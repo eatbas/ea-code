@@ -4,7 +4,7 @@ use crate::models::PipelineStage;
 
 use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
 
-/// Runs the Gemini CLI with the assembled prompt.
+/// Runs the Gemini CLI in agentic mode with auto-approved tool use.
 pub async fn run_gemini(
     input: &AgentInput,
     gemini_path: &str,
@@ -15,7 +15,7 @@ pub async fn run_gemini(
     let full_prompt = build_full_prompt(input);
     run_cli_agent(
         gemini_path,
-        &["-p", &full_prompt],
+        &["-p", &full_prompt, "--yolo"],
         &input.workspace_path,
         app,
         run_id,

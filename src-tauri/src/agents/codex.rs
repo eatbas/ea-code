@@ -4,7 +4,7 @@ use crate::models::PipelineStage;
 
 use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
 
-/// Runs the Codex CLI with the assembled prompt in full-auto mode.
+/// Runs the Codex CLI in full-auto agentic mode with workspace write access.
 pub async fn run_codex(
     input: &AgentInput,
     codex_path: &str,
@@ -15,7 +15,7 @@ pub async fn run_codex(
     let full_prompt = build_full_prompt(input);
     run_cli_agent(
         codex_path,
-        &["-q", &full_prompt, "--full-auto"],
+        &["--full-auto", &full_prompt],
         &input.workspace_path,
         app,
         run_id,

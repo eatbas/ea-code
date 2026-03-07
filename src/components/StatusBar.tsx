@@ -21,6 +21,8 @@ function statusBadgeClasses(status: PipelineStatus): string {
       return "bg-[#ef4444] text-white";
     case "cancelled":
       return "bg-[#f59e0b] text-white";
+    case "waiting_for_input":
+      return "bg-[#f59e0b] text-white";
     default:
       return "bg-[#24243a] text-[#9898b0]";
   }
@@ -47,7 +49,7 @@ export function StatusBar({
   const [elapsed, setElapsed] = useState<number>(0);
 
   useEffect(() => {
-    if (status !== "running" || !startedAt) {
+    if ((status !== "running" && status !== "waiting_for_input") || !startedAt) {
       setElapsed(0);
       return;
     }
@@ -68,22 +70,22 @@ export function StatusBar({
     <footer className="bg-[#1a1a24] border-t border-[#2e2e48] px-4 py-2 flex items-center justify-between text-sm">
       <div className="flex items-center gap-3">
         <span className={`rounded px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(status)}`}>
-          {status.toUpperCase()}
+          {status === "waiting_for_input" ? "AWAITING INPUT" : status.toUpperCase()}
         </span>
 
-        {status === "running" && currentStage && (
+        {(status === "running" || status === "waiting_for_input") && currentStage && (
           <span className="text-xs text-[#9898b0]">{currentStage}</span>
         )}
       </div>
 
       <div className="flex items-center gap-3">
-        {status === "running" && iteration !== undefined && maxIterations !== undefined && (
+        {(status === "running" || status === "waiting_for_input") && iteration !== undefined && maxIterations !== undefined && (
           <span className="text-xs text-[#9898b0]">
             Iteration {iteration}/{maxIterations}
           </span>
         )}
 
-        {status === "running" && (
+        {(status === "running" || status === "waiting_for_input") && (
           <span className="text-xs font-mono text-[#9898b0]">{formatElapsed(elapsed)}</span>
         )}
       </div>

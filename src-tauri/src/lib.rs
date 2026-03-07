@@ -8,6 +8,7 @@ mod settings;
 
 use commands::AppState;
 use std::sync::{atomic::AtomicBool, Arc};
+use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -17,6 +18,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(AppState {
             cancel_flag: Arc::new(AtomicBool::new(false)),
+            answer_sender: Arc::new(Mutex::new(None)),
         })
         .invoke_handler(tauri::generate_handler![
             commands::select_workspace,
@@ -26,6 +28,7 @@ pub fn run() {
             commands::get_settings,
             commands::save_settings,
             commands::check_cli_health,
+            commands::answer_pipeline_question,
         ])
         .run(tauri::generate_context!())
         .expect("error whilst running tauri application");

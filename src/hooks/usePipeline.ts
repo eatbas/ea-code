@@ -10,14 +10,18 @@ import type {
   PipelineArtifactEvent,
   PipelineCompletedEvent,
   PipelineErrorEvent,
+  PipelineQuestionEvent,
+  PipelineAnswer,
 } from "../types";
 
 interface UsePipelineReturn {
   run: PipelineRun | null;
   logs: string[];
   artifacts: Record<string, string>;
+  pendingQuestion: PipelineQuestionEvent | null;
   startPipeline: (request: PipelineRequest) => Promise<void>;
   cancelPipeline: () => Promise<void>;
+  answerQuestion: (answer: PipelineAnswer) => Promise<void>;
 }
 
 /** Hook managing the full pipeline lifecycle including Tauri event listeners. */
@@ -25,6 +29,7 @@ export function usePipeline(): UsePipelineReturn {
   const [run, setRun] = useState<PipelineRun | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [artifacts, setArtifacts] = useState<Record<string, string>>({});
+  const [pendingQuestion, setPendingQuestion] = useState<PipelineQuestionEvent | null>(null);
 
   // Use ref to avoid stale closures in event handlers
   const runRef = useRef<PipelineRun | null>(null);
@@ -50,6 +55,7 @@ export function usePipeline(): UsePipelineReturn {
         setRun(newRun);
         setLogs([]);
         setArtifacts({});
+        setPendingQuestion(null);
       }),
     );
 
@@ -60,6 +66,11 @@ export function usePipeline(): UsePipelineReturn {
         setRun((prev) => {
           if (!prev) return prev;
           const updated = { ...prev, currentStage: stage, currentIteration: iteration };
+
+          // Update pipeline-level status for waiting_for_input
+          if (status === "waiting_for_input") {
+            updated.status = "waiting_for_input";
+          }
 
           // Ensure the iteration array is long enough
           const iterations = [...updated.iterations];
@@ -110,6 +121,13 @@ export function usePipeline(): UsePipelineReturn {
       }),
     );
 
+    // Pipeline question — pause for user input
+    unlisteners.push(
+      listen<PipelineQuestionEvent>("pipeline:question", (event) => {
+        setPendingQuestion(event.payload);
+      }),
+    );
+
     // Pipeline completed
     unlisteners.push(
       listen<PipelineCompletedEvent>("pipeline:completed", (event) => {
@@ -125,6 +143,7 @@ export function usePipeline(): UsePipelineReturn {
             currentStage: undefined,
           };
         });
+        setPendingQuestion(null);
       }),
     );
 
@@ -142,6 +161,7 @@ export function usePipeline(): UsePipelineReturn {
             currentStage: undefined,
           };
         });
+        setPendingQuestion(null);
       }),
     );
 
@@ -159,6 +179,7 @@ export function usePipeline(): UsePipelineReturn {
 
   const cancelPipeline = useCallback(async (): Promise<void> => {
     await invoke("cancel_pipeline");
+    setPendingQuestion(null);
     setRun((prev) => {
       if (!prev) return prev;
       return {
@@ -170,5 +191,14 @@ export function usePipeline(): UsePipelineReturn {
     });
   }, []);
 
-  return { run, logs, artifacts, startPipeline, cancelPipeline };
+  const answerQuestion = useCallback(async (answer: PipelineAnswer): Promise<void> => {
+    await invoke("answer_pipeline_question", { answer });
+    setPendingQuestion(null);
+    setRun((prev) => {
+      if (!prev) return prev;
+      return { ...prev, status: "running" };
+    });
+  }, []);
+
+  return { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion };
 }

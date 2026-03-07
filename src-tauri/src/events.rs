@@ -60,3 +60,16 @@ pub struct PipelineErrorPayload {
     pub stage: Option<PipelineStage>,
     pub message: String,
 }
+
+/// Emitted when the pipeline pauses to ask the user a question.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineQuestionPayload {
+    pub run_id: String,
+    pub question_id: String,
+    pub stage: PipelineStage,
+    pub iteration: u32,
+    pub question_text: String,
+    pub agent_output: String,
+    pub optional: bool,
+}

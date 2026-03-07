@@ -20,7 +20,7 @@ export type PipelineStage =
   | "judge";
 
 /** Status of a single pipeline stage. */
-export type StageStatus = "pending" | "running" | "completed" | "failed" | "skipped";
+export type StageStatus = "pending" | "running" | "completed" | "failed" | "skipped" | "waiting_for_input";
 
 /** Judge verdict — the final arbiter's decision. */
 export type JudgeVerdict = "COMPLETE" | "NOT COMPLETE";
@@ -46,6 +46,7 @@ export interface Iteration {
 export type PipelineStatus =
   | "idle"
   | "running"
+  | "waiting_for_input"
   | "completed"
   | "failed"
   | "cancelled";
@@ -161,4 +162,22 @@ export interface PipelineErrorEvent {
   runId: string;
   stage?: PipelineStage;
   message: string;
+}
+
+/** Pipeline question event — emitted when the pipeline pauses for user input. */
+export interface PipelineQuestionEvent {
+  runId: string;
+  questionId: string;
+  stage: PipelineStage;
+  iteration: number;
+  questionText: string;
+  agentOutput: string;
+  optional: boolean;
+}
+
+/** Answer payload sent back to the backend via the answer_pipeline_question command. */
+export interface PipelineAnswer {
+  questionId: string;
+  answer: string;
+  skipped: boolean;
 }

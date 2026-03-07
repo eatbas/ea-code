@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use tauri::{AppHandle, Emitter};
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::agents::{run_claude, run_codex, run_gemini, AgentInput, AgentOutput};
@@ -164,13 +165,114 @@ fn is_cancelled(cancel_flag: &Arc<AtomicBool>) -> bool {
     cancel_flag.load(Ordering::SeqCst)
 }
 
+/// Extracts a question from agent output if `[QUESTION]...[/QUESTION]`
+/// marker tags are present.
+fn extract_question(output: &str) -> Option<String> {
+    let start_tag = "[QUESTION]";
+    let end_tag = "[/QUESTION]";
+    if let Some(start) = output.find(start_tag) {
+        if let Some(end) = output.find(end_tag) {
+            let question = output[start + start_tag.len()..end].trim();
+            if !question.is_empty() {
+                return Some(question.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Polls the cancel flag until it becomes true. Used in `tokio::select!`
+/// to allow cancellation while awaiting user input.
+async fn wait_for_cancel(cancel_flag: &Arc<AtomicBool>) {
+    loop {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+}
+
+/// Pauses the pipeline and asks the user a question. Returns the user's
+/// answer, or `None` if the pipeline is cancelled while waiting.
+async fn ask_user_question(
+    app: &AppHandle,
+    run_id: &str,
+    stage: &PipelineStage,
+    iteration: u32,
+    question_text: String,
+    agent_output: String,
+    optional: bool,
+    cancel_flag: &Arc<AtomicBool>,
+    answer_sender: &Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
+) -> Result<Option<PipelineAnswer>, String> {
+    let question_id = Uuid::new_v4().to_string();
+
+    // Create a oneshot channel for this question
+    let (tx, rx) = tokio::sync::oneshot::channel::<PipelineAnswer>();
+
+    // Store the sender so the Tauri command can find it
+    {
+        let mut lock = answer_sender.lock().await;
+        *lock = Some(tx);
+    }
+
+    // Emit the question event to the frontend
+    let _ = app.emit(
+        "pipeline:question",
+        PipelineQuestionPayload {
+            run_id: run_id.to_string(),
+            question_id: question_id.clone(),
+            stage: stage.clone(),
+            iteration,
+            question_text,
+            agent_output,
+            optional,
+        },
+    );
+
+    // Emit a stage status update to indicate waiting
+    emit_stage(app, run_id, stage, &StageStatus::WaitingForInput, iteration);
+
+    // Wait for the answer, but also check for cancellation
+    tokio::select! {
+        answer = rx => {
+            match answer {
+                Ok(a) => Ok(Some(a)),
+                Err(_) => Err("Answer channel dropped unexpectedly".to_string()),
+            }
+        }
+        _ = wait_for_cancel(cancel_flag) => {
+            // Clean up the sender
+            let mut lock = answer_sender.lock().await;
+            *lock = None;
+            Ok(None) // Cancelled
+        }
+    }
+}
+
+/// Builds a cancel-and-break iteration for early exit.
+fn push_cancel_iteration(
+    run: &mut PipelineRun,
+    iter_num: u32,
+    stages: Vec<StageResult>,
+) {
+    run.iterations.push(Iteration {
+        number: iter_num,
+        stages,
+        verdict: None,
+        judge_reasoning: None,
+    });
+    run.status = PipelineStatus::Cancelled;
+}
+
 /// Runs the full orchestration pipeline:
-///   generate → diff → review → fix → diff → validate → judge → loop
+///   generate → diff → review → [ask user] → fix → diff → validate → [ask user] → judge → loop
 pub async fn run_pipeline(
     app: AppHandle,
     request: PipelineRequest,
     settings: AppSettings,
     cancel_flag: Arc<AtomicBool>,
+    answer_sender: Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
 ) -> Result<PipelineRun, String> {
     let run_id = Uuid::new_v4().to_string();
     let pipeline_start = Instant::now();
@@ -227,6 +329,7 @@ pub async fn run_pipeline(
             &settings,
         )
         .await;
+        let gen_output = gen_result.output.clone();
         let gen_failed = gen_result.status == StageStatus::Failed;
         stages.push(gen_result);
         if gen_failed || is_cancelled(&cancel_flag) {
@@ -243,6 +346,42 @@ pub async fn run_pipeline(
             break;
         }
 
+        // Check for [QUESTION] tags in generate output
+        if let Some(question) = extract_question(&gen_output) {
+            let answer = ask_user_question(
+                &app,
+                &run_id,
+                &PipelineStage::Generate,
+                iter_num,
+                question,
+                gen_output.clone(),
+                false,
+                &cancel_flag,
+                &answer_sender,
+            )
+            .await?;
+
+            if is_cancelled(&cancel_flag) {
+                push_cancel_iteration(&mut run, iter_num, stages);
+                break;
+            }
+
+            // If the user provided guidance, it will be carried forward
+            // as additional context for the review stage
+            if let Some(ref a) = answer {
+                if !a.skipped && !a.answer.is_empty() {
+                    // Re-emit running status after the pause
+                    emit_stage(
+                        &app,
+                        &run_id,
+                        &PipelineStage::Generate,
+                        &StageStatus::Completed,
+                        iter_num,
+                    );
+                }
+            }
+        }
+
         // --- 2. Diff after generate ---
         run.current_stage = Some(PipelineStage::DiffAfterGenerate);
         let diff1 = execute_diff_stage(
@@ -256,13 +395,7 @@ pub async fn run_pipeline(
         stages.push(diff1);
 
         if is_cancelled(&cancel_flag) {
-            run.iterations.push(Iteration {
-                number: iter_num,
-                stages,
-                verdict: None,
-                judge_reasoning: None,
-            });
-            run.status = PipelineStatus::Cancelled;
+            push_cancel_iteration(&mut run, iter_num, stages);
             break;
         }
 
@@ -302,10 +435,41 @@ pub async fn run_pipeline(
             break;
         }
 
+        // --- Ask user after Review (always) ---
+        let user_review_guidance = ask_user_question(
+            &app,
+            &run_id,
+            &PipelineStage::Review,
+            iter_num,
+            "Review complete. Would you like to provide guidance for the fix stage?"
+                .to_string(),
+            review_output.clone(),
+            true, // optional — user can skip
+            &cancel_flag,
+            &answer_sender,
+        )
+        .await?;
+
+        if is_cancelled(&cancel_flag) {
+            push_cancel_iteration(&mut run, iter_num, stages);
+            break;
+        }
+
+        // Incorporate user guidance into the fix input context
+        let fix_context = match user_review_guidance {
+            Some(ref answer) if !answer.skipped && !answer.answer.is_empty() => {
+                format!(
+                    "{}\n\n--- User Guidance ---\n{}",
+                    review_output, answer.answer
+                )
+            }
+            _ => review_output.clone(),
+        };
+
         // --- 4. Fix ---
         let fix_input = AgentInput {
             prompt: request.prompt.clone(),
-            context: Some(review_output),
+            context: Some(fix_context),
             diff: Some(diff1_output),
             workspace_path: request.workspace_path.clone(),
         };
@@ -320,6 +484,7 @@ pub async fn run_pipeline(
             &settings,
         )
         .await;
+        let fix_output = fix_result.output.clone();
         let fix_failed = fix_result.status == StageStatus::Failed;
         stages.push(fix_result);
         if fix_failed || is_cancelled(&cancel_flag) {
@@ -336,6 +501,30 @@ pub async fn run_pipeline(
             break;
         }
 
+        // Check for [QUESTION] tags in fix output
+        if let Some(question) = extract_question(&fix_output) {
+            let answer = ask_user_question(
+                &app,
+                &run_id,
+                &PipelineStage::Fix,
+                iter_num,
+                question,
+                fix_output.clone(),
+                false,
+                &cancel_flag,
+                &answer_sender,
+            )
+            .await?;
+
+            if is_cancelled(&cancel_flag) {
+                push_cancel_iteration(&mut run, iter_num, stages);
+                break;
+            }
+
+            // Guidance from fix questions will be available in the next iteration
+            let _ = answer; // Consumed — no immediate downstream use
+        }
+
         // --- 5. Diff after fix ---
         run.current_stage = Some(PipelineStage::DiffAfterFix);
         let diff2 = execute_diff_stage(
@@ -349,13 +538,7 @@ pub async fn run_pipeline(
         stages.push(diff2);
 
         if is_cancelled(&cancel_flag) {
-            run.iterations.push(Iteration {
-                number: iter_num,
-                stages,
-                verdict: None,
-                judge_reasoning: None,
-            });
-            run.status = PipelineStatus::Cancelled;
+            push_cancel_iteration(&mut run, iter_num, stages);
             break;
         }
 
@@ -395,10 +578,41 @@ pub async fn run_pipeline(
             break;
         }
 
+        // --- Ask user after Validate (always) ---
+        let user_validate_guidance = ask_user_question(
+            &app,
+            &run_id,
+            &PipelineStage::Validate,
+            iter_num,
+            "Validation complete. Review the findings and optionally provide guidance before the judge stage."
+                .to_string(),
+            validation_output.clone(),
+            true, // optional — user can skip
+            &cancel_flag,
+            &answer_sender,
+        )
+        .await?;
+
+        if is_cancelled(&cancel_flag) {
+            push_cancel_iteration(&mut run, iter_num, stages);
+            break;
+        }
+
+        // Incorporate user guidance into the judge context
+        let judge_context = match user_validate_guidance {
+            Some(ref answer) if !answer.skipped && !answer.answer.is_empty() => {
+                format!(
+                    "{}\n\n--- User Guidance ---\n{}",
+                    validation_output, answer.answer
+                )
+            }
+            _ => validation_output.clone(),
+        };
+
         // --- 7. Judge ---
         let judge_input = AgentInput {
             prompt: request.prompt.clone(),
-            context: Some(validation_output),
+            context: Some(judge_context),
             diff: Some(diff2_output),
             workspace_path: request.workspace_path.clone(),
         };

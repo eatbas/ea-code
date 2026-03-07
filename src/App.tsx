@@ -11,17 +11,18 @@ import { RunTimeline } from "./components/RunTimeline";
 import { LogsPanel } from "./components/LogsPanel";
 import { ArtifactsPanel } from "./components/ArtifactsPanel";
 import { StatusBar } from "./components/StatusBar";
+import { QuestionDialog } from "./components/QuestionDialog";
 import type { PipelineRequest } from "./types";
 
 function App(): ReactNode {
   const { settings, loading, saveSettings } = useSettings();
   const { workspace, selectFolder } = useWorkspace();
-  const { run, logs, artifacts, startPipeline, cancelPipeline } = usePipeline();
+  const { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion } = usePipeline();
   const { health, checkHealth } = useCliHealth();
 
   const [showSettings, setShowSettings] = useState<boolean>(false);
 
-  const isRunning = run?.status === "running";
+  const isRunning = run?.status === "running" || run?.status === "waiting_for_input";
   const currentIteration = run?.currentIteration ?? 0;
   const maxIterations = settings?.maxIterations ?? 3;
 
@@ -116,6 +117,14 @@ function App(): ReactNode {
         maxIterations={maxIterations}
         startedAt={run?.startedAt}
       />
+
+      {/* Question dialog overlay */}
+      {pendingQuestion && (
+        <QuestionDialog
+          question={pendingQuestion}
+          onAnswer={answerQuestion}
+        />
+      )}
     </div>
   );
 }

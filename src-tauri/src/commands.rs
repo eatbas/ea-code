@@ -2,14 +2,18 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use tauri::{AppHandle, State};
+use tokio::sync::Mutex;
 
 use crate::events::PipelineErrorPayload;
 use crate::models::*;
 use crate::settings;
 
-/// Shared application state, holding the pipeline cancellation flag.
+/// Shared application state, holding the pipeline cancellation flag and
+/// the oneshot channel for delivering user answers to the blocked orchestrator.
 pub struct AppState {
     pub cancel_flag: Arc<AtomicBool>,
+    pub answer_sender:
+        Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
 }
 
 /// Validates a workspace directory and returns its git status.
@@ -45,6 +49,7 @@ pub async fn run_pipeline(
     // Reset the cancellation flag
     state.cancel_flag.store(false, Ordering::SeqCst);
     let cancel_flag = state.cancel_flag.clone();
+    let answer_sender = state.answer_sender.clone();
 
     // Spawn the pipeline as a background task so the command returns promptly
     let app_clone = app.clone();
@@ -54,6 +59,7 @@ pub async fn run_pipeline(
             request,
             loaded_settings,
             cancel_flag,
+            answer_sender,
         )
         .await;
 
@@ -77,6 +83,25 @@ pub async fn run_pipeline(
 pub async fn cancel_pipeline(state: State<'_, AppState>) -> Result<(), String> {
     state.cancel_flag.store(true, Ordering::SeqCst);
     Ok(())
+}
+
+/// Delivers the user's answer to a pending pipeline question.
+#[tauri::command]
+pub async fn answer_pipeline_question(
+    state: State<'_, AppState>,
+    answer: PipelineAnswer,
+) -> Result<(), String> {
+    let sender = {
+        let mut lock = state.answer_sender.lock().await;
+        lock.take()
+    };
+
+    match sender {
+        Some(tx) => tx
+            .send(answer)
+            .map_err(|_| "Pipeline is no longer waiting for an answer".to_string()),
+        None => Err("No pending question to answer".to_string()),
+    }
 }
 
 /// Returns the current application settings (from disk or defaults).

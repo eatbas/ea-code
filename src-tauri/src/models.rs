@@ -35,13 +35,14 @@ pub enum PipelineStage {
 
 /// Status of a single pipeline stage.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum StageStatus {
     Pending,
     Running,
     Completed,
     Failed,
     Skipped,
+    WaitingForInput,
 }
 
 /// Judge verdict — the final arbiter's decision.
@@ -55,10 +56,11 @@ pub enum JudgeVerdict {
 
 /// Overall pipeline run status.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum PipelineStatus {
     Idle,
     Running,
+    WaitingForInput,
     Completed,
     Failed,
     Cancelled,
@@ -180,4 +182,28 @@ impl Default for AppSettings {
             require_git: true,
         }
     }
+}
+
+/// Represents a question posed by the pipeline to the user between stages.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineQuestion {
+    pub run_id: String,
+    pub question_id: String,
+    pub stage: PipelineStage,
+    pub iteration: u32,
+    pub question_text: String,
+    pub agent_output: String,
+    /// Whether answering is optional (user can skip).
+    pub optional: bool,
+}
+
+/// Request payload sent from the frontend to answer a pipeline question.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineAnswer {
+    pub question_id: String,
+    pub answer: String,
+    /// If true, the user chose to skip without providing guidance.
+    pub skipped: bool,
 }

@@ -99,6 +99,23 @@ function StageIcon({ status }: { status: StageStatus }): ReactNode {
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
       );
+    case "waiting_for_input":
+      return (
+        <svg
+          className="h-4 w-4 text-[#f59e0b] animate-pulse"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      );
     default:
       // pending
       return (
@@ -116,6 +133,8 @@ function borderColour(status: StageStatus): string {
       return "border-l-[#22c55e]";
     case "failed":
       return "border-l-[#ef4444]";
+    case "waiting_for_input":
+      return "border-l-[#f59e0b]";
     default:
       return "border-l-[#2e2e48]";
   }
@@ -124,8 +143,9 @@ function borderColour(status: StageStatus): string {
 /** Horizontal timeline showing the progress through pipeline stages. */
 export function RunTimeline({ stages, currentStage, iteration }: RunTimelineProps): ReactNode {
   function getStageStatus(stage: PipelineStage): StageStatus {
-    if (currentStage === stage) return "running";
     const result = stages.find((s) => s.stage === stage);
+    if (result?.status === "waiting_for_input") return "waiting_for_input";
+    if (currentStage === stage && result?.status !== "completed") return "running";
     return result?.status ?? "pending";
   }
 
