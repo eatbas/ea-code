@@ -4,9 +4,12 @@ import { useSettings } from "./hooks/useSettings";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { usePipeline } from "./hooks/usePipeline";
 import { useCliHealth } from "./hooks/useCliHealth";
+import { Sidebar } from "./components/Sidebar";
+import type { ActiveView } from "./components/Sidebar";
 import { IdleView } from "./components/IdleView";
 import { ChatView } from "./components/ChatView";
-import { SettingsPanel } from "./components/SettingsPanel";
+import { AgentsView } from "./components/AgentsView";
+import { CliSetupView } from "./components/CliSetupView";
 import { QuestionDialog } from "./components/QuestionDialog";
 import type { PipelineRequest } from "./types";
 
@@ -16,9 +19,10 @@ function App(): ReactNode {
   const { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { health, checkHealth } = useCliHealth();
 
-  const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [activeView, setActiveView] = useState<ActiveView>("home");
 
-  const isIdle = !run || run.status === "idle";
+  const isRunning = run && run.status !== "idle";
 
   function handleRun(prompt: string): void {
     if (!workspace) return;
@@ -29,10 +33,47 @@ function App(): ReactNode {
     startPipeline(request);
   }
 
-  function handleCheckHealth(): void {
-    if (settings) {
-      checkHealth(settings);
+  function handleNewSession(): void {
+    resetRun();
+    setActiveView("home");
+  }
+
+  /** Render the main content area based on active view. */
+  function renderContent(): ReactNode {
+    if (isRunning) {
+      return (
+        <ChatView
+          run={run}
+          logs={logs}
+          artifacts={artifacts}
+          onCancel={cancelPipeline}
+          onBackToHome={handleNewSession}
+        />
+      );
     }
+
+    if (activeView === "agents" && settings) {
+      return <AgentsView settings={settings} onSave={saveSettings} />;
+    }
+
+    if (activeView === "cli-setup" && settings) {
+      return (
+        <CliSetupView
+          settings={settings}
+          onSave={saveSettings}
+          health={health ?? undefined}
+          onCheckHealth={() => { if (settings) checkHealth(settings); }}
+        />
+      );
+    }
+
+    return (
+      <IdleView
+        workspace={workspace}
+        onSelectFolder={selectFolder}
+        onRun={handleRun}
+      />
+    );
   }
 
   if (loading) {
@@ -44,37 +85,19 @@ function App(): ReactNode {
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#0f0f14]">
-      {/* Settings modal overlay */}
-      {showSettings && settings && (
-        <SettingsPanel
-          settings={settings}
-          onSave={saveSettings}
-          health={health ?? undefined}
-          onCheckHealth={handleCheckHealth}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
+    <div className="flex h-full bg-[#0f0f14]">
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((prev) => !prev)}
+        onNewSession={handleNewSession}
+        activeView={activeView}
+        onNavigate={setActiveView}
+      />
 
-      {isIdle ? (
-        <IdleView
-          workspace={workspace}
-          onSelectFolder={selectFolder}
-          onRun={handleRun}
-          onOpenSettings={() => setShowSettings(true)}
-        />
-      ) : (
-        <ChatView
-          run={run}
-          logs={logs}
-          artifacts={artifacts}
-          onCancel={cancelPipeline}
-          onBackToHome={resetRun}
-          onOpenSettings={() => setShowSettings(true)}
-        />
-      )}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {renderContent()}
+      </div>
 
-      {/* Question dialog overlay */}
       {pendingQuestion && (
         <QuestionDialog
           question={pendingQuestion}

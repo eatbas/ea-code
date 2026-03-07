@@ -61,7 +61,7 @@ fn emit_stage(
     );
 }
 
-/// Emits an artefact event (diff, review, validation, or judge output).
+/// Emits an artefact event (diff, review, or judge output).
 fn emit_artifact(app: &AppHandle, run_id: &str, kind: &str, content: &str, iteration: u32) {
     let _ = app.emit(
         "pipeline:artifact",
@@ -266,7 +266,7 @@ fn push_cancel_iteration(
 }
 
 /// Runs the full orchestration pipeline:
-///   generate → diff → review → [ask user] → fix → diff → validate → [ask user] → judge → loop
+///   generate → diff → review → [ask user] → fix → diff → judge → loop
 pub async fn run_pipeline(
     app: AppHandle,
     request: PipelineRequest,
@@ -341,7 +341,7 @@ pub async fn run_pipeline(
             });
             if gen_failed {
                 run.status = PipelineStatus::Failed;
-                run.error = Some("Generator stage failed".to_string());
+                run.error = Some("Coder stage failed".to_string());
             }
             break;
         }
@@ -430,7 +430,7 @@ pub async fn run_pipeline(
             });
             if review_failed {
                 run.status = PipelineStatus::Failed;
-                run.error = Some("Reviewer stage failed".to_string());
+                run.error = Some("Code Reviewer / Auditor stage failed".to_string());
             }
             break;
         }
@@ -496,7 +496,7 @@ pub async fn run_pipeline(
             });
             if fix_failed {
                 run.status = PipelineStatus::Failed;
-                run.error = Some("Fixer stage failed".to_string());
+                run.error = Some("Code Fixer stage failed".to_string());
             }
             break;
         }
@@ -542,74 +542,11 @@ pub async fn run_pipeline(
             break;
         }
 
-        // --- 6. Validate ---
-        let validate_input = AgentInput {
-            prompt: request.prompt.clone(),
-            context: None,
-            diff: Some(diff2_output.clone()),
-            workspace_path: request.workspace_path.clone(),
-        };
-        run.current_stage = Some(PipelineStage::Validate);
-        let validate_result = execute_agent_stage(
-            &app,
-            &run_id,
-            iter_num,
-            PipelineStage::Validate,
-            &settings.validator_agent,
-            &validate_input,
-            &settings,
-        )
-        .await;
-        let validation_output = validate_result.output.clone();
-        let validate_failed = validate_result.status == StageStatus::Failed;
-        emit_artifact(&app, &run_id, "validation", &validation_output, iter_num);
-        stages.push(validate_result);
-        if validate_failed || is_cancelled(&cancel_flag) {
-            run.iterations.push(Iteration {
-                number: iter_num,
-                stages,
-                verdict: None,
-                judge_reasoning: None,
-            });
-            if validate_failed {
-                run.status = PipelineStatus::Failed;
-                run.error = Some("Validator stage failed".to_string());
-            }
-            break;
-        }
-
-        // --- Ask user after Validate (always) ---
-        let user_validate_guidance = ask_user_question(
-            &app,
-            &run_id,
-            &PipelineStage::Validate,
-            iter_num,
-            "Validation complete. Review the findings and optionally provide guidance before the judge stage."
-                .to_string(),
-            validation_output.clone(),
-            true, // optional — user can skip
-            &cancel_flag,
-            &answer_sender,
-        )
-        .await?;
-
-        if is_cancelled(&cancel_flag) {
-            push_cancel_iteration(&mut run, iter_num, stages);
-            break;
-        }
-
-        // Incorporate user guidance into the judge context
-        let judge_context = match user_validate_guidance {
-            Some(ref answer) if !answer.skipped && !answer.answer.is_empty() => {
-                format!(
-                    "{}\n\n--- User Guidance ---\n{}",
-                    validation_output, answer.answer
-                )
-            }
-            _ => validation_output.clone(),
-        };
-
-        // --- 7. Judge ---
+        // --- 6. Judge ---
+        let judge_context = format!(
+            "--- Review ---\n{}\n\n--- Fix ---\n{}",
+            review_output, fix_output
+        );
         let judge_input = AgentInput {
             prompt: request.prompt.clone(),
             context: Some(judge_context),

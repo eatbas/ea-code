@@ -4,11 +4,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentRole {
-    Generator,
-    Reviewer,
-    Fixer,
-    Validator,
-    FinalJudge,
+    Coder,
+    ReviewerAuditor,
+    CodeFixer,
+    Judge,
 }
 
 /// Supported CLI agent backends.
@@ -29,7 +28,6 @@ pub enum PipelineStage {
     Review,
     Fix,
     DiffAfterFix,
-    Validate,
     Judge,
 }
 
@@ -161,7 +159,6 @@ pub struct AppSettings {
     pub generator_agent: AgentBackend,
     pub reviewer_agent: AgentBackend,
     pub fixer_agent: AgentBackend,
-    pub validator_agent: AgentBackend,
     pub final_judge_agent: AgentBackend,
     pub max_iterations: u32,
     pub require_git: bool,
@@ -176,7 +173,6 @@ impl Default for AppSettings {
             generator_agent: AgentBackend::Claude,
             reviewer_agent: AgentBackend::Codex,
             fixer_agent: AgentBackend::Claude,
-            validator_agent: AgentBackend::Gemini,
             final_judge_agent: AgentBackend::Codex,
             max_iterations: 3,
             require_git: true,

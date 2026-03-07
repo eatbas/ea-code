@@ -1,10 +1,9 @@
 /** Agent role identifiers for the orchestration pipeline. */
 export type AgentRole =
-  | "generator"
-  | "reviewer"
-  | "fixer"
-  | "validator"
-  | "final_judge";
+  | "coder"
+  | "reviewer_auditor"
+  | "code_fixer"
+  | "judge";
 
 /** Supported CLI agent backends. */
 export type AgentBackend = "claude" | "codex" | "gemini";
@@ -16,7 +15,6 @@ export type PipelineStage =
   | "review"
   | "fix"
   | "diff_after_fix"
-  | "validate"
   | "judge";
 
 /** Status of a single pipeline stage. */
@@ -75,7 +73,6 @@ export interface AppSettings {
   generatorAgent: AgentBackend;
   reviewerAgent: AgentBackend;
   fixerAgent: AgentBackend;
-  validatorAgent: AgentBackend;
   finalJudgeAgent: AgentBackend;
   maxIterations: number;
   requireGit: boolean;
@@ -89,7 +86,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   generatorAgent: "claude",
   reviewerAgent: "codex",
   fixerAgent: "claude",
-  validatorAgent: "gemini",
   finalJudgeAgent: "codex",
   maxIterations: 3,
   requireGit: true,
@@ -146,7 +142,7 @@ export interface PipelineLogEvent {
 
 export interface PipelineArtifactEvent {
   runId: string;
-  kind: "diff" | "review" | "validation" | "judge";
+  kind: "diff" | "review" | "judge";
   content: string;
   iteration: number;
 }

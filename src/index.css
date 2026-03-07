@@ -27,3 +27,7 @@ body {
   color: var(--colour-text-primary);
   font-family: "Inter", system-ui, -apple-system, sans-serif;
 }
+
+button {
+  cursor: pointer;
+}

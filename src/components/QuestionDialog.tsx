@@ -9,7 +9,6 @@ const STAGE_LABELS: Record<string, string> = {
   review: "Review",
   fix: "Fix",
   diff_after_fix: "Diff",
-  validate: "Validate",
   judge: "Judge",
 };
 

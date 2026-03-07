@@ -14,7 +14,6 @@ const STAGE_LABELS: Record<PipelineStage, string> = {
   review: "Review",
   fix: "Fix",
   diff_after_fix: "Diff",
-  validate: "Validate",
   judge: "Judge",
 };
 
@@ -25,7 +24,6 @@ const STAGE_ORDER: PipelineStage[] = [
   "review",
   "fix",
   "diff_after_fix",
-  "validate",
   "judge",
 ];
 

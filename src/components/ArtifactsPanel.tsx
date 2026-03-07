@@ -6,13 +6,12 @@ interface ArtifactsPanelProps {
 }
 
 /** Tab identifiers for artifact display. */
-const TABS = ["review", "validation", "judge", "diff"] as const;
+const TABS = ["review", "judge", "diff"] as const;
 type ArtifactTab = (typeof TABS)[number];
 
 /** Tab labels for display. */
 const TAB_LABELS: Record<ArtifactTab, string> = {
   review: "Review",
-  validation: "Validation",
   judge: "Judge",
   diff: "Diff",
 };

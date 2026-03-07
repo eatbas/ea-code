@@ -1,0 +1,166 @@
+import type { ReactNode } from "react";
+
+/** Which view the sidebar is navigating to. */
+export type ActiveView = "home" | "agents" | "cli-setup";
+
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+  onNewSession: () => void;
+  activeView: ActiveView;
+  onNavigate: (view: ActiveView) => void;
+}
+
+/** Collapsible left sidebar with new thread and settings sub-navigation. */
+export function Sidebar({ collapsed, onToggle, onNewSession, activeView, onNavigate }: SidebarProps): ReactNode {
+  const isSettings = activeView === "agents" || activeView === "cli-setup";
+
+  function handleSettingsClick(): void {
+    onNavigate(isSettings ? "home" : "agents");
+  }
+
+  if (collapsed) {
+    return (
+      <aside className="flex w-12 shrink-0 flex-col items-center border-r border-[#2e2e48] bg-[#1a1a24] pt-8 pb-3 gap-3">
+        <button
+          onClick={onToggle}
+          className="rounded p-2 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
+          title="Expand sidebar"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <line x1="9" y1="3" x2="9" y2="21" />
+          </svg>
+        </button>
+
+        <button
+          onClick={onNewSession}
+          className="rounded p-2 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
+          title="New thread"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        </button>
+
+        <div className="flex-1" />
+
+        <button
+          onClick={handleSettingsClick}
+          className={`rounded p-2 transition-colors ${isSettings ? "bg-[#24243a] text-[#e4e4ed]" : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"}`}
+          title="Settings"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+      </aside>
+    );
+  }
+
+  // Settings mode — full sidebar becomes settings navigation
+  if (isSettings) {
+    return (
+      <aside className="flex w-60 shrink-0 flex-col border-r border-[#2e2e48] bg-[#1a1a24]">
+        {/* Back to app */}
+        <div className="px-3 pt-8 pb-3">
+          <button
+            onClick={() => onNavigate("home")}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+            Back to app
+          </button>
+        </div>
+
+        {/* Settings nav items */}
+        <div className="flex flex-col gap-1 px-3">
+          <button
+            onClick={() => onNavigate("agents")}
+            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+              activeView === "agents"
+                ? "bg-[#24243a] text-[#e4e4ed]"
+                : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Agents
+          </button>
+
+          <button
+            onClick={() => onNavigate("cli-setup")}
+            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+              activeView === "cli-setup"
+                ? "bg-[#24243a] text-[#e4e4ed]"
+                : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4 17 10 11 4 5" />
+              <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+            CLI Setup
+          </button>
+        </div>
+
+        <div className="flex-1" />
+      </aside>
+    );
+  }
+
+  // Default home sidebar
+  return (
+    <aside className="flex w-60 shrink-0 flex-col border-r border-[#2e2e48] bg-[#1a1a24]">
+      {/* Top bar — sidebar toggle + compose icon + "New thread" */}
+      <div className="flex items-center gap-2 px-3 pt-8 pb-3">
+        <button
+          onClick={onToggle}
+          className="rounded p-1.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
+          title="Collapse sidebar"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <line x1="9" y1="3" x2="9" y2="21" />
+          </svg>
+        </button>
+        <button
+          onClick={onNewSession}
+          className="rounded p-1.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
+          title="New thread"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        </button>
+        <span className="text-sm font-medium text-[#e4e4ed]">New thread</span>
+      </div>
+
+      <div className="flex-1" />
+
+      {/* Bottom — settings */}
+      <div className="border-t border-[#2e2e48] p-3">
+        <button
+          onClick={handleSettingsClick}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          Settings
+        </button>
+      </div>
+    </aside>
+  );
+}

@@ -154,11 +154,10 @@ export function SettingsPanel({
           {/* Agent role mapping */}
           <fieldset className="flex flex-col gap-2">
             <legend className="text-xs font-medium text-[#9898b0] mb-1">Agent Roles</legend>
-            <AgentSelect label="Generator" value={draft.generatorAgent} onChange={(v) => update({ generatorAgent: v })} />
-            <AgentSelect label="Reviewer" value={draft.reviewerAgent} onChange={(v) => update({ reviewerAgent: v })} />
-            <AgentSelect label="Fixer" value={draft.fixerAgent} onChange={(v) => update({ fixerAgent: v })} />
-            <AgentSelect label="Validator" value={draft.validatorAgent} onChange={(v) => update({ validatorAgent: v })} />
-            <AgentSelect label="Final Judge" value={draft.finalJudgeAgent} onChange={(v) => update({ finalJudgeAgent: v })} />
+            <AgentSelect label="Coder" value={draft.generatorAgent} onChange={(v) => update({ generatorAgent: v })} />
+            <AgentSelect label="Code Reviewer / Auditor" value={draft.reviewerAgent} onChange={(v) => update({ reviewerAgent: v })} />
+            <AgentSelect label="Code Fixer" value={draft.fixerAgent} onChange={(v) => update({ fixerAgent: v })} />
+            <AgentSelect label="Judge" value={draft.finalJudgeAgent} onChange={(v) => update({ finalJudgeAgent: v })} />
           </fieldset>
 
           {/* Pipeline parameters */}
