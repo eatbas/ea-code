@@ -22,6 +22,7 @@ interface UsePipelineReturn {
   startPipeline: (request: PipelineRequest) => Promise<void>;
   cancelPipeline: () => Promise<void>;
   answerQuestion: (answer: PipelineAnswer) => Promise<void>;
+  resetRun: () => void;
 }
 
 /** Hook managing the full pipeline lifecycle including Tauri event listeners. */
@@ -200,5 +201,13 @@ export function usePipeline(): UsePipelineReturn {
     });
   }, []);
 
-  return { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion };
+  /** Clear all pipeline state and return to idle. */
+  const resetRun = useCallback((): void => {
+    setRun(null);
+    setLogs([]);
+    setArtifacts({});
+    setPendingQuestion(null);
+  }, []);
+
+  return { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun };
 }

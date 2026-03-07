@@ -8,6 +8,8 @@ interface StatusBarProps {
   iteration?: number;
   maxIterations?: number;
   startedAt?: string;
+  onCancel?: () => void;
+  onBackToHome?: () => void;
 }
 
 /** Colour classes for each pipeline status. */
@@ -38,18 +40,30 @@ function formatElapsed(seconds: number): string {
   return `${secs}s`;
 }
 
-/** Bottom status bar showing pipeline state, stage, iteration, and elapsed time. */
+/** Whether the pipeline is in a terminal (non-running) state. */
+function isTerminal(status: PipelineStatus): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+/** Whether the pipeline is actively executing. */
+function isActive(status: PipelineStatus): boolean {
+  return status === "running" || status === "waiting_for_input";
+}
+
+/** Bottom status bar showing pipeline state, stage, iteration, elapsed time, and action buttons. */
 export function StatusBar({
   status,
   currentStage,
   iteration,
   maxIterations,
   startedAt,
+  onCancel,
+  onBackToHome,
 }: StatusBarProps): ReactNode {
   const [elapsed, setElapsed] = useState<number>(0);
 
   useEffect(() => {
-    if ((status !== "running" && status !== "waiting_for_input") || !startedAt) {
+    if (!isActive(status) || !startedAt) {
       setElapsed(0);
       return;
     }
@@ -73,20 +87,38 @@ export function StatusBar({
           {status === "waiting_for_input" ? "AWAITING INPUT" : status.toUpperCase()}
         </span>
 
-        {(status === "running" || status === "waiting_for_input") && currentStage && (
+        {isActive(status) && currentStage && (
           <span className="text-xs text-[#9898b0]">{currentStage}</span>
         )}
       </div>
 
       <div className="flex items-center gap-3">
-        {(status === "running" || status === "waiting_for_input") && iteration !== undefined && maxIterations !== undefined && (
+        {isActive(status) && iteration !== undefined && maxIterations !== undefined && (
           <span className="text-xs text-[#9898b0]">
             Iteration {iteration}/{maxIterations}
           </span>
         )}
 
-        {(status === "running" || status === "waiting_for_input") && (
+        {isActive(status) && (
           <span className="text-xs font-mono text-[#9898b0]">{formatElapsed(elapsed)}</span>
+        )}
+
+        {isActive(status) && onCancel && (
+          <button
+            onClick={onCancel}
+            className="rounded bg-[#ef4444] px-3 py-1 text-xs font-medium text-white hover:bg-red-400 transition-colors"
+          >
+            Cancel
+          </button>
+        )}
+
+        {isTerminal(status) && onBackToHome && (
+          <button
+            onClick={onBackToHome}
+            className="rounded bg-[#6366f1] px-3 py-1 text-xs font-medium text-white hover:bg-[#818cf8] transition-colors"
+          >
+            New Run
+          </button>
         )}
       </div>
     </footer>
