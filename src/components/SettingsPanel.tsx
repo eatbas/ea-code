@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useState, useEffect } from "react";
-import type { AppSettings, AgentBackend, CliHealth } from "../types";
+import type { AppSettings, CliHealth } from "../types";
+import { TextInput, AgentSelect, OptionalAgentSelect, HealthDot } from "./shared/FormInputs";
 
 interface SettingsPanelProps {
   settings: AppSettings;
@@ -8,107 +9,6 @@ interface SettingsPanelProps {
   health?: CliHealth;
   onCheckHealth: () => void;
   onClose: () => void;
-}
-
-/** Agent backend options for dropdown selects. */
-const BACKEND_OPTIONS: { value: AgentBackend; label: string }[] = [
-  { value: "claude", label: "Claude" },
-  { value: "codex", label: "Codex" },
-  { value: "gemini", label: "Gemini" },
-  { value: "kimi", label: "Kimi" },
-  { value: "opencode", label: "OpenCode" },
-];
-
-/** Reusable text input row for the settings form. */
-function TextInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}): ReactNode {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-[#9898b0]">{label}</span>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
-      />
-    </label>
-  );
-}
-
-/** Reusable select dropdown row for agent role mapping. */
-function AgentSelect({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: AgentBackend;
-  onChange: (v: AgentBackend) => void;
-}): ReactNode {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-[#9898b0]">{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as AgentBackend)}
-        className="rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
-      >
-        {BACKEND_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-/** Reusable optional select row with an explicit skip option. */
-function OptionalAgentSelect({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: AgentBackend | null;
-  onChange: (v: AgentBackend | null) => void;
-}): ReactNode {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-[#9898b0]">{label}</span>
-      <select
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value === "" ? null : (e.target.value as AgentBackend))}
-        className="rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
-      >
-        <option value="">Not selected (Skip)</option>
-        {BACKEND_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-/** Health status indicator dot. */
-function HealthDot({ available, error }: { available: boolean; error?: string }): ReactNode {
-  return (
-    <span
-      title={error ?? (available ? "Available" : "Not found")}
-      className={`inline-block h-2.5 w-2.5 rounded-full ${
-        available ? "bg-[#22c55e]" : "bg-[#ef4444]"
-      }`}
-    />
-  );
 }
 
 /** Settings modal overlay for configuring CLI paths, agent roles, and pipeline parameters. */

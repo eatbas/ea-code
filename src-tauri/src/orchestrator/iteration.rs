@@ -1,5 +1,6 @@
 //! Single iteration logic for the orchestration pipeline.
 
+use std::mem;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -177,7 +178,7 @@ async fn run_planning_stages(
 
     let plan_r = execute_agent_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::Plan,
-        settings.planner_agent.as_ref().expect("guaranteed"),
+        settings.planner_agent.as_ref().unwrap_or(&crate::models::AgentBackend::Claude),
         &AgentInput {
             prompt: prompts::build_planner_user(&request.prompt, enhanced, iter_ctx.selected_plan(), judge_feedback),
             context: Some(prompts::build_planner_system(meta)),
@@ -191,17 +192,17 @@ async fn run_planning_stages(
     emit_artifact(app, run_id, "plan", &plan_out, iter_num, db);
     if plan_r.status == StageStatus::Failed {
         stages.push(plan_r);
-        run.iterations.push(Iteration { number: iter_num, stages: stages.clone(), verdict: None, judge_reasoning: None });
+        run.iterations.push(Iteration { number: iter_num, stages: mem::take(stages), verdict: None, judge_reasoning: None });
         run.status = PipelineStatus::Failed;
         run.error = Some("Planner stage failed".to_string());
         return Ok(());
     }
     stages.push(plan_r);
-    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages.clone()); return Ok(()); }
+    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     let pa_r = execute_agent_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::PlanAudit,
-        settings.plan_auditor_agent.as_ref().expect("guaranteed"),
+        settings.plan_auditor_agent.as_ref().unwrap_or(&crate::models::AgentBackend::Claude),
         &AgentInput {
             prompt: prompts::build_plan_auditor_user(&request.prompt, enhanced, &plan_out, None, None),
             context: Some(prompts::build_plan_auditor_system(meta)),
@@ -214,13 +215,13 @@ async fn run_planning_stages(
     if pa_r.status == StageStatus::Failed {
         let err = pa_r.error.clone().unwrap_or_else(|| "Plan Auditor stage failed".to_string());
         stages.push(pa_r);
-        run.iterations.push(Iteration { number: iter_num, stages: stages.clone(), verdict: None, judge_reasoning: None });
+        run.iterations.push(Iteration { number: iter_num, stages: mem::take(stages), verdict: None, judge_reasoning: None });
         run.status = PipelineStatus::Failed;
         run.error = Some(err);
         return Ok(());
     }
     stages.push(pa_r);
-    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages.clone()); return Ok(()); }
+    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     let parsed = parse_plan_audit_output(&pa_out, &plan_out);
     iter_ctx.audit_verdict = Some(parsed.verdict);

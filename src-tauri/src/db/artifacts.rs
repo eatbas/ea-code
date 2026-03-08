@@ -13,7 +13,7 @@ pub fn insert(
     kind: &str,
     content: &str,
 ) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::insert_into(artifacts::table)
         .values(&NewArtifact {
@@ -30,7 +30,7 @@ pub fn insert(
 
 /// Returns all artefacts for a given run, ordered by iteration and creation time.
 pub fn get_for_run(pool: &DbPool, run_id: &str) -> Result<Vec<ArtifactRow>, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     artifacts::table
         .filter(artifacts::run_id.eq(run_id))

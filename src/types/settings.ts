@@ -1,0 +1,96 @@
+import type { AgentBackend } from "./agents";
+
+/** Application settings persisted locally. */
+export interface AppSettings {
+  claudePath: string;
+  codexPath: string;
+  geminiPath: string;
+  kimiPath: string;
+  opencodePath: string;
+  promptEnhancerAgent: AgentBackend;
+  plannerAgent: AgentBackend | null;
+  planAuditorAgent: AgentBackend | null;
+  generatorAgent: AgentBackend;
+  reviewerAgent: AgentBackend;
+  fixerAgent: AgentBackend;
+  finalJudgeAgent: AgentBackend;
+  executiveSummaryAgent: AgentBackend;
+  maxIterations: number;
+  requireGit: boolean;
+  /** Comma-separated list of enabled Claude models. */
+  claudeModel: string;
+  /** Comma-separated list of enabled Codex models. */
+  codexModel: string;
+  /** Comma-separated list of enabled Gemini models. */
+  geminiModel: string;
+  /** Comma-separated list of enabled Kimi models. */
+  kimiModel: string;
+  /** Comma-separated list of enabled OpenCode models. */
+  opencodeModel: string;
+  /** Per-stage model selections. */
+  promptEnhancerModel: string;
+  plannerModel: string | null;
+  planAuditorModel: string | null;
+  generatorModel: string;
+  reviewerModel: string;
+  fixerModel: string;
+  finalJudgeModel: string;
+  executiveSummaryModel: string;
+}
+
+/** Default settings values. */
+export const DEFAULT_SETTINGS: AppSettings = {
+  claudePath: "claude",
+  codexPath: "codex",
+  geminiPath: "gemini",
+  kimiPath: "kimi",
+  opencodePath: "opencode",
+  promptEnhancerAgent: "claude",
+  plannerAgent: null,
+  planAuditorAgent: null,
+  generatorAgent: "claude",
+  reviewerAgent: "codex",
+  fixerAgent: "claude",
+  finalJudgeAgent: "codex",
+  executiveSummaryAgent: "codex",
+  maxIterations: 3,
+  requireGit: true,
+  claudeModel: "sonnet",
+  codexModel: "codex-5.3",
+  geminiModel: "gemini-2.5-pro",
+  kimiModel: "kimi-k2.5",
+  opencodeModel: "opencode/glm-5",
+  promptEnhancerModel: "sonnet",
+  plannerModel: null,
+  planAuditorModel: null,
+  generatorModel: "sonnet",
+  reviewerModel: "codex-5.3",
+  fixerModel: "sonnet",
+  finalJudgeModel: "codex-5.3",
+  executiveSummaryModel: "codex-5.3",
+};
+
+/** Known model options per CLI, keyed by CLI name. */
+export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  claude: [
+    { value: "sonnet", label: "Sonnet" },
+    { value: "opus", label: "Opus" },
+    { value: "haiku", label: "Haiku" },
+  ],
+  codex: [
+    { value: "codex-5.3", label: "Codex 5.3" },
+  ],
+  gemini: [
+    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
+    { value: "gemini-3-pro-preview", label: "Gemini 3.0 Pro" },
+    { value: "gemini-3-flash-preview", label: "Gemini 3.0 Flash" },
+  ],
+  kimi: [
+    { value: "kimi-k2.5", label: "Kimi K2.5" },
+    { value: "kimi-code", label: "Kimi Code" },
+  ],
+  opencode: [
+    { value: "opencode/glm-5", label: "GLM 5" },
+    { value: "opencode/glm-4.7", label: "GLM 4.7" },
+  ],
+};

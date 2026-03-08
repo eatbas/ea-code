@@ -7,7 +7,7 @@ use super::models::{NewSession, RunRow, SessionRow, SessionSummary};
 
 /// Creates a new session (conversation thread) for a project.
 pub fn create(pool: &DbPool, id: &str, project_id: i32, title: &str) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::insert_into(sessions::table)
         .values(&NewSession {
@@ -28,7 +28,7 @@ pub fn list_for_project(
     project_id: i32,
     limit: i64,
 ) -> Result<Vec<SessionSummary>, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     let session_rows: Vec<SessionRow> = sessions::table
         .filter(sessions::project_id.eq(project_id))
@@ -71,7 +71,7 @@ pub fn list_for_project(
 
 /// Retrieves a session by ID, including the associated project path.
 pub fn get_by_id(pool: &DbPool, session_id: &str) -> Result<Option<SessionRow>, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     sessions::table
         .find(session_id)
@@ -82,7 +82,7 @@ pub fn get_by_id(pool: &DbPool, session_id: &str) -> Result<Option<SessionRow>, 
 
 /// Returns the project path for a given session.
 pub fn get_project_path(pool: &DbPool, session_id: &str) -> Result<String, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     let project_id: i32 = sessions::table
         .find(session_id)
@@ -99,7 +99,7 @@ pub fn get_project_path(pool: &DbPool, session_id: &str) -> Result<String, Strin
 
 /// Updates the session's `updated_at` timestamp (called after a run completes).
 pub fn touch(pool: &DbPool, session_id: &str) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
     let now = chrono::Utc::now().to_rfc3339();
 
     diesel::update(sessions::table.find(session_id))
@@ -112,7 +112,7 @@ pub fn touch(pool: &DbPool, session_id: &str) -> Result<(), String> {
 
 /// Updates the session title.
 pub fn update_title(pool: &DbPool, session_id: &str, title: &str) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::update(sessions::table.find(session_id))
         .set(sessions::title.eq(title))
@@ -124,7 +124,7 @@ pub fn update_title(pool: &DbPool, session_id: &str, title: &str) -> Result<(), 
 
 /// Deletes a session and all associated data (cascaded).
 pub fn delete(pool: &DbPool, session_id: &str) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::delete(sessions::table.find(session_id))
         .execute(&mut conn)

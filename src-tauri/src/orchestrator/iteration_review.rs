@@ -1,5 +1,6 @@
 //! Review, fix, and judge sub-stages for a single iteration.
 
+use std::mem;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -39,7 +40,7 @@ pub async fn run_review_fix_stages(
 ) -> Result<(), String> {
     run.current_stage = Some(PipelineStage::DiffAfterGenerate);
     stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterGenerate, &request.workspace_path, db));
-    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages.clone()); return Ok(()); }
+    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     run.current_stage = Some(PipelineStage::Review);
     let rev_r = execute_agent_stage(
@@ -58,13 +59,13 @@ pub async fn run_review_fix_stages(
     emit_artifact(app, run_id, "review", &rev_out, iter_num, db);
     if rev_r.status == StageStatus::Failed {
         stages.push(rev_r);
-        run.iterations.push(Iteration { number: iter_num, stages: stages.clone(), verdict: None, judge_reasoning: None });
+        run.iterations.push(Iteration { number: iter_num, stages: mem::take(stages), verdict: None, judge_reasoning: None });
         run.status = PipelineStatus::Failed;
         run.error = Some("Code Reviewer / Auditor stage failed".to_string());
         return Ok(());
     }
     stages.push(rev_r);
-    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages.clone()); return Ok(()); }
+    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     run.current_stage = Some(PipelineStage::Fix);
     let fix_r = execute_agent_stage(
@@ -81,19 +82,19 @@ pub async fn run_review_fix_stages(
     persist_iteration_context(db, run_id, iter_num, iter_ctx);
     if fix_r.status == StageStatus::Failed {
         stages.push(fix_r);
-        run.iterations.push(Iteration { number: iter_num, stages: stages.clone(), verdict: None, judge_reasoning: None });
+        run.iterations.push(Iteration { number: iter_num, stages: mem::take(stages), verdict: None, judge_reasoning: None });
         run.status = PipelineStatus::Failed;
         run.error = Some("Code Fixer stage failed".to_string());
         return Ok(());
     }
     stages.push(fix_r);
-    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages.clone()); return Ok(()); }
+    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     if let Some(question) = extract_question(&fix_out) {
         iter_ctx.fix_question = Some(question.clone());
         persist_iteration_context(db, run_id, iter_num, iter_ctx);
         let answer = ask_user_question(app, run_id, &PipelineStage::Fix, iter_num, question, fix_out.clone(), false, cancel_flag, answer_sender, db).await?;
-        if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages.clone()); return Ok(()); }
+        if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
         if let Some(a) = answer {
             if !a.skipped && !a.answer.is_empty() {
                 iter_ctx.fix_answer = Some(a.answer);
@@ -104,7 +105,7 @@ pub async fn run_review_fix_stages(
 
     run.current_stage = Some(PipelineStage::DiffAfterFix);
     stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterFix, &request.workspace_path, db));
-    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages.clone()); return Ok(()); }
+    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     Ok(())
 }
@@ -147,7 +148,7 @@ pub async fn run_judge_stage(
     emit_artifact(app, run_id, "judge", &judge_out, iter_num, db);
     if judge_r.status == StageStatus::Failed {
         stages.push(judge_r);
-        run.iterations.push(Iteration { number: iter_num, stages: stages.clone(), verdict: None, judge_reasoning: None });
+        run.iterations.push(Iteration { number: iter_num, stages: mem::take(stages), verdict: None, judge_reasoning: None });
         run.status = PipelineStatus::Failed;
         run.error = Some("Judge stage failed".to_string());
         return Ok(true);
@@ -157,7 +158,7 @@ pub async fn run_judge_stage(
     let (verdict, reasoning) = parse_judge_verdict(&judge_out);
     let verdict_str = match &verdict { JudgeVerdict::Complete => "COMPLETE", JudgeVerdict::NotComplete => "NOT COMPLETE" };
     let _ = db::runs::update_iteration_verdict(db, run_id, iter_num as i32, Some(verdict_str), Some(&reasoning));
-    run.iterations.push(Iteration { number: iter_num, stages: stages.clone(), verdict: Some(verdict.clone()), judge_reasoning: Some(reasoning) });
+    run.iterations.push(Iteration { number: iter_num, stages: mem::take(stages), verdict: Some(verdict.clone()), judge_reasoning: Some(reasoning) });
 
     if verdict == JudgeVerdict::Complete {
         run.final_verdict = Some(JudgeVerdict::Complete);

@@ -14,7 +14,7 @@ pub fn upsert(
     is_git_repo: bool,
     branch: Option<&str>,
 ) -> Result<i32, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -60,7 +60,7 @@ pub fn upsert(
 
 /// Returns recent projects ordered by last opened (descending).
 pub fn list_recent(pool: &DbPool, limit: i64) -> Result<Vec<ProjectRow>, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     projects::table
         .order(projects::last_opened.desc())
@@ -71,7 +71,7 @@ pub fn list_recent(pool: &DbPool, limit: i64) -> Result<Vec<ProjectRow>, String>
 
 /// Finds a project by its filesystem path. Returns `None` if not found.
 pub fn get_by_path(pool: &DbPool, path: &str) -> Result<Option<ProjectRow>, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     projects::table
         .filter(projects::path.eq(path))

@@ -47,7 +47,7 @@ pub fn insert(
     prompt: &str,
     max_iterations: i32,
 ) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::insert_into(runs::table)
         .values(&NewRun {
@@ -70,7 +70,7 @@ pub fn complete(
     verdict: Option<&str>,
     error: Option<&str>,
 ) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
     let now = chrono::Utc::now().to_rfc3339();
 
     diesel::update(runs::table.find(id))
@@ -88,7 +88,7 @@ pub fn complete(
 
 /// Inserts a new iteration record and returns its auto-generated ID.
 pub fn insert_iteration(pool: &DbPool, run_id: &str, number: i32) -> Result<i32, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::insert_into(iterations::table)
         .values(&NewIteration { run_id, number })
@@ -112,7 +112,7 @@ pub fn update_iteration_verdict(
     verdict: Option<&str>,
     judge_reasoning: Option<&str>,
 ) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::update(
         iterations::table
@@ -136,7 +136,7 @@ pub fn update_iteration_context(
     number: i32,
     patch: &IterationContextPatch<'_>,
 ) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::update(
         iterations::table
@@ -160,7 +160,7 @@ pub fn insert_stage(
     duration_ms: i32,
     error: Option<&str>,
 ) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::insert_into(stages::table)
         .values(&NewStage {
@@ -179,7 +179,7 @@ pub fn insert_stage(
 
 /// Returns a list of run summaries for a given session.
 pub fn list_for_session(pool: &DbPool, session_id: &str) -> Result<Vec<RunSummary>, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     let rows: Vec<RunRow> = runs::table
         .filter(runs::session_id.eq(session_id))
@@ -203,7 +203,7 @@ pub fn list_for_session(pool: &DbPool, session_id: &str) -> Result<Vec<RunSummar
 
 /// Returns full run detail including nested iterations, stages, and questions.
 pub fn get_full(pool: &DbPool, run_id: &str) -> Result<RunDetail, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     let run: RunRow = runs::table
         .find(run_id)
@@ -216,14 +216,24 @@ pub fn get_full(pool: &DbPool, run_id: &str) -> Result<RunDetail, String> {
         .load(&mut conn)
         .map_err(|e| format!("Failed to load iterations: {e}"))?;
 
+    // Batch-load all stages for every iteration in one query (avoids N+1)
+    let all_stages: Vec<StageRow> = stages::table
+        .filter(stages::iteration_id.eq_any(
+            iter_rows.iter().map(|i| i.id).collect::<Vec<_>>()
+        ))
+        .order(stages::created_at.asc())
+        .load(&mut conn)
+        .map_err(|e| format!("Failed to load stages: {e}"))?;
+
+    // Group stages by iteration_id for lookup
+    let mut stages_by_iter: std::collections::HashMap<i32, Vec<StageRow>> =
+        std::collections::HashMap::new();
+    for stage in all_stages {
+        stages_by_iter.entry(stage.iteration_id).or_default().push(stage);
+    }
+
     let mut iteration_details = Vec::with_capacity(iter_rows.len());
     for iter in &iter_rows {
-        let stage_rows: Vec<StageRow> = stages::table
-            .filter(stages::iteration_id.eq(iter.id))
-            .order(stages::created_at.asc())
-            .load(&mut conn)
-            .map_err(|e| format!("Failed to load stages: {e}"))?;
-
         iteration_details.push(IterationDetail {
             number: iter.number,
             verdict: iter.verdict.clone(),
@@ -241,7 +251,7 @@ pub fn get_full(pool: &DbPool, run_id: &str) -> Result<RunDetail, String> {
             generate_answer: iter.generate_answer.clone(),
             fix_question: iter.fix_question.clone(),
             fix_answer: iter.fix_answer.clone(),
-            stages: stage_rows,
+            stages: stages_by_iter.remove(&iter.id).unwrap_or_default(),
         });
     }
 
@@ -277,7 +287,7 @@ pub fn update_executive_summary(
     run_id: &str,
     patch: &RunExecutiveSummaryPatch<'_>,
 ) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::update(runs::table.find(run_id))
         .set(patch)

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
-import type { PipelineRun, PipelineStatus } from "../types";
+import type { PipelineRun } from "../types";
+import { isActive, isTerminal, statusInfo } from "../utils/statusHelpers";
 
 interface ChatViewProps {
   run: PipelineRun;
@@ -8,34 +9,6 @@ interface ChatViewProps {
   artifacts: Record<string, string>;
   onCancel: () => void;
   onBackToHome: () => void;
-}
-
-/** Whether the pipeline is actively executing. */
-function isActive(status: PipelineStatus): boolean {
-  return status === "running" || status === "waiting_for_input";
-}
-
-/** Whether the pipeline is in a terminal state. */
-function isTerminal(status: PipelineStatus): boolean {
-  return status === "completed" || status === "failed" || status === "cancelled";
-}
-
-/** Status label and colour for the current pipeline state. */
-function statusInfo(status: PipelineStatus): { label: string; colour: string } {
-  switch (status) {
-    case "running":
-      return { label: "Running", colour: "#6366f1" };
-    case "waiting_for_input":
-      return { label: "Awaiting input", colour: "#f59e0b" };
-    case "completed":
-      return { label: "Completed", colour: "#22c55e" };
-    case "failed":
-      return { label: "Failed", colour: "#ef4444" };
-    case "cancelled":
-      return { label: "Cancelled", colour: "#f59e0b" };
-    default:
-      return { label: "Idle", colour: "#9898b0" };
-  }
 }
 
 /** Chat-style running view with user prompt bubble and streaming agent output. */

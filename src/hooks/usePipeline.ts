@@ -175,30 +175,48 @@ export function usePipeline(): UsePipelineReturn {
   }, []);
 
   const startPipeline = useCallback(async (request: PipelineRequest): Promise<void> => {
-    await invoke("run_pipeline", { request });
+    try {
+      await invoke("run_pipeline", { request });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setRun((prev) => {
+        if (!prev) return prev;
+        return { ...prev, status: "failed", error: message, currentStage: undefined };
+      });
+    }
   }, []);
 
   const cancelPipeline = useCallback(async (): Promise<void> => {
-    await invoke("cancel_pipeline");
-    setPendingQuestion(null);
-    setRun((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        status: "cancelled",
-        completedAt: new Date().toISOString(),
-        currentStage: undefined,
-      };
-    });
+    try {
+      await invoke("cancel_pipeline");
+      setPendingQuestion(null);
+      setRun((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          status: "cancelled",
+          completedAt: new Date().toISOString(),
+          currentStage: undefined,
+        };
+      });
+    } catch (err) {
+      // Cancellation failure is non-critical — log and carry on
+      console.error("Failed to cancel pipeline:", err);
+    }
   }, []);
 
   const answerQuestion = useCallback(async (answer: PipelineAnswer): Promise<void> => {
-    await invoke("answer_pipeline_question", { answer });
-    setPendingQuestion(null);
-    setRun((prev) => {
-      if (!prev) return prev;
-      return { ...prev, status: "running" };
-    });
+    try {
+      await invoke("answer_pipeline_question", { answer });
+      setPendingQuestion(null);
+      setRun((prev) => {
+        if (!prev) return prev;
+        return { ...prev, status: "running" };
+      });
+    } catch (err) {
+      // Don't clear the pending question so the user can retry
+      console.error("Failed to submit answer:", err);
+    }
   }, []);
 
   /** Clear all pipeline state and return to idle. */

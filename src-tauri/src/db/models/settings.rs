@@ -1,0 +1,77 @@
+/// Database model types for the settings table.
+
+use diesel::prelude::*;
+use serde::Serialize;
+
+use crate::schema::settings;
+
+#[derive(Queryable, Selectable, Serialize, Clone, Debug)]
+#[diesel(table_name = settings)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsRow {
+    pub id: i32,
+    pub claude_path: String,
+    pub codex_path: String,
+    pub gemini_path: String,
+    pub kimi_path: String,
+    pub opencode_path: String,
+    pub prompt_enhancer_agent: String,
+    pub planner_agent: Option<String>,
+    pub plan_auditor_agent: Option<String>,
+    pub generator_agent: String,
+    pub reviewer_agent: String,
+    pub fixer_agent: String,
+    pub final_judge_agent: String,
+    pub max_iterations: i32,
+    pub require_git: bool,
+    pub updated_at: String,
+    pub claude_model: String,
+    pub codex_model: String,
+    pub gemini_model: String,
+    pub kimi_model: String,
+    pub opencode_model: String,
+    pub prompt_enhancer_model: String,
+    pub planner_model: Option<String>,
+    pub plan_auditor_model: Option<String>,
+    pub generator_model: String,
+    pub reviewer_model: String,
+    pub fixer_model: String,
+    pub final_judge_model: String,
+    pub executive_summary_agent: String,
+    pub executive_summary_model: String,
+}
+
+#[derive(AsChangeset)]
+#[diesel(table_name = settings)]
+#[diesel(treat_none_as_null = true)]
+pub struct SettingsChangeset {
+    pub claude_path: String,
+    pub codex_path: String,
+    pub gemini_path: String,
+    pub kimi_path: String,
+    pub opencode_path: String,
+    pub prompt_enhancer_agent: String,
+    pub planner_agent: Option<String>,
+    pub plan_auditor_agent: Option<String>,
+    pub generator_agent: String,
+    pub reviewer_agent: String,
+    pub fixer_agent: String,
+    pub final_judge_agent: String,
+    pub max_iterations: i32,
+    pub require_git: bool,
+    pub updated_at: String,
+    pub claude_model: String,
+    pub codex_model: String,
+    pub gemini_model: String,
+    pub kimi_model: String,
+    pub opencode_model: String,
+    pub prompt_enhancer_model: String,
+    pub planner_model: Option<String>,
+    pub plan_auditor_model: Option<String>,
+    pub generator_model: String,
+    pub reviewer_model: String,
+    pub fixer_model: String,
+    pub final_judge_model: String,
+    pub executive_summary_agent: String,
+    pub executive_summary_model: String,
+}

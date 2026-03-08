@@ -14,7 +14,9 @@ use tokio::sync::Mutex;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialise the SQLite database and run pending migrations
-    let pool = db::init_db().expect("Failed to initialise database");
+    let pool = db::init_db().unwrap_or_else(|e| {
+        panic!("Failed to initialise database — check permissions for ~/.config/ea-code/: {e}");
+    });
 
     // Import legacy settings.json if it exists (first launch only)
     if let Err(e) = db::import_legacy_settings(&pool) {

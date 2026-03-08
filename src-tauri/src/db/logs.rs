@@ -13,7 +13,7 @@ pub fn insert(
     line: &str,
     stream: &str,
 ) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::insert_into(logs::table)
         .values(&NewLog {
@@ -35,7 +35,7 @@ pub fn get_for_run(
     offset: i64,
     limit: i64,
 ) -> Result<Vec<LogRow>, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     logs::table
         .filter(logs::run_id.eq(run_id))

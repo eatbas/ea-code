@@ -16,7 +16,7 @@ pub fn insert(
     agent_output: &str,
     optional: bool,
 ) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     diesel::insert_into(questions::table)
         .values(&NewQuestion {
@@ -41,7 +41,7 @@ pub fn record_answer(
     answer: Option<&str>,
     skipped: bool,
 ) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
     let now = chrono::Utc::now().to_rfc3339();
 
     diesel::update(questions::table.find(question_id))

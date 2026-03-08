@@ -8,7 +8,7 @@ use super::models::{SettingsChangeset, SettingsRow};
 
 /// Loads settings from the database (single row, id = 1).
 pub fn get(pool: &DbPool) -> Result<AppSettings, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     let row: SettingsRow = settings::table
         .find(1)
@@ -20,7 +20,7 @@ pub fn get(pool: &DbPool) -> Result<AppSettings, String> {
 
 /// Persists settings to the database (updates the single row).
 pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+    let mut conn = super::get_conn(pool)?;
 
     let changeset = SettingsChangeset {
         claude_path: s.claude_path.clone(),

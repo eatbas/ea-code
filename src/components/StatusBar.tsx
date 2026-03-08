@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useState, useEffect } from "react";
 import type { PipelineStatus } from "../types";
+import { isActive, isTerminal } from "../utils/statusHelpers";
 
 interface StatusBarProps {
   status: PipelineStatus;
@@ -38,16 +39,6 @@ function formatElapsed(seconds: number): string {
     return `${mins}m ${secs}s`;
   }
   return `${secs}s`;
-}
-
-/** Whether the pipeline is in a terminal (non-running) state. */
-function isTerminal(status: PipelineStatus): boolean {
-  return status === "completed" || status === "failed" || status === "cancelled";
-}
-
-/** Whether the pipeline is actively executing. */
-function isActive(status: PipelineStatus): boolean {
-  return status === "running" || status === "waiting_for_input";
 }
 
 /** Bottom status bar showing pipeline state, stage, iteration, elapsed time, and action buttons. */

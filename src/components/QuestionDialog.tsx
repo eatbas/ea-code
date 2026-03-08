@@ -1,20 +1,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { PipelineQuestionEvent, PipelineAnswer } from "../types";
-
-/** Display labels for pipeline stages. */
-const STAGE_LABELS: Record<string, string> = {
-  prompt_enhance: "Prompt",
-  plan: "Plan",
-  plan_audit: "Plan Audit",
-  generate: "Generate",
-  diff_after_generate: "Diff",
-  review: "Review",
-  fix: "Fix",
-  diff_after_fix: "Diff",
-  judge: "Judge",
-  executive_summary: "Summary",
-};
+import { STAGE_LABELS } from "./shared/constants";
 
 interface QuestionDialogProps {
   question: PipelineQuestionEvent;

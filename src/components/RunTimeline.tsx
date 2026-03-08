@@ -1,25 +1,12 @@
 import type { ReactNode } from "react";
 import type { StageResult, PipelineStage, StageStatus } from "../types";
+import { STAGE_LABELS } from "./shared/constants";
 
 interface RunTimelineProps {
   stages: StageResult[];
   currentStage?: PipelineStage;
   iteration: number;
 }
-
-/** Display labels for each pipeline stage. */
-const STAGE_LABELS: Record<PipelineStage, string> = {
-  prompt_enhance: "Prompt",
-  plan: "Plan",
-  plan_audit: "Plan Audit",
-  generate: "Generate",
-  diff_after_generate: "Diff",
-  review: "Review",
-  fix: "Fix",
-  diff_after_fix: "Diff",
-  judge: "Judge",
-  executive_summary: "Summary",
-};
 
 /** All stages in pipeline order. */
 const STAGE_ORDER: PipelineStage[] = [

@@ -17,6 +17,11 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 /// Thread-safe connection pool for SQLite.
 pub type DbPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
 
+/// Convenience function to get a connection from the pool.
+pub fn get_conn(pool: &DbPool) -> Result<r2d2::PooledConnection<ConnectionManager<SqliteConnection>>, String> {
+    pool.get().map_err(|e| format!("Pool error: {e}"))
+}
+
 /// Embedded migrations compiled into the binary.
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 

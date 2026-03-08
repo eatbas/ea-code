@@ -47,10 +47,7 @@ When a file approaches or exceeds this limit:
 
 ### Currently Over Limit
 
-| File | Lines | Action Needed |
-|---|---|---|
-| `src-tauri/src/orchestrator.rs` | 546 | Split into `orchestrator/` module |
-| `src-tauri/src/bin/mcp_server.rs` | 403 | Split handler logic into separate modules |
+All files are currently within the 300-line limit after the v0.2.0 refactoring.
 
 ---
 
@@ -59,7 +56,7 @@ When a file approaches or exceeds this limit:
 - **Components**: Extract reusable UI elements into `src/components/shared/` or co-located files. Never duplicate JSX across views.
 - **Hooks**: Shared stateful logic belongs in `src/hooks/`. Prefer composition of small hooks over monolithic ones.
 - **Rust**: Common utilities go in dedicated modules. Agent adapters share the `AgentRunner` trait from `agents/base.rs`.
-- **Types**: Frontend types live in `src/types/index.ts`. Rust models in `src-tauri/src/models.rs`. Keep them in sync.
+- **Types**: Frontend types live in `src/types/` (split by domain, re-exported from `index.ts`). Rust models in `src-tauri/src/models/` (split by domain, re-exported from `mod.rs`). Keep them in sync.
 
 ---
 
@@ -99,19 +96,22 @@ When a file approaches or exceeds this limit:
 ```
 src/                          # Frontend (React + TS)
 ├── components/               # UI components (keep < 300 lines each)
+│   ├── shared/               # Reusable form inputs, constants
+│   └── AgentsView/           # Split component folder
 ├── hooks/                    # Custom React hooks
-├── types/index.ts            # Shared type definitions
+├── types/                    # Shared type definitions (split by domain)
+├── utils/                    # Pure helper functions
 ├── App.tsx                   # Root layout and routing
 └── main.tsx                  # Entry point
 
 src-tauri/                    # Backend (Rust)
 ├── src/
 │   ├── agents/               # CLI adapters (base trait + claude/codex/gemini)
-│   ├── bin/mcp_server.rs     # MCP server binary
+│   ├── bin/mcp_server/       # MCP server binary (split into submodules)
+│   ├── commands/             # Tauri IPC commands (split by domain)
 │   ├── db/                   # Diesel ORM layer (models, queries per table)
-│   ├── commands.rs           # Tauri IPC commands
-│   ├── models.rs             # Shared Rust types (serde)
-│   ├── orchestrator.rs       # Pipeline engine
+│   ├── models/               # Shared Rust types (split by domain)
+│   ├── orchestrator/         # Pipeline engine (split into submodules)
 │   ├── schema.rs             # Diesel schema (auto-generated)
 │   └── lib.rs                # Tauri app builder
 └── migrations/               # Diesel SQL migrations
