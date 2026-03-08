@@ -1,18 +1,27 @@
 import type { ReactNode } from "react";
 import { useState, useRef, useEffect } from "react";
-import type { AgentBackend, RunOptions, CliHealth } from "../../types";
+import type { AgentBackend, RunOptions, CliHealth, AppSettings } from "../../types";
 import { CLI_MODEL_OPTIONS } from "../../types";
+import { hasMinimumAgentsConfigured } from "../../utils/agentSettings";
 import { BACKEND_OPTIONS } from "./constants";
 import { PopoverSelect } from "./PopoverSelect";
 
 interface PromptInputBarProps {
   placeholder?: string;
   cliHealth: CliHealth | null;
+  settings: AppSettings | null;
+  onMissingAgentSetup?: () => void;
   onSubmit: (options: RunOptions) => void;
 }
 
 /** Shared prompt input bar with textarea, direct task checkbox, and agent/model selectors. */
-export function PromptInputBar({ placeholder, cliHealth, onSubmit }: PromptInputBarProps): ReactNode {
+export function PromptInputBar({
+  placeholder,
+  cliHealth,
+  settings,
+  onMissingAgentSetup,
+  onSubmit,
+}: PromptInputBarProps): ReactNode {
   const [prompt, setPrompt] = useState<string>("");
   const [directTask, setDirectTask] = useState(false);
   const [noPlan, setNoPlan] = useState(false);
@@ -24,7 +33,16 @@ export function PromptInputBar({ placeholder, cliHealth, onSubmit }: PromptInput
     (opt) => cliHealth?.[opt.value]?.available,
   );
 
-  const canRun = prompt.trim().length > 0;
+  const hasPrompt = prompt.trim().length > 0;
+  const missingMinimumAgents = !settings || !hasMinimumAgentsConfigured(settings);
+  const blockedByMinimumAgents = !directTask && missingMinimumAgents;
+  const canRun = hasPrompt && !blockedByMinimumAgents;
+
+  const disabledReason = blockedByMinimumAgents
+    ? "Go to Settings/Agents and set the minimum agent roles before sending."
+    : directTask
+      ? "Run direct task"
+      : "Run pipeline";
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -32,6 +50,11 @@ export function PromptInputBar({ placeholder, cliHealth, onSubmit }: PromptInput
   }, [prompt]);
 
   function handleSubmit(): void {
+    if (blockedByMinimumAgents) {
+      onMissingAgentSetup?.();
+      return;
+    }
+
     if (canRun) {
       onSubmit({
         prompt,
@@ -65,17 +88,27 @@ export function PromptInputBar({ placeholder, cliHealth, onSubmit }: PromptInput
           className="flex-1 resize-none bg-transparent text-sm text-[#e4e4ed] placeholder-[#9898b0] focus:outline-none"
           style={{ maxHeight: "160px" }}
         />
-        <button
-          onClick={handleSubmit}
-          disabled={!canRun}
-          className="shrink-0 rounded-lg bg-[#e4e4ed] p-2 text-[#0f0f14] hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          title={directTask ? "Run direct task" : "Run pipeline"}
+        <span
+          className="shrink-0"
+          title={disabledReason}
+          onClick={() => {
+            if (blockedByMinimumAgents) {
+              onMissingAgentSetup?.();
+            }
+          }}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="19" x2="12" y2="5" />
-            <polyline points="5 12 12 5 19 12" />
-          </svg>
-        </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!canRun}
+            className="rounded-lg bg-[#e4e4ed] p-2 text-[#0f0f14] hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            title={canRun ? disabledReason : undefined}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5" />
+              <polyline points="5 12 12 5 19 12" />
+            </svg>
+          </button>
+        </span>
       </div>
 
       {/* Bottom row: checkboxes + dropdowns */}

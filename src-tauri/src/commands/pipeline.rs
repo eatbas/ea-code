@@ -18,6 +18,15 @@ pub async fn run_pipeline(
     use tauri::Emitter;
 
     let loaded_settings = db::settings::get_merged_for_workspace(&state.db, &request.workspace_path)?;
+    if !request.direct_task {
+        let missing = loaded_settings.missing_minimum_agents();
+        if !missing.is_empty() {
+            return Err(format!(
+                "Cannot start pipeline. Go to Settings/Agents and set the minimum agent roles: {}.",
+                missing.join(", ")
+            ));
+        }
+    }
     let db = state.db.clone();
 
     // Reset the cancellation flag

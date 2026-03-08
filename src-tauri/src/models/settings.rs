@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use super::agents::{
-    default_copilot_model, default_copilot_path,
-    default_executive_summary_agent, default_executive_summary_model, default_kimi_model,
-    default_kimi_path, default_opencode_model, default_opencode_path,
-    default_prompt_enhancer_agent, AgentBackend,
+    default_copilot_model, default_copilot_path, default_executive_summary_model,
+    default_kimi_model, default_kimi_path, default_opencode_model, default_opencode_path,
+    AgentBackend,
 };
 
 /// Application settings persisted locally.
@@ -20,18 +19,22 @@ pub struct AppSettings {
     pub copilot_path: String,
     #[serde(default = "default_opencode_path")]
     pub opencode_path: String,
-    #[serde(default = "default_prompt_enhancer_agent")]
-    pub prompt_enhancer_agent: AgentBackend,
+    #[serde(default)]
+    pub prompt_enhancer_agent: Option<AgentBackend>,
     #[serde(default)]
     pub skill_selector_agent: Option<AgentBackend>,
     #[serde(default)]
     pub planner_agent: Option<AgentBackend>,
     #[serde(default)]
     pub plan_auditor_agent: Option<AgentBackend>,
-    pub generator_agent: AgentBackend,
-    pub reviewer_agent: AgentBackend,
-    pub fixer_agent: AgentBackend,
-    pub final_judge_agent: AgentBackend,
+    #[serde(default)]
+    pub generator_agent: Option<AgentBackend>,
+    #[serde(default)]
+    pub reviewer_agent: Option<AgentBackend>,
+    #[serde(default)]
+    pub fixer_agent: Option<AgentBackend>,
+    #[serde(default)]
+    pub final_judge_agent: Option<AgentBackend>,
     pub max_iterations: u32,
     pub require_git: bool,
     /// Comma-separated list of enabled Claude models.
@@ -61,8 +64,8 @@ pub struct AppSettings {
     pub reviewer_model: String,
     pub fixer_model: String,
     pub final_judge_model: String,
-    #[serde(default = "default_executive_summary_agent")]
-    pub executive_summary_agent: AgentBackend,
+    #[serde(default)]
+    pub executive_summary_agent: Option<AgentBackend>,
     #[serde(default = "default_executive_summary_model")]
     pub executive_summary_model: String,
     /// Pause pipeline after planning for user approval.
@@ -113,19 +116,19 @@ impl Default for AppSettings {
             kimi_path: "kimi".to_string(),
             copilot_path: "gh".to_string(),
             opencode_path: "opencode".to_string(),
-            prompt_enhancer_agent: AgentBackend::Claude,
+            prompt_enhancer_agent: None,
             planner_agent: None,
             plan_auditor_agent: None,
-            generator_agent: AgentBackend::Claude,
-            reviewer_agent: AgentBackend::Codex,
-            fixer_agent: AgentBackend::Claude,
-            final_judge_agent: AgentBackend::Codex,
+            generator_agent: None,
+            reviewer_agent: None,
+            fixer_agent: None,
+            final_judge_agent: None,
             max_iterations: 3,
             require_git: true,
             claude_model: "sonnet".to_string(),
             codex_model: "codex-5.3".to_string(),
             gemini_model: "gemini-2.5-pro".to_string(),
-            kimi_model: "kimi-k2.5".to_string(),
+            kimi_model: "kimi-code".to_string(),
             copilot_model: "default".to_string(),
             opencode_model: "opencode/glm-5".to_string(),
             prompt_enhancer_model: "sonnet".to_string(),
@@ -136,7 +139,7 @@ impl Default for AppSettings {
             reviewer_model: "codex-5.3".to_string(),
             fixer_model: "sonnet".to_string(),
             final_judge_model: "codex-5.3".to_string(),
-            executive_summary_agent: AgentBackend::Codex,
+            executive_summary_agent: None,
             executive_summary_model: "codex-5.3".to_string(),
             require_plan_approval: false,
             plan_auto_approve_timeout_sec: 45,
@@ -147,5 +150,32 @@ impl Default for AppSettings {
             agent_max_turns: 25,
             skill_selector_agent: None,
         }
+    }
+}
+
+impl AppSettings {
+    pub fn missing_minimum_agents(&self) -> Vec<&'static str> {
+        let mut missing = Vec::new();
+
+        if self.prompt_enhancer_agent.is_none() {
+            missing.push("Prompt Enhancer");
+        }
+        if self.generator_agent.is_none() {
+            missing.push("Coder");
+        }
+        if self.reviewer_agent.is_none() {
+            missing.push("Code Reviewer");
+        }
+        if self.fixer_agent.is_none() {
+            missing.push("Code Fixer");
+        }
+        if self.final_judge_agent.is_none() {
+            missing.push("Judge");
+        }
+        if self.executive_summary_agent.is_none() {
+            missing.push("Executive Summary");
+        }
+
+        missing
     }
 }

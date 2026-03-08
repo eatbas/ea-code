@@ -26,14 +26,6 @@ pub enum AgentBackend {
     OpenCode,
 }
 
-pub(crate) fn default_prompt_enhancer_agent() -> AgentBackend {
-    AgentBackend::Claude
-}
-
-pub(crate) fn default_executive_summary_agent() -> AgentBackend {
-    AgentBackend::Codex
-}
-
 pub(crate) fn default_executive_summary_model() -> String {
     "codex-5.3".to_string()
 }
@@ -51,7 +43,7 @@ pub(crate) fn default_copilot_path() -> String {
 }
 
 pub(crate) fn default_kimi_model() -> String {
-    "kimi-k2.5".to_string()
+    "kimi-code".to_string()
 }
 
 pub(crate) fn default_opencode_model() -> String {

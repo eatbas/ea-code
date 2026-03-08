@@ -84,14 +84,17 @@ export function SettingsView({ settings, onSave, health, onCheckHealth }: Settin
             <p className="text-xs text-[#9898b0]">
               Configure which CLI backend handles each pipeline role.
             </p>
+            <p className="text-xs text-[#6b6b82]">
+              Roles marked as minimum must be set before prompts can be sent.
+            </p>
             <div className="flex flex-col gap-3">
-              <AgentSelect label="Prompt Enhancer" value={draft.promptEnhancerAgent} onChange={(v) => update({ promptEnhancerAgent: v })} />
+              <AgentSelect label="Prompt Enhancer (minimum)" value={draft.promptEnhancerAgent} onChange={(v) => update({ promptEnhancerAgent: v })} />
               <OptionalAgentSelect label="Planner" value={draft.plannerAgent} onChange={(v) => update({ plannerAgent: v })} />
               <OptionalAgentSelect label="Plan Auditor" value={draft.planAuditorAgent} onChange={(v) => update({ planAuditorAgent: v })} />
-              <AgentSelect label="Coder" value={draft.generatorAgent} onChange={(v) => update({ generatorAgent: v })} />
-              <AgentSelect label="Code Reviewer / Auditor" value={draft.reviewerAgent} onChange={(v) => update({ reviewerAgent: v })} />
-              <AgentSelect label="Code Fixer" value={draft.fixerAgent} onChange={(v) => update({ fixerAgent: v })} />
-              <AgentSelect label="Judge" value={draft.finalJudgeAgent} onChange={(v) => update({ finalJudgeAgent: v })} />
+              <AgentSelect label="Coder (minimum)" value={draft.generatorAgent} onChange={(v) => update({ generatorAgent: v })} />
+              <AgentSelect label="Code Reviewer / Auditor (minimum)" value={draft.reviewerAgent} onChange={(v) => update({ reviewerAgent: v })} />
+              <AgentSelect label="Code Fixer (minimum)" value={draft.fixerAgent} onChange={(v) => update({ fixerAgent: v })} />
+              <AgentSelect label="Judge (minimum)" value={draft.finalJudgeAgent} onChange={(v) => update({ finalJudgeAgent: v })} />
             </div>
           </section>
 

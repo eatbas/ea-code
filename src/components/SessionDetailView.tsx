@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
-import type { SessionDetail, RunOptions, CliHealth } from "../types";
+import type { SessionDetail, RunOptions, CliHealth, AppSettings } from "../types";
 import { RunCard } from "./RunCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
 
@@ -8,6 +8,8 @@ interface SessionDetailViewProps {
   sessionDetail: SessionDetail | null;
   loading: boolean;
   cliHealth: CliHealth | null;
+  settings: AppSettings | null;
+  onMissingAgentSetup: () => void;
   onRun: (options: RunOptions) => void;
   onBackToHome: () => void;
 }
@@ -17,6 +19,8 @@ export function SessionDetailView({
   sessionDetail,
   loading,
   cliHealth,
+  settings,
+  onMissingAgentSetup,
   onRun,
   onBackToHome,
 }: SessionDetailViewProps): ReactNode {
@@ -86,6 +90,8 @@ export function SessionDetailView({
         <PromptInputBar
           placeholder="Continue this session..."
           cliHealth={cliHealth}
+          settings={settings}
+          onMissingAgentSetup={onMissingAgentSetup}
           onSubmit={onRun}
         />
       </div>

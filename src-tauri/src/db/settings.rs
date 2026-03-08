@@ -30,22 +30,22 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         kimi_path: s.kimi_path.clone(),
         opencode_path: s.opencode_path.clone(),
         copilot_path: s.copilot_path.clone(),
-        prompt_enhancer_agent: backend_to_str(&s.prompt_enhancer_agent),
+        prompt_enhancer_agent: backend_to_db_str_or_empty(s.prompt_enhancer_agent.as_ref()),
         skill_selector_agent: backend_to_opt(s.skill_selector_agent.as_ref()),
         planner_agent: backend_to_opt(s.planner_agent.as_ref()),
         plan_auditor_agent: backend_to_opt(s.plan_auditor_agent.as_ref()),
-        generator_agent: backend_to_str(&s.generator_agent),
-        reviewer_agent: backend_to_str(&s.reviewer_agent),
-        fixer_agent: backend_to_str(&s.fixer_agent),
-        final_judge_agent: backend_to_str(&s.final_judge_agent),
-        executive_summary_agent: backend_to_str(&s.executive_summary_agent),
+        generator_agent: backend_to_db_str_or_empty(s.generator_agent.as_ref()),
+        reviewer_agent: backend_to_db_str_or_empty(s.reviewer_agent.as_ref()),
+        fixer_agent: backend_to_db_str_or_empty(s.fixer_agent.as_ref()),
+        final_judge_agent: backend_to_db_str_or_empty(s.final_judge_agent.as_ref()),
+        executive_summary_agent: backend_to_db_str_or_empty(s.executive_summary_agent.as_ref()),
         max_iterations: s.max_iterations as i32,
         require_git: s.require_git,
         updated_at: super::now_rfc3339(),
         claude_model: s.claude_model.clone(),
         codex_model: s.codex_model.clone(),
         gemini_model: s.gemini_model.clone(),
-        kimi_model: s.kimi_model.clone(),
+        kimi_model: normalise_kimi_model_csv(&s.kimi_model),
         opencode_model: s.opencode_model.clone(),
         copilot_model: s.copilot_model.clone(),
         prompt_enhancer_model: s.prompt_enhancer_model.clone(),
@@ -78,24 +78,29 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
 fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
     use crate::models::AgentBackend;
 
-    fn parse_backend(s: &str) -> AgentBackend {
+    fn parse_backend(s: &str) -> Option<AgentBackend> {
         match s {
-            "claude" => AgentBackend::Claude,
-            "codex" => AgentBackend::Codex,
-            "gemini" => AgentBackend::Gemini,
-            "kimi" => AgentBackend::Kimi,
+            "claude" => Some(AgentBackend::Claude),
+            "codex" => Some(AgentBackend::Codex),
+            "gemini" => Some(AgentBackend::Gemini),
+            "kimi" => Some(AgentBackend::Kimi),
             // Legacy compatibility: Copilot assignments are migrated to Codex.
-            "copilot" => AgentBackend::Codex,
-            "opencode" => AgentBackend::OpenCode,
+            "copilot" => Some(AgentBackend::Codex),
+            "opencode" => Some(AgentBackend::OpenCode),
+            "" => None,
             _ => {
-                eprintln!("Unknown backend in settings row: {s}; defaulting to claude");
-                AgentBackend::Claude
+                eprintln!("Unknown backend in settings row: {s}; leaving unset");
+                None
             }
         }
     }
 
     fn parse_optional_backend(s: Option<&str>) -> Option<AgentBackend> {
-        s.map(parse_backend)
+        s.and_then(parse_backend)
+    }
+
+    fn parse_required_backend(raw: &str) -> Option<AgentBackend> {
+        parse_backend(raw.trim())
     }
 
     AppSettings {
@@ -105,21 +110,21 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         kimi_path: row.kimi_path.clone(),
         opencode_path: row.opencode_path.clone(),
         copilot_path: row.copilot_path.clone(),
-        prompt_enhancer_agent: parse_backend(&row.prompt_enhancer_agent),
+        prompt_enhancer_agent: parse_required_backend(&row.prompt_enhancer_agent),
         skill_selector_agent: parse_optional_backend(row.skill_selector_agent.as_deref()),
         planner_agent: parse_optional_backend(row.planner_agent.as_deref()),
         plan_auditor_agent: parse_optional_backend(row.plan_auditor_agent.as_deref()),
-        generator_agent: parse_backend(&row.generator_agent),
-        reviewer_agent: parse_backend(&row.reviewer_agent),
-        fixer_agent: parse_backend(&row.fixer_agent),
-        final_judge_agent: parse_backend(&row.final_judge_agent),
-        executive_summary_agent: parse_backend(&row.executive_summary_agent),
+        generator_agent: parse_required_backend(&row.generator_agent),
+        reviewer_agent: parse_required_backend(&row.reviewer_agent),
+        fixer_agent: parse_required_backend(&row.fixer_agent),
+        final_judge_agent: parse_required_backend(&row.final_judge_agent),
+        executive_summary_agent: parse_required_backend(&row.executive_summary_agent),
         max_iterations: row.max_iterations as u32,
         require_git: row.require_git,
         claude_model: row.claude_model.clone(),
         codex_model: row.codex_model.clone(),
         gemini_model: row.gemini_model.clone(),
-        kimi_model: row.kimi_model.clone(),
+        kimi_model: normalise_kimi_model_csv(&row.kimi_model),
         opencode_model: row.opencode_model.clone(),
         copilot_model: row.copilot_model.clone(),
         prompt_enhancer_model: row.prompt_enhancer_model.clone(),
@@ -141,6 +146,11 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
     }
 }
 
+fn normalise_kimi_model_csv(_csv: &str) -> String {
+    // Kimi now exposes a single supported model key in the UI and settings.
+    "kimi-code".to_string()
+}
+
 /// Converts an `AgentBackend` to its database string representation.
 fn backend_to_str(b: &crate::models::AgentBackend) -> String {
     match b {
@@ -155,6 +165,10 @@ fn backend_to_str(b: &crate::models::AgentBackend) -> String {
 /// Converts an optional `AgentBackend` to its nullable DB representation.
 fn backend_to_opt(b: Option<&crate::models::AgentBackend>) -> Option<String> {
     b.map(backend_to_str)
+}
+
+fn backend_to_db_str_or_empty(b: Option<&crate::models::AgentBackend>) -> String {
+    b.map(backend_to_str).unwrap_or_default()
 }
 
 /// Loads merged settings for a workspace path (global + project overrides).

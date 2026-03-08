@@ -65,6 +65,9 @@ export function AgentsView({
           <p className="text-sm text-[#9898b0]">
             Configure which CLI backend and model handles each pipeline role.
           </p>
+          <p className="text-xs text-[#6b6b82]">
+            Roles marked as minimum must be set before prompts can be sent.
+          </p>
           {projectScoped && (
             <div className="rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-xs text-[#9898b0]">
               Project override mode: settings are saved for the active workspace.
@@ -92,13 +95,13 @@ export function AgentsView({
                 >
                   <span className="text-xs font-medium text-[#9898b0]">
                     {stage.label}
-                    {stage.optional && (
-                      <span className="ml-1 text-[#6b6b80]">(optional)</span>
-                    )}
+                    <span className="ml-1 text-[#6b6b80]">
+                      {stage.optional ? "(optional)" : "(minimum)"}
+                    </span>
                   </span>
                   <CascadingSelect
-                    backend={currentBackend as AgentBackend}
-                    model={currentModel ?? ""}
+                    backend={currentBackend}
+                    model={currentModel}
                     settings={draft}
                     optional={stage.optional}
                     cliHealth={cliHealth ?? null}
@@ -106,8 +109,8 @@ export function AgentsView({
                     onChange={(newBackend, newModel) => {
                       update({
                         [stage.backendKey]: newBackend,
-                        [stage.modelKey]: newModel,
-                      });
+                        [stage.modelKey]: newModel ?? "",
+                      } as Partial<AppSettings>);
                     }}
                   />
                 </div>

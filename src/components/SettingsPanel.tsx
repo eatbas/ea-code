@@ -97,13 +97,14 @@ export function SettingsPanel({
           {/* Agent role mapping */}
           <fieldset className="flex flex-col gap-2">
             <legend className="text-xs font-medium text-[#9898b0] mb-1">Agent Roles</legend>
-            <AgentSelect label="Prompt Enhancer" value={draft.promptEnhancerAgent} onChange={(v) => update({ promptEnhancerAgent: v })} />
+            <span className="text-[10px] text-[#6b6b82]">Roles marked as minimum must be set before prompts can be sent.</span>
+            <AgentSelect label="Prompt Enhancer (minimum)" value={draft.promptEnhancerAgent} onChange={(v) => update({ promptEnhancerAgent: v })} />
             <OptionalAgentSelect label="Planner" value={draft.plannerAgent} onChange={(v) => update({ plannerAgent: v })} />
             <OptionalAgentSelect label="Plan Auditor" value={draft.planAuditorAgent} onChange={(v) => update({ planAuditorAgent: v })} />
-            <AgentSelect label="Coder" value={draft.generatorAgent} onChange={(v) => update({ generatorAgent: v })} />
-            <AgentSelect label="Code Reviewer / Auditor" value={draft.reviewerAgent} onChange={(v) => update({ reviewerAgent: v })} />
-            <AgentSelect label="Code Fixer" value={draft.fixerAgent} onChange={(v) => update({ fixerAgent: v })} />
-            <AgentSelect label="Judge" value={draft.finalJudgeAgent} onChange={(v) => update({ finalJudgeAgent: v })} />
+            <AgentSelect label="Coder (minimum)" value={draft.generatorAgent} onChange={(v) => update({ generatorAgent: v })} />
+            <AgentSelect label="Code Reviewer / Auditor (minimum)" value={draft.reviewerAgent} onChange={(v) => update({ reviewerAgent: v })} />
+            <AgentSelect label="Code Fixer (minimum)" value={draft.fixerAgent} onChange={(v) => update({ fixerAgent: v })} />
+            <AgentSelect label="Judge (minimum)" value={draft.finalJudgeAgent} onChange={(v) => update({ finalJudgeAgent: v })} />
           </fieldset>
 
           {/* Pipeline parameters */}

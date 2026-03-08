@@ -41,13 +41,22 @@ pub async fn run_review_fix_stages(
     iter_ctx: &mut IterationContext,
     workspace_context: &str,
 ) -> Result<(), String> {
+    let reviewer_agent = settings.reviewer_agent.as_ref().ok_or_else(|| {
+        "Code Reviewer is not set. Go to Settings/Agents and configure the minimum roles."
+            .to_string()
+    })?;
+    let fixer_agent = settings.fixer_agent.as_ref().ok_or_else(|| {
+        "Code Fixer is not set. Go to Settings/Agents and configure the minimum roles."
+            .to_string()
+    })?;
+
     run.current_stage = Some(PipelineStage::DiffAfterGenerate);
     stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterGenerate, &request.workspace_path, db));
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     run.current_stage = Some(PipelineStage::Review);
     let rev_r = execute_agent_stage(
-        app, run_id, iter_num, iteration_db_id, PipelineStage::Review, &settings.reviewer_agent,
+        app, run_id, iter_num, iteration_db_id, PipelineStage::Review, reviewer_agent,
         &AgentInput {
             prompt: prompts::build_reviewer_user(&request.prompt, enhanced, iter_ctx.selected_plan()),
             context: Some(compose_agent_context(
@@ -75,7 +84,7 @@ pub async fn run_review_fix_stages(
 
     run.current_stage = Some(PipelineStage::Fix);
     let fix_r = execute_agent_stage(
-        app, run_id, iter_num, iteration_db_id, PipelineStage::Fix, &settings.fixer_agent,
+        app, run_id, iter_num, iteration_db_id, PipelineStage::Fix, fixer_agent,
         &AgentInput {
             prompt: prompts::build_fixer_user(
                 &request.prompt,
@@ -147,12 +156,15 @@ pub async fn run_judge_stage(
     last_handoff: &mut Option<prompts::IterationHandoff>,
     workspace_context: &str,
 ) -> Result<bool, String> {
+    let judge_agent = settings.final_judge_agent.as_ref().ok_or_else(|| {
+        "Judge is not set. Go to Settings/Agents and configure the minimum roles.".to_string()
+    })?;
     let rev_out = iter_ctx.review_output.clone().unwrap_or_default();
     let fix_out = iter_ctx.fix_output.clone().unwrap_or_default();
 
     run.current_stage = Some(PipelineStage::Judge);
     let judge_r = execute_agent_stage(
-        app, run_id, iter_num, iteration_db_id, PipelineStage::Judge, &settings.final_judge_agent,
+        app, run_id, iter_num, iteration_db_id, PipelineStage::Judge, judge_agent,
         &AgentInput {
             prompt: prompts::build_judge_user(&request.prompt, enhanced, iter_ctx.selected_plan(), &rev_out, &fix_out, previous_judge_output.as_deref()),
             context: Some(compose_agent_context(

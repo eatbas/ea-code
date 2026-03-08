@@ -7,8 +7,8 @@ import { backendLabel, modelLabel, getModelOptionsForBackend } from "./agentHelp
 
 /** Props for the CascadingSelect component. */
 export interface CascadingSelectProps {
-  backend: AgentBackend;
-  model: string;
+  backend: AgentBackend | null;
+  model: string | null;
   settings: AppSettings;
   optional?: boolean;
   cliHealth: CliHealth | null;
@@ -50,7 +50,7 @@ export function CascadingSelect({
   const displayText = cliHealthChecking && !cliHealth
     ? "Checking installed CLIs..."
     : isSkipped
-      ? "Skip"
+      ? (optional ? "Skip" : "Not selected")
       : `${backendLabel(backend)} · ${modelLabel(backend, model)}`;
 
   return (

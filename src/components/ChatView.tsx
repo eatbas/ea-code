@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
-import type { PipelineRun, RunOptions, CliHealth } from "../types";
+import type { PipelineRun, RunOptions, CliHealth, AppSettings } from "../types";
 import { isActive, isTerminal, statusInfo } from "../utils/statusHelpers";
 import { StageCard } from "./shared/StageCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
@@ -16,6 +16,8 @@ interface ChatViewProps {
   stageLogs: Record<string, string[]>;
   artifacts: Record<string, string>;
   cliHealth: CliHealth | null;
+  settings: AppSettings | null;
+  onMissingAgentSetup: () => void;
   onCancel: () => void;
   onBackToHome: () => void;
   onContinue: (options: RunOptions) => void;
@@ -28,6 +30,8 @@ export function ChatView({
   stageLogs,
   artifacts,
   cliHealth,
+  settings,
+  onMissingAgentSetup,
   onCancel,
   onBackToHome,
   onContinue,
@@ -120,6 +124,8 @@ export function ChatView({
             <PromptInputBar
               placeholder="Continue this session..."
               cliHealth={cliHealth}
+              settings={settings}
+              onMissingAgentSetup={onMissingAgentSetup}
               onSubmit={onContinue}
             />
             <div className="flex items-center justify-between px-1 text-xs text-[#9898b0]">

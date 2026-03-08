@@ -13,9 +13,6 @@ pub use judge::*;
 pub use planning::*;
 pub use skills::*;
 
-/// Prompt template version. Increment on any prompt text change.
-pub const PROMPT_VERSION: &str = "2.5.0";
-
 /// Metadata injected into every prompt builder so agents are iteration-aware.
 #[derive(Clone, Debug)]
 pub struct PromptMeta {

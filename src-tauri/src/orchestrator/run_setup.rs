@@ -113,6 +113,10 @@ pub async fn run_executive_summary(
     session_id: &str,
     db: &DbPool,
 ) {
+    let Some(executive_summary_agent) = settings.executive_summary_agent.as_ref() else {
+        return;
+    };
+
     let summary_iteration = run.current_iteration;
     let summary_input = AgentInput {
         prompt: prompts::build_executive_summary_system(),
@@ -121,7 +125,7 @@ pub async fn run_executive_summary(
     };
     let summary_result = execute_run_level_agent_stage(
         app, run_id, summary_iteration, PipelineStage::ExecutiveSummary,
-        &settings.executive_summary_agent, &summary_input, settings,
+        executive_summary_agent, &summary_input, settings,
         Some(session_id), db,
     )
     .await;
@@ -140,7 +144,7 @@ pub async fn run_executive_summary(
         },
         executive_summary_status: Some(summary_status),
         executive_summary_error: summary_result.error.as_deref(),
-        executive_summary_agent: Some(backend_to_db_str(&settings.executive_summary_agent)),
+        executive_summary_agent: Some(backend_to_db_str(executive_summary_agent)),
         executive_summary_model: Some(summary_model.as_str()),
         executive_summary_generated_at: Some(summary_generated_at.as_str()),
     };

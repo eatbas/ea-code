@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useState, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useClickOutside } from "../hooks/useClickOutside";
-import type { WorkspaceInfo, ProjectSummary, RunOptions, CliHealth } from "../types";
+import type { WorkspaceInfo, ProjectSummary, RunOptions, CliHealth, AppSettings } from "../types";
 import { folderName, projectDisplayName } from "../utils/formatters";
 import { PromptInputBar } from "./shared/PromptInputBar";
 
@@ -11,6 +11,8 @@ interface IdleViewProps {
   workspacePath?: string;
   projects: ProjectSummary[];
   cliHealth: CliHealth | null;
+  settings: AppSettings | null;
+  onMissingAgentSetup: () => void;
   onSelectProject: (projectPath: string) => void | Promise<void>;
   onAddProject: () => void;
   onRun: (options: RunOptions) => void;
@@ -22,6 +24,8 @@ export function IdleView({
   workspacePath,
   projects,
   cliHealth,
+  settings,
+  onMissingAgentSetup,
   onSelectProject,
   onAddProject,
   onRun,
@@ -136,6 +140,8 @@ export function IdleView({
         <PromptInputBar
           placeholder="What would you like to build?"
           cliHealth={cliHealth}
+          settings={settings}
+          onMissingAgentSetup={onMissingAgentSetup}
           onSubmit={onRun}
         />
 

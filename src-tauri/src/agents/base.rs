@@ -6,6 +6,7 @@ use crate::db::{self, DbPool};
 use crate::events::PipelineLogPayload;
 use crate::models::PipelineStage;
 
+#[cfg(target_os = "windows")]
 const GIT_BASH_INSTALL_URL: &str = "https://git-scm.com/download/win";
 
 #[cfg(target_os = "windows")]
@@ -146,7 +147,6 @@ pub struct AgentInput {
 #[derive(Clone, Debug)]
 pub struct AgentOutput {
     pub raw_text: String,
-    pub exit_code: i32,
 }
 
 /// Assembles a full prompt by concatenating the base prompt with optional
@@ -170,7 +170,7 @@ pub fn build_full_prompt(input: &AgentInput) -> String {
 pub async fn run_cli_agent(
     binary: &str,
     args: &[&str],
-    prompt_arg_index: Option<usize>,
+    _prompt_arg_index: Option<usize>,
     workspace_path: &str,
     app: &AppHandle,
     run_id: &str,
@@ -178,14 +178,14 @@ pub async fn run_cli_agent(
     db: &DbPool,
 ) -> Result<AgentOutput, String> {
     #[cfg(target_os = "windows")]
-    let prompt_file: Option<String> = match prompt_arg_index {
+    let prompt_file: Option<String> = match _prompt_arg_index {
         Some(idx) => Some(write_prompt_temp_file(args[idx])?),
         None => None,
     };
 
     #[cfg(target_os = "windows")]
     let mut command =
-        build_windows_git_bash_command(binary, args, prompt_file.as_deref(), prompt_arg_index)?;
+        build_windows_git_bash_command(binary, args, prompt_file.as_deref(), _prompt_arg_index)?;
 
     #[cfg(not(target_os = "windows"))]
     let mut command = {
@@ -285,7 +285,8 @@ pub async fn run_cli_agent(
         all_output.push_str(&stderr_lines.join("\n"));
     }
 
-    let status = child
+    // Wait for process to exit before returning output.
+    let _status = child
         .wait()
         .await
         .map_err(|e| format!("Failed to wait for {binary}: {e}"))?;
@@ -298,6 +299,5 @@ pub async fn run_cli_agent(
 
     Ok(AgentOutput {
         raw_text: all_output,
-        exit_code: status.code().unwrap_or(-1),
     })
 }

@@ -41,7 +41,10 @@ export function backendLabel(backend: AgentBackend): string {
 }
 
 /** Finds the display label for a model value within a backend. */
-export function modelLabel(backend: AgentBackend, model: string): string {
+export function modelLabel(backend: AgentBackend, model: string | null): string {
+  if (!model) {
+    return "Not selected";
+  }
   const allOptions = CLI_MODEL_OPTIONS[backend] ?? [];
   return allOptions.find((o) => o.value === model)?.label ?? model;
 }

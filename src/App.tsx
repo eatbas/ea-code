@@ -84,6 +84,10 @@ function App(): ReactNode {
     startPipeline(request);
   }
 
+  function handleMissingAgentSetup(): void {
+    setActiveView("agents");
+  }
+
   function handleNewSession(): void {
     resetRun();
     setActiveSessionId(undefined);
@@ -126,6 +130,8 @@ function App(): ReactNode {
           stageLogs={stageLogs}
           artifacts={artifacts}
           cliHealth={cliHealth}
+          settings={settings}
+          onMissingAgentSetup={handleMissingAgentSetup}
           onCancel={cancelPipeline}
           onBackToHome={handleNewSession}
           onContinue={(options) => {
@@ -193,6 +199,8 @@ function App(): ReactNode {
           sessionDetail={sessionDetail}
           loading={sessionDetailLoading}
           cliHealth={cliHealth}
+          settings={settings}
+          onMissingAgentSetup={handleMissingAgentSetup}
           onRun={handleRun}
           onBackToHome={handleNewSession}
         />
@@ -205,6 +213,8 @@ function App(): ReactNode {
         workspacePath={workspace?.path}
         projects={projects}
         cliHealth={cliHealth}
+        settings={settings}
+        onMissingAgentSetup={handleMissingAgentSetup}
         onSelectProject={handleSelectProject}
         onAddProject={selectFolder}
         onRun={handleRun}

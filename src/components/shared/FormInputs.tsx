@@ -27,8 +27,8 @@ export function TextInput({ label, value, onChange }: TextInputProps): ReactNode
 /** Props for the AgentSelect component. */
 export interface AgentSelectProps {
   label: string;
-  value: AgentBackend;
-  onChange: (v: AgentBackend) => void;
+  value: AgentBackend | null;
+  onChange: (v: AgentBackend | null) => void;
 }
 
 /** Reusable select dropdown row for agent role mapping. */
@@ -37,10 +37,11 @@ export function AgentSelect({ label, value, onChange }: AgentSelectProps): React
     <label className="flex flex-col gap-1">
       <span className="text-xs font-medium text-[#9898b0]">{label}</span>
       <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as AgentBackend)}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value === "" ? null : (e.target.value as AgentBackend))}
         className="rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
       >
+        <option value="">Not selected</option>
         {BACKEND_OPTIONS.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}

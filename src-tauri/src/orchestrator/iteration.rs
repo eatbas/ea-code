@@ -58,12 +58,22 @@ pub async fn run_iteration(
     let handoff_json = last_handoff
         .as_ref()
         .and_then(|h| serde_json::to_string_pretty(h).ok());
+    let prompt_enhancer_agent = settings
+        .prompt_enhancer_agent
+        .as_ref()
+        .ok_or_else(|| {
+            "Prompt Enhancer is not set. Go to Settings/Agents and configure the minimum roles."
+                .to_string()
+        })?;
+    let generator_agent = settings.generator_agent.as_ref().ok_or_else(|| {
+        "Coder is not set. Go to Settings/Agents and configure the minimum roles.".to_string()
+    })?;
 
     // --- 1. Prompt enhance ---
     run.current_stage = Some(PipelineStage::PromptEnhance);
     let pe_result = execute_agent_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::PromptEnhance,
-        &settings.prompt_enhancer_agent,
+        prompt_enhancer_agent,
         &AgentInput {
             prompt: prompts::build_prompt_enhancer_user(&request.prompt),
             context: Some(compose_agent_context(
@@ -139,7 +149,7 @@ pub async fn run_iteration(
     run.current_stage = Some(PipelineStage::Generate);
     let gen_r = execute_agent_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::Generate,
-        &settings.generator_agent,
+        generator_agent,
         &AgentInput {
             prompt: prompts::build_generator_user(
                 &request.prompt,

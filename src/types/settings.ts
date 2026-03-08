@@ -7,15 +7,15 @@ export interface AppSettings {
   geminiPath: string;
   kimiPath: string;
   opencodePath: string;
-  promptEnhancerAgent: AgentBackend;
+  promptEnhancerAgent: AgentBackend | null;
   skillSelectorAgent: AgentBackend | null;
   plannerAgent: AgentBackend | null;
   planAuditorAgent: AgentBackend | null;
-  generatorAgent: AgentBackend;
-  reviewerAgent: AgentBackend;
-  fixerAgent: AgentBackend;
-  finalJudgeAgent: AgentBackend;
-  executiveSummaryAgent: AgentBackend;
+  generatorAgent: AgentBackend | null;
+  reviewerAgent: AgentBackend | null;
+  fixerAgent: AgentBackend | null;
+  finalJudgeAgent: AgentBackend | null;
+  executiveSummaryAgent: AgentBackend | null;
   maxIterations: number;
   requireGit: boolean;
   /** Pause pipeline after planning to let the user approve, revise, or skip the plan. */
@@ -61,15 +61,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   geminiPath: "gemini",
   kimiPath: "kimi",
   opencodePath: "opencode",
-  promptEnhancerAgent: "claude",
+  promptEnhancerAgent: null,
   skillSelectorAgent: null,
   plannerAgent: null,
   planAuditorAgent: null,
-  generatorAgent: "claude",
-  reviewerAgent: "codex",
-  fixerAgent: "claude",
-  finalJudgeAgent: "codex",
-  executiveSummaryAgent: "codex",
+  generatorAgent: null,
+  reviewerAgent: null,
+  fixerAgent: null,
+  finalJudgeAgent: null,
+  executiveSummaryAgent: null,
   maxIterations: 3,
   requireGit: true,
   requirePlanApproval: false,
@@ -82,7 +82,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   claudeModel: "sonnet",
   codexModel: "codex-5.3",
   geminiModel: "gemini-2.5-pro",
-  kimiModel: "kimi-k2.5",
+  kimiModel: "kimi-code",
   opencodeModel: "opencode/glm-5",
   promptEnhancerModel: "sonnet",
   skillSelectorModel: null,
@@ -111,7 +111,6 @@ export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[
     { value: "gemini-3-flash-preview", label: "Gemini 3.0 Flash" },
   ],
   kimi: [
-    { value: "kimi-k2.5", label: "Kimi K2.5" },
     { value: "kimi-code", label: "Kimi Code" },
   ],
   opencode: [
