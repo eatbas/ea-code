@@ -5,8 +5,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter};
-use tokio::sync::Mutex;
-use uuid::Uuid;
 
 use crate::agents::{
     run_claude, run_codex, run_gemini, run_kimi, run_opencode, AgentInput, AgentOutput,
@@ -155,70 +153,6 @@ pub async fn wait_for_cancel(cancel_flag: &Arc<AtomicBool>) {
             return;
         }
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-    }
-}
-
-/// Pauses the pipeline and asks the user a question, persisting Q&A to DB.
-pub async fn ask_user_question(
-    app: &AppHandle,
-    run_id: &str,
-    stage: &PipelineStage,
-    iteration: u32,
-    question_text: String,
-    agent_output: String,
-    optional: bool,
-    cancel_flag: &Arc<AtomicBool>,
-    answer_sender: &Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
-    db: &DbPool,
-) -> Result<Option<PipelineAnswer>, String> {
-    let question_id = Uuid::new_v4().to_string();
-    let stage_str = stage_to_str(stage);
-
-    let _ = db::questions::insert(
-        db, &question_id, run_id, &stage_str,
-        iteration as i32, &question_text, &agent_output, optional,
-    );
-
-    let (tx, rx) = tokio::sync::oneshot::channel::<PipelineAnswer>();
-    {
-        let mut lock = answer_sender.lock().await;
-        *lock = Some(tx);
-    }
-
-    let _ = app.emit(
-        "pipeline:question",
-        PipelineQuestionPayload {
-            run_id: run_id.to_string(),
-            question_id: question_id.clone(),
-            stage: stage.clone(),
-            iteration,
-            question_text,
-            agent_output,
-            optional,
-        },
-    );
-
-    emit_stage(app, run_id, stage, &StageStatus::WaitingForInput, iteration);
-
-    tokio::select! {
-        answer = rx => {
-            match answer {
-                Ok(a) => {
-                    let _ = db::questions::record_answer(
-                        db, &question_id,
-                        if a.skipped { None } else { Some(&a.answer) },
-                        a.skipped,
-                    );
-                    Ok(Some(a))
-                }
-                Err(_) => Err("Answer channel dropped unexpectedly".to_string()),
-            }
-        }
-        _ = wait_for_cancel(cancel_flag) => {
-            let mut lock = answer_sender.lock().await;
-            *lock = None;
-            Ok(None)
-        }
     }
 }
 

@@ -14,9 +14,11 @@ use crate::models::*;
 use super::helpers::*;
 use super::iteration_review::{run_judge_stage, run_review_fix_stages};
 use super::parsing::{extract_question, parse_plan_audit_output};
+use super::plan_gate::run_plan_gate;
 use super::prompts::{self, PromptMeta};
 use super::run_setup::*;
 use super::stages::*;
+use super::user_questions::*;
 
 /// Runs a single iteration of the pipeline. Returns `true` if the loop
 /// should break (completion, failure, or cancellation).
@@ -89,6 +91,19 @@ pub async fn run_iteration(
     ).await?;
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         return Ok(true);
+    }
+
+    // --- Plan gate: user approval if enabled ---
+    if settings.require_plan_approval && iter_ctx.selected_plan().is_some() {
+        let should_break = run_plan_gate(
+            app, settings, cancel_flag, answer_sender, db,
+            run_id, iter_num, iteration_db_id,
+            &meta, &enhanced,
+            run, &mut stages, &mut iter_ctx,
+        ).await?;
+        if should_break {
+            return Ok(true);
+        }
     }
 
     // --- 4. Generate ---

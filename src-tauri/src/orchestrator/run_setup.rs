@@ -14,6 +14,7 @@ use super::stages::*;
 /// Tracks accumulated context within a single iteration.
 #[derive(Clone, Debug)]
 pub struct IterationContext {
+    pub original_prompt: String,
     pub enhanced_prompt: String,
     pub planner_plan: Option<String>,
     pub audit_verdict: Option<String>,
@@ -32,6 +33,7 @@ pub struct IterationContext {
 impl IterationContext {
     pub fn new(original_prompt: String) -> Self {
         Self {
+            original_prompt: original_prompt.clone(),
             enhanced_prompt: original_prompt,
             planner_plan: None,
             audit_verdict: None,

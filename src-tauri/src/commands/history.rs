@@ -34,10 +34,10 @@ pub async fn get_session_detail(
 
     let project_path = db::sessions::get_project_path(&state.db, &session_id)?;
 
-    let run_summaries = db::runs::list_for_session(&state.db, &session_id)?;
+    let run_summaries = db::run_detail::list_for_session(&state.db, &session_id)?;
     let mut run_details = Vec::with_capacity(run_summaries.len());
     for rs in &run_summaries {
-        run_details.push(db::runs::get_full(&state.db, &rs.id)?);
+        run_details.push(db::run_detail::get_full(&state.db, &rs.id)?);
     }
 
     Ok(db::models::SessionDetail {
@@ -71,7 +71,7 @@ pub async fn get_run_detail(
     state: State<'_, AppState>,
     run_id: String,
 ) -> Result<db::models::RunDetail, String> {
-    db::runs::get_full(&state.db, &run_id)
+    db::run_detail::get_full(&state.db, &run_id)
 }
 
 /// Returns paginated logs for a run.

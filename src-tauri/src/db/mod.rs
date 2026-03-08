@@ -3,6 +3,7 @@ pub mod logs;
 pub mod models;
 pub mod projects;
 pub mod questions;
+pub mod run_detail;
 pub mod runs;
 pub mod sessions;
 pub mod settings;

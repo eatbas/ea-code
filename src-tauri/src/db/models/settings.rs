@@ -39,6 +39,12 @@ pub struct SettingsRow {
     pub final_judge_model: String,
     pub executive_summary_agent: String,
     pub executive_summary_model: String,
+    pub require_plan_approval: bool,
+    pub plan_auto_approve_timeout_sec: i32,
+    pub max_plan_revisions: i32,
+    pub token_optimized_prompts: bool,
+    pub agent_retry_count: i32,
+    pub agent_timeout_ms: i32,
 }
 
 #[derive(AsChangeset)]
@@ -74,4 +80,10 @@ pub struct SettingsChangeset {
     pub final_judge_model: String,
     pub executive_summary_agent: String,
     pub executive_summary_model: String,
+    pub require_plan_approval: bool,
+    pub plan_auto_approve_timeout_sec: i32,
+    pub max_plan_revisions: i32,
+    pub token_optimized_prompts: bool,
+    pub agent_retry_count: i32,
+    pub agent_timeout_ms: i32,
 }

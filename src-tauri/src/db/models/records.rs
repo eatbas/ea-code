@@ -134,6 +134,8 @@ pub struct IterationRow {
     pub generate_answer: Option<String>,
     pub fix_question: Option<String>,
     pub fix_answer: Option<String>,
+    pub plan_approval: Option<String>,
+    pub plan_revision_count: i32,
 }
 
 #[derive(Insertable)]

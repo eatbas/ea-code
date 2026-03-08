@@ -129,6 +129,72 @@ export function SettingsPanel({
               />
               <span className="text-xs text-[#9898b0]">Require Git repository</span>
             </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[#9898b0]">Agent Retry Count</span>
+              <input
+                type="number"
+                min={0}
+                max={5}
+                value={draft.agentRetryCount}
+                onChange={(e) => update({ agentRetryCount: Math.max(0, Math.min(5, Number(e.target.value))) })}
+                className="w-20 rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+              />
+              <span className="text-[10px] text-[#6b6b82]">Retries per agent call on failure</span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[#9898b0]">Agent Timeout (ms)</span>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={draft.agentTimeoutMs}
+                onChange={(e) => update({ agentTimeoutMs: Math.max(0, Number(e.target.value)) })}
+                className="w-28 rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+              />
+              <span className="text-[10px] text-[#6b6b82]">Per-agent timeout (0 = no timeout)</span>
+            </label>
+          </fieldset>
+
+          {/* Plan Gate */}
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-xs font-medium text-[#9898b0] mb-1">Plan Gate</legend>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={draft.requirePlanApproval}
+                onChange={(e) => update({ requirePlanApproval: e.target.checked })}
+                className="rounded border-[#2e2e48] accent-[#6366f1]"
+              />
+              <span className="text-xs text-[#9898b0]">Require plan approval</span>
+            </label>
+            {draft.requirePlanApproval && (
+              <>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-[#9898b0]">Auto-Approve Timeout (sec)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={600}
+                    value={draft.planAutoApproveTimeoutSec}
+                    onChange={(e) => update({ planAutoApproveTimeoutSec: Math.max(0, Math.min(600, Number(e.target.value))) })}
+                    className="w-20 rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+                  />
+                  <span className="text-[10px] text-[#6b6b82]">Seconds before auto-approve (0 = wait)</span>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-[#9898b0]">Max Plan Revisions</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={draft.maxPlanRevisions}
+                    onChange={(e) => update({ maxPlanRevisions: Math.max(0, Math.min(10, Number(e.target.value))) })}
+                    className="w-20 rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+                  />
+                  <span className="text-[10px] text-[#6b6b82]">Max revision rounds</span>
+                </label>
+              </>
+            )}
           </fieldset>
 
           {/* Action buttons */}

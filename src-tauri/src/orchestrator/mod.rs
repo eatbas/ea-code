@@ -12,9 +12,11 @@ pub mod helpers;
 pub mod iteration;
 pub mod iteration_review;
 pub mod parsing;
+pub mod plan_gate;
 pub mod pipeline;
 pub mod prompts;
 pub mod run_setup;
 pub mod stages;
+pub mod user_questions;
 
 pub use pipeline::run_pipeline;

@@ -33,6 +33,12 @@ diesel::table! {
         final_judge_model -> Text,
         executive_summary_agent -> Text,
         executive_summary_model -> Text,
+        require_plan_approval -> Bool,
+        plan_auto_approve_timeout_sec -> Integer,
+        max_plan_revisions -> Integer,
+        token_optimized_prompts -> Bool,
+        agent_retry_count -> Integer,
+        agent_timeout_ms -> Integer,
     }
 }
 
@@ -98,6 +104,8 @@ diesel::table! {
         generate_answer -> Nullable<Text>,
         fix_question -> Nullable<Text>,
         fix_answer -> Nullable<Text>,
+        plan_approval -> Nullable<Text>,
+        plan_revision_count -> Integer,
     }
 }
 

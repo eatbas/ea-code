@@ -52,6 +52,12 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         fixer_model: s.fixer_model.clone(),
         final_judge_model: s.final_judge_model.clone(),
         executive_summary_model: s.executive_summary_model.clone(),
+        require_plan_approval: s.require_plan_approval,
+        plan_auto_approve_timeout_sec: s.plan_auto_approve_timeout_sec as i32,
+        max_plan_revisions: s.max_plan_revisions as i32,
+        token_optimized_prompts: s.token_optimized_prompts,
+        agent_retry_count: s.agent_retry_count as i32,
+        agent_timeout_ms: s.agent_timeout_ms as i32,
     };
 
     diesel::update(settings::table.find(1))
@@ -113,6 +119,12 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         fixer_model: row.fixer_model.clone(),
         final_judge_model: row.final_judge_model.clone(),
         executive_summary_model: row.executive_summary_model.clone(),
+        require_plan_approval: row.require_plan_approval,
+        plan_auto_approve_timeout_sec: row.plan_auto_approve_timeout_sec as u32,
+        max_plan_revisions: row.max_plan_revisions as u32,
+        token_optimized_prompts: row.token_optimized_prompts,
+        agent_retry_count: row.agent_retry_count as u32,
+        agent_timeout_ms: row.agent_timeout_ms as u64,
     }
 }
 

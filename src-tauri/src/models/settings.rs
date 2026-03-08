@@ -55,6 +55,36 @@ pub struct AppSettings {
     pub executive_summary_agent: AgentBackend,
     #[serde(default = "default_executive_summary_model")]
     pub executive_summary_model: String,
+    /// Pause pipeline after planning for user approval.
+    #[serde(default)]
+    pub require_plan_approval: bool,
+    /// Seconds before auto-approving the plan (0 = wait indefinitely).
+    #[serde(default = "default_plan_timeout")]
+    pub plan_auto_approve_timeout_sec: u32,
+    /// Maximum user revision rounds for the plan.
+    #[serde(default = "default_max_plan_revisions")]
+    pub max_plan_revisions: u32,
+    /// Use compact handoff mode to reduce token usage.
+    #[serde(default)]
+    pub token_optimized_prompts: bool,
+    /// Number of retries per agent call on failure (0 = no retry).
+    #[serde(default = "default_agent_retry_count")]
+    pub agent_retry_count: u32,
+    /// Per-agent timeout in milliseconds (0 = no timeout).
+    #[serde(default)]
+    pub agent_timeout_ms: u64,
+}
+
+fn default_plan_timeout() -> u32 {
+    45
+}
+
+fn default_max_plan_revisions() -> u32 {
+    3
+}
+
+fn default_agent_retry_count() -> u32 {
+    1
 }
 
 impl Default for AppSettings {
@@ -88,6 +118,12 @@ impl Default for AppSettings {
             final_judge_model: "codex-5.3".to_string(),
             executive_summary_agent: AgentBackend::Codex,
             executive_summary_model: "codex-5.3".to_string(),
+            require_plan_approval: false,
+            plan_auto_approve_timeout_sec: 45,
+            max_plan_revisions: 3,
+            token_optimized_prompts: false,
+            agent_retry_count: 1,
+            agent_timeout_ms: 0,
         }
     }
 }

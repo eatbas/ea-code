@@ -16,6 +16,7 @@ use super::parsing::{extract_question, parse_judge_verdict};
 use super::prompts::{self, PromptMeta};
 use super::run_setup::*;
 use super::stages::*;
+use super::user_questions::*;
 
 /// Review + Fix stages (including diffs and user questions).
 #[allow(clippy::too_many_arguments)]

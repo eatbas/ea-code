@@ -33,26 +33,29 @@ pub fn run() {
             db: pool,
         })
         .invoke_handler(tauri::generate_handler![
-            commands::select_workspace,
-            commands::validate_environment,
-            commands::run_pipeline,
-            commands::cancel_pipeline,
-            commands::get_settings,
-            commands::save_settings,
-            commands::check_cli_health,
-            commands::answer_pipeline_question,
+            // Workspace commands
+            commands::workspace::select_workspace,
+            commands::workspace::validate_environment,
+            // Pipeline commands
+            commands::pipeline::run_pipeline,
+            commands::pipeline::cancel_pipeline,
+            commands::pipeline::answer_pipeline_question,
+            // Settings commands
+            commands::settings::get_settings,
+            commands::settings::save_settings,
+            // CLI health & version commands
+            commands::cli::check_cli_health,
+            commands::cli::get_cli_versions,
+            commands::cli::update_cli,
             // History / session commands
-            commands::list_projects,
-            commands::list_sessions,
-            commands::get_session_detail,
-            commands::create_session,
-            commands::get_run_detail,
-            commands::get_run_logs,
-            commands::get_run_artifacts,
-            commands::delete_session,
-            // CLI version management
-            commands::get_cli_versions,
-            commands::update_cli,
+            commands::history::list_projects,
+            commands::history::list_sessions,
+            commands::history::get_session_detail,
+            commands::history::create_session,
+            commands::history::get_run_detail,
+            commands::history::get_run_logs,
+            commands::history::get_run_artifacts,
+            commands::history::delete_session,
         ])
         .run(tauri::generate_context!())
         .expect("error whilst running tauri application");

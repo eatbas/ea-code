@@ -17,6 +17,18 @@ export interface AppSettings {
   executiveSummaryAgent: AgentBackend;
   maxIterations: number;
   requireGit: boolean;
+  /** Pause pipeline after planning to let the user approve, revise, or skip the plan. */
+  requirePlanApproval: boolean;
+  /** Seconds to wait before auto-approving the plan (0 = wait indefinitely). */
+  planAutoApproveTimeoutSec: number;
+  /** Maximum number of plan revision rounds before auto-approving. */
+  maxPlanRevisions: number;
+  /** Use token-optimised prompt variants (compact handoff, git inspection). */
+  tokenOptimizedPrompts: boolean;
+  /** Number of retries per agent call on failure (0 = no retries). */
+  agentRetryCount: number;
+  /** Per-agent timeout in milliseconds (0 = no timeout). */
+  agentTimeoutMs: number;
   /** Comma-separated list of enabled Claude models. */
   claudeModel: string;
   /** Comma-separated list of enabled Codex models. */
@@ -55,6 +67,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   executiveSummaryAgent: "codex",
   maxIterations: 3,
   requireGit: true,
+  requirePlanApproval: false,
+  planAutoApproveTimeoutSec: 45,
+  maxPlanRevisions: 3,
+  tokenOptimizedPrompts: false,
+  agentRetryCount: 1,
+  agentTimeoutMs: 0,
   claudeModel: "sonnet",
   codexModel: "codex-5.3",
   geminiModel: "gemini-2.5-pro",

@@ -27,7 +27,7 @@ pub fn handle_get_session_history(
         .ok_or_else(|| format!("Session {session_id} not found."))?;
 
     // Get runs for this session
-    let all_runs = db::runs::list_for_session(pool, &session_id)?;
+    let all_runs = db::run_detail::list_for_session(pool, &session_id)?;
     let runs_to_show: Vec<_> = all_runs.into_iter().take(limit as usize).collect();
 
     Ok(json!({
@@ -114,7 +114,7 @@ pub fn handle_get_run_output(pool: &DbPool, args: &Value) -> Result<Value, Strin
         .and_then(|v| v.as_str())
         .ok_or_else(|| "Missing required parameter: run_id".to_string())?;
 
-    let detail = db::runs::get_full(pool, run_id)?;
+    let detail = db::run_detail::get_full(pool, run_id)?;
     let artifacts = db::artifacts::get_for_run(pool, run_id)?;
 
     Ok(json!({
