@@ -26,6 +26,8 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         claude_path: s.claude_path.clone(),
         codex_path: s.codex_path.clone(),
         gemini_path: s.gemini_path.clone(),
+        kimi_path: s.kimi_path.clone(),
+        opencode_path: s.opencode_path.clone(),
         prompt_enhancer_agent: backend_to_str(&s.prompt_enhancer_agent),
         planner_agent: backend_to_opt(s.planner_agent.as_ref()),
         plan_auditor_agent: backend_to_opt(s.plan_auditor_agent.as_ref()),
@@ -40,6 +42,8 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         claude_model: s.claude_model.clone(),
         codex_model: s.codex_model.clone(),
         gemini_model: s.gemini_model.clone(),
+        kimi_model: s.kimi_model.clone(),
+        opencode_model: s.opencode_model.clone(),
         prompt_enhancer_model: s.prompt_enhancer_model.clone(),
         planner_model: s.planner_model.clone(),
         plan_auditor_model: s.plan_auditor_model.clone(),
@@ -64,9 +68,15 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
 
     fn parse_backend(s: &str) -> AgentBackend {
         match s {
+            "claude" => AgentBackend::Claude,
             "codex" => AgentBackend::Codex,
             "gemini" => AgentBackend::Gemini,
-            _ => AgentBackend::Claude,
+            "kimi" => AgentBackend::Kimi,
+            "opencode" => AgentBackend::OpenCode,
+            _ => {
+                eprintln!("Unknown backend in settings row: {s}; defaulting to claude");
+                AgentBackend::Claude
+            }
         }
     }
 
@@ -78,6 +88,8 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         claude_path: row.claude_path.clone(),
         codex_path: row.codex_path.clone(),
         gemini_path: row.gemini_path.clone(),
+        kimi_path: row.kimi_path.clone(),
+        opencode_path: row.opencode_path.clone(),
         prompt_enhancer_agent: parse_backend(&row.prompt_enhancer_agent),
         planner_agent: parse_optional_backend(row.planner_agent.as_deref()),
         plan_auditor_agent: parse_optional_backend(row.plan_auditor_agent.as_deref()),
@@ -91,6 +103,8 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         claude_model: row.claude_model.clone(),
         codex_model: row.codex_model.clone(),
         gemini_model: row.gemini_model.clone(),
+        kimi_model: row.kimi_model.clone(),
+        opencode_model: row.opencode_model.clone(),
         prompt_enhancer_model: row.prompt_enhancer_model.clone(),
         planner_model: row.planner_model.clone(),
         plan_auditor_model: row.plan_auditor_model.clone(),
@@ -108,6 +122,8 @@ fn backend_to_str(b: &crate::models::AgentBackend) -> String {
         crate::models::AgentBackend::Claude => "claude".to_string(),
         crate::models::AgentBackend::Codex => "codex".to_string(),
         crate::models::AgentBackend::Gemini => "gemini".to_string(),
+        crate::models::AgentBackend::Kimi => "kimi".to_string(),
+        crate::models::AgentBackend::OpenCode => "opencode".to_string(),
     }
 }
 

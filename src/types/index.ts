@@ -10,7 +10,7 @@ export type AgentRole =
   | "executive_summary";
 
 /** Supported CLI agent backends. */
-export type AgentBackend = "claude" | "codex" | "gemini";
+export type AgentBackend = "claude" | "codex" | "gemini" | "kimi" | "opencode";
 
 /** Pipeline stage identifiers. */
 export type PipelineStage =
@@ -78,6 +78,8 @@ export interface AppSettings {
   claudePath: string;
   codexPath: string;
   geminiPath: string;
+  kimiPath: string;
+  opencodePath: string;
   promptEnhancerAgent: AgentBackend;
   plannerAgent: AgentBackend | null;
   planAuditorAgent: AgentBackend | null;
@@ -94,6 +96,10 @@ export interface AppSettings {
   codexModel: string;
   /** Comma-separated list of enabled Gemini models. */
   geminiModel: string;
+  /** Comma-separated list of enabled Kimi models. */
+  kimiModel: string;
+  /** Comma-separated list of enabled OpenCode models. */
+  opencodeModel: string;
   /** Per-stage model selections. */
   promptEnhancerModel: string;
   plannerModel: string | null;
@@ -110,6 +116,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   claudePath: "claude",
   codexPath: "codex",
   geminiPath: "gemini",
+  kimiPath: "kimi",
+  opencodePath: "opencode",
   promptEnhancerAgent: "claude",
   plannerAgent: null,
   planAuditorAgent: null,
@@ -123,6 +131,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   claudeModel: "sonnet",
   codexModel: "codex-5.3",
   geminiModel: "gemini-2.5-pro",
+  kimiModel: "kimi-k2.5",
+  opencodeModel: "opencode/glm-5",
   promptEnhancerModel: "sonnet",
   plannerModel: null,
   planAuditorModel: null,
@@ -148,6 +158,14 @@ export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[
     { value: "gemini-3-pro-preview", label: "Gemini 3.0 Pro" },
     { value: "gemini-3-flash-preview", label: "Gemini 3.0 Flash" },
   ],
+  kimi: [
+    { value: "kimi-k2.5", label: "Kimi K2.5" },
+    { value: "kimi-code", label: "Kimi Code" },
+  ],
+  opencode: [
+    { value: "opencode/glm-5", label: "GLM 5" },
+    { value: "opencode/glm-4.7", label: "GLM 4.7" },
+  ],
 };
 
 /** CLI health check result returned from the backend. */
@@ -155,6 +173,8 @@ export interface CliHealth {
   claude: CliStatus;
   codex: CliStatus;
   gemini: CliStatus;
+  kimi: CliStatus;
+  opencode: CliStatus;
 }
 
 export interface CliStatus {
@@ -180,6 +200,8 @@ export interface AllCliVersions {
   claude: CliVersionInfo;
   codex: CliVersionInfo;
   gemini: CliVersionInfo;
+  kimi: CliVersionInfo;
+  opencode: CliVersionInfo;
 }
 
 /** Request to start a pipeline run. */

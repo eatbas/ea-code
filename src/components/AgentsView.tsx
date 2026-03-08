@@ -13,16 +13,20 @@ const BACKEND_OPTIONS: { value: AgentBackend; label: string }[] = [
   { value: "claude", label: "Claude" },
   { value: "codex", label: "Codex" },
   { value: "gemini", label: "Gemini" },
+  { value: "kimi", label: "Kimi" },
+  { value: "opencode", label: "OpenCode" },
 ];
 
 /** Settings key for each CLI's enabled-models field (comma-separated). */
-type ModelCsvKey = "claudeModel" | "codexModel" | "geminiModel";
+type ModelCsvKey = "claudeModel" | "codexModel" | "geminiModel" | "kimiModel" | "opencodeModel";
 
 /** Map from backend name to its comma-separated enabled-models settings key. */
 const BACKEND_CSV_KEY: Record<AgentBackend, ModelCsvKey> = {
   claude: "claudeModel",
   codex: "codexModel",
   gemini: "geminiModel",
+  kimi: "kimiModel",
+  opencode: "opencodeModel",
 };
 
 /** Parses a comma-separated model string into an array. */

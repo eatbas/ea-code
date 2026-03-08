@@ -15,6 +15,8 @@ const BACKEND_OPTIONS: { value: AgentBackend; label: string }[] = [
   { value: "claude", label: "Claude" },
   { value: "codex", label: "Codex" },
   { value: "gemini", label: "Gemini" },
+  { value: "kimi", label: "Kimi" },
+  { value: "opencode", label: "OpenCode" },
 ];
 
 /** Reusable text input row for the settings form. */
@@ -177,6 +179,18 @@ export function SettingsPanel({
                 <TextInput label="Gemini" value={draft.geminiPath} onChange={(v) => update({ geminiPath: v })} />
               </div>
               {health && <HealthDot available={health.gemini.available} error={health.gemini.error} />}
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <TextInput label="Kimi" value={draft.kimiPath} onChange={(v) => update({ kimiPath: v })} />
+              </div>
+              {health && <HealthDot available={health.kimi.available} error={health.kimi.error} />}
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <TextInput label="OpenCode" value={draft.opencodePath} onChange={(v) => update({ opencodePath: v })} />
+              </div>
+              {health && <HealthDot available={health.opencode.available} error={health.opencode.error} />}
             </div>
           </fieldset>
 

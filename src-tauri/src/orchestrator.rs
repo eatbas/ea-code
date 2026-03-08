@@ -6,7 +6,9 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::agents::{run_claude, run_codex, run_gemini, AgentInput, AgentOutput};
+use crate::agents::{
+    run_claude, run_codex, run_gemini, run_kimi, run_opencode, AgentInput, AgentOutput,
+};
 use crate::db::{self, DbPool};
 use crate::events::*;
 use crate::git;
@@ -155,6 +157,21 @@ async fn dispatch_agent(
             )
             .await
         }
+        AgentBackend::Kimi => {
+            run_kimi(input, &settings.kimi_path, model, app, run_id, stage, db).await
+        }
+        AgentBackend::OpenCode => {
+            run_opencode(
+                input,
+                &settings.opencode_path,
+                model,
+                app,
+                run_id,
+                stage,
+                db,
+            )
+            .await
+        }
     }
 }
 
@@ -187,6 +204,8 @@ fn first_enabled_model_for_backend(backend: Option<&AgentBackend>, settings: &Ap
         Some(AgentBackend::Claude) => &settings.claude_model,
         Some(AgentBackend::Codex) => &settings.codex_model,
         Some(AgentBackend::Gemini) => &settings.gemini_model,
+        Some(AgentBackend::Kimi) => &settings.kimi_model,
+        Some(AgentBackend::OpenCode) => &settings.opencode_model,
         None => return String::new(),
     };
     csv.split(',')
@@ -708,48 +727,109 @@ fn normalise_enhanced_prompt(enhanced_output: &str, fallback_prompt: &str) -> St
     }
 }
 
-fn build_planner_prompt(enhanced_prompt: &str) -> String {
+fn build_planner_prompt(enhanced_prompt: &str, original_prompt: &str) -> String {
     format!(
         "You are the Planner stage in a coding pipeline.\n\
 Create a concrete, implementation-ready plan for the coding task.\n\
 Be explicit about sequence, edge cases, and verification checks.\n\
 Return only the plan content.\n\n\
+--- Original Prompt ---\n{original_prompt}\n\n\
 --- Enhanced Prompt ---\n{enhanced_prompt}"
     )
 }
 
-fn build_plan_auditor_prompt(enhanced_prompt: &str, plan_output: &str) -> String {
+fn build_plan_auditor_prompt(
+    enhanced_prompt: &str,
+    original_prompt: &str,
+    plan_output: &str,
+) -> String {
     format!(
         "You are the Plan Auditor stage in a coding pipeline.\n\
 Review the proposed plan against the enhanced prompt.\n\
 The first line MUST be exactly APPROVED or REJECTED.\n\
 Then improve and rewrite the plan so it is implementation-ready.\n\
 Use this exact section header before the rewritten plan: --- Improved Plan ---\n\n\
+--- Original Prompt ---\n{original_prompt}\n\n\
 --- Enhanced Prompt ---\n{enhanced_prompt}\n\n\
 --- Proposed Plan ---\n{plan_output}"
     )
 }
 
-fn build_review_prompt(enhanced_prompt: &str) -> String {
+fn build_generate_prompt(
+    enhanced_prompt: &str,
+    original_prompt: &str,
+    audited_plan: Option<&str>,
+) -> String {
+    let plan_section = audited_plan
+        .map(|plan| format!("--- Audited Plan ---\n{plan}\n\n"))
+        .unwrap_or_default();
     format!(
-        "{enhanced_prompt}\n\nYou are the Review stage.\n\
+        "You are a senior software developer implementing the task.\n\
+Work directly in the repository and produce complete, correct code changes.\n\n\
+--- Original Prompt ---\n{original_prompt}\n\n\
+--- Enhanced Prompt ---\n{enhanced_prompt}\n\n\
+{plan_section}Return only actionable implementation output."
+    )
+}
+
+fn build_review_prompt(
+    enhanced_prompt: &str,
+    original_prompt: &str,
+    audited_plan: Option<&str>,
+) -> String {
+    let plan_section = audited_plan
+        .map(|plan| format!("--- Audited Plan ---\n{plan}\n\n"))
+        .unwrap_or_default();
+    format!(
+        "You are a senior software developer performing code review.\n\
+--- Original Prompt ---\n{original_prompt}\n\n\
+--- Enhanced Prompt ---\n{enhanced_prompt}\n\n\
+{plan_section}\
 Inspect the repository state yourself using tools (git diff, git status, file reads).\n\
-Do not assume a diff is provided in the prompt."
+Do not assume a diff is provided in the prompt.\n\
+Return specific findings and required fixes."
     )
 }
 
-fn build_fix_prompt(enhanced_prompt: &str) -> String {
+fn build_fix_prompt(
+    enhanced_prompt: &str,
+    original_prompt: &str,
+    audited_plan: Option<&str>,
+    review_context: &str,
+) -> String {
+    let plan_section = audited_plan
+        .map(|plan| format!("--- Audited Plan ---\n{plan}\n\n"))
+        .unwrap_or_default();
     format!(
-        "{enhanced_prompt}\n\nYou are the Fix stage.\n\
+        "You are a senior software developer fixing the code.\n\
+--- Original Prompt ---\n{original_prompt}\n\n\
+--- Enhanced Prompt ---\n{enhanced_prompt}\n\n\
+{plan_section}\
+--- Review Output ---\n{review_context}\n\n\
 Inspect repository changes using tools before editing.\n\
-Do not assume a diff is provided in the prompt."
+Do not assume a diff is provided in the prompt.\n\
+Apply concrete fixes."
     )
 }
 
-fn build_judge_prompt(enhanced_prompt: &str) -> String {
+fn build_judge_prompt(
+    enhanced_prompt: &str,
+    original_prompt: &str,
+    audited_plan: Option<&str>,
+    review_output: &str,
+    fix_output: &str,
+) -> String {
+    let plan_section = audited_plan
+        .map(|plan| format!("--- Audited Plan ---\n{plan}\n\n"))
+        .unwrap_or_default();
     format!(
-        "{enhanced_prompt}\n\nYou are the Judge stage.\n\
-Inspect repository changes using tools before final judgement.\n\
+        "You are the final judge and a senior software developer.\n\
+--- Original Prompt ---\n{original_prompt}\n\n\
+--- Enhanced Prompt ---\n{enhanced_prompt}\n\n\
+{plan_section}\
+--- Review Output ---\n{review_output}\n\n\
+--- Fix Output ---\n{fix_output}\n\n\
+Inspect repository changes using tools (especially git diff) before final judgement.\n\
 First line must be COMPLETE or NOT COMPLETE."
     )
 }
@@ -796,6 +876,8 @@ fn backend_to_db_str(backend: &AgentBackend) -> &'static str {
         AgentBackend::Claude => "claude",
         AgentBackend::Codex => "codex",
         AgentBackend::Gemini => "gemini",
+        AgentBackend::Kimi => "kimi",
+        AgentBackend::OpenCode => "opencode",
     }
 }
 

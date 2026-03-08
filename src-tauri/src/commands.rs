@@ -232,7 +232,7 @@ pub async fn check_cli_health(settings: AppSettings) -> Result<CliHealth, String
 /// Fetches version and availability information for all CLI tools.
 #[tauri::command]
 pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, String> {
-    let (claude, codex, gemini) = tokio::join!(
+    let (claude, codex, gemini, kimi, opencode) = tokio::join!(
         build_cli_version_info(
             &settings.claude_path,
             "Claude CLI",
@@ -246,37 +246,34 @@ pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, S
             "gemini",
             "@google/gemini-cli",
         ),
+        build_cli_version_info(&settings.kimi_path, "Kimi CLI", "kimi", "kimi-cli",),
+        build_cli_version_info(
+            &settings.opencode_path,
+            "OpenCode CLI",
+            "opencode",
+            "opencode-ai",
+        ),
     );
 
     Ok(AllCliVersions {
         claude,
         codex,
         gemini,
+        kimi,
+        opencode,
     })
 }
 
-/// Runs `npm install -g <package>@latest` for a given CLI tool.
+/// Updates a CLI tool using its preferred package manager.
 #[tauri::command]
 pub async fn update_cli(cli_name: String) -> Result<String, String> {
-    let npm_package = match cli_name.as_str() {
-        "claude" => "@anthropic-ai/claude-code",
-        "codex" => "@openai/codex",
-        "gemini" => "@google/gemini-cli",
-        _ => return Err(format!("Unknown CLI: {cli_name}")),
-    };
-
-    let output = tokio::process::Command::new("npm")
-        .args(["install", "-g", &format!("{npm_package}@latest")])
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run npm: {e}"))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        Ok(stdout)
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(format!("Update failed: {stderr}"))
+    match cli_name.as_str() {
+        "claude" => update_with_npm("@anthropic-ai/claude-code").await,
+        "codex" => update_with_npm("@openai/codex").await,
+        "gemini" => update_with_npm("@google/gemini-cli").await,
+        "opencode" => update_with_npm("opencode-ai").await,
+        "kimi" => update_kimi_cli().await,
+        _ => Err(format!("Unknown CLI: {cli_name}")),
     }
 }
 
@@ -307,17 +304,54 @@ async fn check_single_cli(path: &str) -> CliStatus {
 
 /// Shared implementation for CLI health checks.
 async fn check_cli_health_inner(settings: &AppSettings) -> Result<CliHealth, String> {
-    let (claude, codex, gemini) = tokio::join!(
+    let (claude, codex, gemini, kimi, opencode) = tokio::join!(
         check_single_cli(&settings.claude_path),
         check_single_cli(&settings.codex_path),
         check_single_cli(&settings.gemini_path),
+        check_single_cli(&settings.kimi_path),
+        check_single_cli(&settings.opencode_path),
     );
 
     Ok(CliHealth {
         claude,
         codex,
         gemini,
+        kimi,
+        opencode,
     })
+}
+
+/// Runs `npm install -g <package>@latest` and returns stdout on success.
+async fn update_with_npm(npm_package: &str) -> Result<String, String> {
+    let output = tokio::process::Command::new("npm")
+        .args(["install", "-g", &format!("{npm_package}@latest")])
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run npm: {e}"))?;
+
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(format!("Update failed: {stderr}"))
+}
+
+/// Updates Kimi via `uv` when available, falling back to npm.
+async fn update_kimi_cli() -> Result<String, String> {
+    if check_binary_exists("uv").await {
+        let output = tokio::process::Command::new("uv")
+            .args(["tool", "upgrade", "kimi-cli", "--no-cache"])
+            .output()
+            .await
+            .map_err(|e| format!("Failed to run uv: {e}"))?;
+
+        if output.status.success() {
+            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+        }
+    }
+
+    update_with_npm("kimi-cli").await
 }
 
 /// Checks whether a binary is available via `which`.

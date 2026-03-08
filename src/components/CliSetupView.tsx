@@ -4,13 +4,20 @@ import type { AppSettings, CliVersionInfo, AllCliVersions } from "../types";
 import { CLI_MODEL_OPTIONS } from "../types";
 
 /** Settings key for each CLI's enabled-models field (comma-separated). */
-type ModelSettingsKey = "claudeModel" | "codexModel" | "geminiModel";
+type ModelSettingsKey =
+  | "claudeModel"
+  | "codexModel"
+  | "geminiModel"
+  | "kimiModel"
+  | "opencodeModel";
 
 /** Map from CLI name to its settings key. */
 const MODEL_KEY_MAP: Record<string, ModelSettingsKey> = {
   claude: "claudeModel",
   codex: "codexModel",
   gemini: "geminiModel",
+  kimi: "kimiModel",
+  opencode: "opencodeModel",
 };
 
 interface CliSetupViewProps {
@@ -193,7 +200,7 @@ export function CliSetupView({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cliEntries: CliVersionInfo[] = versions
-    ? [versions.claude, versions.codex, versions.gemini]
+    ? [versions.claude, versions.codex, versions.gemini, versions.kimi, versions.opencode]
     : [];
 
   /** Returns the set of currently enabled models for a CLI. */
@@ -252,7 +259,7 @@ export function CliSetupView({
           {/* Loading skeleton */}
           {loading && !versions && (
             <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-              {[0, 1, 2].map((i) => (
+              {[0, 1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
                   className="h-48 animate-pulse rounded-lg border border-[#2e2e48] bg-[#1a1a2e]"

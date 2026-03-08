@@ -21,6 +21,8 @@ pub enum AgentBackend {
     Claude,
     Codex,
     Gemini,
+    Kimi,
+    OpenCode,
 }
 
 fn default_prompt_enhancer_agent() -> AgentBackend {
@@ -33,6 +35,22 @@ fn default_executive_summary_agent() -> AgentBackend {
 
 fn default_executive_summary_model() -> String {
     "codex-5.3".to_string()
+}
+
+fn default_kimi_path() -> String {
+    "kimi".to_string()
+}
+
+fn default_opencode_path() -> String {
+    "opencode".to_string()
+}
+
+fn default_kimi_model() -> String {
+    "kimi-k2.5".to_string()
+}
+
+fn default_opencode_model() -> String {
+    "opencode/glm-5".to_string()
 }
 
 /// Pipeline stage identifiers.
@@ -170,6 +188,8 @@ pub struct CliHealth {
     pub claude: CliStatus,
     pub codex: CliStatus,
     pub gemini: CliStatus,
+    pub kimi: CliStatus,
+    pub opencode: CliStatus,
 }
 
 /// Version and availability information for a single CLI tool.
@@ -196,6 +216,8 @@ pub struct AllCliVersions {
     pub claude: CliVersionInfo,
     pub codex: CliVersionInfo,
     pub gemini: CliVersionInfo,
+    pub kimi: CliVersionInfo,
+    pub opencode: CliVersionInfo,
 }
 
 /// Application settings persisted locally.
@@ -205,6 +227,10 @@ pub struct AppSettings {
     pub claude_path: String,
     pub codex_path: String,
     pub gemini_path: String,
+    #[serde(default = "default_kimi_path")]
+    pub kimi_path: String,
+    #[serde(default = "default_opencode_path")]
+    pub opencode_path: String,
     #[serde(default = "default_prompt_enhancer_agent")]
     pub prompt_enhancer_agent: AgentBackend,
     #[serde(default)]
@@ -223,6 +249,12 @@ pub struct AppSettings {
     pub codex_model: String,
     /// Comma-separated list of enabled Gemini models.
     pub gemini_model: String,
+    /// Comma-separated list of enabled Kimi models.
+    #[serde(default = "default_kimi_model")]
+    pub kimi_model: String,
+    /// Comma-separated list of enabled OpenCode models.
+    #[serde(default = "default_opencode_model")]
+    pub opencode_model: String,
     /// Per-stage model selections.
     pub prompt_enhancer_model: String,
     #[serde(default)]
@@ -245,6 +277,8 @@ impl Default for AppSettings {
             claude_path: "claude".to_string(),
             codex_path: "codex".to_string(),
             gemini_path: "gemini".to_string(),
+            kimi_path: "kimi".to_string(),
+            opencode_path: "opencode".to_string(),
             prompt_enhancer_agent: AgentBackend::Claude,
             planner_agent: None,
             plan_auditor_agent: None,
@@ -257,6 +291,8 @@ impl Default for AppSettings {
             claude_model: "sonnet".to_string(),
             codex_model: "codex-5.3".to_string(),
             gemini_model: "gemini-2.5-pro".to_string(),
+            kimi_model: "kimi-k2.5".to_string(),
+            opencode_model: "opencode/glm-5".to_string(),
             prompt_enhancer_model: "sonnet".to_string(),
             planner_model: None,
             plan_auditor_model: None,
