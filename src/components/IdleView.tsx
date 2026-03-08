@@ -86,10 +86,16 @@ export function IdleView({
                 {workspace.branch ?? "git"}
               </span>
             )}
-            {workspace.isDirty && (
-              <span className="rounded bg-[#24243a] px-2 py-0.5 text-[#f59e0b]">
-                dirty
-              </span>
+            {workspace.isGitRepo && (
+              workspace.isDirty ? (
+                <span className="rounded bg-[#24243a] px-2 py-0.5 text-[#f59e0b]">
+                  dirty
+                </span>
+              ) : (
+                <span className="rounded bg-[#24243a] px-2 py-0.5 text-[#22c55e]">
+                  clean
+                </span>
+              )
             )}
           </div>
         )}

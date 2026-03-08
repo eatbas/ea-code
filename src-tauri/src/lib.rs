@@ -35,6 +35,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Workspace commands
             commands::workspace::select_workspace,
+            commands::workspace::refresh_workspace,
             commands::workspace::validate_environment,
             // Pipeline commands
             commands::pipeline::run_pipeline,
