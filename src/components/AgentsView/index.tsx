@@ -118,88 +118,30 @@ export function AgentsView({
           {/* Pipeline parameters */}
           <div className="flex flex-col gap-3 border-t border-[#2e2e48] pt-4">
             <span className="text-sm font-medium text-[#e4e4ed]">Pipeline</span>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-[#9898b0]">Skill Selection Mode</span>
-              <select
-                value={draft.skillSelectionMode}
-                onChange={(e) => update({ skillSelectionMode: e.target.value as AppSettings["skillSelectionMode"] })}
-                className="w-44 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
-              >
-                <option value="disable">Disable</option>
-                <option value="auto">Auto (agent selects)</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-[#9898b0]">Max Iterations</span>
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={draft.maxIterations}
-                onChange={(e) => update({ maxIterations: Math.max(1, Math.min(10, Number(e.target.value))) })}
-                className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
-              />
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={draft.requireGit}
-                onChange={(e) => update({ requireGit: e.target.checked })}
-                className="rounded border-[#2e2e48] accent-[#e4e4ed]"
-              />
-              <span className="text-xs text-[#9898b0]">Require Git repository</span>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-[#9898b0]">Agent Max Turns</span>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={draft.agentMaxTurns}
-                onChange={(e) => update({ agentMaxTurns: Math.max(1, Math.min(100, Number(e.target.value))) })}
-                className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-[#9898b0]">Mode</span>
-              <select
-                value={draft.mode}
-                onChange={(e) => update({ mode: e.target.value as AppSettings["mode"] })}
-                className="w-44 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
-              >
-                <option value="workspace-write">workspace-write</option>
-                <option value="diff-first">diff-first</option>
-              </select>
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={draft.updateCliOnRun}
-                onChange={(e) => update({ updateCliOnRun: e.target.checked })}
-                className="rounded border-[#2e2e48] accent-[#e4e4ed]"
-              />
-              <span className="text-xs text-[#9898b0]">Update CLIs on run start</span>
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={draft.failOnCliUpdateError}
-                onChange={(e) => update({ failOnCliUpdateError: e.target.checked })}
-                className="rounded border-[#2e2e48] accent-[#e4e4ed]"
-              />
-              <span className="text-xs text-[#9898b0]">Fail run on CLI update error</span>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-[#9898b0]">CLI Update Timeout (ms)</span>
-              <input
-                type="number"
-                min={1000}
-                step={1000}
-                value={draft.cliUpdateTimeoutMs}
-                onChange={(e) => update({ cliUpdateTimeoutMs: Math.max(1000, Number(e.target.value)) })}
-                className="w-36 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
-              />
-            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-[#9898b0]">Max Iterations</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={draft.maxIterations}
+                  onChange={(e) => update({ maxIterations: Math.max(1, Math.min(10, Number(e.target.value))) })}
+                  className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-[#9898b0]">Agent Max Turns</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={draft.agentMaxTurns}
+                  onChange={(e) => update({ agentMaxTurns: Math.max(1, Math.min(100, Number(e.target.value))) })}
+                  className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
+                />
+              </label>
+            </div>
           </div>
 
           {/* Save */}

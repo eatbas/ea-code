@@ -1,5 +1,4 @@
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 
 use tauri::{AppHandle, State};
 
@@ -19,7 +18,6 @@ pub async fn run_pipeline(
     use tauri::Emitter;
 
     let loaded_settings = db::settings::get_merged_for_workspace(&state.db, &request.workspace_path)?;
-    run_startup_cli_updates(&loaded_settings).await?;
     let db = state.db.clone();
 
     // Reset the cancellation flag
@@ -53,41 +51,6 @@ pub async fn run_pipeline(
     });
 
     Ok(())
-}
-
-async fn run_startup_cli_updates(settings: &AppSettings) -> Result<(), String> {
-    if !settings.update_cli_on_run {
-        return Ok(());
-    }
-
-    let timeout_ms = settings.cli_update_timeout_ms.max(1_000);
-    let mut failures = Vec::new();
-
-    for cli_name in ["claude", "codex", "gemini", "kimi", "opencode"] {
-        let result = tokio::time::timeout(
-            Duration::from_millis(timeout_ms),
-            super::cli::update_cli(cli_name.to_string()),
-        )
-        .await;
-
-        match result {
-            Ok(Ok(_)) => {}
-            Ok(Err(e)) => failures.push(format!("{cli_name}: {e}")),
-            Err(_) => failures.push(format!("{cli_name}: update timed out after {timeout_ms}ms")),
-        }
-    }
-
-    if failures.is_empty() {
-        return Ok(());
-    }
-
-    let message = format!("CLI startup update failures:\n{}", failures.join("\n"));
-    if settings.fail_on_cli_update_error {
-        Err(message)
-    } else {
-        eprintln!("{message}");
-        Ok(())
-    }
 }
 
 /// Signals the running pipeline to cancel at the next stage boundary.

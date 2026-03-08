@@ -86,21 +86,6 @@ pub struct AppSettings {
     /// Maximum agentic turns per invocation for CLIs that support it.
     #[serde(default = "default_agent_max_turns")]
     pub agent_max_turns: u32,
-    /// Execution mode: workspace-write or diff-first.
-    #[serde(default = "default_execution_mode")]
-    pub mode: String,
-    /// Run CLI update checks before each pipeline run.
-    #[serde(default = "default_update_cli_on_run")]
-    pub update_cli_on_run: bool,
-    /// Abort runs when a CLI update command fails.
-    #[serde(default)]
-    pub fail_on_cli_update_error: bool,
-    /// Per-CLI startup update timeout in milliseconds.
-    #[serde(default = "default_cli_update_timeout_ms")]
-    pub cli_update_timeout_ms: u64,
-    /// Skill selection mode: disable or auto.
-    #[serde(default = "default_skill_selection_mode")]
-    pub skill_selection_mode: String,
 }
 
 fn default_plan_timeout() -> u32 {
@@ -115,24 +100,8 @@ fn default_agent_retry_count() -> u32 {
     1
 }
 
-fn default_skill_selection_mode() -> String {
-    "disable".to_string()
-}
-
 fn default_agent_max_turns() -> u32 {
     25
-}
-
-fn default_execution_mode() -> String {
-    "workspace-write".to_string()
-}
-
-fn default_update_cli_on_run() -> bool {
-    true
-}
-
-fn default_cli_update_timeout_ms() -> u64 {
-    600_000
 }
 
 impl Default for AppSettings {
@@ -176,12 +145,7 @@ impl Default for AppSettings {
             agent_retry_count: 1,
             agent_timeout_ms: 0,
             agent_max_turns: 25,
-            mode: "workspace-write".to_string(),
-            update_cli_on_run: true,
-            fail_on_cli_update_error: false,
-            cli_update_timeout_ms: 600_000,
             skill_selector_agent: None,
-            skill_selection_mode: "disable".to_string(),
         }
     }
 }

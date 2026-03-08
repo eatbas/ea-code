@@ -19,7 +19,7 @@ import { QuestionDialog } from "./components/QuestionDialog";
 import type { PipelineRequest } from "./types";
 
 function App(): ReactNode {
-  const { workspace, openWorkspace, selectFolder, refreshWorkspace } = useWorkspace();
+  const { workspace, openWorkspace, selectFolder } = useWorkspace();
   const { settings, loading, saveSettings, clearProjectSettings } = useSettings(workspace?.path);
   const { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { versions, loading: versionsLoading, updating: versionsUpdating, error: versionsError, fetchVersions, updateCli } = useCliVersions();
@@ -51,13 +51,6 @@ function App(): ReactNode {
       loadSessions(workspace.path);
     }
   }, [run?.status, workspace, loadSessions]);
-
-  // Refresh git status when a pipeline run finishes (the working tree likely changed)
-  useEffect(() => {
-    if (run && (run.status === "completed" || run.status === "failed" || run.status === "cancelled")) {
-      void refreshWorkspace();
-    }
-  }, [run?.status, refreshWorkspace]);
 
   // Refresh CLI availability whenever persisted settings change.
   useEffect(() => {
@@ -153,7 +146,9 @@ function App(): ReactNode {
     return (
       <IdleView
         workspace={workspace}
-        onSelectFolder={selectFolder}
+        projects={projects}
+        onSelectProject={handleSelectProject}
+        onAddProject={selectFolder}
         onRun={handleRun}
       />
     );

@@ -32,14 +32,6 @@ export interface AppSettings {
   agentTimeoutMs: number;
   /** Maximum agentic turns per invocation for CLIs that support it. */
   agentMaxTurns: number;
-  /** Execution mode parity with eaOrch (`diff-first` is currently informational). */
-  mode: "workspace-write" | "diff-first";
-  /** Run CLI update checks before each pipeline run. */
-  updateCliOnRun: boolean;
-  /** Abort a run when any CLI update fails. */
-  failOnCliUpdateError: boolean;
-  /** Per-CLI startup update timeout in milliseconds. */
-  cliUpdateTimeoutMs: number;
   /** Comma-separated list of enabled Claude models. */
   claudeModel: string;
   /** Comma-separated list of enabled Codex models. */
@@ -60,7 +52,6 @@ export interface AppSettings {
   fixerModel: string;
   finalJudgeModel: string;
   executiveSummaryModel: string;
-  skillSelectionMode: "disable" | "auto";
 }
 
 /** Default settings values. */
@@ -88,10 +79,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   agentRetryCount: 1,
   agentTimeoutMs: 0,
   agentMaxTurns: 25,
-  mode: "workspace-write",
-  updateCliOnRun: true,
-  failOnCliUpdateError: false,
-  cliUpdateTimeoutMs: 600000,
   claudeModel: "sonnet",
   codexModel: "codex-5.3",
   geminiModel: "gemini-2.5-pro",
@@ -106,7 +93,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fixerModel: "sonnet",
   finalJudgeModel: "codex-5.3",
   executiveSummaryModel: "codex-5.3",
-  skillSelectionMode: "disable",
 };
 
 /** Known model options per CLI, keyed by CLI name. */

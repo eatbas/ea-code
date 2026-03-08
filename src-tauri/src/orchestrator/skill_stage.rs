@@ -51,19 +51,6 @@ pub async fn run_skill_selection_stage(
     run: &mut PipelineRun,
     stages: &mut Vec<StageResult>,
 ) -> Result<Option<String>, String> {
-    if !settings.skill_selection_mode.eq_ignore_ascii_case("auto") {
-        stages.push(execute_skipped_stage(
-            app,
-            run_id,
-            iter_num,
-            iteration_db_id,
-            PipelineStage::SkillSelect,
-            "Skill selection mode is disabled.",
-            db_pool,
-        ));
-        return Ok(None);
-    }
-
     let selector = match settings.skill_selector_agent.as_ref() {
         Some(agent) => agent,
         None => {

@@ -44,11 +44,6 @@ diesel::table! {
         agent_retry_count -> Integer,
         agent_timeout_ms -> Integer,
         agent_max_turns -> Integer,
-        mode -> Text,
-        update_cli_on_run -> Bool,
-        fail_on_cli_update_error -> Bool,
-        cli_update_timeout_ms -> Integer,
-        skill_selection_mode -> Text,
     }
 }
 

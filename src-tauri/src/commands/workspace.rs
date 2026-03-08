@@ -33,16 +33,6 @@ pub async fn select_workspace(
     Ok(info)
 }
 
-/// Refreshes git status for an already-selected workspace without database side effects.
-#[tauri::command]
-pub async fn refresh_workspace(path: String) -> Result<WorkspaceInfo, String> {
-    let meta = std::fs::metadata(&path).map_err(|e| format!("Cannot access path: {e}"))?;
-    if !meta.is_dir() {
-        return Err("Path is not a directory".to_string());
-    }
-    Ok(crate::git::workspace_info(&path))
-}
-
 /// Checks the health of all configured CLI tools.
 #[tauri::command]
 pub async fn validate_environment(settings: AppSettings) -> Result<CliHealth, String> {

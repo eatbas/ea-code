@@ -64,11 +64,6 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         agent_retry_count: s.agent_retry_count as i32,
         agent_timeout_ms: s.agent_timeout_ms as i32,
         agent_max_turns: s.agent_max_turns as i32,
-        mode: s.mode.clone(),
-        update_cli_on_run: s.update_cli_on_run,
-        fail_on_cli_update_error: s.fail_on_cli_update_error,
-        cli_update_timeout_ms: s.cli_update_timeout_ms as i32,
-        skill_selection_mode: s.skill_selection_mode.clone(),
     };
 
     diesel::update(settings::table.find(1))
@@ -143,11 +138,6 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         agent_retry_count: row.agent_retry_count as u32,
         agent_timeout_ms: row.agent_timeout_ms as u64,
         agent_max_turns: row.agent_max_turns as u32,
-        mode: row.mode.clone(),
-        update_cli_on_run: row.update_cli_on_run,
-        fail_on_cli_update_error: row.fail_on_cli_update_error,
-        cli_update_timeout_ms: row.cli_update_timeout_ms as u64,
-        skill_selection_mode: row.skill_selection_mode.clone(),
     }
 }
 

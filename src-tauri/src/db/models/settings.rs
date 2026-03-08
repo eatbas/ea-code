@@ -50,11 +50,6 @@ pub struct SettingsRow {
     pub agent_retry_count: i32,
     pub agent_timeout_ms: i32,
     pub agent_max_turns: i32,
-    pub mode: String,
-    pub update_cli_on_run: bool,
-    pub fail_on_cli_update_error: bool,
-    pub cli_update_timeout_ms: i32,
-    pub skill_selection_mode: String,
 }
 
 #[derive(AsChangeset)]
@@ -101,9 +96,4 @@ pub struct SettingsChangeset {
     pub agent_retry_count: i32,
     pub agent_timeout_ms: i32,
     pub agent_max_turns: i32,
-    pub mode: String,
-    pub update_cli_on_run: bool,
-    pub fail_on_cli_update_error: bool,
-    pub cli_update_timeout_ms: i32,
-    pub skill_selection_mode: String,
 }

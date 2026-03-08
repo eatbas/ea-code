@@ -10,7 +10,6 @@ export interface PipelineRequest {
 export interface WorkspaceInfo {
   path: string;
   isGitRepo: boolean;
-  isDirty: boolean;
   branch?: string;
 }
 

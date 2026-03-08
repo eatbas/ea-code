@@ -165,18 +165,6 @@ export function SettingsPanel({
               />
               <span className="text-[10px] text-[#6b6b82]">Used by Claude via --max-turns</span>
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-[#9898b0]">Mode</span>
-              <select
-                value={draft.mode}
-                onChange={(e) => update({ mode: e.target.value as AppSettings["mode"] })}
-                className="w-40 rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
-              >
-                <option value="workspace-write">workspace-write</option>
-                <option value="diff-first">diff-first</option>
-              </select>
-              <span className="text-[10px] text-[#6b6b82]">`diff-first` is saved for parity; runtime behaviour is unchanged.</span>
-            </label>
           </fieldset>
 
           {/* Plan Gate */}
