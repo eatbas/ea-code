@@ -241,15 +241,15 @@ impl Default for AppSettings {
             max_iterations: 3,
             require_git: true,
             claude_model: "sonnet".to_string(),
-            codex_model: "o4-mini".to_string(),
+            codex_model: "codex-5.3".to_string(),
             gemini_model: "gemini-2.5-pro".to_string(),
             prompt_enhancer_model: "sonnet".to_string(),
             planner_model: None,
             plan_auditor_model: None,
             generator_model: "sonnet".to_string(),
-            reviewer_model: "o4-mini".to_string(),
+            reviewer_model: "codex-5.3".to_string(),
             fixer_model: "sonnet".to_string(),
-            final_judge_model: "o4-mini".to_string(),
+            final_judge_model: "codex-5.3".to_string(),
         }
     }
 }

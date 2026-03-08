@@ -116,15 +116,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxIterations: 3,
   requireGit: true,
   claudeModel: "sonnet",
-  codexModel: "o4-mini",
+  codexModel: "codex-5.3",
   geminiModel: "gemini-2.5-pro",
   promptEnhancerModel: "sonnet",
   plannerModel: null,
   planAuditorModel: null,
   generatorModel: "sonnet",
-  reviewerModel: "o4-mini",
+  reviewerModel: "codex-5.3",
   fixerModel: "sonnet",
-  finalJudgeModel: "o4-mini",
+  finalJudgeModel: "codex-5.3",
 };
 
 /** Known model options per CLI, keyed by CLI name. */
@@ -135,7 +135,7 @@ export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[
     { value: "haiku", label: "Haiku" },
   ],
   codex: [
-    { value: "o4-mini", label: "Codex o4-mini" },
+    { value: "codex-5.3", label: "Codex 5.3" },
   ],
   gemini: [
     { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
