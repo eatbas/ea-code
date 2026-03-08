@@ -121,7 +121,7 @@ pub async fn update_skill(
     let tags = payload.tags.as_deref().map(clean).unwrap_or(existing.tags);
     let is_active = payload.is_active.unwrap_or(existing.is_active);
 
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = crate::db::now_rfc3339();
     let row = db::skills::update(
         &state.db,
         &id,

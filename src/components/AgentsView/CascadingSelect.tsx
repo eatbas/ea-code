@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useClickOutside } from "../../hooks/useClickOutside";
 import type { AgentBackend, AppSettings, CliHealth } from "../../types";
 import { BACKEND_OPTIONS } from "../shared/constants";
 import { backendLabel, modelLabel, getModelOptionsForBackend } from "./agentHelpers";
@@ -28,36 +29,14 @@ export function CascadingSelect({
   const [open, setOpen] = useState(false);
   const [hoveredBackend, setHoveredBackend] = useState<AgentBackend | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const closeMenu = useCallback(() => setOpen(false), []);
+  useClickOutside(containerRef, closeMenu, open);
+
   const backendOptions = cliHealth
     ? BACKEND_OPTIONS.filter((opt) => cliHealth[opt.value].available)
     : [];
   const hasSelectableBackends = backendOptions.length > 0;
   const triggerDisabled = cliHealthChecking || (!optional && !hasSelectableBackends);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent): void {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
-
-  // Close on Escape
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    },
-    [],
-  );
-  useEffect(() => {
-    if (!open) return;
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, handleKeyDown]);
 
   // Ensure disabled state closes the dropdown immediately.
   useEffect(() => {

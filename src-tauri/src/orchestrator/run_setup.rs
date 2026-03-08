@@ -126,7 +126,7 @@ pub async fn run_executive_summary(
     )
     .await;
     let summary_model = resolve_stage_model(&PipelineStage::ExecutiveSummary, settings);
-    let summary_generated_at = chrono::Utc::now().to_rfc3339();
+    let summary_generated_at = crate::db::now_rfc3339();
     let summary_status = if summary_result.status == StageStatus::Completed {
         "completed"
     } else {

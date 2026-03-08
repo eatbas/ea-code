@@ -203,7 +203,7 @@ pub async fn update_mcp_server(
     let args = normalise_json_array(payload.args.as_deref())?;
     let env = normalise_json_object(payload.env.as_deref())?;
     let is_enabled = payload.is_enabled.unwrap_or(false);
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = crate::db::now_rfc3339();
 
     let row = db::mcp::update_custom_server(
         &state.db,

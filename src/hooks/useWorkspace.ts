@@ -33,8 +33,7 @@ export function useWorkspace(): UseWorkspaceReturn {
         return;
       }
 
-      const path = typeof selected === "string" ? selected : selected;
-      await openWorkspace(path);
+      await openWorkspace(selected);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

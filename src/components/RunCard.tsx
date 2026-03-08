@@ -26,13 +26,10 @@ export function RunCard({ run }: RunCardProps): ReactNode {
   const tint = isOk ? "rgba(40,180,95,0.10)" : run.status === "failed" ? "rgba(230,75,75,0.10)" : undefined;
   const borderTint = isOk ? "rgba(40,180,95,0.30)" : run.status === "failed" ? "rgba(230,75,75,0.30)" : "#2e2e48";
 
-  // Compute duration from iterations if available
-  const totalDurationMs = run.iterations.reduce((sum, iter) => {
-    if (typeof iter === "object" && iter !== null && "durationMs" in iter) {
-      return sum + ((iter as Record<string, unknown>)["durationMs"] as number ?? 0);
-    }
-    return sum;
-  }, 0);
+  // Compute duration from run timestamps
+  const totalDurationMs = run.startedAt && run.completedAt
+    ? new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime()
+    : 0;
 
   return (
     <div className="flex flex-col gap-3">

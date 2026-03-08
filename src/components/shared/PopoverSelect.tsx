@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
+import { useClickOutside } from "../../hooks/useClickOutside";
 
 interface PopoverSelectOption {
   value: string;
@@ -29,26 +30,8 @@ export function PopoverSelect({
 }: PopoverSelectProps): ReactNode {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent): void {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
-
-  // Close on Escape
-  const handleEscape = useCallback((e: KeyboardEvent) => {
-    if (e.key === "Escape") setOpen(false);
-  }, []);
-  useEffect(() => {
-    if (!open) return;
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [open, handleEscape]);
+  const close = useCallback(() => setOpen(false), []);
+  useClickOutside(ref, close, open);
 
   const selectedLabel = options.find((o) => o.value === value)?.label ?? value;
 

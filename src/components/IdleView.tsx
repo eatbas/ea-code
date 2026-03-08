@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useClickOutside } from "../hooks/useClickOutside";
 import type { WorkspaceInfo, ProjectSummary, RunOptions, CliHealth } from "../types";
 import { PromptInputBar } from "./shared/PromptInputBar";
 
@@ -26,18 +27,8 @@ export function IdleView({
 }: IdleViewProps): ReactNode {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!dropdownOpen) return;
-    const close = () => setDropdownOpen(false);
-    const onClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) close();
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onClick); document.removeEventListener("keydown", onKey); };
-  }, [dropdownOpen]);
+  const closeDropdown = useCallback(() => setDropdownOpen(false), []);
+  useClickOutside(dropdownRef, closeDropdown, dropdownOpen);
 
   function folderName(path: string): string {
     const parts = path.split(/[/\\]+/);

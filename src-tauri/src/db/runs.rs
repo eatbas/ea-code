@@ -68,7 +68,7 @@ pub fn complete(
     error: Option<&str>,
 ) -> Result<(), String> {
     let mut conn = super::get_conn(pool)?;
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = super::now_rfc3339();
 
     diesel::update(runs::table.find(id))
         .set((

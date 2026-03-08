@@ -72,7 +72,7 @@ pub fn list_servers(pool: &DbPool) -> Result<Vec<McpServerRow>, String> {
 /// Keeps only: ea-code-history, context7, playwright.
 pub fn sync_builtin_catalog(pool: &DbPool) -> Result<(), String> {
     let mut conn = super::get_conn(pool)?;
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = super::now_rfc3339();
     let allowed_ids = BUILTIN_MCP_SERVERS.iter().map(|s| s.id).collect::<Vec<_>>();
 
     conn.transaction(|conn| {
@@ -164,12 +164,10 @@ pub fn update_custom_server(
     changeset: &McpServerChangeset<'_>,
 ) -> Result<McpServerRow, String> {
     let mut conn = super::get_conn(pool)?;
-    let row = mcp_servers::table
-        .find(server_id)
-        .first::<McpServerRow>(&mut conn)
-        .optional()
-        .map_err(|e| format!("Failed to load MCP server: {e}"))?
-        .ok_or_else(|| "MCP server not found".to_string())?;
+    let row = super::find_or_not_found(
+        mcp_servers::table.find(server_id).first::<McpServerRow>(&mut conn).optional(),
+        "MCP server",
+    )?;
     if row.is_builtin {
         return Err("Built-in MCP servers cannot be edited".to_string());
     }
@@ -187,12 +185,10 @@ pub fn update_custom_server(
 
 pub fn delete_custom_server(pool: &DbPool, server_id: &str) -> Result<(), String> {
     let mut conn = super::get_conn(pool)?;
-    let row = mcp_servers::table
-        .find(server_id)
-        .first::<McpServerRow>(&mut conn)
-        .optional()
-        .map_err(|e| format!("Failed to load MCP server: {e}"))?
-        .ok_or_else(|| "MCP server not found".to_string())?;
+    let row = super::find_or_not_found(
+        mcp_servers::table.find(server_id).first::<McpServerRow>(&mut conn).optional(),
+        "MCP server",
+    )?;
     if row.is_builtin {
         return Err("Built-in MCP servers cannot be deleted".to_string());
     }
@@ -209,7 +205,7 @@ pub fn set_server_enabled(pool: &DbPool, server_id: &str, enabled: bool) -> Resu
     }
 
     let mut conn = super::get_conn(pool)?;
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = super::now_rfc3339();
     let affected = diesel::update(mcp_servers::table.find(server_id))
         .set((mcp_servers::is_enabled.eq(enabled), mcp_servers::updated_at.eq(now)))
         .execute(&mut conn)
@@ -268,12 +264,10 @@ pub fn set_server_env_var(
     env_value: Option<&str>,
 ) -> Result<(), String> {
     let mut conn = super::get_conn(pool)?;
-    let row = mcp_servers::table
-        .find(server_id)
-        .first::<McpServerRow>(&mut conn)
-        .optional()
-        .map_err(|e| format!("Failed to load MCP server: {e}"))?
-        .ok_or_else(|| "MCP server not found".to_string())?;
+    let row = super::find_or_not_found(
+        mcp_servers::table.find(server_id).first::<McpServerRow>(&mut conn).optional(),
+        "MCP server",
+    )?;
 
     let mut env = serde_json::from_str::<HashMap<String, String>>(&row.env)
         .map_err(|e| format!("Invalid env JSON for MCP server {}: {e}", row.id))?;
@@ -289,7 +283,7 @@ pub fn set_server_env_var(
 
     let env_json = serde_json::to_string(&env)
         .map_err(|e| format!("Failed to serialise MCP env map: {e}"))?;
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = super::now_rfc3339();
 
     diesel::update(mcp_servers::table.find(server_id))
         .set((mcp_servers::env.eq(env_json), mcp_servers::updated_at.eq(now)))

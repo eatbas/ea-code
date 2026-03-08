@@ -100,7 +100,7 @@ pub fn get_project_path(pool: &DbPool, session_id: &str) -> Result<String, Strin
 /// Updates the session's `updated_at` timestamp (called after a run completes).
 pub fn touch(pool: &DbPool, session_id: &str) -> Result<(), String> {
     let mut conn = super::get_conn(pool)?;
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = super::now_rfc3339();
 
     diesel::update(sessions::table.find(session_id))
         .set(sessions::updated_at.eq(&now))

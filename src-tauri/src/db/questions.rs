@@ -42,7 +42,7 @@ pub fn record_answer(
     skipped: bool,
 ) -> Result<(), String> {
     let mut conn = super::get_conn(pool)?;
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = super::now_rfc3339();
 
     diesel::update(questions::table.find(question_id))
         .set((

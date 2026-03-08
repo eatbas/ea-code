@@ -41,7 +41,7 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         executive_summary_agent: backend_to_str(&s.executive_summary_agent),
         max_iterations: s.max_iterations as i32,
         require_git: s.require_git,
-        updated_at: chrono::Utc::now().to_rfc3339(),
+        updated_at: super::now_rfc3339(),
         claude_model: s.claude_model.clone(),
         codex_model: s.codex_model.clone(),
         gemini_model: s.gemini_model.clone(),

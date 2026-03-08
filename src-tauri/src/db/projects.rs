@@ -16,7 +16,7 @@ pub fn upsert(
 ) -> Result<i32, String> {
     let mut conn = super::get_conn(pool)?;
 
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = super::now_rfc3339();
 
     // Try to find an existing project by path
     let existing: Option<ProjectRow> = projects::table

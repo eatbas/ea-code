@@ -26,6 +26,22 @@ pub fn get_conn(pool: &DbPool) -> Result<r2d2::PooledConnection<ConnectionManage
     pool.get().map_err(|e| format!("Pool error: {e}"))
 }
 
+/// Returns the current UTC timestamp as an RFC 3339 string.
+pub fn now_rfc3339() -> String {
+    chrono::Utc::now().to_rfc3339()
+}
+
+/// Unwraps a Diesel `optional()` query into a `Result`, converting
+/// `None` into a user-friendly "not found" error.
+pub fn find_or_not_found<T>(
+    result: Result<Option<T>, diesel::result::Error>,
+    entity: &str,
+) -> Result<T, String> {
+    result
+        .map_err(|e| format!("Failed to load {entity}: {e}"))?
+        .ok_or_else(|| format!("{entity} not found"))
+}
+
 /// Embedded migrations compiled into the binary.
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
