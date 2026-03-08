@@ -89,7 +89,7 @@ export function CascadingSelect({
           isSkipped
             ? "border-[#2e2e48] bg-[#1a1a24] text-[#6b6b80]"
             : "border-[#2e2e48] bg-[#1a1a24] text-[#e4e4ed]"
-        } hover:border-[#6366f1] focus:border-[#6366f1] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60`}
+        } hover:border-[#3e3e58] focus:border-[#3e3e58] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60`}
       >
         <span className="truncate">{displayText}</span>
         <svg
@@ -120,7 +120,7 @@ export function CascadingSelect({
                 onMouseEnter={() => setHoveredBackend(null)}
                 className={`flex w-full items-center px-3 py-1.5 text-sm transition-colors ${
                   isSkipped
-                    ? "bg-[#6366f1]/15 text-[#e4e4ed]"
+                    ? "bg-[#24243a] text-[#e4e4ed]"
                     : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
                 }`}
               >
@@ -190,13 +190,13 @@ export function CascadingSelect({
                       }}
                       className={`flex w-full items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
                         isSelected
-                          ? "bg-[#6366f1]/15 text-[#e4e4ed]"
+                          ? "bg-[#24243a] text-[#e4e4ed]"
                           : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
                       }`}
                     >
                       {isSelected && (
                         <svg
-                          className="h-3 w-3 shrink-0 text-[#6366f1]"
+                          className="h-3 w-3 shrink-0 text-[#e4e4ed]"
                           viewBox="0 0 12 12"
                           fill="none"
                           stroke="currentColor"

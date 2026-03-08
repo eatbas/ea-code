@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import type { SessionSummary } from "../types";
+import type { ProjectSummary, SessionSummary } from "../types";
+import { ProjectThreadsList } from "./ProjectThreadsList";
 
 /** Which view the sidebar is navigating to. */
 export type ActiveView = "home" | "agents" | "cli-setup" | "skills" | "mcp";
@@ -10,13 +11,30 @@ interface SidebarProps {
   onNewSession: () => void;
   activeView: ActiveView;
   onNavigate: (view: ActiveView) => void;
+  projects: ProjectSummary[];
+  activeProjectPath?: string;
+  onSelectProject: (projectPath: string) => void | Promise<void>;
+  onAddProject: () => void;
   sessions: SessionSummary[];
   activeSessionId?: string;
   onSelectSession: (sessionId: string) => void;
 }
 
 /** Collapsible left sidebar with new thread and settings sub-navigation. */
-export function Sidebar({ collapsed, onToggle, onNewSession, activeView, onNavigate, sessions, activeSessionId, onSelectSession }: SidebarProps): ReactNode {
+export function Sidebar({
+  collapsed,
+  onToggle,
+  onNewSession,
+  activeView,
+  onNavigate,
+  projects,
+  activeProjectPath,
+  onSelectProject,
+  onAddProject,
+  sessions,
+  activeSessionId,
+  onSelectSession,
+}: SidebarProps): ReactNode {
   const isSettings = activeView === "agents" || activeView === "cli-setup" || activeView === "skills" || activeView === "mcp";
 
   function handleSettingsClick(): void {
@@ -182,35 +200,29 @@ export function Sidebar({ collapsed, onToggle, onNewSession, activeView, onNavig
         <span className="text-sm font-medium text-[#e4e4ed]">New thread</span>
       </div>
 
-      {/* Session history */}
-      <div className="flex-1 overflow-y-auto px-2">
-        {sessions.length === 0 ? (
-          <p className="px-3 py-4 text-xs text-[#9898b0]">No threads yet</p>
-        ) : (
-          <div className="flex flex-col gap-0.5 py-1">
-            {sessions.map((s) => {
-              const isActive = s.id === activeSessionId;
-              const statusDot = s.lastStatus === "completed" ? "#22c55e"
-                : s.lastStatus === "failed" ? "#ef4444"
-                : s.lastStatus === "running" ? "#6366f1"
-                : "#9898b0";
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => onSelectSession(s.id)}
-                  className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                    isActive
-                      ? "bg-[#24243a] text-[#e4e4ed]"
-                      : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
-                  }`}
-                >
-                  <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: statusDot }} />
-                  <span className="line-clamp-2 break-words">{s.lastPrompt ?? s.title}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+      <ProjectThreadsList
+        projects={projects}
+        sessions={sessions}
+        activeProjectPath={activeProjectPath}
+        activeSessionId={activeSessionId}
+        onAddProject={onAddProject}
+        onSelectProject={onSelectProject}
+        onSelectSession={onSelectSession}
+      />
+
+      <div className="px-3 pb-3">
+        <button
+          onClick={onAddProject}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v2" />
+            <path d="M3 11v6a2 2 0 0 0 2 2h6" />
+            <line x1="16" y1="17" x2="22" y2="17" />
+            <line x1="19" y1="14" x2="19" y2="20" />
+          </svg>
+          Add project
+        </button>
       </div>
 
       {/* Bottom — settings */}

@@ -91,7 +91,7 @@ function CliCard({
   const installSearchUrl = buildGoogleInstallSearchUrl(info.name);
 
   return (
-    <div className="rounded-lg border border-[#2e2e48] bg-[#1a1a2e] p-5">
+    <div className="rounded-lg border border-[#2e2e48] bg-[#1a1a24] p-5">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-[#e4e4ed]">{info.name}</h3>
         <StatusBadge info={info} />
@@ -129,20 +129,20 @@ function CliCard({
                   onClick={() => onToggleModel(opt.value)}
                   className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors ${
                     isChecked
-                      ? "bg-[#6366f1]/15 text-[#e4e4ed]"
+                      ? "bg-[#24243a] text-[#e4e4ed]"
                       : "bg-[#0f0f14] text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
                   }`}
                 >
                   <span
                     className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                       isChecked
-                        ? "border-[#6366f1] bg-[#6366f1]"
+                        ? "border-[#e4e4ed] bg-[#e4e4ed]"
                         : "border-[#3e3e58] bg-transparent"
                     }`}
                   >
                     {isChecked && (
                       <svg
-                        className="h-3 w-3 text-white"
+                        className="h-3 w-3 text-[#0f0f14]"
                         viewBox="0 0 12 12"
                         fill="none"
                         stroke="currentColor"
@@ -170,7 +170,7 @@ function CliCard({
       {showInstall && (
         <button
           onClick={() => void openUrl(installSearchUrl)}
-          className="mt-4 w-full rounded-md bg-[#6366f1] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#5558e6]"
+          className="mt-4 w-full rounded-md bg-[#e4e4ed] px-4 py-2 text-sm font-medium text-[#0f0f14] transition-colors hover:bg-white"
         >
           Install
         </button>
@@ -179,7 +179,7 @@ function CliCard({
         <button
           onClick={onUpdate}
           disabled={updating}
-          className="mt-4 w-full rounded-md bg-[#6366f1] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#5558e6] disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-4 w-full rounded-md bg-[#e4e4ed] px-4 py-2 text-sm font-medium text-[#0f0f14] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {updating ? "Updating…" : "Update"}
         </button>
@@ -264,7 +264,7 @@ export function CliSetupView({
               {[0, 1, 2, 3, 4, 5].map((i) => (
                 <div
                   key={i}
-                  className="h-48 animate-pulse rounded-lg border border-[#2e2e48] bg-[#1a1a2e]"
+                  className="h-48 animate-pulse rounded-lg border border-[#2e2e48] bg-[#1a1a24]"
                 />
               ))}
             </div>

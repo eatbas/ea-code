@@ -48,7 +48,7 @@ export function IdleView({
   /** Extract the folder name from a full path. */
   function workspaceName(): string {
     if (!workspace) return "";
-    const parts = workspace.path.split("/");
+    const parts = workspace.path.split(/[/\\]+/);
     return parts[parts.length - 1] || workspace.path;
   }
 

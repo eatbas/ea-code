@@ -19,12 +19,12 @@ import { QuestionDialog } from "./components/QuestionDialog";
 import type { PipelineRequest } from "./types";
 
 function App(): ReactNode {
-  const { workspace, selectFolder } = useWorkspace();
+  const { workspace, openWorkspace, selectFolder } = useWorkspace();
   const { settings, loading, saveSettings, clearProjectSettings } = useSettings(workspace?.path);
   const { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { versions, loading: versionsLoading, updating: versionsUpdating, error: versionsError, fetchVersions, updateCli } = useCliVersions();
   const { health: cliHealth, checking: cliHealthChecking, checkHealth } = useCliHealth();
-  const { sessions, loadSessions, loadProjects } = useHistory();
+  const { projects, sessions, loadSessions, loadProjects } = useHistory();
   const { skills, loading: skillsLoading, error: skillsError, createSkill, updateSkill, deleteSkill } = useSkills();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -39,9 +39,11 @@ function App(): ReactNode {
   // Load sessions when workspace changes
   useEffect(() => {
     if (workspace) {
+      loadProjects();
       loadSessions(workspace.path);
+      setActiveSessionId(undefined);
     }
-  }, [workspace, loadSessions]);
+  }, [workspace, loadProjects, loadSessions]);
 
   // Reload sessions when a pipeline run completes
   useEffect(() => {
@@ -76,6 +78,11 @@ function App(): ReactNode {
     setActiveSessionId(_sessionId);
     setActiveView("home");
   }, []);
+
+  const handleSelectProject = useCallback(async (projectPath: string): Promise<void> => {
+    await openWorkspace(projectPath);
+    setActiveView("home");
+  }, [openWorkspace]);
 
   /** Render the main content area based on active view. */
   function renderContent(): ReactNode {
@@ -161,6 +168,10 @@ function App(): ReactNode {
         onNewSession={handleNewSession}
         activeView={activeView}
         onNavigate={setActiveView}
+        projects={projects}
+        activeProjectPath={workspace?.path}
+        onSelectProject={handleSelectProject}
+        onAddProject={selectFolder}
         sessions={sessions}
         activeSessionId={activeSessionId}
         onSelectSession={handleSelectSession}

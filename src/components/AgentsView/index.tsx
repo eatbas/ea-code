@@ -66,7 +66,7 @@ export function AgentsView({
             Configure which CLI backend and model handles each pipeline role.
           </p>
           {projectScoped && (
-            <div className="rounded border border-[#2e2e48] bg-[#1a1a2e] px-3 py-2 text-xs text-[#9898b0]">
+            <div className="rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-xs text-[#9898b0]">
               Project override mode: settings are saved for the active workspace.
               {onResetProjectSettings && (
                 <button
@@ -88,7 +88,7 @@ export function AgentsView({
               return (
                 <div
                   key={stage.label}
-                  className="rounded-lg border border-[#2e2e48] bg-[#1a1a2e] p-4 flex flex-col gap-2"
+                  className="rounded-lg border border-[#2e2e48] bg-[#1a1a24] p-4 flex flex-col gap-2"
                 >
                   <span className="text-xs font-medium text-[#9898b0]">
                     {stage.label}
@@ -123,7 +123,7 @@ export function AgentsView({
               <select
                 value={draft.skillSelectionMode}
                 onChange={(e) => update({ skillSelectionMode: e.target.value as AppSettings["skillSelectionMode"] })}
-                className="w-44 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+                className="w-44 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
               >
                 <option value="disable">Disable</option>
                 <option value="auto">Auto (agent selects)</option>
@@ -137,7 +137,7 @@ export function AgentsView({
                 max={10}
                 value={draft.maxIterations}
                 onChange={(e) => update({ maxIterations: Math.max(1, Math.min(10, Number(e.target.value))) })}
-                className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+                className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
               />
             </label>
             <label className="flex items-center gap-2">
@@ -145,7 +145,7 @@ export function AgentsView({
                 type="checkbox"
                 checked={draft.requireGit}
                 onChange={(e) => update({ requireGit: e.target.checked })}
-                className="rounded border-[#2e2e48] accent-[#6366f1]"
+                className="rounded border-[#2e2e48] accent-[#e4e4ed]"
               />
               <span className="text-xs text-[#9898b0]">Require Git repository</span>
             </label>
@@ -157,7 +157,7 @@ export function AgentsView({
                 max={100}
                 value={draft.agentMaxTurns}
                 onChange={(e) => update({ agentMaxTurns: Math.max(1, Math.min(100, Number(e.target.value))) })}
-                className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+                className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -165,7 +165,7 @@ export function AgentsView({
               <select
                 value={draft.mode}
                 onChange={(e) => update({ mode: e.target.value as AppSettings["mode"] })}
-                className="w-44 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+                className="w-44 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
               >
                 <option value="workspace-write">workspace-write</option>
                 <option value="diff-first">diff-first</option>
@@ -176,7 +176,7 @@ export function AgentsView({
                 type="checkbox"
                 checked={draft.updateCliOnRun}
                 onChange={(e) => update({ updateCliOnRun: e.target.checked })}
-                className="rounded border-[#2e2e48] accent-[#6366f1]"
+                className="rounded border-[#2e2e48] accent-[#e4e4ed]"
               />
               <span className="text-xs text-[#9898b0]">Update CLIs on run start</span>
             </label>
@@ -185,7 +185,7 @@ export function AgentsView({
                 type="checkbox"
                 checked={draft.failOnCliUpdateError}
                 onChange={(e) => update({ failOnCliUpdateError: e.target.checked })}
-                className="rounded border-[#2e2e48] accent-[#6366f1]"
+                className="rounded border-[#2e2e48] accent-[#e4e4ed]"
               />
               <span className="text-xs text-[#9898b0]">Fail run on CLI update error</span>
             </label>
@@ -197,7 +197,7 @@ export function AgentsView({
                 step={1000}
                 value={draft.cliUpdateTimeoutMs}
                 onChange={(e) => update({ cliUpdateTimeoutMs: Math.max(1000, Number(e.target.value)) })}
-                className="w-36 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+                className="w-36 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
               />
             </label>
           </div>

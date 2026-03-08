@@ -6,6 +6,7 @@ import type { WorkspaceInfo } from "../types";
 interface UseWorkspaceReturn {
   workspace: WorkspaceInfo | null;
   error: string | null;
+  openWorkspace: (path: string) => Promise<void>;
   selectFolder: () => Promise<void>;
 }
 
@@ -13,6 +14,16 @@ interface UseWorkspaceReturn {
 export function useWorkspace(): UseWorkspaceReturn {
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const openWorkspace = useCallback(async (path: string): Promise<void> => {
+    try {
+      const info = await invoke<WorkspaceInfo>("select_workspace", { path });
+      setWorkspace(info);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
 
   const selectFolder = useCallback(async (): Promise<void> => {
     try {
@@ -24,13 +35,11 @@ export function useWorkspace(): UseWorkspaceReturn {
       }
 
       const path = typeof selected === "string" ? selected : selected;
-      const info = await invoke<WorkspaceInfo>("select_workspace", { path });
-      setWorkspace(info);
-      setError(null);
+      await openWorkspace(path);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, []);
+  }, [openWorkspace]);
 
-  return { workspace, error, selectFolder };
+  return { workspace, error, openWorkspace, selectFolder };
 }
