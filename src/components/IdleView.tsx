@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { WorkspaceInfo, ProjectSummary, AgentBackend, RunOptions, CliHealth } from "../types";
 import { CLI_MODEL_OPTIONS } from "../types";
@@ -41,40 +41,22 @@ export function IdleView({
 
   const canRun = prompt.trim().length > 0 && workspace !== null;
 
-  /** Auto-resize the textarea to fit its content. */
-  function autoResize(): void {
-    const el = textareaRef.current;
-    if (el) {
-      el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-    }
-  }
-
   useEffect(() => {
-    autoResize();
+    const el = textareaRef.current;
+    if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 160)}px`; }
   }, [prompt]);
 
-  // Close project dropdown on outside click
   useEffect(() => {
     if (!dropdownOpen) return;
-    function handleClick(e: MouseEvent): void {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    const close = () => setDropdownOpen(false);
+    const onClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onClick); document.removeEventListener("keydown", onKey); };
   }, [dropdownOpen]);
-
-  // Close project dropdown on Escape
-  const handleEscape = useCallback((e: KeyboardEvent) => {
-    if (e.key === "Escape") setDropdownOpen(false);
-  }, []);
-  useEffect(() => {
-    if (!dropdownOpen) return;
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [dropdownOpen, handleEscape]);
 
   function handleSubmit(): void {
     if (canRun) {
@@ -95,18 +77,13 @@ export function IdleView({
     }
   }
 
-  function projectDisplayName(project: ProjectSummary): string {
-    if (project.name.trim().length > 0) return project.name;
-    const parts = project.path.split(/[/\\]+/);
-    return parts[parts.length - 1] || project.path;
+  function folderName(path: string): string {
+    const parts = path.split(/[/\\]+/);
+    return parts[parts.length - 1] || path;
   }
-
-  /** Extract the folder name from the active workspace path. */
-  function workspaceName(): string {
-    if (!workspace) return "";
-    const parts = workspace.path.split(/[/\\]+/);
-    return parts[parts.length - 1] || workspace.path;
-  }
+  const projectDisplayName = (p: ProjectSummary): string =>
+    p.name.trim().length > 0 ? p.name : folderName(p.path);
+  const workspaceLabel = workspace ? folderName(workspace.path) : "";
 
   return (
     <div className="flex h-full flex-col items-center bg-[#0f0f14]">
@@ -129,7 +106,7 @@ export function IdleView({
             onClick={() => setDropdownOpen((prev) => !prev)}
             className="flex items-center gap-2 text-lg text-[#9898b0] hover:text-[#e4e4ed] transition-colors"
           >
-            <span>{workspace ? workspaceName() : "Select a project..."}</span>
+            <span>{workspace ? workspaceLabel : "Select a project..."}</span>
             <svg
               className={`h-4 w-4 shrink-0 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
               xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -267,58 +244,25 @@ export function IdleView({
             </label>
             {directTask && (
               <div className="ml-auto flex items-center gap-2">
-                {/* Agent dropdown (opens upward) */}
-                <div ref={agentDropdownRef} className="relative">
-                  <button
-                    onClick={() => { setAgentDropdownOpen((p) => !p); setModelDropdownOpen(false); }}
-                    className="flex items-center gap-1 rounded border border-[#2e2e48] bg-[#1a1a24] px-2 py-1 text-xs text-[#e4e4ed] hover:border-[#6366f1] transition-colors"
-                  >
-                    <span>{availableBackends.find((b) => b.value === directAgent)?.label ?? directAgent}</span>
-                    <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
-                  </button>
-                  {agentDropdownOpen && (
-                    <div className="absolute bottom-full left-0 z-50 mb-1 min-w-full rounded-lg border border-[#2e2e48] bg-[#1a1a2e] py-1 shadow-lg">
-                      {availableBackends.map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => {
-                            const backend = opt.value;
-                            setDirectAgent(backend);
-                            const opts = CLI_MODEL_OPTIONS[backend];
-                            if (opts && opts.length > 0) setDirectModel(opts[0].value);
-                            setAgentDropdownOpen(false);
-                          }}
-                          className={`flex w-full items-center px-3 py-1.5 text-xs whitespace-nowrap transition-colors ${
-                            opt.value === directAgent ? "bg-[#24243a] text-[#e4e4ed]" : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
-                          }`}
-                        >{opt.label}</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {/* Model dropdown (opens upward) */}
-                <div ref={modelDropdownRef} className="relative">
-                  <button
-                    onClick={() => { setModelDropdownOpen((p) => !p); setAgentDropdownOpen(false); }}
-                    className="flex items-center gap-1 rounded border border-[#2e2e48] bg-[#1a1a24] px-2 py-1 text-xs text-[#e4e4ed] hover:border-[#6366f1] transition-colors"
-                  >
-                    <span>{(CLI_MODEL_OPTIONS[directAgent] ?? []).find((m) => m.value === directModel)?.label ?? directModel}</span>
-                    <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
-                  </button>
-                  {modelDropdownOpen && (
-                    <div className="absolute bottom-full right-0 z-50 mb-1 min-w-full rounded-lg border border-[#2e2e48] bg-[#1a1a2e] py-1 shadow-lg">
-                      {(CLI_MODEL_OPTIONS[directAgent] ?? []).map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => { setDirectModel(opt.value); setModelDropdownOpen(false); }}
-                          className={`flex w-full items-center px-3 py-1.5 text-xs whitespace-nowrap transition-colors ${
-                            opt.value === directModel ? "bg-[#24243a] text-[#e4e4ed]" : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
-                          }`}
-                        >{opt.label}</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <PopoverSelect
+                  value={directAgent}
+                  options={availableBackends}
+                  direction="up"
+                  align="left"
+                  onChange={(val) => {
+                    const backend = val as AgentBackend;
+                    setDirectAgent(backend);
+                    const opts = CLI_MODEL_OPTIONS[backend];
+                    if (opts && opts.length > 0) setDirectModel(opts[0].value);
+                  }}
+                />
+                <PopoverSelect
+                  value={directModel}
+                  options={CLI_MODEL_OPTIONS[directAgent] ?? []}
+                  direction="up"
+                  align="right"
+                  onChange={setDirectModel}
+                />
               </div>
             )}
           </div>

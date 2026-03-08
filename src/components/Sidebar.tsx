@@ -175,8 +175,8 @@ export function Sidebar({
   // Default home sidebar
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-[#2e2e48] bg-[#1a1a24]">
-      {/* Top bar — sidebar toggle + compose icon + "New thread" */}
-      <div className="flex items-center gap-2 px-3 pt-8 pb-3">
+      {/* Top bar — sidebar toggle + compose icon */}
+      <div className="flex items-center px-3 pt-8 pb-3">
         <button
           onClick={onToggle}
           className="rounded p-1.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
@@ -189,7 +189,7 @@ export function Sidebar({
         </button>
         <button
           onClick={onNewSession}
-          className="rounded p-1.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
+          className="ml-auto rounded p-1.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
           title="New thread"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -197,7 +197,6 @@ export function Sidebar({
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
           </svg>
         </button>
-        <span className="text-sm font-medium text-[#e4e4ed]">New thread</span>
       </div>
 
       <ProjectThreadsList
@@ -205,7 +204,6 @@ export function Sidebar({
         sessions={sessions}
         activeProjectPath={activeProjectPath}
         activeSessionId={activeSessionId}
-        onAddProject={onAddProject}
         onSelectProject={onSelectProject}
         onSelectSession={onSelectSession}
       />
