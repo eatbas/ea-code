@@ -2,6 +2,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
+use crate::db::{self, DbPool};
 use crate::events::PipelineLogPayload;
 use crate::models::PipelineStage;
 
@@ -44,6 +45,7 @@ pub async fn run_cli_agent(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
+    db: &DbPool,
 ) -> Result<AgentOutput, String> {
     let mut child = Command::new(binary)
         .args(args)
@@ -73,6 +75,17 @@ pub async fn run_cli_agent(
     let run_id_err = run_id.to_string();
     let stage_err = stage.clone();
 
+    let stage_str = serde_json::to_value(&stage)
+        .ok()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| format!("{stage:?}"));
+
+    let db_out = db.clone();
+    let stage_str_out = stage_str.clone();
+
+    let db_err = db.clone();
+    let stage_str_err = stage_str;
+
     // Read stdout and stderr concurrently via separate tasks
     let stdout_handle = tokio::spawn(async move {
         let mut lines = Vec::new();
@@ -86,6 +99,8 @@ pub async fn run_cli_agent(
                     stream: "stdout".to_string(),
                 },
             );
+            // Fire-and-forget log persistence
+            let _ = db::logs::insert(&db_out, &run_id_out, &stage_str_out, &line, "stdout");
             lines.push(line);
         }
         lines
@@ -103,6 +118,7 @@ pub async fn run_cli_agent(
                     stream: "stderr".to_string(),
                 },
             );
+            let _ = db::logs::insert(&db_err, &run_id_err, &stage_str_err, &line, "stderr");
             lines.push(line);
         }
         lines

@@ -117,6 +117,9 @@ pub struct PipelineRun {
 pub struct PipelineRequest {
     pub prompt: String,
     pub workspace_path: String,
+    /// Session ID for this conversation thread.
+    /// If not provided, a new session will be created.
+    pub session_id: Option<String>,
 }
 
 /// Workspace validation result.

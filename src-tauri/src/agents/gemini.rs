@@ -1,5 +1,6 @@
 use tauri::AppHandle;
 
+use crate::db::DbPool;
 use crate::models::PipelineStage;
 
 use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
@@ -11,6 +12,7 @@ pub async fn run_gemini(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
+    db: &DbPool,
 ) -> Result<AgentOutput, String> {
     let full_prompt = build_full_prompt(input);
     run_cli_agent(
@@ -20,6 +22,7 @@ pub async fn run_gemini(
         app,
         run_id,
         stage,
+        db,
     )
     .await
 }

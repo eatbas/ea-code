@@ -45,7 +45,7 @@ export function useSettings(): UseSettingsReturn {
 
   const saveSettings = useCallback(async (updated: AppSettings): Promise<void> => {
     try {
-      await invoke("save_settings", { settings: updated });
+      await invoke("save_settings", { newSettings: updated });
       setSettings(updated);
       setError(null);
     } catch (err) {

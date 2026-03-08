@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSettings } from "./hooks/useSettings";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { usePipeline } from "./hooks/usePipeline";
 import { useCliHealth } from "./hooks/useCliHealth";
+import { useHistory } from "./hooks/useHistory";
 import { Sidebar } from "./components/Sidebar";
 import type { ActiveView } from "./components/Sidebar";
 import { IdleView } from "./components/IdleView";
@@ -18,25 +19,51 @@ function App(): ReactNode {
   const { workspace, selectFolder } = useWorkspace();
   const { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { health, checkHealth } = useCliHealth();
+  const { sessions, loadSessions, loadProjects } = useHistory();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ActiveView>("home");
+  const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
 
   const isRunning = run && run.status !== "idle";
+
+  // Load projects on mount
+  useEffect(() => { loadProjects(); }, [loadProjects]);
+
+  // Load sessions when workspace changes
+  useEffect(() => {
+    if (workspace) {
+      loadSessions(workspace.path);
+    }
+  }, [workspace, loadSessions]);
+
+  // Reload sessions when a pipeline run completes
+  useEffect(() => {
+    if (run && (run.status === "completed" || run.status === "failed" || run.status === "cancelled") && workspace) {
+      loadSessions(workspace.path);
+    }
+  }, [run?.status, workspace, loadSessions]);
 
   function handleRun(prompt: string): void {
     if (!workspace) return;
     const request: PipelineRequest = {
       prompt,
       workspacePath: workspace.path,
+      sessionId: activeSessionId,
     };
     startPipeline(request);
   }
 
   function handleNewSession(): void {
     resetRun();
+    setActiveSessionId(undefined);
     setActiveView("home");
   }
+
+  const handleSelectSession = useCallback((_sessionId: string) => {
+    setActiveSessionId(_sessionId);
+    setActiveView("home");
+  }, []);
 
   /** Render the main content area based on active view. */
   function renderContent(): ReactNode {
@@ -92,6 +119,9 @@ function App(): ReactNode {
         onNewSession={handleNewSession}
         activeView={activeView}
         onNavigate={setActiveView}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSelectSession={handleSelectSession}
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">

@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::agents::{run_claude, run_codex, run_gemini, AgentInput, AgentOutput};
+use crate::db::{self, DbPool};
 use crate::events::*;
 use crate::git;
 use crate::models::*;
@@ -20,24 +21,34 @@ fn epoch_millis() -> String {
         .to_string()
 }
 
+/// Serialises a PipelineStage to its snake_case string for DB storage.
+fn stage_to_str(stage: &PipelineStage) -> String {
+    serde_json::to_value(stage)
+        .ok()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| format!("{stage:?}"))
+}
+
 /// Dispatches to the appropriate agent runner based on the backend setting.
 async fn dispatch_agent(
     backend: &AgentBackend,
     input: &AgentInput,
     settings: &AppSettings,
+    session_id: Option<&str>,
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
+    db: &DbPool,
 ) -> Result<AgentOutput, String> {
     match backend {
         AgentBackend::Claude => {
-            run_claude(input, &settings.claude_path, app, run_id, stage).await
+            run_claude(input, &settings.claude_path, session_id, app, run_id, stage, db).await
         }
         AgentBackend::Codex => {
-            run_codex(input, &settings.codex_path, app, run_id, stage).await
+            run_codex(input, &settings.codex_path, app, run_id, stage, db).await
         }
         AgentBackend::Gemini => {
-            run_gemini(input, &settings.gemini_path, app, run_id, stage).await
+            run_gemini(input, &settings.gemini_path, app, run_id, stage, db).await
         }
     }
 }
@@ -61,8 +72,15 @@ fn emit_stage(
     );
 }
 
-/// Emits an artefact event (diff, review, or judge output).
-fn emit_artifact(app: &AppHandle, run_id: &str, kind: &str, content: &str, iteration: u32) {
+/// Emits an artefact event and persists it to the database.
+fn emit_artifact(
+    app: &AppHandle,
+    run_id: &str,
+    kind: &str,
+    content: &str,
+    iteration: u32,
+    db: &DbPool,
+) {
     let _ = app.emit(
         "pipeline:artifact",
         PipelineArtifactPayload {
@@ -72,55 +90,59 @@ fn emit_artifact(app: &AppHandle, run_id: &str, kind: &str, content: &str, itera
             iteration,
         },
     );
+    let _ = db::artifacts::insert(db, run_id, iteration as i32, kind, content);
 }
 
 /// Runs an agent stage: emits Running, executes, emits Completed/Failed,
-/// and returns the `StageResult`.
+/// persists the stage result, and returns it.
 async fn execute_agent_stage(
     app: &AppHandle,
     run_id: &str,
     iteration_num: u32,
+    iteration_db_id: i32,
     stage: PipelineStage,
     backend: &AgentBackend,
     input: &AgentInput,
     settings: &AppSettings,
+    session_id: Option<&str>,
+    db: &DbPool,
 ) -> StageResult {
     let start = Instant::now();
     emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num);
 
-    match dispatch_agent(backend, input, settings, app, run_id, stage.clone()).await {
+    let stage_str = stage_to_str(&stage);
+
+    match dispatch_agent(backend, input, settings, session_id, app, run_id, stage.clone(), db).await {
         Ok(output) => {
             let duration_ms = start.elapsed().as_millis() as u64;
             emit_stage(app, run_id, &stage, &StageStatus::Completed, iteration_num);
-            StageResult {
-                stage,
-                status: StageStatus::Completed,
-                output: output.raw_text,
-                duration_ms,
-                error: None,
-            }
+            let _ = db::runs::insert_stage(
+                db, iteration_db_id, &stage_str, "completed",
+                &output.raw_text, duration_ms as i32, None,
+            );
+            StageResult { stage, status: StageStatus::Completed, output: output.raw_text, duration_ms, error: None }
         }
         Err(e) => {
             let duration_ms = start.elapsed().as_millis() as u64;
             emit_stage(app, run_id, &stage, &StageStatus::Failed, iteration_num);
-            StageResult {
-                stage,
-                status: StageStatus::Failed,
-                output: String::new(),
-                duration_ms,
-                error: Some(e),
-            }
+            let _ = db::runs::insert_stage(
+                db, iteration_db_id, &stage_str, "failed",
+                "", duration_ms as i32, Some(&e),
+            );
+            StageResult { stage, status: StageStatus::Failed, output: String::new(), duration_ms, error: Some(e) }
         }
     }
 }
 
-/// Captures a git diff and wraps it in a `StageResult`.
+/// Captures a git diff and wraps it in a `StageResult`, persisting to DB.
 fn execute_diff_stage(
     app: &AppHandle,
     run_id: &str,
     iteration_num: u32,
+    iteration_db_id: i32,
     stage: PipelineStage,
     workspace_path: &str,
+    db: &DbPool,
 ) -> StageResult {
     let start = Instant::now();
     emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num);
@@ -129,44 +151,29 @@ fn execute_diff_stage(
     let duration_ms = start.elapsed().as_millis() as u64;
 
     emit_stage(app, run_id, &stage, &StageStatus::Completed, iteration_num);
-    emit_artifact(app, run_id, "diff", &diff, iteration_num);
+    emit_artifact(app, run_id, "diff", &diff, iteration_num, db);
 
-    StageResult {
-        stage,
-        status: StageStatus::Completed,
-        output: diff,
-        duration_ms,
-        error: None,
-    }
+    let stage_str = stage_to_str(&stage);
+    let _ = db::runs::insert_stage(
+        db, iteration_db_id, &stage_str, "completed",
+        &diff, duration_ms as i32, None,
+    );
+
+    StageResult { stage, status: StageStatus::Completed, output: diff, duration_ms, error: None }
 }
 
 /// Parses the judge verdict from raw output text.
-/// The first line must be exactly "COMPLETE" or "NOT COMPLETE"; anything
-/// else is treated as NOT COMPLETE.
 fn parse_judge_verdict(output: &str) -> (JudgeVerdict, String) {
     let first_line = output.lines().next().unwrap_or("").trim();
-    let reasoning = output
-        .lines()
-        .skip(1)
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    let verdict = if first_line == "COMPLETE" {
-        JudgeVerdict::Complete
-    } else {
-        JudgeVerdict::NotComplete
-    };
-
+    let reasoning = output.lines().skip(1).collect::<Vec<_>>().join("\n");
+    let verdict = if first_line == "COMPLETE" { JudgeVerdict::Complete } else { JudgeVerdict::NotComplete };
     (verdict, reasoning)
 }
 
-/// Returns `true` if the cancel flag has been set.
 fn is_cancelled(cancel_flag: &Arc<AtomicBool>) -> bool {
     cancel_flag.load(Ordering::SeqCst)
 }
 
-/// Extracts a question from agent output if `[QUESTION]...[/QUESTION]`
-/// marker tags are present.
 fn extract_question(output: &str) -> Option<String> {
     let start_tag = "[QUESTION]";
     let end_tag = "[/QUESTION]";
@@ -181,19 +188,14 @@ fn extract_question(output: &str) -> Option<String> {
     None
 }
 
-/// Polls the cancel flag until it becomes true. Used in `tokio::select!`
-/// to allow cancellation while awaiting user input.
 async fn wait_for_cancel(cancel_flag: &Arc<AtomicBool>) {
     loop {
-        if cancel_flag.load(Ordering::SeqCst) {
-            return;
-        }
+        if cancel_flag.load(Ordering::SeqCst) { return; }
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
 }
 
-/// Pauses the pipeline and asks the user a question. Returns the user's
-/// answer, or `None` if the pipeline is cancelled while waiting.
+/// Pauses the pipeline and asks the user a question, persisting Q&A to DB.
 async fn ask_user_question(
     app: &AppHandle,
     run_id: &str,
@@ -204,19 +206,20 @@ async fn ask_user_question(
     optional: bool,
     cancel_flag: &Arc<AtomicBool>,
     answer_sender: &Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
+    db: &DbPool,
 ) -> Result<Option<PipelineAnswer>, String> {
     let question_id = Uuid::new_v4().to_string();
+    let stage_str = stage_to_str(stage);
 
-    // Create a oneshot channel for this question
+    // Persist the question
+    let _ = db::questions::insert(
+        db, &question_id, run_id, &stage_str, iteration as i32,
+        &question_text, &agent_output, optional,
+    );
+
     let (tx, rx) = tokio::sync::oneshot::channel::<PipelineAnswer>();
+    { let mut lock = answer_sender.lock().await; *lock = Some(tx); }
 
-    // Store the sender so the Tauri command can find it
-    {
-        let mut lock = answer_sender.lock().await;
-        *lock = Some(tx);
-    }
-
-    // Emit the question event to the frontend
     let _ = app.emit(
         "pipeline:question",
         PipelineQuestionPayload {
@@ -230,37 +233,33 @@ async fn ask_user_question(
         },
     );
 
-    // Emit a stage status update to indicate waiting
     emit_stage(app, run_id, stage, &StageStatus::WaitingForInput, iteration);
 
-    // Wait for the answer, but also check for cancellation
     tokio::select! {
         answer = rx => {
             match answer {
-                Ok(a) => Ok(Some(a)),
+                Ok(a) => {
+                    let _ = db::questions::record_answer(
+                        db, &question_id,
+                        if a.skipped { None } else { Some(&a.answer) },
+                        a.skipped,
+                    );
+                    Ok(Some(a))
+                }
                 Err(_) => Err("Answer channel dropped unexpectedly".to_string()),
             }
         }
         _ = wait_for_cancel(cancel_flag) => {
-            // Clean up the sender
             let mut lock = answer_sender.lock().await;
             *lock = None;
-            Ok(None) // Cancelled
+            Ok(None)
         }
     }
 }
 
-/// Builds a cancel-and-break iteration for early exit.
-fn push_cancel_iteration(
-    run: &mut PipelineRun,
-    iter_num: u32,
-    stages: Vec<StageResult>,
-) {
+fn push_cancel_iteration(run: &mut PipelineRun, iter_num: u32, stages: Vec<StageResult>) {
     run.iterations.push(Iteration {
-        number: iter_num,
-        stages,
-        verdict: None,
-        judge_reasoning: None,
+        number: iter_num, stages, verdict: None, judge_reasoning: None,
     });
     run.status = PipelineStatus::Cancelled;
 }
@@ -273,9 +272,39 @@ pub async fn run_pipeline(
     settings: AppSettings,
     cancel_flag: Arc<AtomicBool>,
     answer_sender: Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
+    db: DbPool,
 ) -> Result<PipelineRun, String> {
     let run_id = Uuid::new_v4().to_string();
     let pipeline_start = Instant::now();
+
+    // Register/touch project in DB
+    let workspace_name = std::path::Path::new(&request.workspace_path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| request.workspace_path.clone());
+    let ws_info = git::workspace_info(&request.workspace_path);
+    let project_id = db::projects::upsert(
+        &db, &request.workspace_path, &workspace_name,
+        ws_info.is_git_repo, ws_info.branch.as_deref(),
+    )?;
+
+    // Resolve or create session
+    let session_id = match request.session_id {
+        Some(ref sid) if !sid.is_empty() => sid.clone(),
+        _ => {
+            let title = if request.prompt.chars().count() > 60 {
+                format!("{}...", request.prompt.chars().take(60).collect::<String>())
+            } else {
+                request.prompt.clone()
+            };
+            let sid = Uuid::new_v4().to_string();
+            db::sessions::create(&db, &sid, project_id, &title)?;
+            sid
+        }
+    };
+
+    // Insert run record
+    db::runs::insert(&db, &run_id, &session_id, &request.prompt, settings.max_iterations as i32)?;
 
     let mut run = PipelineRun {
         id: run_id.clone(),
@@ -292,7 +321,6 @@ pub async fn run_pipeline(
         error: None,
     };
 
-    // Emit pipeline:started
     let _ = app.emit(
         "pipeline:started",
         PipelineStartedPayload {
@@ -303,81 +331,40 @@ pub async fn run_pipeline(
     );
 
     for iter_num in 1..=settings.max_iterations {
-        if is_cancelled(&cancel_flag) {
-            run.status = PipelineStatus::Cancelled;
-            break;
-        }
+        if is_cancelled(&cancel_flag) { run.status = PipelineStatus::Cancelled; break; }
 
         run.current_iteration = iter_num;
         let mut stages: Vec<StageResult> = Vec::new();
+        let iteration_db_id = db::runs::insert_iteration(&db, &run_id, iter_num as i32)?;
 
         // --- 1. Generate ---
         let gen_input = AgentInput {
-            prompt: request.prompt.clone(),
-            context: None,
-            diff: None,
+            prompt: request.prompt.clone(), context: None, diff: None,
             workspace_path: request.workspace_path.clone(),
         };
         run.current_stage = Some(PipelineStage::Generate);
         let gen_result = execute_agent_stage(
-            &app,
-            &run_id,
-            iter_num,
-            PipelineStage::Generate,
-            &settings.generator_agent,
-            &gen_input,
-            &settings,
-        )
-        .await;
+            &app, &run_id, iter_num, iteration_db_id,
+            PipelineStage::Generate, &settings.generator_agent, &gen_input, &settings, Some(session_id.as_str()), &db,
+        ).await;
         let gen_output = gen_result.output.clone();
         let gen_failed = gen_result.status == StageStatus::Failed;
         stages.push(gen_result);
         if gen_failed || is_cancelled(&cancel_flag) {
-            run.iterations.push(Iteration {
-                number: iter_num,
-                stages,
-                verdict: None,
-                judge_reasoning: None,
-            });
-            if gen_failed {
-                run.status = PipelineStatus::Failed;
-                run.error = Some("Coder stage failed".to_string());
-            }
+            run.iterations.push(Iteration { number: iter_num, stages, verdict: None, judge_reasoning: None });
+            if gen_failed { run.status = PipelineStatus::Failed; run.error = Some("Coder stage failed".to_string()); }
             break;
         }
 
-        // Check for [QUESTION] tags in generate output
         if let Some(question) = extract_question(&gen_output) {
             let answer = ask_user_question(
-                &app,
-                &run_id,
-                &PipelineStage::Generate,
-                iter_num,
-                question,
-                gen_output.clone(),
-                false,
-                &cancel_flag,
-                &answer_sender,
-            )
-            .await?;
-
-            if is_cancelled(&cancel_flag) {
-                push_cancel_iteration(&mut run, iter_num, stages);
-                break;
-            }
-
-            // If the user provided guidance, it will be carried forward
-            // as additional context for the review stage
+                &app, &run_id, &PipelineStage::Generate, iter_num,
+                question, gen_output.clone(), false, &cancel_flag, &answer_sender, &db,
+            ).await?;
+            if is_cancelled(&cancel_flag) { push_cancel_iteration(&mut run, iter_num, stages); break; }
             if let Some(ref a) = answer {
                 if !a.skipped && !a.answer.is_empty() {
-                    // Re-emit running status after the pause
-                    emit_stage(
-                        &app,
-                        &run_id,
-                        &PipelineStage::Generate,
-                        &StageStatus::Completed,
-                        iter_num,
-                    );
+                    emit_stage(&app, &run_id, &PipelineStage::Generate, &StageStatus::Completed, iter_num);
                 }
             }
         }
@@ -385,210 +372,118 @@ pub async fn run_pipeline(
         // --- 2. Diff after generate ---
         run.current_stage = Some(PipelineStage::DiffAfterGenerate);
         let diff1 = execute_diff_stage(
-            &app,
-            &run_id,
-            iter_num,
-            PipelineStage::DiffAfterGenerate,
-            &request.workspace_path,
+            &app, &run_id, iter_num, iteration_db_id,
+            PipelineStage::DiffAfterGenerate, &request.workspace_path, &db,
         );
         let diff1_output = diff1.output.clone();
         stages.push(diff1);
-
-        if is_cancelled(&cancel_flag) {
-            push_cancel_iteration(&mut run, iter_num, stages);
-            break;
-        }
+        if is_cancelled(&cancel_flag) { push_cancel_iteration(&mut run, iter_num, stages); break; }
 
         // --- 3. Review ---
         let review_input = AgentInput {
-            prompt: request.prompt.clone(),
-            context: None,
-            diff: Some(diff1_output.clone()),
-            workspace_path: request.workspace_path.clone(),
+            prompt: request.prompt.clone(), context: None,
+            diff: Some(diff1_output.clone()), workspace_path: request.workspace_path.clone(),
         };
         run.current_stage = Some(PipelineStage::Review);
         let review_result = execute_agent_stage(
-            &app,
-            &run_id,
-            iter_num,
-            PipelineStage::Review,
-            &settings.reviewer_agent,
-            &review_input,
-            &settings,
-        )
-        .await;
+            &app, &run_id, iter_num, iteration_db_id,
+            PipelineStage::Review, &settings.reviewer_agent, &review_input, &settings, Some(session_id.as_str()), &db,
+        ).await;
         let review_output = review_result.output.clone();
         let review_failed = review_result.status == StageStatus::Failed;
-        emit_artifact(&app, &run_id, "review", &review_output, iter_num);
+        emit_artifact(&app, &run_id, "review", &review_output, iter_num, &db);
         stages.push(review_result);
         if review_failed || is_cancelled(&cancel_flag) {
-            run.iterations.push(Iteration {
-                number: iter_num,
-                stages,
-                verdict: None,
-                judge_reasoning: None,
-            });
-            if review_failed {
-                run.status = PipelineStatus::Failed;
-                run.error = Some("Code Reviewer / Auditor stage failed".to_string());
-            }
+            run.iterations.push(Iteration { number: iter_num, stages, verdict: None, judge_reasoning: None });
+            if review_failed { run.status = PipelineStatus::Failed; run.error = Some("Code Reviewer / Auditor stage failed".to_string()); }
             break;
         }
 
-        // --- Ask user after Review (always) ---
+        // --- Ask user after Review ---
         let user_review_guidance = ask_user_question(
-            &app,
-            &run_id,
-            &PipelineStage::Review,
-            iter_num,
-            "Review complete. Would you like to provide guidance for the fix stage?"
-                .to_string(),
-            review_output.clone(),
-            true, // optional — user can skip
-            &cancel_flag,
-            &answer_sender,
-        )
-        .await?;
+            &app, &run_id, &PipelineStage::Review, iter_num,
+            "Review complete. Would you like to provide guidance for the fix stage?".to_string(),
+            review_output.clone(), true, &cancel_flag, &answer_sender, &db,
+        ).await?;
+        if is_cancelled(&cancel_flag) { push_cancel_iteration(&mut run, iter_num, stages); break; }
 
-        if is_cancelled(&cancel_flag) {
-            push_cancel_iteration(&mut run, iter_num, stages);
-            break;
-        }
-
-        // Incorporate user guidance into the fix input context
         let fix_context = match user_review_guidance {
             Some(ref answer) if !answer.skipped && !answer.answer.is_empty() => {
-                format!(
-                    "{}\n\n--- User Guidance ---\n{}",
-                    review_output, answer.answer
-                )
+                format!("{}\n\n--- User Guidance ---\n{}", review_output, answer.answer)
             }
             _ => review_output.clone(),
         };
 
         // --- 4. Fix ---
         let fix_input = AgentInput {
-            prompt: request.prompt.clone(),
-            context: Some(fix_context),
-            diff: Some(diff1_output),
-            workspace_path: request.workspace_path.clone(),
+            prompt: request.prompt.clone(), context: Some(fix_context),
+            diff: Some(diff1_output), workspace_path: request.workspace_path.clone(),
         };
         run.current_stage = Some(PipelineStage::Fix);
         let fix_result = execute_agent_stage(
-            &app,
-            &run_id,
-            iter_num,
-            PipelineStage::Fix,
-            &settings.fixer_agent,
-            &fix_input,
-            &settings,
-        )
-        .await;
+            &app, &run_id, iter_num, iteration_db_id,
+            PipelineStage::Fix, &settings.fixer_agent, &fix_input, &settings, Some(session_id.as_str()), &db,
+        ).await;
         let fix_output = fix_result.output.clone();
         let fix_failed = fix_result.status == StageStatus::Failed;
         stages.push(fix_result);
         if fix_failed || is_cancelled(&cancel_flag) {
-            run.iterations.push(Iteration {
-                number: iter_num,
-                stages,
-                verdict: None,
-                judge_reasoning: None,
-            });
-            if fix_failed {
-                run.status = PipelineStatus::Failed;
-                run.error = Some("Code Fixer stage failed".to_string());
-            }
+            run.iterations.push(Iteration { number: iter_num, stages, verdict: None, judge_reasoning: None });
+            if fix_failed { run.status = PipelineStatus::Failed; run.error = Some("Code Fixer stage failed".to_string()); }
             break;
         }
 
-        // Check for [QUESTION] tags in fix output
         if let Some(question) = extract_question(&fix_output) {
             let answer = ask_user_question(
-                &app,
-                &run_id,
-                &PipelineStage::Fix,
-                iter_num,
-                question,
-                fix_output.clone(),
-                false,
-                &cancel_flag,
-                &answer_sender,
-            )
-            .await?;
-
-            if is_cancelled(&cancel_flag) {
-                push_cancel_iteration(&mut run, iter_num, stages);
-                break;
-            }
-
-            // Guidance from fix questions will be available in the next iteration
-            let _ = answer; // Consumed — no immediate downstream use
+                &app, &run_id, &PipelineStage::Fix, iter_num,
+                question, fix_output.clone(), false, &cancel_flag, &answer_sender, &db,
+            ).await?;
+            if is_cancelled(&cancel_flag) { push_cancel_iteration(&mut run, iter_num, stages); break; }
+            let _ = answer;
         }
 
         // --- 5. Diff after fix ---
         run.current_stage = Some(PipelineStage::DiffAfterFix);
         let diff2 = execute_diff_stage(
-            &app,
-            &run_id,
-            iter_num,
-            PipelineStage::DiffAfterFix,
-            &request.workspace_path,
+            &app, &run_id, iter_num, iteration_db_id,
+            PipelineStage::DiffAfterFix, &request.workspace_path, &db,
         );
         let diff2_output = diff2.output.clone();
         stages.push(diff2);
-
-        if is_cancelled(&cancel_flag) {
-            push_cancel_iteration(&mut run, iter_num, stages);
-            break;
-        }
+        if is_cancelled(&cancel_flag) { push_cancel_iteration(&mut run, iter_num, stages); break; }
 
         // --- 6. Judge ---
-        let judge_context = format!(
-            "--- Review ---\n{}\n\n--- Fix ---\n{}",
-            review_output, fix_output
-        );
+        let judge_context = format!("--- Review ---\n{}\n\n--- Fix ---\n{}", review_output, fix_output);
         let judge_input = AgentInput {
-            prompt: request.prompt.clone(),
-            context: Some(judge_context),
-            diff: Some(diff2_output),
-            workspace_path: request.workspace_path.clone(),
+            prompt: request.prompt.clone(), context: Some(judge_context),
+            diff: Some(diff2_output), workspace_path: request.workspace_path.clone(),
         };
         run.current_stage = Some(PipelineStage::Judge);
         let judge_result = execute_agent_stage(
-            &app,
-            &run_id,
-            iter_num,
-            PipelineStage::Judge,
-            &settings.final_judge_agent,
-            &judge_input,
-            &settings,
-        )
-        .await;
+            &app, &run_id, iter_num, iteration_db_id,
+            PipelineStage::Judge, &settings.final_judge_agent, &judge_input, &settings, Some(session_id.as_str()), &db,
+        ).await;
         let judge_output = judge_result.output.clone();
         let judge_failed = judge_result.status == StageStatus::Failed;
-        emit_artifact(&app, &run_id, "judge", &judge_output, iter_num);
+        emit_artifact(&app, &run_id, "judge", &judge_output, iter_num, &db);
         stages.push(judge_result);
 
         if judge_failed {
-            run.iterations.push(Iteration {
-                number: iter_num,
-                stages,
-                verdict: None,
-                judge_reasoning: None,
-            });
+            run.iterations.push(Iteration { number: iter_num, stages, verdict: None, judge_reasoning: None });
             run.status = PipelineStatus::Failed;
             run.error = Some("Judge stage failed".to_string());
             break;
         }
 
-        // --- Parse verdict ---
         let (verdict, reasoning) = parse_judge_verdict(&judge_output);
+        let verdict_str = match &verdict {
+            JudgeVerdict::Complete => "COMPLETE",
+            JudgeVerdict::NotComplete => "NOT COMPLETE",
+        };
+        let _ = db::runs::update_iteration_verdict(&db, &run_id, iter_num as i32, Some(verdict_str), Some(&reasoning));
 
         run.iterations.push(Iteration {
-            number: iter_num,
-            stages,
-            verdict: Some(verdict.clone()),
-            judge_reasoning: Some(reasoning),
+            number: iter_num, stages, verdict: Some(verdict.clone()), judge_reasoning: Some(reasoning),
         });
 
         if verdict == JudgeVerdict::Complete {
@@ -597,61 +492,52 @@ pub async fn run_pipeline(
             break;
         }
 
-        // If this was the last iteration and still NOT COMPLETE, mark as completed
-        // with the NOT COMPLETE verdict.
         if iter_num == settings.max_iterations {
             run.final_verdict = Some(JudgeVerdict::NotComplete);
             run.status = PipelineStatus::Completed;
         }
     }
 
-    // Handle cancellation status
-    if is_cancelled(&cancel_flag) {
-        run.status = PipelineStatus::Cancelled;
-    }
+    if is_cancelled(&cancel_flag) { run.status = PipelineStatus::Cancelled; }
 
     let total_duration_ms = pipeline_start.elapsed().as_millis() as u64;
     run.completed_at = Some(epoch_millis());
     run.current_stage = None;
 
-    // Emit completion or error event
+    // Persist final run status
+    let status_str = match &run.status {
+        PipelineStatus::Completed => "completed",
+        PipelineStatus::Failed => "failed",
+        PipelineStatus::Cancelled => "cancelled",
+        _ => "completed",
+    };
+    let verdict_str = run.final_verdict.as_ref().map(|v| match v {
+        JudgeVerdict::Complete => "COMPLETE",
+        JudgeVerdict::NotComplete => "NOT COMPLETE",
+    });
+    let _ = db::runs::complete(&db, &run_id, status_str, verdict_str, run.error.as_deref());
+    let _ = db::sessions::touch(&db, &session_id);
+
     match &run.status {
         PipelineStatus::Completed => {
-            let _ = app.emit(
-                "pipeline:completed",
-                PipelineCompletedPayload {
-                    run_id: run_id.clone(),
-                    verdict: run
-                        .final_verdict
-                        .clone()
-                        .unwrap_or(JudgeVerdict::NotComplete),
-                    total_iterations: run.current_iteration,
-                    duration_ms: total_duration_ms,
-                },
-            );
+            let _ = app.emit("pipeline:completed", PipelineCompletedPayload {
+                run_id: run_id.clone(),
+                verdict: run.final_verdict.clone().unwrap_or(JudgeVerdict::NotComplete),
+                total_iterations: run.current_iteration,
+                duration_ms: total_duration_ms,
+            });
         }
         PipelineStatus::Failed => {
-            let _ = app.emit(
-                "pipeline:error",
-                PipelineErrorPayload {
-                    run_id: run_id.clone(),
-                    stage: None,
-                    message: run
-                        .error
-                        .clone()
-                        .unwrap_or_else(|| "Unknown error".to_string()),
-                },
-            );
+            let _ = app.emit("pipeline:error", PipelineErrorPayload {
+                run_id: run_id.clone(), stage: None,
+                message: run.error.clone().unwrap_or_else(|| "Unknown error".to_string()),
+            });
         }
         PipelineStatus::Cancelled => {
-            let _ = app.emit(
-                "pipeline:error",
-                PipelineErrorPayload {
-                    run_id: run_id.clone(),
-                    stage: None,
-                    message: "Pipeline cancelled by user".to_string(),
-                },
-            );
+            let _ = app.emit("pipeline:error", PipelineErrorPayload {
+                run_id: run_id.clone(), stage: None,
+                message: "Pipeline cancelled by user".to_string(),
+            });
         }
         _ => {}
     }
