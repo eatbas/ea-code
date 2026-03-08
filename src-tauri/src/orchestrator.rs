@@ -1030,7 +1030,7 @@ pub async fn run_pipeline(
         if planning_enabled {
             // --- 2. Plan ---
             let plan_input = AgentInput {
-                prompt: build_planner_prompt(&enhanced_prompt),
+                prompt: build_planner_prompt(&enhanced_prompt, &request.prompt),
                 context: Some(stage_context_with_original(&request.prompt, None)),
                 workspace_path: request.workspace_path.clone(),
             };
@@ -1073,7 +1073,7 @@ pub async fn run_pipeline(
 
             // --- 3. Plan audit ---
             let plan_audit_input = AgentInput {
-                prompt: build_plan_auditor_prompt(&enhanced_prompt, &plan_output),
+                prompt: build_plan_auditor_prompt(&enhanced_prompt, &request.prompt, &plan_output),
                 context: Some(stage_context_with_original(&request.prompt, None)),
                 workspace_path: request.workspace_path.clone(),
             };
@@ -1166,7 +1166,11 @@ pub async fn run_pipeline(
 
         // --- 4. Generate ---
         let gen_input = AgentInput {
-            prompt: enhanced_prompt.clone(),
+            prompt: build_generate_prompt(
+                &enhanced_prompt,
+                &request.prompt,
+                iter_ctx.selected_plan(),
+            ),
             context: Some(add_plan_context(
                 &request.prompt,
                 None,
@@ -1259,7 +1263,11 @@ pub async fn run_pipeline(
 
         // --- 6. Review ---
         let review_input = AgentInput {
-            prompt: build_review_prompt(&enhanced_prompt),
+            prompt: build_review_prompt(
+                &enhanced_prompt,
+                &request.prompt,
+                iter_ctx.selected_plan(),
+            ),
             context: Some(add_plan_context(
                 &request.prompt,
                 None,
@@ -1301,40 +1309,18 @@ pub async fn run_pipeline(
             break;
         }
 
-        // --- Ask user after Review ---
-        let user_review_guidance = ask_user_question(
-            &app,
-            &run_id,
-            &PipelineStage::Review,
-            iter_num,
-            "Review complete. Would you like to provide guidance for the fix stage?".to_string(),
-            review_output.clone(),
-            true,
-            &cancel_flag,
-            &answer_sender,
-            &db,
-        )
-        .await?;
-        if is_cancelled(&cancel_flag) {
-            push_cancel_iteration(&mut run, iter_num, stages);
-            break;
-        }
-
-        let fix_context = match user_review_guidance {
-            Some(ref answer) if !answer.skipped && !answer.answer.is_empty() => {
-                iter_ctx.review_user_guidance = Some(answer.answer.clone());
-                persist_iteration_context(&db, &run_id, iter_num, &iter_ctx);
-                format!(
-                    "{}\n\n--- User Guidance ---\n{}",
-                    review_output, answer.answer
-                )
-            }
-            _ => review_output.clone(),
-        };
+        let fix_context = review_output.clone();
+        iter_ctx.review_user_guidance = None;
+        persist_iteration_context(&db, &run_id, iter_num, &iter_ctx);
 
         // --- 7. Fix ---
         let fix_input = AgentInput {
-            prompt: build_fix_prompt(&enhanced_prompt),
+            prompt: build_fix_prompt(
+                &enhanced_prompt,
+                &request.prompt,
+                iter_ctx.selected_plan(),
+                &review_output,
+            ),
             context: Some(add_plan_context(
                 &request.prompt,
                 Some(fix_context),
@@ -1426,7 +1412,13 @@ pub async fn run_pipeline(
             review_output, fix_output
         );
         let judge_input = AgentInput {
-            prompt: build_judge_prompt(&enhanced_prompt),
+            prompt: build_judge_prompt(
+                &enhanced_prompt,
+                &request.prompt,
+                iter_ctx.selected_plan(),
+                &review_output,
+                &fix_output,
+            ),
             context: Some(add_plan_context(
                 &request.prompt,
                 Some(judge_context),
