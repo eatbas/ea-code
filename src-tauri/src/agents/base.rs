@@ -11,7 +11,6 @@ use crate::models::PipelineStage;
 pub struct AgentInput {
     pub prompt: String,
     pub context: Option<String>,
-    pub diff: Option<String>,
     pub workspace_path: String,
 }
 
@@ -23,14 +22,11 @@ pub struct AgentOutput {
 }
 
 /// Assembles a full prompt by concatenating the base prompt with optional
-/// context and diff sections.
+/// context sections.
 pub fn build_full_prompt(input: &AgentInput) -> String {
     let mut parts = vec![input.prompt.clone()];
     if let Some(ref ctx) = input.context {
         parts.push(format!("\n\n--- Context ---\n{ctx}"));
-    }
-    if let Some(ref diff) = input.diff {
-        parts.push(format!("\n\n--- Diff ---\n{diff}"));
     }
     parts.join("")
 }

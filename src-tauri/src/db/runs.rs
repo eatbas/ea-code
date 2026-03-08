@@ -8,6 +8,37 @@ use super::models::{
     RunSummary, StageRow,
 };
 
+/// Patch object for updating typed iteration context fields.
+#[derive(AsChangeset, Default)]
+#[diesel(table_name = iterations)]
+pub struct IterationContextPatch<'a> {
+    pub enhanced_prompt: Option<&'a str>,
+    pub planner_plan: Option<&'a str>,
+    pub audit_verdict: Option<&'a str>,
+    pub audit_reasoning: Option<&'a str>,
+    pub audited_plan: Option<&'a str>,
+    pub review_output: Option<&'a str>,
+    pub review_user_guidance: Option<&'a str>,
+    pub fix_output: Option<&'a str>,
+    pub judge_output: Option<&'a str>,
+    pub generate_question: Option<&'a str>,
+    pub generate_answer: Option<&'a str>,
+    pub fix_question: Option<&'a str>,
+    pub fix_answer: Option<&'a str>,
+}
+
+/// Patch object for storing run-level executive summary information.
+#[derive(AsChangeset, Default)]
+#[diesel(table_name = runs)]
+pub struct RunExecutiveSummaryPatch<'a> {
+    pub executive_summary: Option<&'a str>,
+    pub executive_summary_status: Option<&'a str>,
+    pub executive_summary_error: Option<&'a str>,
+    pub executive_summary_agent: Option<&'a str>,
+    pub executive_summary_model: Option<&'a str>,
+    pub executive_summary_generated_at: Option<&'a str>,
+}
+
 /// Inserts a new pipeline run.
 pub fn insert(
     pool: &DbPool,
@@ -98,6 +129,27 @@ pub fn update_iteration_verdict(
     Ok(())
 }
 
+/// Updates typed context fields for a specific iteration.
+pub fn update_iteration_context(
+    pool: &DbPool,
+    run_id: &str,
+    number: i32,
+    patch: &IterationContextPatch<'_>,
+) -> Result<(), String> {
+    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+
+    diesel::update(
+        iterations::table
+            .filter(iterations::run_id.eq(run_id))
+            .filter(iterations::number.eq(number)),
+    )
+    .set(patch)
+    .execute(&mut conn)
+    .map_err(|e| format!("Failed to update iteration context: {e}"))?;
+
+    Ok(())
+}
+
 /// Inserts a stage result record.
 pub fn insert_stage(
     pool: &DbPool,
@@ -142,6 +194,7 @@ pub fn list_for_session(pool: &DbPool, session_id: &str) -> Result<Vec<RunSummar
             prompt: r.prompt,
             status: r.status,
             final_verdict: r.final_verdict,
+            executive_summary: r.executive_summary,
             started_at: r.started_at,
             completed_at: r.completed_at,
         })
@@ -175,6 +228,19 @@ pub fn get_full(pool: &DbPool, run_id: &str) -> Result<RunDetail, String> {
             number: iter.number,
             verdict: iter.verdict.clone(),
             judge_reasoning: iter.judge_reasoning.clone(),
+            enhanced_prompt: iter.enhanced_prompt.clone(),
+            planner_plan: iter.planner_plan.clone(),
+            audit_verdict: iter.audit_verdict.clone(),
+            audit_reasoning: iter.audit_reasoning.clone(),
+            audited_plan: iter.audited_plan.clone(),
+            review_output: iter.review_output.clone(),
+            review_user_guidance: iter.review_user_guidance.clone(),
+            fix_output: iter.fix_output.clone(),
+            judge_output: iter.judge_output.clone(),
+            generate_question: iter.generate_question.clone(),
+            generate_answer: iter.generate_answer.clone(),
+            fix_question: iter.fix_question.clone(),
+            fix_answer: iter.fix_answer.clone(),
             stages: stage_rows,
         });
     }
@@ -191,10 +257,32 @@ pub fn get_full(pool: &DbPool, run_id: &str) -> Result<RunDetail, String> {
         status: run.status,
         final_verdict: run.final_verdict,
         error: run.error,
+        executive_summary: run.executive_summary,
+        executive_summary_status: run.executive_summary_status,
+        executive_summary_error: run.executive_summary_error,
+        executive_summary_agent: run.executive_summary_agent,
+        executive_summary_model: run.executive_summary_model,
+        executive_summary_generated_at: run.executive_summary_generated_at,
         max_iterations: run.max_iterations,
         started_at: run.started_at,
         completed_at: run.completed_at,
         iterations: iteration_details,
         questions: question_rows,
     })
+}
+
+/// Stores run-level executive summary details.
+pub fn update_executive_summary(
+    pool: &DbPool,
+    run_id: &str,
+    patch: &RunExecutiveSummaryPatch<'_>,
+) -> Result<(), String> {
+    let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
+
+    diesel::update(runs::table.find(run_id))
+        .set(patch)
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to update executive summary: {e}"))?;
+
+    Ok(())
 }

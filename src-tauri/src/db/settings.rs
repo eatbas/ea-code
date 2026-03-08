@@ -33,6 +33,7 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         reviewer_agent: backend_to_str(&s.reviewer_agent),
         fixer_agent: backend_to_str(&s.fixer_agent),
         final_judge_agent: backend_to_str(&s.final_judge_agent),
+        executive_summary_agent: backend_to_str(&s.executive_summary_agent),
         max_iterations: s.max_iterations as i32,
         require_git: s.require_git,
         updated_at: chrono::Utc::now().to_rfc3339(),
@@ -46,6 +47,7 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         reviewer_model: s.reviewer_model.clone(),
         fixer_model: s.fixer_model.clone(),
         final_judge_model: s.final_judge_model.clone(),
+        executive_summary_model: s.executive_summary_model.clone(),
     };
 
     diesel::update(settings::table.find(1))
@@ -83,6 +85,7 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         reviewer_agent: parse_backend(&row.reviewer_agent),
         fixer_agent: parse_backend(&row.fixer_agent),
         final_judge_agent: parse_backend(&row.final_judge_agent),
+        executive_summary_agent: parse_backend(&row.executive_summary_agent),
         max_iterations: row.max_iterations as u32,
         require_git: row.require_git,
         claude_model: row.claude_model.clone(),
@@ -95,6 +98,7 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         reviewer_model: row.reviewer_model.clone(),
         fixer_model: row.fixer_model.clone(),
         final_judge_model: row.final_judge_model.clone(),
+        executive_summary_model: row.executive_summary_model.clone(),
     }
 }
 

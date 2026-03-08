@@ -11,6 +11,7 @@ pub enum AgentRole {
     ReviewerAuditor,
     CodeFixer,
     Judge,
+    ExecutiveSummary,
 }
 
 /// Supported CLI agent backends.
@@ -26,6 +27,14 @@ fn default_prompt_enhancer_agent() -> AgentBackend {
     AgentBackend::Claude
 }
 
+fn default_executive_summary_agent() -> AgentBackend {
+    AgentBackend::Codex
+}
+
+fn default_executive_summary_model() -> String {
+    "codex-5.3".to_string()
+}
+
 /// Pipeline stage identifiers.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -39,6 +48,7 @@ pub enum PipelineStage {
     Fix,
     DiffAfterFix,
     Judge,
+    ExecutiveSummary,
 }
 
 /// Status of a single pipeline stage.
@@ -223,6 +233,10 @@ pub struct AppSettings {
     pub reviewer_model: String,
     pub fixer_model: String,
     pub final_judge_model: String,
+    #[serde(default = "default_executive_summary_agent")]
+    pub executive_summary_agent: AgentBackend,
+    #[serde(default = "default_executive_summary_model")]
+    pub executive_summary_model: String,
 }
 
 impl Default for AppSettings {
@@ -250,6 +264,8 @@ impl Default for AppSettings {
             reviewer_model: "codex-5.3".to_string(),
             fixer_model: "sonnet".to_string(),
             final_judge_model: "codex-5.3".to_string(),
+            executive_summary_agent: AgentBackend::Codex,
+            executive_summary_model: "codex-5.3".to_string(),
         }
     }
 }

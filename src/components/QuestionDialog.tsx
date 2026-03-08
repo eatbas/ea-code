@@ -13,6 +13,7 @@ const STAGE_LABELS: Record<string, string> = {
   fix: "Fix",
   diff_after_fix: "Diff",
   judge: "Judge",
+  executive_summary: "Summary",
 };
 
 interface QuestionDialogProps {

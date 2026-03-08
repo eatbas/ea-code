@@ -33,6 +33,8 @@ pub struct SettingsRow {
     pub reviewer_model: String,
     pub fixer_model: String,
     pub final_judge_model: String,
+    pub executive_summary_agent: String,
+    pub executive_summary_model: String,
 }
 
 #[derive(AsChangeset)]
@@ -62,6 +64,8 @@ pub struct SettingsChangeset {
     pub reviewer_model: String,
     pub fixer_model: String,
     pub final_judge_model: String,
+    pub executive_summary_agent: String,
+    pub executive_summary_model: String,
 }
 
 // ── Projects ────────────────────────────────────────────────────────────
@@ -136,6 +140,12 @@ pub struct RunRow {
     pub max_iterations: i32,
     pub final_verdict: Option<String>,
     pub error: Option<String>,
+    pub executive_summary: Option<String>,
+    pub executive_summary_status: Option<String>,
+    pub executive_summary_error: Option<String>,
+    pub executive_summary_agent: Option<String>,
+    pub executive_summary_model: Option<String>,
+    pub executive_summary_generated_at: Option<String>,
     pub started_at: String,
     pub completed_at: Option<String>,
 }
@@ -157,6 +167,7 @@ pub struct RunSummary {
     pub prompt: String,
     pub status: String,
     pub final_verdict: Option<String>,
+    pub executive_summary: Option<String>,
     pub started_at: String,
     pub completed_at: Option<String>,
 }
@@ -172,6 +183,19 @@ pub struct IterationRow {
     pub number: i32,
     pub verdict: Option<String>,
     pub judge_reasoning: Option<String>,
+    pub enhanced_prompt: Option<String>,
+    pub planner_plan: Option<String>,
+    pub audit_verdict: Option<String>,
+    pub audit_reasoning: Option<String>,
+    pub audited_plan: Option<String>,
+    pub review_output: Option<String>,
+    pub review_user_guidance: Option<String>,
+    pub fix_output: Option<String>,
+    pub judge_output: Option<String>,
+    pub generate_question: Option<String>,
+    pub generate_answer: Option<String>,
+    pub fix_question: Option<String>,
+    pub fix_answer: Option<String>,
 }
 
 #[derive(Insertable)]
@@ -306,6 +330,12 @@ pub struct RunDetail {
     pub status: String,
     pub final_verdict: Option<String>,
     pub error: Option<String>,
+    pub executive_summary: Option<String>,
+    pub executive_summary_status: Option<String>,
+    pub executive_summary_error: Option<String>,
+    pub executive_summary_agent: Option<String>,
+    pub executive_summary_model: Option<String>,
+    pub executive_summary_generated_at: Option<String>,
     pub max_iterations: i32,
     pub started_at: String,
     pub completed_at: Option<String>,
@@ -320,5 +350,18 @@ pub struct IterationDetail {
     pub number: i32,
     pub verdict: Option<String>,
     pub judge_reasoning: Option<String>,
+    pub enhanced_prompt: Option<String>,
+    pub planner_plan: Option<String>,
+    pub audit_verdict: Option<String>,
+    pub audit_reasoning: Option<String>,
+    pub audited_plan: Option<String>,
+    pub review_output: Option<String>,
+    pub review_user_guidance: Option<String>,
+    pub fix_output: Option<String>,
+    pub judge_output: Option<String>,
+    pub generate_question: Option<String>,
+    pub generate_answer: Option<String>,
+    pub fix_question: Option<String>,
+    pub fix_answer: Option<String>,
     pub stages: Vec<StageRow>,
 }

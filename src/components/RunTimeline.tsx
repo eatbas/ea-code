@@ -18,6 +18,7 @@ const STAGE_LABELS: Record<PipelineStage, string> = {
   fix: "Fix",
   diff_after_fix: "Diff",
   judge: "Judge",
+  executive_summary: "Summary",
 };
 
 /** All stages in pipeline order. */

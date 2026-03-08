@@ -6,15 +6,17 @@ interface ArtifactsPanelProps {
 }
 
 /** Tab identifiers for artifact display. */
-const TABS = ["plan", "plan_audit", "review", "judge", "diff"] as const;
+const TABS = ["plan", "plan_audit", "plan_final", "review", "judge", "executive_summary", "diff"] as const;
 type ArtifactTab = (typeof TABS)[number];
 
 /** Tab labels for display. */
 const TAB_LABELS: Record<ArtifactTab, string> = {
   plan: "Plan",
   plan_audit: "Plan Audit",
+  plan_final: "Final Plan",
   review: "Review",
   judge: "Judge",
+  executive_summary: "Summary",
   diff: "Diff",
 };
 

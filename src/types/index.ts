@@ -6,7 +6,8 @@ export type AgentRole =
   | "coder"
   | "reviewer_auditor"
   | "code_fixer"
-  | "judge";
+  | "judge"
+  | "executive_summary";
 
 /** Supported CLI agent backends. */
 export type AgentBackend = "claude" | "codex" | "gemini";
@@ -21,7 +22,8 @@ export type PipelineStage =
   | "review"
   | "fix"
   | "diff_after_fix"
-  | "judge";
+  | "judge"
+  | "executive_summary";
 
 /** Status of a single pipeline stage. */
 export type StageStatus = "pending" | "running" | "completed" | "failed" | "skipped" | "waiting_for_input";
@@ -83,6 +85,7 @@ export interface AppSettings {
   reviewerAgent: AgentBackend;
   fixerAgent: AgentBackend;
   finalJudgeAgent: AgentBackend;
+  executiveSummaryAgent: AgentBackend;
   maxIterations: number;
   requireGit: boolean;
   /** Comma-separated list of enabled Claude models. */
@@ -99,6 +102,7 @@ export interface AppSettings {
   reviewerModel: string;
   fixerModel: string;
   finalJudgeModel: string;
+  executiveSummaryModel: string;
 }
 
 /** Default settings values. */
@@ -113,6 +117,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reviewerAgent: "codex",
   fixerAgent: "claude",
   finalJudgeAgent: "codex",
+  executiveSummaryAgent: "codex",
   maxIterations: 3,
   requireGit: true,
   claudeModel: "sonnet",
@@ -125,6 +130,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reviewerModel: "codex-5.3",
   fixerModel: "sonnet",
   finalJudgeModel: "codex-5.3",
+  executiveSummaryModel: "codex-5.3",
 };
 
 /** Known model options per CLI, keyed by CLI name. */
@@ -216,7 +222,7 @@ export interface PipelineLogEvent {
 
 export interface PipelineArtifactEvent {
   runId: string;
-  kind: "diff" | "plan" | "plan_audit" | "review" | "judge";
+  kind: "diff" | "plan" | "plan_audit" | "plan_final" | "review" | "judge" | "executive_summary";
   content: string;
   iteration: number;
 }
@@ -293,6 +299,7 @@ export interface RunSummary {
   prompt: string;
   status: string;
   finalVerdict?: string;
+  executiveSummary?: string;
   startedAt: string;
   completedAt?: string;
 }
@@ -304,6 +311,12 @@ export interface RunDetail {
   status: string;
   finalVerdict?: string;
   error?: string;
+  executiveSummary?: string;
+  executiveSummaryStatus?: string;
+  executiveSummaryError?: string;
+  executiveSummaryAgent?: string;
+  executiveSummaryModel?: string;
+  executiveSummaryGeneratedAt?: string;
   maxIterations: number;
   startedAt: string;
   completedAt?: string;
@@ -316,6 +329,19 @@ export interface IterationDetail {
   number: number;
   verdict?: string;
   judgeReasoning?: string;
+  enhancedPrompt?: string;
+  plannerPlan?: string;
+  auditVerdict?: string;
+  auditReasoning?: string;
+  auditedPlan?: string;
+  reviewOutput?: string;
+  reviewUserGuidance?: string;
+  fixOutput?: string;
+  judgeOutput?: string;
+  generateQuestion?: string;
+  generateAnswer?: string;
+  fixQuestion?: string;
+  fixAnswer?: string;
   stages: StageEntry[];
 }
 

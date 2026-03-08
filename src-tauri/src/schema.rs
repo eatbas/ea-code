@@ -27,6 +27,8 @@ diesel::table! {
         reviewer_model -> Text,
         fixer_model -> Text,
         final_judge_model -> Text,
+        executive_summary_agent -> Text,
+        executive_summary_model -> Text,
     }
 }
 
@@ -61,6 +63,12 @@ diesel::table! {
         max_iterations -> Integer,
         final_verdict -> Nullable<Text>,
         error -> Nullable<Text>,
+        executive_summary -> Nullable<Text>,
+        executive_summary_status -> Nullable<Text>,
+        executive_summary_error -> Nullable<Text>,
+        executive_summary_agent -> Nullable<Text>,
+        executive_summary_model -> Nullable<Text>,
+        executive_summary_generated_at -> Nullable<Timestamp>,
         started_at -> Timestamp,
         completed_at -> Nullable<Timestamp>,
     }
@@ -73,6 +81,19 @@ diesel::table! {
         number -> Integer,
         verdict -> Nullable<Text>,
         judge_reasoning -> Nullable<Text>,
+        enhanced_prompt -> Nullable<Text>,
+        planner_plan -> Nullable<Text>,
+        audit_verdict -> Nullable<Text>,
+        audit_reasoning -> Nullable<Text>,
+        audited_plan -> Nullable<Text>,
+        review_output -> Nullable<Text>,
+        review_user_guidance -> Nullable<Text>,
+        fix_output -> Nullable<Text>,
+        judge_output -> Nullable<Text>,
+        generate_question -> Nullable<Text>,
+        generate_answer -> Nullable<Text>,
+        fix_question -> Nullable<Text>,
+        fix_answer -> Nullable<Text>,
     }
 }
 

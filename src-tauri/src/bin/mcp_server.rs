@@ -164,6 +164,7 @@ fn handle_search_runs(pool: &DbPool, args: &Value) -> Result<Value, String> {
             runs::prompt,
             runs::status,
             runs::final_verdict,
+            runs::executive_summary,
             runs::started_at,
             runs::completed_at,
             projects::path,
@@ -179,6 +180,7 @@ fn handle_search_runs(pool: &DbPool, args: &Value) -> Result<Value, String> {
         String,
         String,
         Option<String>,
+        Option<String>,
         String,
         Option<String>,
         String,
@@ -189,12 +191,13 @@ fn handle_search_runs(pool: &DbPool, args: &Value) -> Result<Value, String> {
     let runs_json: Vec<Value> = results
         .into_iter()
         .map(
-            |(id, prompt, status, verdict, started, completed, proj_path)| {
+            |(id, prompt, status, verdict, executive_summary, started, completed, proj_path)| {
                 json!({
                     "id": id,
                     "prompt": prompt,
                     "status": status,
                     "finalVerdict": verdict,
+                    "executiveSummary": executive_summary,
                     "startedAt": started,
                     "completedAt": completed,
                     "projectPath": proj_path,
