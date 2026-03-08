@@ -11,12 +11,13 @@ import { Sidebar } from "./components/Sidebar";
 import type { ActiveView } from "./components/Sidebar";
 import { IdleView } from "./components/IdleView";
 import { ChatView } from "./components/ChatView";
+import { SessionDetailView } from "./components/SessionDetailView";
 import { AgentsView } from "./components/AgentsView";
 import { CliSetupView } from "./components/CliSetupView";
 import { SkillsView } from "./components/SkillsView";
 import { McpView } from "./components/McpView";
 import { QuestionDialog } from "./components/QuestionDialog";
-import type { PipelineRequest, RunOptions } from "./types";
+import type { PipelineRequest, RunOptions, SessionDetail } from "./types";
 
 function App(): ReactNode {
   const { workspace, openWorkspace, selectFolder } = useWorkspace();
@@ -24,12 +25,14 @@ function App(): ReactNode {
   const { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { versions, loading: versionsLoading, updating: versionsUpdating, error: versionsError, fetchVersions, updateCli } = useCliVersions();
   const { health: cliHealth, checking: cliHealthChecking, checkHealth } = useCliHealth();
-  const { projects, sessions, loadSessions, loadProjects } = useHistory();
+  const { projects, sessions, loadSessions, loadProjects, loadSessionDetail } = useHistory();
   const { skills, loading: skillsLoading, error: skillsError, createSkill, updateSkill, deleteSkill } = useSkills();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ActiveView>("home");
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
+  const [sessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
+  const [sessionDetailLoading, setSessionDetailLoading] = useState(false);
 
   const isRunning = run && run.status !== "idle";
 
@@ -42,6 +45,7 @@ function App(): ReactNode {
       loadProjects();
       loadSessions(workspace.path);
       setActiveSessionId(undefined);
+      setSessionDetail(null);
     }
   }, [workspace, loadProjects, loadSessions]);
 
@@ -75,13 +79,24 @@ function App(): ReactNode {
   function handleNewSession(): void {
     resetRun();
     setActiveSessionId(undefined);
+    setSessionDetail(null);
     setActiveView("home");
   }
 
-  const handleSelectSession = useCallback((_sessionId: string) => {
+  const handleSelectSession = useCallback(async (_sessionId: string): Promise<void> => {
     setActiveSessionId(_sessionId);
     setActiveView("home");
-  }, []);
+    setSessionDetailLoading(true);
+    try {
+      const detail = await loadSessionDetail(_sessionId);
+      setSessionDetail(detail);
+    } catch (err) {
+      console.error("Failed to load session detail:", err);
+      setSessionDetail(null);
+    } finally {
+      setSessionDetailLoading(false);
+    }
+  }, [loadSessionDetail]);
 
   const handleSelectProject = useCallback(async (projectPath: string): Promise<void> => {
     await openWorkspace(projectPath);
@@ -145,6 +160,18 @@ function App(): ReactNode {
 
     if (activeView === "mcp") {
       return <McpView />;
+    }
+
+    if (activeSessionId) {
+      return (
+        <SessionDetailView
+          sessionDetail={sessionDetail}
+          loading={sessionDetailLoading}
+          cliHealth={cliHealth}
+          onRun={handleRun}
+          onBackToHome={handleNewSession}
+        />
+      );
     }
 
     return (
