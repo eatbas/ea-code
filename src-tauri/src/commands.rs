@@ -12,16 +12,14 @@ use crate::models::*;
 /// the oneshot channel for delivering user answers, and the database pool.
 pub struct AppState {
     pub cancel_flag: Arc<AtomicBool>,
-    pub answer_sender:
-        Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
+    pub answer_sender: Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
     pub db: DbPool,
 }
 
 /// Validates a workspace directory and returns its git status.
 #[tauri::command]
 pub async fn select_workspace(path: String) -> Result<WorkspaceInfo, String> {
-    let meta = std::fs::metadata(&path)
-        .map_err(|e| format!("Cannot access path: {e}"))?;
+    let meta = std::fs::metadata(&path).map_err(|e| format!("Cannot access path: {e}"))?;
 
     if !meta.is_dir() {
         return Err("Selected path is not a directory".to_string());
@@ -126,7 +124,9 @@ pub async fn save_settings(
 
 /// Returns recently opened projects for the sidebar.
 #[tauri::command]
-pub async fn list_projects(state: State<'_, AppState>) -> Result<Vec<db::models::ProjectRow>, String> {
+pub async fn list_projects(
+    state: State<'_, AppState>,
+) -> Result<Vec<db::models::ProjectRow>, String> {
     db::projects::list_recent(&state.db, 20)
 }
 
@@ -200,7 +200,12 @@ pub async fn get_run_logs(
     offset: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Vec<db::models::LogRow>, String> {
-    db::logs::get_for_run(&state.db, &run_id, offset.unwrap_or(0), limit.unwrap_or(500))
+    db::logs::get_for_run(
+        &state.db,
+        &run_id,
+        offset.unwrap_or(0),
+        limit.unwrap_or(500),
+    )
 }
 
 /// Returns artefacts for a run.
@@ -214,10 +219,7 @@ pub async fn get_run_artifacts(
 
 /// Deletes a session and all associated data.
 #[tauri::command]
-pub async fn delete_session(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> Result<(), String> {
+pub async fn delete_session(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
     db::sessions::delete(&state.db, &session_id)
 }
 
@@ -225,6 +227,57 @@ pub async fn delete_session(
 #[tauri::command]
 pub async fn check_cli_health(settings: AppSettings) -> Result<CliHealth, String> {
     check_cli_health_inner(&settings).await
+}
+
+/// Fetches version and availability information for all CLI tools.
+#[tauri::command]
+pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, String> {
+    let (claude, codex, gemini) = tokio::join!(
+        build_cli_version_info(
+            &settings.claude_path,
+            "Claude CLI",
+            "claude",
+            "@anthropic-ai/claude-code",
+        ),
+        build_cli_version_info(&settings.codex_path, "Codex CLI", "codex", "@openai/codex",),
+        build_cli_version_info(
+            &settings.gemini_path,
+            "Gemini CLI",
+            "gemini",
+            "@google/gemini-cli",
+        ),
+    );
+
+    Ok(AllCliVersions {
+        claude,
+        codex,
+        gemini,
+    })
+}
+
+/// Runs `npm install -g <package>@latest` for a given CLI tool.
+#[tauri::command]
+pub async fn update_cli(cli_name: String) -> Result<String, String> {
+    let npm_package = match cli_name.as_str() {
+        "claude" => "@anthropic-ai/claude-code",
+        "codex" => "@openai/codex",
+        "gemini" => "@google/gemini-cli",
+        _ => return Err(format!("Unknown CLI: {cli_name}")),
+    };
+
+    let output = tokio::process::Command::new("npm")
+        .args(["install", "-g", &format!("{npm_package}@latest")])
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run npm: {e}"))?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(format!("Update failed: {stderr}"))
+    }
 }
 
 /// Probes a single CLI binary using `which`.
@@ -265,4 +318,105 @@ async fn check_cli_health_inner(settings: &AppSettings) -> Result<CliHealth, Str
         codex,
         gemini,
     })
+}
+
+/// Checks whether a binary is available via `which`.
+async fn check_binary_exists(path: &str) -> bool {
+    matches!(
+        tokio::process::Command::new("which")
+            .arg(path)
+            .output()
+            .await,
+        Ok(output) if output.status.success()
+    )
+}
+
+/// Runs `<cli> --version` and extracts the version string.
+async fn get_installed_version(path: &str) -> Option<String> {
+    let output = tokio::process::Command::new(path)
+        .arg("--version")
+        .output()
+        .await
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Some(extract_version_number(&raw))
+}
+
+/// Runs `npm view <package> version` to fetch the latest published version.
+async fn get_latest_npm_version(package_name: &str) -> Option<String> {
+    let output = tokio::process::Command::new("npm")
+        .args(["view", package_name, "version"])
+        .output()
+        .await
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Extracts a semver-style version number from raw CLI output.
+///
+/// Handles formats like "claude v1.2.3", "1.2.3", "tool 1.2.3-beta", etc.
+fn extract_version_number(raw: &str) -> String {
+    for token in raw.split_whitespace() {
+        let trimmed = token.trim_start_matches('v');
+        let looks_like_version =
+            trimmed.chars().next().map_or(false, |c| c.is_ascii_digit()) && trimmed.contains('.');
+        if looks_like_version {
+            return trimmed.to_string();
+        }
+    }
+    raw.to_string()
+}
+
+/// Builds full version information for a single CLI tool.
+async fn build_cli_version_info(
+    path: &str,
+    display_name: &str,
+    cli_name: &str,
+    npm_package: &str,
+) -> CliVersionInfo {
+    let available = check_binary_exists(path).await;
+
+    if !available {
+        return CliVersionInfo {
+            name: display_name.to_string(),
+            cli_name: cli_name.to_string(),
+            installed_version: None,
+            latest_version: None,
+            up_to_date: false,
+            update_command: format!("npm install -g {npm_package}@latest"),
+            available: false,
+            error: Some(format!("{path} not found in PATH")),
+        };
+    }
+
+    let (installed, latest) = tokio::join!(
+        get_installed_version(path),
+        get_latest_npm_version(npm_package),
+    );
+
+    let up_to_date = match (&installed, &latest) {
+        (Some(i), Some(l)) => i == l,
+        _ => false,
+    };
+
+    CliVersionInfo {
+        name: display_name.to_string(),
+        cli_name: cli_name.to_string(),
+        installed_version: installed,
+        latest_version: latest,
+        up_to_date,
+        update_command: format!("npm install -g {npm_package}@latest"),
+        available: true,
+        error: None,
+    }
 }

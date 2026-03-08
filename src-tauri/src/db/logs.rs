@@ -6,7 +6,13 @@ use crate::schema::logs;
 use super::models::{LogRow, NewLog};
 
 /// Inserts a single log line. Intended to be called fire-and-forget.
-pub fn insert(pool: &DbPool, run_id: &str, stage: &str, line: &str, stream: &str) -> Result<(), String> {
+pub fn insert(
+    pool: &DbPool,
+    run_id: &str,
+    stage: &str,
+    line: &str,
+    stream: &str,
+) -> Result<(), String> {
     let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
 
     diesel::insert_into(logs::table)

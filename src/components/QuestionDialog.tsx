@@ -4,6 +4,7 @@ import type { PipelineQuestionEvent, PipelineAnswer } from "../types";
 
 /** Display labels for pipeline stages. */
 const STAGE_LABELS: Record<string, string> = {
+  prompt_enhance: "Prompt",
   generate: "Generate",
   diff_after_generate: "Diff",
   review: "Review",

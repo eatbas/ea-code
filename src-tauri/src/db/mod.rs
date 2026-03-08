@@ -48,7 +48,9 @@ pub fn init_db() -> Result<DbPool, String> {
         .map_err(|e| format!("Failed to build connection pool: {e}"))?;
 
     // Run pending migrations on startup
-    let mut conn = pool.get().map_err(|e| format!("Failed to get connection: {e}"))?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| format!("Failed to get connection: {e}"))?;
 
     // Enable WAL mode and foreign keys
     diesel::sql_query("PRAGMA journal_mode = WAL;")
@@ -75,8 +77,8 @@ pub fn import_legacy_settings(pool: &DbPool) -> Result<(), String> {
         return Ok(());
     }
 
-    let contents =
-        std::fs::read_to_string(&json_path).map_err(|e| format!("Failed to read settings.json: {e}"))?;
+    let contents = std::fs::read_to_string(&json_path)
+        .map_err(|e| format!("Failed to read settings.json: {e}"))?;
 
     // Re-use the existing AppSettings model for deserialisation
     let legacy: crate::models::AppSettings = match serde_json::from_str(&contents) {

@@ -42,11 +42,18 @@ async fn dispatch_agent(
 ) -> Result<AgentOutput, String> {
     match backend {
         AgentBackend::Claude => {
-            run_claude(input, &settings.claude_path, session_id, app, run_id, stage, db).await
+            run_claude(
+                input,
+                &settings.claude_path,
+                session_id,
+                app,
+                run_id,
+                stage,
+                db,
+            )
+            .await
         }
-        AgentBackend::Codex => {
-            run_codex(input, &settings.codex_path, app, run_id, stage, db).await
-        }
+        AgentBackend::Codex => run_codex(input, &settings.codex_path, app, run_id, stage, db).await,
         AgentBackend::Gemini => {
             run_gemini(input, &settings.gemini_path, app, run_id, stage, db).await
         }
@@ -112,24 +119,57 @@ async fn execute_agent_stage(
 
     let stage_str = stage_to_str(&stage);
 
-    match dispatch_agent(backend, input, settings, session_id, app, run_id, stage.clone(), db).await {
+    match dispatch_agent(
+        backend,
+        input,
+        settings,
+        session_id,
+        app,
+        run_id,
+        stage.clone(),
+        db,
+    )
+    .await
+    {
         Ok(output) => {
             let duration_ms = start.elapsed().as_millis() as u64;
             emit_stage(app, run_id, &stage, &StageStatus::Completed, iteration_num);
             let _ = db::runs::insert_stage(
-                db, iteration_db_id, &stage_str, "completed",
-                &output.raw_text, duration_ms as i32, None,
+                db,
+                iteration_db_id,
+                &stage_str,
+                "completed",
+                &output.raw_text,
+                duration_ms as i32,
+                None,
             );
-            StageResult { stage, status: StageStatus::Completed, output: output.raw_text, duration_ms, error: None }
+            StageResult {
+                stage,
+                status: StageStatus::Completed,
+                output: output.raw_text,
+                duration_ms,
+                error: None,
+            }
         }
         Err(e) => {
             let duration_ms = start.elapsed().as_millis() as u64;
             emit_stage(app, run_id, &stage, &StageStatus::Failed, iteration_num);
             let _ = db::runs::insert_stage(
-                db, iteration_db_id, &stage_str, "failed",
-                "", duration_ms as i32, Some(&e),
+                db,
+                iteration_db_id,
+                &stage_str,
+                "failed",
+                "",
+                duration_ms as i32,
+                Some(&e),
             );
-            StageResult { stage, status: StageStatus::Failed, output: String::new(), duration_ms, error: Some(e) }
+            StageResult {
+                stage,
+                status: StageStatus::Failed,
+                output: String::new(),
+                duration_ms,
+                error: Some(e),
+            }
         }
     }
 }
@@ -155,18 +195,33 @@ fn execute_diff_stage(
 
     let stage_str = stage_to_str(&stage);
     let _ = db::runs::insert_stage(
-        db, iteration_db_id, &stage_str, "completed",
-        &diff, duration_ms as i32, None,
+        db,
+        iteration_db_id,
+        &stage_str,
+        "completed",
+        &diff,
+        duration_ms as i32,
+        None,
     );
 
-    StageResult { stage, status: StageStatus::Completed, output: diff, duration_ms, error: None }
+    StageResult {
+        stage,
+        status: StageStatus::Completed,
+        output: diff,
+        duration_ms,
+        error: None,
+    }
 }
 
 /// Parses the judge verdict from raw output text.
 fn parse_judge_verdict(output: &str) -> (JudgeVerdict, String) {
     let first_line = output.lines().next().unwrap_or("").trim();
     let reasoning = output.lines().skip(1).collect::<Vec<_>>().join("\n");
-    let verdict = if first_line == "COMPLETE" { JudgeVerdict::Complete } else { JudgeVerdict::NotComplete };
+    let verdict = if first_line == "COMPLETE" {
+        JudgeVerdict::Complete
+    } else {
+        JudgeVerdict::NotComplete
+    };
     (verdict, reasoning)
 }
 
@@ -190,7 +245,9 @@ fn extract_question(output: &str) -> Option<String> {
 
 async fn wait_for_cancel(cancel_flag: &Arc<AtomicBool>) {
     loop {
-        if cancel_flag.load(Ordering::SeqCst) { return; }
+        if cancel_flag.load(Ordering::SeqCst) {
+            return;
+        }
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
 }
@@ -213,12 +270,21 @@ async fn ask_user_question(
 
     // Persist the question
     let _ = db::questions::insert(
-        db, &question_id, run_id, &stage_str, iteration as i32,
-        &question_text, &agent_output, optional,
+        db,
+        &question_id,
+        run_id,
+        &stage_str,
+        iteration as i32,
+        &question_text,
+        &agent_output,
+        optional,
     );
 
     let (tx, rx) = tokio::sync::oneshot::channel::<PipelineAnswer>();
-    { let mut lock = answer_sender.lock().await; *lock = Some(tx); }
+    {
+        let mut lock = answer_sender.lock().await;
+        *lock = Some(tx);
+    }
 
     let _ = app.emit(
         "pipeline:question",
@@ -259,13 +325,35 @@ async fn ask_user_question(
 
 fn push_cancel_iteration(run: &mut PipelineRun, iter_num: u32, stages: Vec<StageResult>) {
     run.iterations.push(Iteration {
-        number: iter_num, stages, verdict: None, judge_reasoning: None,
+        number: iter_num,
+        stages,
+        verdict: None,
+        judge_reasoning: None,
     });
     run.status = PipelineStatus::Cancelled;
 }
 
+fn build_prompt_enhancer_prompt(user_prompt: &str) -> String {
+    format!(
+        "You are a prompt enhancer for a multi-agent coding pipeline.\n\
+Rewrite the user's request to be clear, precise, and implementation-ready.\n\
+Preserve all constraints and intent.\n\
+Return only the enhanced prompt text with no preamble.\n\n\
+--- User Prompt ---\n{user_prompt}"
+    )
+}
+
+fn normalise_enhanced_prompt(enhanced_output: &str, fallback_prompt: &str) -> String {
+    let candidate = enhanced_output.trim();
+    if candidate.is_empty() {
+        fallback_prompt.to_string()
+    } else {
+        candidate.to_string()
+    }
+}
+
 /// Runs the full orchestration pipeline:
-///   generate → diff → review → [ask user] → fix → diff → judge → loop
+///   prompt enhance → generate → diff → review → [ask user] → fix → diff → judge → loop
 pub async fn run_pipeline(
     app: AppHandle,
     request: PipelineRequest,
@@ -284,8 +372,11 @@ pub async fn run_pipeline(
         .unwrap_or_else(|| request.workspace_path.clone());
     let ws_info = git::workspace_info(&request.workspace_path);
     let project_id = db::projects::upsert(
-        &db, &request.workspace_path, &workspace_name,
-        ws_info.is_git_repo, ws_info.branch.as_deref(),
+        &db,
+        &request.workspace_path,
+        &workspace_name,
+        ws_info.is_git_repo,
+        ws_info.branch.as_deref(),
     )?;
 
     // Resolve or create session
@@ -304,7 +395,13 @@ pub async fn run_pipeline(
     };
 
     // Insert run record
-    db::runs::insert(&db, &run_id, &session_id, &request.prompt, settings.max_iterations as i32)?;
+    db::runs::insert(
+        &db,
+        &run_id,
+        &session_id,
+        &request.prompt,
+        settings.max_iterations as i32,
+    )?;
 
     let mut run = PipelineRun {
         id: run_id.clone(),
@@ -331,145 +428,323 @@ pub async fn run_pipeline(
     );
 
     for iter_num in 1..=settings.max_iterations {
-        if is_cancelled(&cancel_flag) { run.status = PipelineStatus::Cancelled; break; }
+        if is_cancelled(&cancel_flag) {
+            run.status = PipelineStatus::Cancelled;
+            break;
+        }
 
         run.current_iteration = iter_num;
         let mut stages: Vec<StageResult> = Vec::new();
         let iteration_db_id = db::runs::insert_iteration(&db, &run_id, iter_num as i32)?;
 
-        // --- 1. Generate ---
+        // --- 1. Prompt enhance ---
+        let prompt_enhance_input = AgentInput {
+            prompt: build_prompt_enhancer_prompt(&request.prompt),
+            context: None,
+            diff: None,
+            workspace_path: request.workspace_path.clone(),
+        };
+        run.current_stage = Some(PipelineStage::PromptEnhance);
+        let prompt_enhance_result = execute_agent_stage(
+            &app,
+            &run_id,
+            iter_num,
+            iteration_db_id,
+            PipelineStage::PromptEnhance,
+            &settings.prompt_enhancer_agent,
+            &prompt_enhance_input,
+            &settings,
+            Some(session_id.as_str()),
+            &db,
+        )
+        .await;
+        let enhanced_prompt =
+            normalise_enhanced_prompt(&prompt_enhance_result.output, &request.prompt);
+        let prompt_enhance_failed = prompt_enhance_result.status == StageStatus::Failed;
+        stages.push(prompt_enhance_result);
+        if prompt_enhance_failed || is_cancelled(&cancel_flag) {
+            run.iterations.push(Iteration {
+                number: iter_num,
+                stages,
+                verdict: None,
+                judge_reasoning: None,
+            });
+            if prompt_enhance_failed {
+                run.status = PipelineStatus::Failed;
+                run.error = Some("Prompt Enhancer stage failed".to_string());
+            }
+            break;
+        }
+
+        // --- 2. Generate ---
         let gen_input = AgentInput {
-            prompt: request.prompt.clone(), context: None, diff: None,
+            prompt: enhanced_prompt.clone(),
+            context: None,
+            diff: None,
             workspace_path: request.workspace_path.clone(),
         };
         run.current_stage = Some(PipelineStage::Generate);
         let gen_result = execute_agent_stage(
-            &app, &run_id, iter_num, iteration_db_id,
-            PipelineStage::Generate, &settings.generator_agent, &gen_input, &settings, Some(session_id.as_str()), &db,
-        ).await;
+            &app,
+            &run_id,
+            iter_num,
+            iteration_db_id,
+            PipelineStage::Generate,
+            &settings.generator_agent,
+            &gen_input,
+            &settings,
+            Some(session_id.as_str()),
+            &db,
+        )
+        .await;
         let gen_output = gen_result.output.clone();
         let gen_failed = gen_result.status == StageStatus::Failed;
         stages.push(gen_result);
         if gen_failed || is_cancelled(&cancel_flag) {
-            run.iterations.push(Iteration { number: iter_num, stages, verdict: None, judge_reasoning: None });
-            if gen_failed { run.status = PipelineStatus::Failed; run.error = Some("Coder stage failed".to_string()); }
+            run.iterations.push(Iteration {
+                number: iter_num,
+                stages,
+                verdict: None,
+                judge_reasoning: None,
+            });
+            if gen_failed {
+                run.status = PipelineStatus::Failed;
+                run.error = Some("Coder stage failed".to_string());
+            }
             break;
         }
 
         if let Some(question) = extract_question(&gen_output) {
             let answer = ask_user_question(
-                &app, &run_id, &PipelineStage::Generate, iter_num,
-                question, gen_output.clone(), false, &cancel_flag, &answer_sender, &db,
-            ).await?;
-            if is_cancelled(&cancel_flag) { push_cancel_iteration(&mut run, iter_num, stages); break; }
+                &app,
+                &run_id,
+                &PipelineStage::Generate,
+                iter_num,
+                question,
+                gen_output.clone(),
+                false,
+                &cancel_flag,
+                &answer_sender,
+                &db,
+            )
+            .await?;
+            if is_cancelled(&cancel_flag) {
+                push_cancel_iteration(&mut run, iter_num, stages);
+                break;
+            }
             if let Some(ref a) = answer {
                 if !a.skipped && !a.answer.is_empty() {
-                    emit_stage(&app, &run_id, &PipelineStage::Generate, &StageStatus::Completed, iter_num);
+                    emit_stage(
+                        &app,
+                        &run_id,
+                        &PipelineStage::Generate,
+                        &StageStatus::Completed,
+                        iter_num,
+                    );
                 }
             }
         }
 
-        // --- 2. Diff after generate ---
+        // --- 3. Diff after generate ---
         run.current_stage = Some(PipelineStage::DiffAfterGenerate);
         let diff1 = execute_diff_stage(
-            &app, &run_id, iter_num, iteration_db_id,
-            PipelineStage::DiffAfterGenerate, &request.workspace_path, &db,
+            &app,
+            &run_id,
+            iter_num,
+            iteration_db_id,
+            PipelineStage::DiffAfterGenerate,
+            &request.workspace_path,
+            &db,
         );
         let diff1_output = diff1.output.clone();
         stages.push(diff1);
-        if is_cancelled(&cancel_flag) { push_cancel_iteration(&mut run, iter_num, stages); break; }
+        if is_cancelled(&cancel_flag) {
+            push_cancel_iteration(&mut run, iter_num, stages);
+            break;
+        }
 
-        // --- 3. Review ---
+        // --- 4. Review ---
         let review_input = AgentInput {
-            prompt: request.prompt.clone(), context: None,
-            diff: Some(diff1_output.clone()), workspace_path: request.workspace_path.clone(),
+            prompt: enhanced_prompt.clone(),
+            context: None,
+            diff: Some(diff1_output.clone()),
+            workspace_path: request.workspace_path.clone(),
         };
         run.current_stage = Some(PipelineStage::Review);
         let review_result = execute_agent_stage(
-            &app, &run_id, iter_num, iteration_db_id,
-            PipelineStage::Review, &settings.reviewer_agent, &review_input, &settings, Some(session_id.as_str()), &db,
-        ).await;
+            &app,
+            &run_id,
+            iter_num,
+            iteration_db_id,
+            PipelineStage::Review,
+            &settings.reviewer_agent,
+            &review_input,
+            &settings,
+            Some(session_id.as_str()),
+            &db,
+        )
+        .await;
         let review_output = review_result.output.clone();
         let review_failed = review_result.status == StageStatus::Failed;
         emit_artifact(&app, &run_id, "review", &review_output, iter_num, &db);
         stages.push(review_result);
         if review_failed || is_cancelled(&cancel_flag) {
-            run.iterations.push(Iteration { number: iter_num, stages, verdict: None, judge_reasoning: None });
-            if review_failed { run.status = PipelineStatus::Failed; run.error = Some("Code Reviewer / Auditor stage failed".to_string()); }
+            run.iterations.push(Iteration {
+                number: iter_num,
+                stages,
+                verdict: None,
+                judge_reasoning: None,
+            });
+            if review_failed {
+                run.status = PipelineStatus::Failed;
+                run.error = Some("Code Reviewer / Auditor stage failed".to_string());
+            }
             break;
         }
 
         // --- Ask user after Review ---
         let user_review_guidance = ask_user_question(
-            &app, &run_id, &PipelineStage::Review, iter_num,
+            &app,
+            &run_id,
+            &PipelineStage::Review,
+            iter_num,
             "Review complete. Would you like to provide guidance for the fix stage?".to_string(),
-            review_output.clone(), true, &cancel_flag, &answer_sender, &db,
-        ).await?;
-        if is_cancelled(&cancel_flag) { push_cancel_iteration(&mut run, iter_num, stages); break; }
+            review_output.clone(),
+            true,
+            &cancel_flag,
+            &answer_sender,
+            &db,
+        )
+        .await?;
+        if is_cancelled(&cancel_flag) {
+            push_cancel_iteration(&mut run, iter_num, stages);
+            break;
+        }
 
         let fix_context = match user_review_guidance {
             Some(ref answer) if !answer.skipped && !answer.answer.is_empty() => {
-                format!("{}\n\n--- User Guidance ---\n{}", review_output, answer.answer)
+                format!(
+                    "{}\n\n--- User Guidance ---\n{}",
+                    review_output, answer.answer
+                )
             }
             _ => review_output.clone(),
         };
 
-        // --- 4. Fix ---
+        // --- 5. Fix ---
         let fix_input = AgentInput {
-            prompt: request.prompt.clone(), context: Some(fix_context),
-            diff: Some(diff1_output), workspace_path: request.workspace_path.clone(),
+            prompt: enhanced_prompt.clone(),
+            context: Some(fix_context),
+            diff: Some(diff1_output),
+            workspace_path: request.workspace_path.clone(),
         };
         run.current_stage = Some(PipelineStage::Fix);
         let fix_result = execute_agent_stage(
-            &app, &run_id, iter_num, iteration_db_id,
-            PipelineStage::Fix, &settings.fixer_agent, &fix_input, &settings, Some(session_id.as_str()), &db,
-        ).await;
+            &app,
+            &run_id,
+            iter_num,
+            iteration_db_id,
+            PipelineStage::Fix,
+            &settings.fixer_agent,
+            &fix_input,
+            &settings,
+            Some(session_id.as_str()),
+            &db,
+        )
+        .await;
         let fix_output = fix_result.output.clone();
         let fix_failed = fix_result.status == StageStatus::Failed;
         stages.push(fix_result);
         if fix_failed || is_cancelled(&cancel_flag) {
-            run.iterations.push(Iteration { number: iter_num, stages, verdict: None, judge_reasoning: None });
-            if fix_failed { run.status = PipelineStatus::Failed; run.error = Some("Code Fixer stage failed".to_string()); }
+            run.iterations.push(Iteration {
+                number: iter_num,
+                stages,
+                verdict: None,
+                judge_reasoning: None,
+            });
+            if fix_failed {
+                run.status = PipelineStatus::Failed;
+                run.error = Some("Code Fixer stage failed".to_string());
+            }
             break;
         }
 
         if let Some(question) = extract_question(&fix_output) {
             let answer = ask_user_question(
-                &app, &run_id, &PipelineStage::Fix, iter_num,
-                question, fix_output.clone(), false, &cancel_flag, &answer_sender, &db,
-            ).await?;
-            if is_cancelled(&cancel_flag) { push_cancel_iteration(&mut run, iter_num, stages); break; }
+                &app,
+                &run_id,
+                &PipelineStage::Fix,
+                iter_num,
+                question,
+                fix_output.clone(),
+                false,
+                &cancel_flag,
+                &answer_sender,
+                &db,
+            )
+            .await?;
+            if is_cancelled(&cancel_flag) {
+                push_cancel_iteration(&mut run, iter_num, stages);
+                break;
+            }
             let _ = answer;
         }
 
-        // --- 5. Diff after fix ---
+        // --- 6. Diff after fix ---
         run.current_stage = Some(PipelineStage::DiffAfterFix);
         let diff2 = execute_diff_stage(
-            &app, &run_id, iter_num, iteration_db_id,
-            PipelineStage::DiffAfterFix, &request.workspace_path, &db,
+            &app,
+            &run_id,
+            iter_num,
+            iteration_db_id,
+            PipelineStage::DiffAfterFix,
+            &request.workspace_path,
+            &db,
         );
         let diff2_output = diff2.output.clone();
         stages.push(diff2);
-        if is_cancelled(&cancel_flag) { push_cancel_iteration(&mut run, iter_num, stages); break; }
+        if is_cancelled(&cancel_flag) {
+            push_cancel_iteration(&mut run, iter_num, stages);
+            break;
+        }
 
-        // --- 6. Judge ---
-        let judge_context = format!("--- Review ---\n{}\n\n--- Fix ---\n{}", review_output, fix_output);
+        // --- 7. Judge ---
+        let judge_context = format!(
+            "--- Review ---\n{}\n\n--- Fix ---\n{}",
+            review_output, fix_output
+        );
         let judge_input = AgentInput {
-            prompt: request.prompt.clone(), context: Some(judge_context),
-            diff: Some(diff2_output), workspace_path: request.workspace_path.clone(),
+            prompt: enhanced_prompt,
+            context: Some(judge_context),
+            diff: Some(diff2_output),
+            workspace_path: request.workspace_path.clone(),
         };
         run.current_stage = Some(PipelineStage::Judge);
         let judge_result = execute_agent_stage(
-            &app, &run_id, iter_num, iteration_db_id,
-            PipelineStage::Judge, &settings.final_judge_agent, &judge_input, &settings, Some(session_id.as_str()), &db,
-        ).await;
+            &app,
+            &run_id,
+            iter_num,
+            iteration_db_id,
+            PipelineStage::Judge,
+            &settings.final_judge_agent,
+            &judge_input,
+            &settings,
+            Some(session_id.as_str()),
+            &db,
+        )
+        .await;
         let judge_output = judge_result.output.clone();
         let judge_failed = judge_result.status == StageStatus::Failed;
         emit_artifact(&app, &run_id, "judge", &judge_output, iter_num, &db);
         stages.push(judge_result);
 
         if judge_failed {
-            run.iterations.push(Iteration { number: iter_num, stages, verdict: None, judge_reasoning: None });
+            run.iterations.push(Iteration {
+                number: iter_num,
+                stages,
+                verdict: None,
+                judge_reasoning: None,
+            });
             run.status = PipelineStatus::Failed;
             run.error = Some("Judge stage failed".to_string());
             break;
@@ -480,10 +755,19 @@ pub async fn run_pipeline(
             JudgeVerdict::Complete => "COMPLETE",
             JudgeVerdict::NotComplete => "NOT COMPLETE",
         };
-        let _ = db::runs::update_iteration_verdict(&db, &run_id, iter_num as i32, Some(verdict_str), Some(&reasoning));
+        let _ = db::runs::update_iteration_verdict(
+            &db,
+            &run_id,
+            iter_num as i32,
+            Some(verdict_str),
+            Some(&reasoning),
+        );
 
         run.iterations.push(Iteration {
-            number: iter_num, stages, verdict: Some(verdict.clone()), judge_reasoning: Some(reasoning),
+            number: iter_num,
+            stages,
+            verdict: Some(verdict.clone()),
+            judge_reasoning: Some(reasoning),
         });
 
         if verdict == JudgeVerdict::Complete {
@@ -498,7 +782,9 @@ pub async fn run_pipeline(
         }
     }
 
-    if is_cancelled(&cancel_flag) { run.status = PipelineStatus::Cancelled; }
+    if is_cancelled(&cancel_flag) {
+        run.status = PipelineStatus::Cancelled;
+    }
 
     let total_duration_ms = pipeline_start.elapsed().as_millis() as u64;
     run.completed_at = Some(epoch_millis());
@@ -520,24 +806,41 @@ pub async fn run_pipeline(
 
     match &run.status {
         PipelineStatus::Completed => {
-            let _ = app.emit("pipeline:completed", PipelineCompletedPayload {
-                run_id: run_id.clone(),
-                verdict: run.final_verdict.clone().unwrap_or(JudgeVerdict::NotComplete),
-                total_iterations: run.current_iteration,
-                duration_ms: total_duration_ms,
-            });
+            let _ = app.emit(
+                "pipeline:completed",
+                PipelineCompletedPayload {
+                    run_id: run_id.clone(),
+                    verdict: run
+                        .final_verdict
+                        .clone()
+                        .unwrap_or(JudgeVerdict::NotComplete),
+                    total_iterations: run.current_iteration,
+                    duration_ms: total_duration_ms,
+                },
+            );
         }
         PipelineStatus::Failed => {
-            let _ = app.emit("pipeline:error", PipelineErrorPayload {
-                run_id: run_id.clone(), stage: None,
-                message: run.error.clone().unwrap_or_else(|| "Unknown error".to_string()),
-            });
+            let _ = app.emit(
+                "pipeline:error",
+                PipelineErrorPayload {
+                    run_id: run_id.clone(),
+                    stage: None,
+                    message: run
+                        .error
+                        .clone()
+                        .unwrap_or_else(|| "Unknown error".to_string()),
+                },
+            );
         }
         PipelineStatus::Cancelled => {
-            let _ = app.emit("pipeline:error", PipelineErrorPayload {
-                run_id: run_id.clone(), stage: None,
-                message: "Pipeline cancelled by user".to_string(),
-            });
+            let _ = app.emit(
+                "pipeline:error",
+                PipelineErrorPayload {
+                    run_id: run_id.clone(),
+                    stage: None,
+                    message: "Pipeline cancelled by user".to_string(),
+                },
+            );
         }
         _ => {}
     }

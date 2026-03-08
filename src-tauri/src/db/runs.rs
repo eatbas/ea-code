@@ -56,11 +56,7 @@ pub fn complete(
 }
 
 /// Inserts a new iteration record and returns its auto-generated ID.
-pub fn insert_iteration(
-    pool: &DbPool,
-    run_id: &str,
-    number: i32,
-) -> Result<i32, String> {
+pub fn insert_iteration(pool: &DbPool, run_id: &str, number: i32) -> Result<i32, String> {
     let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
 
     diesel::insert_into(iterations::table)

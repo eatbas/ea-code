@@ -48,6 +48,9 @@ pub fn run() {
             commands::get_run_logs,
             commands::get_run_artifacts,
             commands::delete_session,
+            // CLI version management
+            commands::get_cli_versions,
+            commands::update_cli,
         ])
         .run(tauri::generate_context!())
         .expect("error whilst running tauri application");

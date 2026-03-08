@@ -23,7 +23,11 @@ pub fn create(pool: &DbPool, id: &str, project_id: i32, title: &str) -> Result<(
 
 /// Returns sessions for a given project, ordered by last update (most recent first).
 /// Each summary includes run count and last prompt/status.
-pub fn list_for_project(pool: &DbPool, project_id: i32, limit: i64) -> Result<Vec<SessionSummary>, String> {
+pub fn list_for_project(
+    pool: &DbPool,
+    project_id: i32,
+    limit: i64,
+) -> Result<Vec<SessionSummary>, String> {
     let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
 
     let session_rows: Vec<SessionRow> = sessions::table

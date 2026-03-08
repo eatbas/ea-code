@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSettings } from "./hooks/useSettings";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { usePipeline } from "./hooks/usePipeline";
-import { useCliHealth } from "./hooks/useCliHealth";
+import { useCliVersions } from "./hooks/useCliVersions";
 import { useHistory } from "./hooks/useHistory";
 import { Sidebar } from "./components/Sidebar";
 import type { ActiveView } from "./components/Sidebar";
@@ -18,7 +18,7 @@ function App(): ReactNode {
   const { settings, loading, saveSettings } = useSettings();
   const { workspace, selectFolder } = useWorkspace();
   const { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
-  const { health, checkHealth } = useCliHealth();
+  const { versions, loading: versionsLoading, updating: versionsUpdating, error: versionsError, fetchVersions, updateCli } = useCliVersions();
   const { sessions, loadSessions, loadProjects } = useHistory();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -87,9 +87,12 @@ function App(): ReactNode {
       return (
         <CliSetupView
           settings={settings}
-          onSave={saveSettings}
-          health={health ?? undefined}
-          onCheckHealth={() => { if (settings) checkHealth(settings); }}
+          versions={versions}
+          loading={versionsLoading}
+          updating={versionsUpdating}
+          error={versionsError}
+          onFetchVersions={fetchVersions}
+          onUpdateCli={updateCli}
         />
       );
     }

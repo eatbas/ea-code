@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentRole {
+    PromptEnhancer,
     Coder,
     ReviewerAuditor,
     CodeFixer,
@@ -19,10 +20,15 @@ pub enum AgentBackend {
     Gemini,
 }
 
+fn default_prompt_enhancer_agent() -> AgentBackend {
+    AgentBackend::Claude
+}
+
 /// Pipeline stage identifiers.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum PipelineStage {
+    PromptEnhance,
     Generate,
     DiffAfterGenerate,
     Review,
@@ -152,6 +158,32 @@ pub struct CliHealth {
     pub gemini: CliStatus,
 }
 
+/// Version and availability information for a single CLI tool.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliVersionInfo {
+    pub name: String,
+    pub cli_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub installed_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_version: Option<String>,
+    pub up_to_date: bool,
+    pub update_command: String,
+    pub available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Aggregate version information for all CLI tools.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AllCliVersions {
+    pub claude: CliVersionInfo,
+    pub codex: CliVersionInfo,
+    pub gemini: CliVersionInfo,
+}
+
 /// Application settings persisted locally.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,6 +191,8 @@ pub struct AppSettings {
     pub claude_path: String,
     pub codex_path: String,
     pub gemini_path: String,
+    #[serde(default = "default_prompt_enhancer_agent")]
+    pub prompt_enhancer_agent: AgentBackend,
     pub generator_agent: AgentBackend,
     pub reviewer_agent: AgentBackend,
     pub fixer_agent: AgentBackend,
@@ -173,6 +207,7 @@ impl Default for AppSettings {
             claude_path: "claude".to_string(),
             codex_path: "codex".to_string(),
             gemini_path: "gemini".to_string(),
+            prompt_enhancer_agent: AgentBackend::Claude,
             generator_agent: AgentBackend::Claude,
             reviewer_agent: AgentBackend::Codex,
             fixer_agent: AgentBackend::Claude,

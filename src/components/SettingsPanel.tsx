@@ -154,6 +154,7 @@ export function SettingsPanel({
           {/* Agent role mapping */}
           <fieldset className="flex flex-col gap-2">
             <legend className="text-xs font-medium text-[#9898b0] mb-1">Agent Roles</legend>
+            <AgentSelect label="Prompt Enhancer" value={draft.promptEnhancerAgent} onChange={(v) => update({ promptEnhancerAgent: v })} />
             <AgentSelect label="Coder" value={draft.generatorAgent} onChange={(v) => update({ generatorAgent: v })} />
             <AgentSelect label="Code Reviewer / Auditor" value={draft.reviewerAgent} onChange={(v) => update({ reviewerAgent: v })} />
             <AgentSelect label="Code Fixer" value={draft.fixerAgent} onChange={(v) => update({ fixerAgent: v })} />

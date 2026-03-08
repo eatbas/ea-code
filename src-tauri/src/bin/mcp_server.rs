@@ -120,10 +120,7 @@ fn handle_get_session_history(
         .or_else(|| default_session.clone())
         .ok_or_else(|| "No session_id provided and no default session set.".to_string())?;
 
-    let limit = args
-        .get("limit")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(10);
+    let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(10);
 
     // Get session info
     let session = db::sessions::get_by_id(pool, &session_id)?
@@ -148,10 +145,7 @@ fn handle_search_runs(pool: &DbPool, args: &Value) -> Result<Value, String> {
         .ok_or_else(|| "Missing required parameter: query".to_string())?;
 
     let workspace_path = args.get("workspace_path").and_then(|v| v.as_str());
-    let limit = args
-        .get("limit")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(10);
+    let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(10);
 
     // Search runs by prompt text, optionally filtered by workspace/project
     let mut conn = pool.get().map_err(|e| format!("Pool error: {e}"))?;
@@ -180,24 +174,33 @@ fn handle_search_runs(pool: &DbPool, args: &Value) -> Result<Value, String> {
         query_builder = query_builder.filter(projects::path.eq(wp));
     }
 
-    let results: Vec<(String, String, String, Option<String>, String, Option<String>, String)> =
-        query_builder
-            .load(&mut conn)
-            .map_err(|e| format!("Search query failed: {e}"))?;
+    let results: Vec<(
+        String,
+        String,
+        String,
+        Option<String>,
+        String,
+        Option<String>,
+        String,
+    )> = query_builder
+        .load(&mut conn)
+        .map_err(|e| format!("Search query failed: {e}"))?;
 
     let runs_json: Vec<Value> = results
         .into_iter()
-        .map(|(id, prompt, status, verdict, started, completed, proj_path)| {
-            json!({
-                "id": id,
-                "prompt": prompt,
-                "status": status,
-                "finalVerdict": verdict,
-                "startedAt": started,
-                "completedAt": completed,
-                "projectPath": proj_path,
-            })
-        })
+        .map(
+            |(id, prompt, status, verdict, started, completed, proj_path)| {
+                json!({
+                    "id": id,
+                    "prompt": prompt,
+                    "status": status,
+                    "finalVerdict": verdict,
+                    "startedAt": started,
+                    "completedAt": completed,
+                    "projectPath": proj_path,
+                })
+            },
+        )
         .collect();
 
     Ok(json!({ "results": runs_json }))
@@ -275,16 +278,9 @@ fn make_tool_result(text: &str, is_error: bool) -> Value {
     })
 }
 
-fn handle_request(
-    pool: &DbPool,
-    request: &Value,
-    default_session: &Option<String>,
-) -> Value {
+fn handle_request(pool: &DbPool, request: &Value, default_session: &Option<String>) -> Value {
     let id = request.get("id").unwrap_or(&Value::Null);
-    let method = request
-        .get("method")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let method = request.get("method").and_then(|v| v.as_str()).unwrap_or("");
 
     match method {
         "initialize" => make_response(
@@ -306,17 +302,11 @@ fn handle_request(
             return Value::Null;
         }
 
-        "tools/list" => make_response(
-            id,
-            json!({ "tools": tool_definitions() }),
-        ),
+        "tools/list" => make_response(id, json!({ "tools": tool_definitions() })),
 
         "tools/call" => {
             let params = request.get("params").unwrap_or(&Value::Null);
-            let tool_name = params
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
             let empty_args = json!({});
             let arguments = params.get("arguments").unwrap_or(&empty_args);
 
@@ -380,7 +370,11 @@ fn main() {
             Ok(v) => v,
             Err(e) => {
                 let err = make_error(&Value::Null, -32700, &format!("Parse error: {e}"));
-                let _ = writeln!(stdout_lock, "{}", serde_json::to_string(&err).unwrap_or_default());
+                let _ = writeln!(
+                    stdout_lock,
+                    "{}",
+                    serde_json::to_string(&err).unwrap_or_default()
+                );
                 let _ = stdout_lock.flush();
                 continue;
             }

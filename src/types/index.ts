@@ -1,5 +1,6 @@
 /** Agent role identifiers for the orchestration pipeline. */
 export type AgentRole =
+  | "prompt_enhancer"
   | "coder"
   | "reviewer_auditor"
   | "code_fixer"
@@ -10,6 +11,7 @@ export type AgentBackend = "claude" | "codex" | "gemini";
 
 /** Pipeline stage identifiers. */
 export type PipelineStage =
+  | "prompt_enhance"
   | "generate"
   | "diff_after_generate"
   | "review"
@@ -70,6 +72,7 @@ export interface AppSettings {
   claudePath: string;
   codexPath: string;
   geminiPath: string;
+  promptEnhancerAgent: AgentBackend;
   generatorAgent: AgentBackend;
   reviewerAgent: AgentBackend;
   fixerAgent: AgentBackend;
@@ -83,6 +86,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   claudePath: "claude",
   codexPath: "codex",
   geminiPath: "gemini",
+  promptEnhancerAgent: "claude",
   generatorAgent: "claude",
   reviewerAgent: "codex",
   fixerAgent: "claude",
@@ -102,6 +106,25 @@ export interface CliStatus {
   available: boolean;
   path: string;
   error?: string;
+}
+
+/** Version and availability information for a single CLI tool. */
+export interface CliVersionInfo {
+  name: string;
+  cliName: string;
+  installedVersion?: string;
+  latestVersion?: string;
+  upToDate: boolean;
+  updateCommand: string;
+  available: boolean;
+  error?: string;
+}
+
+/** Aggregate version information for all CLI tools. */
+export interface AllCliVersions {
+  claude: CliVersionInfo;
+  codex: CliVersionInfo;
+  gemini: CliVersionInfo;
 }
 
 /** Request to start a pipeline run. */

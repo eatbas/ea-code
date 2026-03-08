@@ -69,6 +69,7 @@ export function AgentsView({ settings, onSave }: AgentsViewProps): ReactNode {
 
           {/* Agent role mapping */}
           <div className="flex flex-col gap-3">
+            <AgentSelect label="Prompt Enhancer" value={draft.promptEnhancerAgent} onChange={(v) => update({ promptEnhancerAgent: v })} />
             <AgentSelect label="Coder" value={draft.generatorAgent} onChange={(v) => update({ generatorAgent: v })} />
             <AgentSelect label="Code Reviewer / Auditor" value={draft.reviewerAgent} onChange={(v) => update({ reviewerAgent: v })} />
             <AgentSelect label="Code Fixer" value={draft.fixerAgent} onChange={(v) => update({ fixerAgent: v })} />

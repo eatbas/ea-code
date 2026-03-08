@@ -7,6 +7,7 @@ diesel::table! {
         claude_path -> Text,
         codex_path -> Text,
         gemini_path -> Text,
+        prompt_enhancer_agent -> Text,
         generator_agent -> Text,
         reviewer_agent -> Text,
         fixer_agent -> Text,
@@ -123,13 +124,5 @@ diesel::joinable!(artifacts -> runs (run_id));
 diesel::joinable!(questions -> runs (run_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
-    settings,
-    projects,
-    sessions,
-    runs,
-    iterations,
-    stages,
-    logs,
-    artifacts,
-    questions,
+    settings, projects, sessions, runs, iterations, stages, logs, artifacts, questions,
 );
