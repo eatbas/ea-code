@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { WorkspaceInfo, ProjectSummary, AgentBackend, RunOptions, CliHealth } from "../types";
 import { CLI_MODEL_OPTIONS } from "../types";
 import { BACKEND_OPTIONS } from "./shared/constants";
+import { PopoverSelect } from "./shared/PopoverSelect";
 
 interface IdleViewProps {
   workspace: WorkspaceInfo | null;
@@ -53,7 +54,7 @@ export function IdleView({
     autoResize();
   }, [prompt]);
 
-  // Close dropdown on outside click
+  // Close project dropdown on outside click
   useEffect(() => {
     if (!dropdownOpen) return;
     function handleClick(e: MouseEvent): void {
@@ -65,7 +66,7 @@ export function IdleView({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [dropdownOpen]);
 
-  // Close dropdown on Escape
+  // Close project dropdown on Escape
   const handleEscape = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") setDropdownOpen(false);
   }, []);
@@ -138,7 +139,7 @@ export function IdleView({
           </button>
 
           {dropdownOpen && (
-            <div className="absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded-lg border border-[#2e2e48] bg-[#1a1a2e] py-1 shadow-lg">
+            <div className="absolute top-full left-1/2 z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-[#2e2e48] bg-[#1a1a2e] py-1 shadow-lg">
               {projects.length === 0 && (
                 <span className="block px-3 py-2 text-xs text-[#6b6b80]">No projects yet</span>
               )}
@@ -266,31 +267,58 @@ export function IdleView({
             </label>
             {directTask && (
               <div className="ml-auto flex items-center gap-2">
-                <select
-                  value={directAgent}
-                  onChange={(e) => {
-                    const backend = e.target.value as AgentBackend;
-                    setDirectAgent(backend);
-                    const opts = CLI_MODEL_OPTIONS[backend];
-                    if (opts && opts.length > 0) {
-                      setDirectModel(opts[0].value);
-                    }
-                  }}
-                  className="rounded border border-[#2e2e48] bg-[#1a1a24] px-2 py-1 text-xs text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
-                >
-                  {availableBackends.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                <select
-                  value={directModel}
-                  onChange={(e) => setDirectModel(e.target.value)}
-                  className="rounded border border-[#2e2e48] bg-[#1a1a24] px-2 py-1 text-xs text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
-                >
-                  {(CLI_MODEL_OPTIONS[directAgent] ?? []).map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                {/* Agent dropdown (opens upward) */}
+                <div ref={agentDropdownRef} className="relative">
+                  <button
+                    onClick={() => { setAgentDropdownOpen((p) => !p); setModelDropdownOpen(false); }}
+                    className="flex items-center gap-1 rounded border border-[#2e2e48] bg-[#1a1a24] px-2 py-1 text-xs text-[#e4e4ed] hover:border-[#6366f1] transition-colors"
+                  >
+                    <span>{availableBackends.find((b) => b.value === directAgent)?.label ?? directAgent}</span>
+                    <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
+                  </button>
+                  {agentDropdownOpen && (
+                    <div className="absolute bottom-full left-0 z-50 mb-1 min-w-full rounded-lg border border-[#2e2e48] bg-[#1a1a2e] py-1 shadow-lg">
+                      {availableBackends.map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            const backend = opt.value;
+                            setDirectAgent(backend);
+                            const opts = CLI_MODEL_OPTIONS[backend];
+                            if (opts && opts.length > 0) setDirectModel(opts[0].value);
+                            setAgentDropdownOpen(false);
+                          }}
+                          className={`flex w-full items-center px-3 py-1.5 text-xs whitespace-nowrap transition-colors ${
+                            opt.value === directAgent ? "bg-[#24243a] text-[#e4e4ed]" : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+                          }`}
+                        >{opt.label}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* Model dropdown (opens upward) */}
+                <div ref={modelDropdownRef} className="relative">
+                  <button
+                    onClick={() => { setModelDropdownOpen((p) => !p); setAgentDropdownOpen(false); }}
+                    className="flex items-center gap-1 rounded border border-[#2e2e48] bg-[#1a1a24] px-2 py-1 text-xs text-[#e4e4ed] hover:border-[#6366f1] transition-colors"
+                  >
+                    <span>{(CLI_MODEL_OPTIONS[directAgent] ?? []).find((m) => m.value === directModel)?.label ?? directModel}</span>
+                    <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
+                  </button>
+                  {modelDropdownOpen && (
+                    <div className="absolute bottom-full right-0 z-50 mb-1 min-w-full rounded-lg border border-[#2e2e48] bg-[#1a1a2e] py-1 shadow-lg">
+                      {(CLI_MODEL_OPTIONS[directAgent] ?? []).map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => { setDirectModel(opt.value); setModelDropdownOpen(false); }}
+                          className={`flex w-full items-center px-3 py-1.5 text-xs whitespace-nowrap transition-colors ${
+                            opt.value === directModel ? "bg-[#24243a] text-[#e4e4ed]" : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+                          }`}
+                        >{opt.label}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
