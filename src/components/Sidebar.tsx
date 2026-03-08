@@ -5,6 +5,30 @@ import { ProjectThreadsList } from "./ProjectThreadsList";
 /** Which view the sidebar is navigating to. */
 export type ActiveView = "home" | "agents" | "cli-setup" | "skills" | "mcp";
 
+/** Data-driven settings navigation items. */
+const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[] = [
+  {
+    view: "agents",
+    label: "Agents",
+    iconPath: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />',
+  },
+  {
+    view: "cli-setup",
+    label: "CLI Setup",
+    iconPath: '<polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />',
+  },
+  {
+    view: "mcp",
+    label: "MCP Servers",
+    iconPath: '<rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 9h6v6H9z" /><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />',
+  },
+  {
+    view: "skills",
+    label: "Skills",
+    iconPath: '<path d="M12 3L3 7.5L12 12L21 7.5L12 3z" /><path d="M3 12l9 4.5l9-4.5" /><path d="M3 16.5L12 21l9-4.5" />',
+  },
+];
+
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
@@ -114,69 +138,24 @@ export function Sidebar({
 
         {/* Settings nav items */}
         <div className="flex flex-col gap-1 px-3">
-          <button
-            onClick={() => onNavigate("agents")}
-            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-              activeView === "agents"
-                ? "bg-[#24243a] text-[#e4e4ed]"
-                : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
-            }`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            Agents
-          </button>
-
-          <button
-            onClick={() => onNavigate("cli-setup")}
-            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-              activeView === "cli-setup"
-                ? "bg-[#24243a] text-[#e4e4ed]"
-                : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
-            }`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="4 17 10 11 4 5" />
-              <line x1="12" y1="19" x2="20" y2="19" />
-            </svg>
-            CLI Setup
-          </button>
-
-          <button
-            onClick={() => onNavigate("mcp")}
-            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-              activeView === "mcp"
-                ? "bg-[#24243a] text-[#e4e4ed]"
-                : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
-            }`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="4" y="4" width="16" height="16" rx="2" />
-              <path d="M9 9h6v6H9z" />
-              <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
-            </svg>
-            MCP Servers
-          </button>
-
-          <button
-            onClick={() => onNavigate("skills")}
-            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-              activeView === "skills"
-                ? "bg-[#24243a] text-[#e4e4ed]"
-                : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
-            }`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3L3 7.5L12 12L21 7.5L12 3z" />
-              <path d="M3 12l9 4.5l9-4.5" />
-              <path d="M3 16.5L12 21l9-4.5" />
-            </svg>
-            Skills
-          </button>
+          {SETTINGS_NAV_ITEMS.map(({ view, label, iconPath }) => (
+            <button
+              key={view}
+              onClick={() => onNavigate(view)}
+              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                activeView === view
+                  ? "bg-[#24243a] text-[#e4e4ed]"
+                  : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+              }`}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                dangerouslySetInnerHTML={{ __html: iconPath }}
+              />
+              {label}
+            </button>
+          ))}
         </div>
 
         <div className="flex-1" />

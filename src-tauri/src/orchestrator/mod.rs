@@ -10,6 +10,7 @@
 
 pub mod helpers;
 pub mod iteration;
+pub mod iteration_planning;
 pub mod iteration_review;
 pub mod context_summary;
 pub mod parsing;

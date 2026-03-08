@@ -17,7 +17,17 @@ import { CliSetupView } from "./components/CliSetupView";
 import { SkillsView } from "./components/SkillsView";
 import { McpView } from "./components/McpView";
 import { QuestionDialog } from "./components/QuestionDialog";
-import type { PipelineRequest, RunOptions, SessionDetail } from "./types";
+import type { PipelineRequest, PipelineRun, RunOptions, SessionDetail } from "./types";
+
+/** Whether the pipeline is actively in progress (running or awaiting user input). */
+function isRunActive(run: PipelineRun | null): boolean {
+  return !!run && (run.status === "running" || run.status === "waiting_for_input");
+}
+
+/** Whether the pipeline has reached a terminal state (completed, failed, or cancelled). */
+function isRunTerminal(run: PipelineRun | null): boolean {
+  return !!run && (run.status === "completed" || run.status === "failed" || run.status === "cancelled");
+}
 
 function App(): ReactNode {
   const { workspace, openWorkspace, selectFolder } = useWorkspace();
@@ -49,7 +59,7 @@ function App(): ReactNode {
 
   // Reload sessions when a pipeline run completes
   useEffect(() => {
-    if (run && (run.status === "completed" || run.status === "failed" || run.status === "cancelled") && workspace) {
+    if (isRunTerminal(run) && workspace) {
       loadSessions(workspace.path);
     }
   }, [run?.status, workspace, loadSessions]);
@@ -104,9 +114,9 @@ function App(): ReactNode {
   /** Render the main content area based on active view. */
   function renderContent(): ReactNode {
     // Actively running pipeline always takes priority (blocks navigation)
-    const pipelineActive = run && (run.status === "running" || run.status === "waiting_for_input");
+    const pipelineActive = isRunActive(run);
     // Terminal pipeline shown only when on home view
-    const pipelineTerminal = run && (run.status === "completed" || run.status === "failed" || run.status === "cancelled");
+    const pipelineTerminal = isRunTerminal(run);
     const showChat = pipelineActive || (pipelineTerminal && activeView === "home" && !activeSessionId);
 
     if (run && showChat) {
@@ -225,8 +235,8 @@ function App(): ReactNode {
         sessions={sessions}
         activeSessionId={activeSessionId}
         onSelectSession={handleSelectSession}
-        isRunning={!!run && (run.status === "running" || run.status === "waiting_for_input")}
-        hasTerminalRun={!!run && (run.status === "completed" || run.status === "failed" || run.status === "cancelled")}
+        isRunning={isRunActive(run)}
+        hasTerminalRun={isRunTerminal(run)}
         onGoToRun={() => {
           setActiveSessionId(undefined);
           setSessionDetail(null);

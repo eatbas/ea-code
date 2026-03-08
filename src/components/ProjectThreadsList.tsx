@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { ProjectSummary, SessionSummary } from "../types";
+import { projectDisplayName } from "../utils/formatters";
 
 interface ProjectThreadsListProps {
   projects: ProjectSummary[];
@@ -12,14 +13,6 @@ interface ProjectThreadsListProps {
   onArchiveSession?: (sessionId: string) => void;
 }
 
-function getProjectName(project: ProjectSummary): string {
-  if (project.name.trim().length > 0) {
-    return project.name;
-  }
-
-  const parts = project.path.split(/[/\\]+/);
-  return parts[parts.length - 1] || project.path;
-}
 
 /** Renders projects with nested sessions for the active project. */
 export function ProjectThreadsList({
@@ -76,7 +69,7 @@ export function ProjectThreadsList({
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                 </svg>
-                <span className="truncate">{getProjectName(project)}</span>
+                <span className="truncate">{projectDisplayName(project)}</span>
               </button>
 
               {isActiveProject && (

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { RunDetail } from "../types";
-import { formatDuration } from "../utils/formatters";
+import { formatDuration, formatTimestamp } from "../utils/formatters";
 
 interface RunCardProps {
   run: RunDetail;
@@ -91,15 +91,4 @@ export function RunCard({ run }: RunCardProps): ReactNode {
       </div>
     </div>
   );
-}
-
-/** Formats an ISO timestamp into a readable date/time string. */
-function formatTimestamp(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
-      " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return iso;
-  }
 }

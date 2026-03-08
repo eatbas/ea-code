@@ -1,5 +1,29 @@
 /** Formatting utilities for pipeline metrics display. */
 
+import type { ProjectSummary } from "../types";
+
+/** Extracts the last path segment as a folder display name. */
+export function folderName(path: string): string {
+  const parts = path.split(/[/\\]+/);
+  return parts[parts.length - 1] || path;
+}
+
+/** Returns a display name for a project (name or folder fallback). */
+export function projectDisplayName(project: ProjectSummary): string {
+  return project.name.trim().length > 0 ? project.name : folderName(project.path);
+}
+
+/** Formats an ISO timestamp into a readable date/time string. */
+export function formatTimestamp(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
+      " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return iso;
+  }
+}
+
 /** Formats milliseconds into human-readable duration (e.g., "1.3s", "2m 5s"). */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;

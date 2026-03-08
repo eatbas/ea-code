@@ -3,6 +3,7 @@ import { useState, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useClickOutside } from "../hooks/useClickOutside";
 import type { WorkspaceInfo, ProjectSummary, RunOptions, CliHealth } from "../types";
+import { folderName, projectDisplayName } from "../utils/formatters";
 import { PromptInputBar } from "./shared/PromptInputBar";
 
 interface IdleViewProps {
@@ -30,12 +31,6 @@ export function IdleView({
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
   useClickOutside(dropdownRef, closeDropdown, dropdownOpen);
 
-  function folderName(path: string): string {
-    const parts = path.split(/[/\\]+/);
-    return parts[parts.length - 1] || path;
-  }
-  const projectDisplayName = (p: ProjectSummary): string =>
-    p.name.trim().length > 0 ? p.name : folderName(p.path);
   const workspaceLabel = workspace ? folderName(workspace.path) : "";
 
   return (

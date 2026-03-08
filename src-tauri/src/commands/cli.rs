@@ -15,26 +15,11 @@ pub async fn check_cli_health(settings: AppSettings) -> Result<CliHealth, String
 #[tauri::command]
 pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, String> {
     let (claude, codex, gemini, kimi, opencode, git_bash) = tokio::join!(
-        build_cli_version_info(
-            &settings.claude_path,
-            "Claude CLI",
-            "claude",
-            "@anthropic-ai/claude-code",
-        ),
+        build_cli_version_info(&settings.claude_path, "Claude CLI", "claude", "@anthropic-ai/claude-code"),
         build_cli_version_info(&settings.codex_path, "Codex CLI", "codex", "@openai/codex",),
-        build_cli_version_info(
-            &settings.gemini_path,
-            "Gemini CLI",
-            "gemini",
-            "@google/gemini-cli",
-        ),
-        build_cli_version_info(&settings.kimi_path, "Kimi CLI", "kimi", "kimi-cli",),
-        build_cli_version_info(
-            &settings.opencode_path,
-            "OpenCode CLI",
-            "opencode",
-            "opencode-ai",
-        ),
+        build_cli_version_info(&settings.gemini_path, "Gemini CLI", "gemini", "@google/gemini-cli"),
+        build_cli_version_info(&settings.kimi_path, "Kimi CLI", "kimi", "kimi-cli"),
+        build_cli_version_info(&settings.opencode_path, "OpenCode CLI", "opencode", "opencode-ai"),
         async {
             if cfg!(target_os = "windows") {
                 Some(build_git_bash_version_info().await)
@@ -65,26 +50,10 @@ pub async fn update_cli(cli_name: String) -> Result<String, String> {
 }
 async fn check_single_cli(path: &str) -> CliStatus {
     let probe = path_probe_command();
-    match tokio::process::Command::new(probe)
-        .arg(path)
-        .output()
-        .await
-    {
-        Ok(output) if output.status.success() => CliStatus {
-            available: true,
-            path: path.to_string(),
-            error: None,
-        },
-        Ok(_) => CliStatus {
-            available: false,
-            path: path.to_string(),
-            error: Some(format!("{path} not found in PATH")),
-        },
-        Err(e) => CliStatus {
-            available: false,
-            path: path.to_string(),
-            error: Some(format!("Failed to check {path} with {probe}: {e}")),
-        },
+    match tokio::process::Command::new(probe).arg(path).output().await {
+        Ok(output) if output.status.success() => CliStatus { available: true, path: path.to_string(), error: None },
+        Ok(_) => CliStatus { available: false, path: path.to_string(), error: Some(format!("{path} not found in PATH")) },
+        Err(e) => CliStatus { available: false, path: path.to_string(), error: Some(format!("Failed to check {path} with {probe}: {e}")) },
     }
 }
 pub(crate) async fn check_cli_health_inner(settings: &AppSettings) -> Result<CliHealth, String> {
@@ -126,6 +95,8 @@ async fn update_kimi_cli() -> Result<String, String> {
         if output.status.success() {
             return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
         }
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(format!("Update failed: {stderr}"));
     }
     update_with_npm("kimi-cli").await
 }
@@ -145,31 +116,21 @@ pub(crate) async fn is_cli_available(path: &str) -> bool {
 }
 async fn run_npm(args: &[&str]) -> Result<std::process::Output, String> {
     if cfg!(target_os = "windows") {
-        if let Ok(Ok(output)) = timeout(
-            Duration::from_secs(20),
-            tokio::process::Command::new("npm.cmd").args(args).output(),
-        )
-        .await
+        if let Ok(Ok(output)) =
+            timeout(Duration::from_secs(20), tokio::process::Command::new("npm.cmd").args(args).output()).await
         {
             return Ok(output);
         }
     }
-    timeout(
-        Duration::from_secs(20),
-        tokio::process::Command::new("npm").args(args).output(),
-    )
-    .await
+    timeout(Duration::from_secs(20), tokio::process::Command::new("npm").args(args).output()).await
         .map_err(|_| "npm command timed out after 20 seconds".to_string())?
         .map_err(|e| format!("Failed to run npm: {e}"))
 }
 async fn get_installed_version(path: &str) -> Option<String> {
-    let output = timeout(
-        Duration::from_secs(15),
-        tokio::process::Command::new(path).arg("--version").output(),
-    )
-    .await
-    .ok()?
-    .ok()?;
+    let output = timeout(Duration::from_secs(15), tokio::process::Command::new(path).arg("--version").output())
+        .await
+        .ok()?
+        .ok()?;
     if !output.status.success() {
         return None;
     }
@@ -182,6 +143,16 @@ async fn get_latest_npm_version(package_name: &str) -> Option<String> {
         return None;
     }
     Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+async fn get_latest_kimi_version(has_uv: bool) -> Option<String> {
+    if has_uv {
+        let output = timeout(Duration::from_secs(20), tokio::process::Command::new("uvx").args(["--from", "kimi-cli", "kimi", "--version"]).output()).await.ok()?.ok()?;
+        if output.status.success() {
+            let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            return Some(extract_version_number(&raw));
+        }
+    }
+    get_latest_npm_version("kimi-cli").await
 }
 fn extract_version_number(raw: &str) -> String {
     for token in raw.split_whitespace() {
@@ -201,6 +172,7 @@ async fn build_cli_version_info(
     npm_package: &str,
 ) -> CliVersionInfo {
     let available = check_binary_exists(path).await;
+    let has_uv = cli_name == "kimi" && check_binary_exists("uv").await;
     let (installed, latest) = tokio::join!(
         async {
             if available {
@@ -209,23 +181,33 @@ async fn build_cli_version_info(
                 None
             }
         },
-        get_latest_npm_version(npm_package),
+        async {
+            if cli_name == "kimi" {
+                get_latest_kimi_version(has_uv).await
+            } else {
+                get_latest_npm_version(npm_package).await
+            }
+        },
     );
     let up_to_date = match (&installed, &latest) {
         (Some(i), Some(l)) => i == l,
         _ => false,
     };
+    let installed_and_latest_error = if cli_name == "kimi" {
+        format!("Failed to read installed version and latest Kimi version for {path}")
+    } else {
+        format!("Failed to read installed version and latest npm version for {path}")
+    };
+    let latest_error = if cli_name == "kimi" {
+        "Failed to fetch latest Kimi version".to_string()
+    } else {
+        format!("Failed to fetch latest npm version for package {npm_package}")
+    };
     let error = match (available, &installed, &latest) {
         (false, _, _) => Some(format!("{path} not found in PATH")),
-        (true, None, None) => Some(format!(
-            "Failed to read installed version and latest npm version for {path}"
-        )),
-        (true, None, Some(_)) => {
-            Some(format!("Failed to read installed version from {path} --version"))
-        }
-        (true, Some(_), None) => Some(format!(
-            "Failed to fetch latest npm version for package {npm_package}"
-        )),
+        (true, None, None) => Some(installed_and_latest_error),
+        (true, None, Some(_)) => Some(format!("Failed to read installed version from {path} --version")),
+        (true, Some(_), None) => Some(latest_error),
         (true, Some(_), Some(_)) => None,
     };
     CliVersionInfo {
@@ -234,7 +216,7 @@ async fn build_cli_version_info(
         installed_version: installed,
         latest_version: latest,
         up_to_date,
-        update_command: format!("npm install -g {npm_package}@latest"),
+        update_command: if has_uv { "uv tool upgrade kimi-cli --no-cache".to_string() } else { format!("npm install -g {npm_package}@latest") },
         available,
         error,
     }
@@ -278,22 +260,7 @@ async fn get_latest_git_bash_version() -> Option<String> {
     if !cfg!(target_os = "windows") {
         return None;
     }
-    let output = timeout(
-        Duration::from_secs(20),
-        tokio::process::Command::new("winget")
-            .args([
-                "show",
-                "--id",
-                "Git.Git",
-                "--exact",
-                "--accept-source-agreements",
-                "--disable-interactivity",
-            ])
-            .output(),
-    )
-    .await
-    .ok()?
-    .ok()?;
+    let output = timeout(Duration::from_secs(20), tokio::process::Command::new("winget").args(["show", "--id", "Git.Git", "--exact", "--accept-source-agreements", "--disable-interactivity"]).output()).await.ok()?.ok()?;
     if !output.status.success() {
         return None;
     }
