@@ -22,4 +22,5 @@ export const STAGE_LABELS: Record<PipelineStage, string> = {
   diff_after_fix: "Diff",
   judge: "Judge",
   executive_summary: "Summary",
+  direct_task: "Direct Task",
 };

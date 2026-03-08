@@ -105,11 +105,23 @@ pub async fn list_mcp_servers(state: State<'_, AppState>) -> Result<Vec<McpServe
 }
 
 #[tauri::command]
-pub async fn list_mcp_capable_clis() -> Result<Vec<String>, String> {
-    Ok(db::mcp::MCP_CAPABLE_CLIS
-        .iter()
-        .map(|s| (*s).to_string())
-        .collect())
+pub async fn list_mcp_capable_clis(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let settings = db::settings::get(&state.db)?;
+    let mut available = Vec::new();
+
+    for cli_name in db::mcp::MCP_CAPABLE_CLIS {
+        let path = match cli_name {
+            "claude" => settings.claude_path.as_str(),
+            "codex" => settings.codex_path.as_str(),
+            _ => continue,
+        };
+
+        if super::cli::is_cli_available(path).await {
+            available.push(cli_name.to_string());
+        }
+    }
+
+    Ok(available)
 }
 
 #[tauri::command]

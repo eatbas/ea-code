@@ -10,7 +10,8 @@ export type PipelineStage =
   | "fix"
   | "diff_after_fix"
   | "judge"
-  | "executive_summary";
+  | "executive_summary"
+  | "direct_task";
 
 /** Status of a single pipeline stage. */
 export type StageStatus = "pending" | "running" | "completed" | "failed" | "skipped" | "waiting_for_input";

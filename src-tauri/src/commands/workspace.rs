@@ -1,5 +1,5 @@
 use crate::models::*;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use super::cli::check_cli_health_inner;
 use super::AppState;
@@ -37,4 +37,16 @@ pub async fn select_workspace(
 #[tauri::command]
 pub async fn validate_environment(settings: AppSettings) -> Result<CliHealth, String> {
     check_cli_health_inner(&settings).await
+}
+
+/// Opens the given workspace path in VS Code.
+#[tauri::command]
+pub async fn open_in_vscode(app: AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_shell::ShellExt;
+    app.shell()
+        .command("code")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| format!("Failed to open VS Code: {e}"))?;
+    Ok(())
 }

@@ -16,7 +16,7 @@ import { CliSetupView } from "./components/CliSetupView";
 import { SkillsView } from "./components/SkillsView";
 import { McpView } from "./components/McpView";
 import { QuestionDialog } from "./components/QuestionDialog";
-import type { PipelineRequest } from "./types";
+import type { PipelineRequest, RunOptions } from "./types";
 
 function App(): ReactNode {
   const { workspace, openWorkspace, selectFolder } = useWorkspace();
@@ -58,12 +58,16 @@ function App(): ReactNode {
     void checkHealth(settings);
   }, [settings, checkHealth]);
 
-  function handleRun(prompt: string): void {
+  function handleRun(options: RunOptions): void {
     if (!workspace) return;
     const request: PipelineRequest = {
-      prompt,
+      prompt: options.prompt,
       workspacePath: workspace.path,
       sessionId: activeSessionId,
+      directTask: options.directTask || undefined,
+      directTaskAgent: options.directTaskAgent,
+      directTaskModel: options.directTaskModel,
+      noPlan: options.noPlan || undefined,
     };
     startPipeline(request);
   }
@@ -146,7 +150,9 @@ function App(): ReactNode {
     return (
       <IdleView
         workspace={workspace}
+        workspacePath={workspace?.path}
         projects={projects}
+        cliHealth={cliHealth}
         onSelectProject={handleSelectProject}
         onAddProject={selectFolder}
         onRun={handleRun}

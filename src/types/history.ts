@@ -1,9 +1,28 @@
+import type { AgentBackend } from "./agents";
+
+/** Options passed from IdleView to App when submitting a prompt. */
+export interface RunOptions {
+  prompt: string;
+  directTask: boolean;
+  directTaskAgent?: AgentBackend;
+  directTaskModel?: string;
+  noPlan: boolean;
+}
+
 /** Request to start a pipeline run. */
 export interface PipelineRequest {
   prompt: string;
   workspacePath: string;
   /** Session ID for this conversation thread. If omitted, a new session is created. */
   sessionId?: string;
+  /** When true, bypass the pipeline and send the prompt directly to a single agent. */
+  directTask?: boolean;
+  /** Agent backend to use for direct task mode. */
+  directTaskAgent?: AgentBackend;
+  /** Model to use for direct task mode. */
+  directTaskModel?: string;
+  /** When true, skip the plan and plan_audit stages in the pipeline. */
+  noPlan?: boolean;
 }
 
 /** Workspace validation result. */

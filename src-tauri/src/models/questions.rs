@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use super::agents::AgentBackend;
 use super::pipeline::PipelineStage;
 
 /// Request to start a pipeline run.
@@ -11,6 +12,18 @@ pub struct PipelineRequest {
     /// Session ID for this conversation thread.
     /// If not provided, a new session will be created.
     pub session_id: Option<String>,
+    /// When true, bypass the pipeline and send the prompt directly to a single agent.
+    #[serde(default)]
+    pub direct_task: bool,
+    /// Agent backend for direct task mode.
+    #[serde(default)]
+    pub direct_task_agent: Option<AgentBackend>,
+    /// Model for direct task mode.
+    #[serde(default)]
+    pub direct_task_model: Option<String>,
+    /// When true, skip plan + plan_audit stages.
+    #[serde(default)]
+    pub no_plan: bool,
 }
 
 /// Represents a question posed by the pipeline to the user between stages.

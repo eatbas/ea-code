@@ -138,10 +138,6 @@ export function McpView(): ReactNode {
                     })}
                   </div>
 
-                  <div className="mt-3 rounded bg-[#0f0f14] px-3 py-2 text-[11px] text-[#9898b0]">
-                    <code>{server.command} {server.args}</code>
-                  </div>
-
                   {isContext7 && (
                     <div className="mt-3 flex flex-col gap-2">
                       <label className="text-xs text-[#9898b0]">Context7 API Key</label>

@@ -139,6 +139,10 @@ async fn check_binary_exists(path: &str) -> bool {
         Ok(output) if output.status.success()
     )
 }
+
+pub(crate) async fn is_cli_available(path: &str) -> bool {
+    check_binary_exists(path).await
+}
 async fn run_npm(args: &[&str]) -> Result<std::process::Output, String> {
     if cfg!(target_os = "windows") {
         if let Ok(Ok(output)) = timeout(

@@ -15,6 +15,7 @@ pub enum PipelineStage {
     DiffAfterFix,
     Judge,
     ExecutiveSummary,
+    DirectTask,
 }
 
 /// Status of a single pipeline stage.

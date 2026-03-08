@@ -223,9 +223,15 @@ async fn run_planning_stages(
     iter_ctx: &mut IterationContext,
     workspace_context: &str,
 ) -> Result<(), String> {
-    let planning_enabled = settings.planner_agent.is_some() && settings.plan_auditor_agent.is_some();
+    let planning_enabled = !request.no_plan
+        && settings.planner_agent.is_some()
+        && settings.plan_auditor_agent.is_some();
     if !planning_enabled {
-        let skip = "Planner and Plan Auditor must both be selected; skipping planning stages.";
+        let skip = if request.no_plan {
+            "Planning stages skipped by user request (No Plan mode)."
+        } else {
+            "Planner and Plan Auditor must both be selected; skipping planning stages."
+        };
         stages.push(execute_skipped_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::Plan, skip, db));
         stages.push(execute_skipped_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::PlanAudit, skip, db));
         return Ok(());

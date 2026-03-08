@@ -88,7 +88,7 @@ pub fn resolve_stage_model(stage: &PipelineStage, settings: &AppSettings) -> Str
         PipelineStage::Fix => settings.fixer_model.clone(),
         PipelineStage::Judge => settings.final_judge_model.clone(),
         PipelineStage::ExecutiveSummary => settings.executive_summary_model.clone(),
-        PipelineStage::DiffAfterGenerate | PipelineStage::DiffAfterFix => String::new(),
+        PipelineStage::DiffAfterGenerate | PipelineStage::DiffAfterFix | PipelineStage::DirectTask => String::new(),
     }
 }
 
