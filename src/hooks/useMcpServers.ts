@@ -13,6 +13,7 @@ interface UseMcpServersReturn {
   createServer: (payload: CreateMcpServerPayload) => Promise<void>;
   updateServer: (payload: UpdateMcpServerPayload) => Promise<void>;
   deleteServer: (serverId: string) => Promise<void>;
+  setContext7ApiKey: (apiKey: string) => Promise<void>;
 }
 
 /** Hook for MCP catalogue CRUD and per-CLI binding management. */
@@ -67,5 +68,22 @@ export function useMcpServers(): UseMcpServersReturn {
     await refresh();
   }, [refresh]);
 
-  return { servers, capableClis, loading, error, refresh, setEnabled, setBindings, createServer, updateServer, deleteServer };
+  const setContext7ApiKey = useCallback(async (apiKey: string): Promise<void> => {
+    await invoke("set_context7_api_key", { apiKey });
+    await refresh();
+  }, [refresh]);
+
+  return {
+    servers,
+    capableClis,
+    loading,
+    error,
+    refresh,
+    setEnabled,
+    setBindings,
+    createServer,
+    updateServer,
+    deleteServer,
+    setContext7ApiKey,
+  };
 }

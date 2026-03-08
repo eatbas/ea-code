@@ -6,6 +6,53 @@ use crate::db::{self, DbPool};
 use crate::events::PipelineLogPayload;
 use crate::models::PipelineStage;
 
+const GIT_BASH_INSTALL_URL: &str = "https://git-scm.com/download/win";
+
+#[cfg(target_os = "windows")]
+fn find_git_bash() -> Option<String> {
+    let mut candidates = Vec::new();
+    if let Ok(program_files) = std::env::var("ProgramFiles") {
+        candidates.push(format!("{program_files}\\Git\\bin\\bash.exe"));
+    }
+    if let Ok(program_files_x86) = std::env::var("ProgramFiles(x86)") {
+        candidates.push(format!("{program_files_x86}\\Git\\bin\\bash.exe"));
+    }
+    if let Ok(local_app_data) = std::env::var("LocalAppData") {
+        candidates.push(format!("{local_app_data}\\Programs\\Git\\bin\\bash.exe"));
+    }
+
+    for path in candidates {
+        if std::path::Path::new(&path).exists() {
+            return Some(path);
+        }
+    }
+
+    let where_output = std::process::Command::new("where")
+        .arg("bash")
+        .output()
+        .ok()?;
+    if !where_output.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&where_output.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|line| line.to_ascii_lowercase().contains("\\git\\") && !line.is_empty())
+        .map(str::to_string)
+}
+
+#[cfg(target_os = "windows")]
+fn build_windows_git_bash_command(binary: &str, args: &[&str]) -> Result<Command, String> {
+    let git_bash = find_git_bash().ok_or_else(|| {
+        format!(
+            "Git Bash is required on Windows to run agents. Install it: {GIT_BASH_INSTALL_URL}"
+        )
+    })?;
+    let mut command = Command::new(git_bash);
+    command.arg("-lc").arg("exec \"$0\" \"$@\"").arg(binary).args(args);
+    Ok(command)
+}
+
 /// Input passed to each agent invocation.
 #[derive(Clone, Debug)]
 pub struct AgentInput {
@@ -43,8 +90,16 @@ pub async fn run_cli_agent(
     stage: PipelineStage,
     db: &DbPool,
 ) -> Result<AgentOutput, String> {
-    let mut child = Command::new(binary)
-        .args(args)
+    #[cfg(target_os = "windows")]
+    let mut command = build_windows_git_bash_command(binary, args)?;
+    #[cfg(not(target_os = "windows"))]
+    let mut command = {
+        let mut command = Command::new(binary);
+        command.args(args);
+        command
+    };
+
+    let mut child = command
         .current_dir(workspace_path)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())

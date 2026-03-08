@@ -4,6 +4,7 @@ import { useSettings } from "./hooks/useSettings";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { usePipeline } from "./hooks/usePipeline";
 import { useCliVersions } from "./hooks/useCliVersions";
+import { useCliHealth } from "./hooks/useCliHealth";
 import { useHistory } from "./hooks/useHistory";
 import { useSkills } from "./hooks/useSkills";
 import { Sidebar } from "./components/Sidebar";
@@ -22,6 +23,7 @@ function App(): ReactNode {
   const { settings, loading, saveSettings, clearProjectSettings } = useSettings(workspace?.path);
   const { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { versions, loading: versionsLoading, updating: versionsUpdating, error: versionsError, fetchVersions, updateCli } = useCliVersions();
+  const { health: cliHealth, checking: cliHealthChecking, checkHealth } = useCliHealth();
   const { sessions, loadSessions, loadProjects } = useHistory();
   const { skills, loading: skillsLoading, error: skillsError, createSkill, updateSkill, deleteSkill } = useSkills();
 
@@ -47,6 +49,12 @@ function App(): ReactNode {
       loadSessions(workspace.path);
     }
   }, [run?.status, workspace, loadSessions]);
+
+  // Refresh CLI availability whenever persisted settings change.
+  useEffect(() => {
+    if (!settings) return;
+    void checkHealth(settings);
+  }, [settings, checkHealth]);
 
   function handleRun(prompt: string): void {
     if (!workspace) return;
@@ -90,6 +98,8 @@ function App(): ReactNode {
           onSave={saveSettings}
           projectScoped={Boolean(workspace?.path)}
           onResetProjectSettings={workspace?.path ? clearProjectSettings : undefined}
+          cliHealth={cliHealth}
+          cliHealthChecking={cliHealthChecking}
         />
       );
     }

@@ -8,8 +8,7 @@ export type ModelCsvKey =
   | "codexModel"
   | "geminiModel"
   | "kimiModel"
-  | "opencodeModel"
-  | "copilotModel";
+  | "opencodeModel";
 
 /** Map from backend name to its comma-separated enabled-models settings key. */
 export const BACKEND_CSV_KEY: Record<AgentBackend, ModelCsvKey> = {
@@ -18,7 +17,6 @@ export const BACKEND_CSV_KEY: Record<AgentBackend, ModelCsvKey> = {
   gemini: "geminiModel",
   kimi: "kimiModel",
   opencode: "opencodeModel",
-  copilot: "copilotModel",
 };
 
 /** Parses a comma-separated model string into an array. */

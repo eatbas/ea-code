@@ -60,6 +60,7 @@ pub fn run() {
             commands::mcp::create_mcp_server,
             commands::mcp::update_mcp_server,
             commands::mcp::delete_mcp_server,
+            commands::mcp::set_context7_api_key,
             // CLI health & version commands
             commands::cli::check_cli_health,
             commands::cli::get_cli_versions,

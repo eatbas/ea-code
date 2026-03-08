@@ -216,3 +216,16 @@ pub async fn update_mcp_server(
 pub async fn delete_mcp_server(state: State<'_, AppState>, server_id: String) -> Result<(), String> {
     db::mcp::delete_custom_server(&state.db, server_id.trim())
 }
+
+#[tauri::command]
+pub async fn set_context7_api_key(
+    state: State<'_, AppState>,
+    api_key: String,
+) -> Result<(), String> {
+    db::mcp::set_server_env_var(
+        &state.db,
+        "context7",
+        "CONTEXT7_API_KEY",
+        Some(api_key.as_str()),
+    )
+}

@@ -63,7 +63,7 @@ async fn run_startup_cli_updates(settings: &AppSettings) -> Result<(), String> {
     let timeout_ms = settings.cli_update_timeout_ms.max(1_000);
     let mut failures = Vec::new();
 
-    for cli_name in ["claude", "codex", "gemini", "kimi", "copilot", "opencode"] {
+    for cli_name in ["claude", "codex", "gemini", "kimi", "opencode"] {
         let result = tokio::time::timeout(
             Duration::from_millis(timeout_ms),
             super::cli::update_cli(cli_name.to_string()),

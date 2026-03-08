@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { AgentBackend, AppSettings } from "../../types";
+import type { AgentBackend, AppSettings, CliHealth } from "../../types";
 import { BACKEND_OPTIONS } from "../shared/constants";
 import { backendLabel, modelLabel, getModelOptionsForBackend } from "./agentHelpers";
 
@@ -10,6 +10,8 @@ export interface CascadingSelectProps {
   model: string;
   settings: AppSettings;
   optional?: boolean;
+  cliHealth: CliHealth | null;
+  cliHealthChecking: boolean;
   onChange: (backend: AgentBackend | null, model: string | null) => void;
 }
 
@@ -19,11 +21,18 @@ export function CascadingSelect({
   model,
   settings,
   optional,
+  cliHealth,
+  cliHealthChecking,
   onChange,
 }: CascadingSelectProps): ReactNode {
   const [open, setOpen] = useState(false);
   const [hoveredBackend, setHoveredBackend] = useState<AgentBackend | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const backendOptions = cliHealth
+    ? BACKEND_OPTIONS.filter((opt) => cliHealth[opt.value].available)
+    : [];
+  const hasSelectableBackends = backendOptions.length > 0;
+  const triggerDisabled = cliHealthChecking || (!optional && !hasSelectableBackends);
 
   // Close on outside click
   useEffect(() => {
@@ -50,10 +59,20 @@ export function CascadingSelect({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, handleKeyDown]);
 
+  // Ensure disabled state closes the dropdown immediately.
+  useEffect(() => {
+    if (triggerDisabled) {
+      setOpen(false);
+      setHoveredBackend(null);
+    }
+  }, [triggerDisabled]);
+
   const isSkipped = !backend;
-  const displayText = isSkipped
-    ? "Skip"
-    : `${backendLabel(backend)} · ${modelLabel(backend, model)}`;
+  const displayText = cliHealthChecking && !cliHealth
+    ? "Checking installed CLIs..."
+    : isSkipped
+      ? "Skip"
+      : `${backendLabel(backend)} · ${modelLabel(backend, model)}`;
 
   return (
     <div ref={containerRef} className="relative">
@@ -61,14 +80,16 @@ export function CascadingSelect({
       <button
         type="button"
         onClick={() => {
+          if (triggerDisabled) return;
           setOpen((prev) => !prev);
           setHoveredBackend(null);
         }}
+        disabled={triggerDisabled}
         className={`flex w-full items-center justify-between rounded border px-3 py-2 text-sm transition-colors ${
           isSkipped
             ? "border-[#2e2e48] bg-[#1a1a24] text-[#6b6b80]"
             : "border-[#2e2e48] bg-[#1a1a24] text-[#e4e4ed]"
-        } hover:border-[#6366f1] focus:border-[#6366f1] focus:outline-none`}
+        } hover:border-[#6366f1] focus:border-[#6366f1] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60`}
       >
         <span className="truncate">{displayText}</span>
         <svg
@@ -106,7 +127,7 @@ export function CascadingSelect({
                 Skip
               </button>
             )}
-            {BACKEND_OPTIONS.map((opt) => {
+            {backendOptions.map((opt) => {
               const isActive = opt.value === hoveredBackend;
               const isCurrent = opt.value === backend;
               return (
@@ -138,6 +159,11 @@ export function CascadingSelect({
                 </button>
               );
             })}
+            {backendOptions.length === 0 && (
+              <span className="block px-3 py-1.5 text-xs text-[#6b6b80]">
+                No installed CLIs
+              </span>
+            )}
           </div>
 
           {/* Model submenu */}

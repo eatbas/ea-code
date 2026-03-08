@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
 use crate::agents::{
-    run_claude, run_codex, run_copilot, run_gemini, run_kimi, run_opencode, AgentInput, AgentOutput,
+    run_claude, run_codex, run_gemini, run_kimi, run_opencode, AgentInput, AgentOutput,
 };
 use crate::db::{self, DbPool};
 use crate::events::*;
@@ -61,9 +61,6 @@ pub async fn dispatch_agent(
         AgentBackend::Kimi => {
             run_kimi(input, &settings.kimi_path, model, app, run_id, stage, db).await
         }
-        AgentBackend::Copilot => {
-            run_copilot(input, &settings.copilot_path, model, app, run_id, stage, db).await
-        }
         AgentBackend::OpenCode => {
             run_opencode(input, &settings.opencode_path, model, app, run_id, stage, db).await
         }
@@ -104,7 +101,6 @@ fn first_enabled_model_for_backend(
         Some(AgentBackend::Codex) => &settings.codex_model,
         Some(AgentBackend::Gemini) => &settings.gemini_model,
         Some(AgentBackend::Kimi) => &settings.kimi_model,
-        Some(AgentBackend::Copilot) => &settings.copilot_model,
         Some(AgentBackend::OpenCode) => &settings.opencode_model,
         None => return String::new(),
     };
@@ -180,7 +176,6 @@ pub fn backend_to_db_str(backend: &AgentBackend) -> &'static str {
         AgentBackend::Codex => "codex",
         AgentBackend::Gemini => "gemini",
         AgentBackend::Kimi => "kimi",
-        AgentBackend::Copilot => "copilot",
         AgentBackend::OpenCode => "opencode",
     }
 }

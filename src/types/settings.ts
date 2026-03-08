@@ -6,7 +6,6 @@ export interface AppSettings {
   codexPath: string;
   geminiPath: string;
   kimiPath: string;
-  copilotPath: string;
   opencodePath: string;
   promptEnhancerAgent: AgentBackend;
   skillSelectorAgent: AgentBackend | null;
@@ -49,8 +48,6 @@ export interface AppSettings {
   geminiModel: string;
   /** Comma-separated list of enabled Kimi models. */
   kimiModel: string;
-  /** Comma-separated list of enabled Copilot models. */
-  copilotModel: string;
   /** Comma-separated list of enabled OpenCode models. */
   opencodeModel: string;
   /** Per-stage model selections. */
@@ -72,7 +69,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   codexPath: "codex",
   geminiPath: "gemini",
   kimiPath: "kimi",
-  copilotPath: "gh",
   opencodePath: "opencode",
   promptEnhancerAgent: "claude",
   skillSelectorAgent: null,
@@ -100,7 +96,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   codexModel: "codex-5.3",
   geminiModel: "gemini-2.5-pro",
   kimiModel: "kimi-k2.5",
-  copilotModel: "default",
   opencodeModel: "opencode/glm-5",
   promptEnhancerModel: "sonnet",
   skillSelectorModel: null,
@@ -132,9 +127,6 @@ export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[
   kimi: [
     { value: "kimi-k2.5", label: "Kimi K2.5" },
     { value: "kimi-code", label: "Kimi Code" },
-  ],
-  copilot: [
-    { value: "default", label: "Default" },
   ],
   opencode: [
     { value: "opencode/glm-5", label: "GLM 5" },

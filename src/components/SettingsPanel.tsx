@@ -88,12 +88,6 @@ export function SettingsPanel({
             </div>
             <div className="flex items-center gap-2">
               <div className="flex-1">
-                <TextInput label="Copilot (gh)" value={draft.copilotPath} onChange={(v) => update({ copilotPath: v })} />
-              </div>
-              {health && <HealthDot available={health.copilot.available} error={health.copilot.error} />}
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
                 <TextInput label="OpenCode" value={draft.opencodePath} onChange={(v) => update({ opencodePath: v })} />
               </div>
               {health && <HealthDot available={health.opencode.available} error={health.opencode.error} />}

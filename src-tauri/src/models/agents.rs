@@ -19,10 +19,10 @@ pub enum AgentRole {
 #[serde(rename_all = "lowercase")]
 pub enum AgentBackend {
     Claude,
+    #[serde(alias = "copilot")]
     Codex,
     Gemini,
     Kimi,
-    Copilot,
     OpenCode,
 }
 

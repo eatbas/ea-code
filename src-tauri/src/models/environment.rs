@@ -29,7 +29,6 @@ pub struct CliHealth {
     pub codex: CliStatus,
     pub gemini: CliStatus,
     pub kimi: CliStatus,
-    pub copilot: CliStatus,
     pub opencode: CliStatus,
 }
 
@@ -58,6 +57,7 @@ pub struct AllCliVersions {
     pub codex: CliVersionInfo,
     pub gemini: CliVersionInfo,
     pub kimi: CliVersionInfo,
-    pub copilot: CliVersionInfo,
     pub opencode: CliVersionInfo,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git_bash: Option<CliVersionInfo>,
 }

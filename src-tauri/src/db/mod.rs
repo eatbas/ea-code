@@ -72,6 +72,8 @@ pub fn init_db() -> Result<DbPool, String> {
     conn.run_pending_migrations(MIGRATIONS)
         .map_err(|e| format!("Migration failed: {e}"))?;
 
+    mcp::sync_builtin_catalog(&pool)?;
+
     Ok(pool)
 }
 

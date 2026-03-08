@@ -1,27 +1,22 @@
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { AppSettings, CliVersionInfo, AllCliVersions } from "../types";
 import { CLI_MODEL_OPTIONS } from "../types";
-
-/** Settings key for each CLI's enabled-models field (comma-separated). */
 type ModelSettingsKey =
   | "claudeModel"
   | "codexModel"
   | "geminiModel"
   | "kimiModel"
-  | "copilotModel"
   | "opencodeModel";
 
-/** Map from CLI name to its settings key. */
 const MODEL_KEY_MAP: Record<string, ModelSettingsKey> = {
   claude: "claudeModel",
   codex: "codexModel",
   gemini: "geminiModel",
   kimi: "kimiModel",
-  copilot: "copilotModel",
   opencode: "opencodeModel",
 };
-
 interface CliSetupViewProps {
   settings: AppSettings;
   versions: AllCliVersions | null;
@@ -33,22 +28,31 @@ interface CliSetupViewProps {
   onSave: (settings: AppSettings) => void;
 }
 
-/** Parses a comma-separated model string into a Set. */
 function parseEnabledModels(csv: string): Set<string> {
   return new Set(csv.split(",").map((s) => s.trim()).filter(Boolean));
 }
 
-/** Serialises a Set of model values back to a comma-separated string. */
 function serialiseEnabledModels(models: Set<string>): string {
   return Array.from(models).join(",");
 }
 
-/** Status badge indicating whether a CLI is up-to-date, outdated, or missing. */
+function buildGoogleInstallSearchUrl(name: string): string {
+  const query = encodeURIComponent(`install ${name}`);
+  return `https://www.google.com/search?q=${query}`;
+}
+
 function StatusBadge({ info }: { info: CliVersionInfo }): ReactNode {
   if (!info.available) {
     return (
       <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#ef4444]/15 px-2.5 py-0.5 text-xs font-medium text-[#ef4444]">
         Not Installed
+      </span>
+    );
+  }
+  if (!info.latestVersion) {
+    return (
+      <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#64748b]/15 px-2.5 py-0.5 text-xs font-medium text-[#94a3b8]">
+        Installed
       </span>
     );
   }
@@ -66,7 +70,6 @@ function StatusBadge({ info }: { info: CliVersionInfo }): ReactNode {
   );
 }
 
-/** Single CLI tool card showing version info, multi-model checklist, and update controls. */
 function CliCard({
   info,
   updating,
@@ -82,18 +85,17 @@ function CliCard({
   onToggleModel: (value: string) => void;
   onUpdate: () => void;
 }): ReactNode {
-  const showUpdate = info.available && !info.upToDate;
+  const showUpdate =
+    info.available && !info.upToDate && info.updateCommand.trim().length > 0;
   const showInstall = !info.available;
+  const installSearchUrl = buildGoogleInstallSearchUrl(info.name);
 
   return (
     <div className="rounded-lg border border-[#2e2e48] bg-[#1a1a2e] p-5">
-      {/* Header row */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-[#e4e4ed]">{info.name}</h3>
         <StatusBadge info={info} />
       </div>
-
-      {/* Version details */}
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-md bg-[#0f0f14] px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-wider text-[#6b6b80]">
@@ -112,9 +114,7 @@ function CliCard({
           </p>
         </div>
       </div>
-
-      {/* Model checklist (multi-select) */}
-      {modelOptions.length > 0 && (
+      {info.available && modelOptions.length > 0 && (
         <div className="mt-4">
           <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[#6b6b80]">
             Models
@@ -161,31 +161,33 @@ function CliCard({
           </div>
         </div>
       )}
-
-      {/* Error message */}
-      {info.error && (
-        <p className="mt-3 text-xs text-[#ef4444]">{info.error}</p>
+      {!info.available && modelOptions.length > 0 && (
+        <p className="mt-4 text-xs text-[#6b6b80]">
+          Install this CLI to enable model selection.
+        </p>
       )}
-
-      {/* Update / Install button */}
-      {(showUpdate || showInstall) && (
+      {info.error && <p className="mt-3 text-xs text-[#ef4444]">{info.error}</p>}
+      {showInstall && (
+        <button
+          onClick={() => void openUrl(installSearchUrl)}
+          className="mt-4 w-full rounded-md bg-[#6366f1] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#5558e6]"
+        >
+          Install
+        </button>
+      )}
+      {showUpdate && (
         <button
           onClick={onUpdate}
           disabled={updating}
           className="mt-4 w-full rounded-md bg-[#6366f1] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#5558e6] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {updating
-            ? "Updating…"
-            : showInstall
-              ? "Install"
-              : "Update"}
+          {updating ? "Updating…" : "Update"}
         </button>
       )}
     </div>
   );
 }
 
-/** Card-based view for managing CLI tool versions and model selection. */
 export function CliSetupView({
   settings,
   versions,
@@ -196,36 +198,39 @@ export function CliSetupView({
   onUpdateCli,
   onSave,
 }: CliSetupViewProps): ReactNode {
-  // Fetch version info on mount
   useEffect(() => {
     onFetchVersions(settings);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cliEntries: CliVersionInfo[] = versions
-    ? [versions.claude, versions.codex, versions.gemini, versions.kimi, versions.copilot, versions.opencode]
+    ? [
+        versions.claude,
+        versions.codex,
+        versions.gemini,
+        versions.kimi,
+        versions.opencode,
+        ...(versions.gitBash ? [versions.gitBash] : []),
+      ]
     : [];
 
-  /** Returns the set of currently enabled models for a CLI. */
   function getEnabledModels(cliName: string): Set<string> {
     const key = MODEL_KEY_MAP[cliName];
     if (!key) return new Set();
     return parseEnabledModels(settings[key]);
   }
 
-  /** Toggles a model on/off for a given CLI. At least one model must remain enabled. */
   function handleToggleModel(cliName: string, model: string): void {
     const key = MODEL_KEY_MAP[cliName];
     if (!key) return;
+    const cliInfo = versions?.[cliName as keyof AllCliVersions];
+    if (cliInfo && !cliInfo.available) return;
     const current = parseEnabledModels(settings[key]);
-
     if (current.has(model)) {
-      // Prevent disabling the last enabled model
       if (current.size <= 1) return;
       current.delete(model);
     } else {
       current.add(model);
     }
-
     const updated = { ...settings, [key]: serialiseEnabledModels(current) };
     onSave(updated);
   }
@@ -233,8 +238,7 @@ export function CliSetupView({
   return (
     <div className="flex h-full flex-col bg-[#0f0f14]">
       <div className="flex-1 overflow-y-auto px-8 py-8">
-        <div className="mx-auto max-w-2xl flex flex-col gap-6">
-          {/* Header */}
+        <div className="mx-auto flex max-w-2xl flex-col gap-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl font-bold text-[#e4e4ed]">CLI Setup</h1>
@@ -250,17 +254,13 @@ export function CliSetupView({
               {loading ? "Checking…" : "Refresh"}
             </button>
           </div>
-
-          {/* Error banner */}
           {error && (
             <div className="rounded-md border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 text-sm text-[#ef4444]">
               {error}
             </div>
           )}
-
-          {/* Loading skeleton */}
           {loading && !versions && (
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {[0, 1, 2, 3, 4, 5].map((i) => (
                 <div
                   key={i}
@@ -269,10 +269,8 @@ export function CliSetupView({
               ))}
             </div>
           )}
-
-          {/* CLI cards */}
           {cliEntries.length > 0 && (
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {cliEntries.map((info) => (
                 <CliCard
                   key={info.cliName}

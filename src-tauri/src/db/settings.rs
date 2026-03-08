@@ -89,7 +89,8 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
             "codex" => AgentBackend::Codex,
             "gemini" => AgentBackend::Gemini,
             "kimi" => AgentBackend::Kimi,
-            "copilot" => AgentBackend::Copilot,
+            // Legacy compatibility: Copilot assignments are migrated to Codex.
+            "copilot" => AgentBackend::Codex,
             "opencode" => AgentBackend::OpenCode,
             _ => {
                 eprintln!("Unknown backend in settings row: {s}; defaulting to claude");
@@ -157,7 +158,6 @@ fn backend_to_str(b: &crate::models::AgentBackend) -> String {
         crate::models::AgentBackend::Codex => "codex".to_string(),
         crate::models::AgentBackend::Gemini => "gemini".to_string(),
         crate::models::AgentBackend::Kimi => "kimi".to_string(),
-        crate::models::AgentBackend::Copilot => "copilot".to_string(),
         crate::models::AgentBackend::OpenCode => "opencode".to_string(),
     }
 }

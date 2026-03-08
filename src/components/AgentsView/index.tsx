@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useState, useEffect } from "react";
-import type { AppSettings, AgentBackend } from "../../types";
+import type { AppSettings, AgentBackend, CliHealth } from "../../types";
 import { CascadingSelect } from "./CascadingSelect";
 
 /** Configuration for a single pipeline stage row. */
@@ -30,10 +30,19 @@ export interface AgentsViewProps {
   onSave: (s: AppSettings) => void;
   projectScoped?: boolean;
   onResetProjectSettings?: () => Promise<void>;
+  cliHealth?: CliHealth | null;
+  cliHealthChecking?: boolean;
 }
 
 /** Inline view for configuring agent role assignments and pipeline parameters. */
-export function AgentsView({ settings, onSave, projectScoped, onResetProjectSettings }: AgentsViewProps): ReactNode {
+export function AgentsView({
+  settings,
+  onSave,
+  projectScoped,
+  onResetProjectSettings,
+  cliHealth,
+  cliHealthChecking,
+}: AgentsViewProps): ReactNode {
   const [draft, setDraft] = useState<AppSettings>(settings);
 
   useEffect(() => {
@@ -92,6 +101,8 @@ export function AgentsView({ settings, onSave, projectScoped, onResetProjectSett
                     model={currentModel ?? ""}
                     settings={draft}
                     optional={stage.optional}
+                    cliHealth={cliHealth ?? null}
+                    cliHealthChecking={Boolean(cliHealthChecking)}
                     onChange={(newBackend, newModel) => {
                       update({
                         [stage.backendKey]: newBackend,
