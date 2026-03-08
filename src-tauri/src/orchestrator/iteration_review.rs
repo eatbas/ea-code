@@ -33,6 +33,7 @@ pub async fn run_review_fix_stages(
     iteration_db_id: i32,
     meta: &PromptMeta,
     enhanced: &str,
+    selected_skills_section: Option<&str>,
     judge_feedback: Option<&str>,
     handoff_json: Option<&str>,
     run: &mut PipelineRun,
@@ -72,7 +73,15 @@ pub async fn run_review_fix_stages(
     let fix_r = execute_agent_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::Fix, &settings.fixer_agent,
         &AgentInput {
-            prompt: prompts::build_fixer_user(&request.prompt, enhanced, iter_ctx.selected_plan(), &rev_out, judge_feedback, handoff_json),
+            prompt: prompts::build_fixer_user(
+                &request.prompt,
+                enhanced,
+                iter_ctx.selected_plan(),
+                selected_skills_section,
+                &rev_out,
+                judge_feedback,
+                handoff_json,
+            ),
             context: Some(prompts::build_fixer_system(meta)),
             workspace_path: request.workspace_path.clone(),
         },

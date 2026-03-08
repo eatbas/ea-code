@@ -16,6 +16,8 @@ pub mod plan_gate;
 pub mod pipeline;
 pub mod prompts;
 pub mod run_setup;
+pub mod skill_selection;
+pub mod skill_stage;
 pub mod stages;
 pub mod user_questions;
 

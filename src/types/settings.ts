@@ -8,6 +8,7 @@ export interface AppSettings {
   kimiPath: string;
   opencodePath: string;
   promptEnhancerAgent: AgentBackend;
+  skillSelectorAgent: AgentBackend | null;
   plannerAgent: AgentBackend | null;
   planAuditorAgent: AgentBackend | null;
   generatorAgent: AgentBackend;
@@ -41,6 +42,7 @@ export interface AppSettings {
   opencodeModel: string;
   /** Per-stage model selections. */
   promptEnhancerModel: string;
+  skillSelectorModel: string | null;
   plannerModel: string | null;
   planAuditorModel: string | null;
   generatorModel: string;
@@ -48,6 +50,7 @@ export interface AppSettings {
   fixerModel: string;
   finalJudgeModel: string;
   executiveSummaryModel: string;
+  skillSelectionMode: "disable" | "auto";
 }
 
 /** Default settings values. */
@@ -58,6 +61,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   kimiPath: "kimi",
   opencodePath: "opencode",
   promptEnhancerAgent: "claude",
+  skillSelectorAgent: null,
   plannerAgent: null,
   planAuditorAgent: null,
   generatorAgent: "claude",
@@ -79,6 +83,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   kimiModel: "kimi-k2.5",
   opencodeModel: "opencode/glm-5",
   promptEnhancerModel: "sonnet",
+  skillSelectorModel: null,
   plannerModel: null,
   planAuditorModel: null,
   generatorModel: "sonnet",
@@ -86,6 +91,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fixerModel: "sonnet",
   finalJudgeModel: "codex-5.3",
   executiveSummaryModel: "codex-5.3",
+  skillSelectionMode: "disable",
 };
 
 /** Known model options per CLI, keyed by CLI name. */

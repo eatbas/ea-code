@@ -5,12 +5,14 @@ import { useWorkspace } from "./hooks/useWorkspace";
 import { usePipeline } from "./hooks/usePipeline";
 import { useCliVersions } from "./hooks/useCliVersions";
 import { useHistory } from "./hooks/useHistory";
+import { useSkills } from "./hooks/useSkills";
 import { Sidebar } from "./components/Sidebar";
 import type { ActiveView } from "./components/Sidebar";
 import { IdleView } from "./components/IdleView";
 import { ChatView } from "./components/ChatView";
 import { AgentsView } from "./components/AgentsView";
 import { CliSetupView } from "./components/CliSetupView";
+import { SkillsView } from "./components/SkillsView";
 import { QuestionDialog } from "./components/QuestionDialog";
 import type { PipelineRequest } from "./types";
 
@@ -20,6 +22,7 @@ function App(): ReactNode {
   const { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { versions, loading: versionsLoading, updating: versionsUpdating, error: versionsError, fetchVersions, updateCli } = useCliVersions();
   const { sessions, loadSessions, loadProjects } = useHistory();
+  const { skills, loading: skillsLoading, error: skillsError, createSkill, updateSkill, deleteSkill } = useSkills();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ActiveView>("home");
@@ -94,6 +97,19 @@ function App(): ReactNode {
           onFetchVersions={fetchVersions}
           onUpdateCli={updateCli}
           onSave={saveSettings}
+        />
+      );
+    }
+
+    if (activeView === "skills") {
+      return (
+        <SkillsView
+          skills={skills}
+          loading={skillsLoading}
+          error={skillsError}
+          onCreate={createSkill}
+          onUpdate={updateSkill}
+          onDelete={deleteSkill}
         />
       );
     }

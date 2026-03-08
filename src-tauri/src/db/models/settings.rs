@@ -16,6 +16,7 @@ pub struct SettingsRow {
     pub kimi_path: String,
     pub opencode_path: String,
     pub prompt_enhancer_agent: String,
+    pub skill_selector_agent: Option<String>,
     pub planner_agent: Option<String>,
     pub plan_auditor_agent: Option<String>,
     pub generator_agent: String,
@@ -31,6 +32,7 @@ pub struct SettingsRow {
     pub kimi_model: String,
     pub opencode_model: String,
     pub prompt_enhancer_model: String,
+    pub skill_selector_model: Option<String>,
     pub planner_model: Option<String>,
     pub plan_auditor_model: Option<String>,
     pub generator_model: String,
@@ -45,6 +47,7 @@ pub struct SettingsRow {
     pub token_optimized_prompts: bool,
     pub agent_retry_count: i32,
     pub agent_timeout_ms: i32,
+    pub skill_selection_mode: String,
 }
 
 #[derive(AsChangeset)]
@@ -57,6 +60,7 @@ pub struct SettingsChangeset {
     pub kimi_path: String,
     pub opencode_path: String,
     pub prompt_enhancer_agent: String,
+    pub skill_selector_agent: Option<String>,
     pub planner_agent: Option<String>,
     pub plan_auditor_agent: Option<String>,
     pub generator_agent: String,
@@ -72,6 +76,7 @@ pub struct SettingsChangeset {
     pub kimi_model: String,
     pub opencode_model: String,
     pub prompt_enhancer_model: String,
+    pub skill_selector_model: Option<String>,
     pub planner_model: Option<String>,
     pub plan_auditor_model: Option<String>,
     pub generator_model: String,
@@ -86,4 +91,5 @@ pub struct SettingsChangeset {
     pub token_optimized_prompts: bool,
     pub agent_retry_count: i32,
     pub agent_timeout_ms: i32,
+    pub skill_selection_mode: String,
 }

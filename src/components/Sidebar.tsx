@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { SessionSummary } from "../types";
 
 /** Which view the sidebar is navigating to. */
-export type ActiveView = "home" | "agents" | "cli-setup";
+export type ActiveView = "home" | "agents" | "cli-setup" | "skills";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -17,7 +17,7 @@ interface SidebarProps {
 
 /** Collapsible left sidebar with new thread and settings sub-navigation. */
 export function Sidebar({ collapsed, onToggle, onNewSession, activeView, onNavigate, sessions, activeSessionId, onSelectSession }: SidebarProps): ReactNode {
-  const isSettings = activeView === "agents" || activeView === "cli-setup";
+  const isSettings = activeView === "agents" || activeView === "cli-setup" || activeView === "skills";
 
   function handleSettingsClick(): void {
     onNavigate(isSettings ? "home" : "agents");
@@ -114,6 +114,22 @@ export function Sidebar({ collapsed, onToggle, onNewSession, activeView, onNavig
               <line x1="12" y1="19" x2="20" y2="19" />
             </svg>
             CLI Setup
+          </button>
+
+          <button
+            onClick={() => onNavigate("skills")}
+            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+              activeView === "skills"
+                ? "bg-[#24243a] text-[#e4e4ed]"
+                : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3L3 7.5L12 12L21 7.5L12 3z" />
+              <path d="M3 12l9 4.5l9-4.5" />
+              <path d="M3 16.5L12 21l9-4.5" />
+            </svg>
+            Skills
           </button>
         </div>
 

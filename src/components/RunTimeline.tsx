@@ -13,6 +13,7 @@ const STAGE_ORDER: PipelineStage[] = [
   "prompt_enhance",
   "plan",
   "plan_audit",
+  "skill_select",
   "generate",
   "diff_after_generate",
   "review",

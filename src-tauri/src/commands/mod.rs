@@ -2,6 +2,7 @@ pub(crate) mod cli;
 pub(crate) mod history;
 pub(crate) mod pipeline;
 pub(crate) mod settings;
+pub(crate) mod skills;
 pub(crate) mod workspace;
 
 use std::sync::atomic::AtomicBool;

@@ -71,6 +71,10 @@ pub async fn dispatch_agent(
 pub fn resolve_stage_model(stage: &PipelineStage, settings: &AppSettings) -> String {
     match stage {
         PipelineStage::PromptEnhance => settings.prompt_enhancer_model.clone(),
+        PipelineStage::SkillSelect => settings
+            .skill_selector_model
+            .clone()
+            .unwrap_or_else(|| first_enabled_model_for_backend(settings.skill_selector_agent.as_ref(), settings)),
         PipelineStage::Plan => settings
             .planner_model
             .clone()

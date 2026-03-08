@@ -7,6 +7,7 @@ pub mod run_detail;
 pub mod runs;
 pub mod sessions;
 pub mod settings;
+pub mod skills;
 
 use std::path::PathBuf;
 

@@ -10,6 +10,7 @@ diesel::table! {
         kimi_path -> Text,
         opencode_path -> Text,
         prompt_enhancer_agent -> Text,
+        skill_selector_agent -> Nullable<Text>,
         planner_agent -> Nullable<Text>,
         plan_auditor_agent -> Nullable<Text>,
         generator_agent -> Text,
@@ -25,6 +26,7 @@ diesel::table! {
         kimi_model -> Text,
         opencode_model -> Text,
         prompt_enhancer_model -> Text,
+        skill_selector_model -> Nullable<Text>,
         planner_model -> Nullable<Text>,
         plan_auditor_model -> Nullable<Text>,
         generator_model -> Text,
@@ -39,6 +41,20 @@ diesel::table! {
         token_optimized_prompts -> Bool,
         agent_retry_count -> Integer,
         agent_timeout_ms -> Integer,
+        skill_selection_mode -> Text,
+    }
+}
+
+diesel::table! {
+    skills (id) {
+        id -> Text,
+        name -> Text,
+        description -> Text,
+        instructions -> Text,
+        tags -> Text,
+        is_active -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -169,5 +185,5 @@ diesel::joinable!(artifacts -> runs (run_id));
 diesel::joinable!(questions -> runs (run_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
-    settings, projects, sessions, runs, iterations, stages, logs, artifacts, questions,
+    settings, skills, projects, sessions, runs, iterations, stages, logs, artifacts, questions,
 );

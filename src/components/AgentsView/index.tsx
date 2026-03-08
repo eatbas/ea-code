@@ -14,6 +14,7 @@ interface StageConfig {
 /** Ordered list of pipeline stages for the agents grid. */
 const STAGES: StageConfig[] = [
   { label: "Prompt Enhancer", backendKey: "promptEnhancerAgent", modelKey: "promptEnhancerModel", optional: false },
+  { label: "Skill Selector", backendKey: "skillSelectorAgent", modelKey: "skillSelectorModel", optional: true },
   { label: "Planner", backendKey: "plannerAgent", modelKey: "plannerModel", optional: true },
   { label: "Plan Auditor", backendKey: "planAuditorAgent", modelKey: "planAuditorModel", optional: true },
   { label: "Coder", backendKey: "generatorAgent", modelKey: "generatorModel", optional: false },
@@ -91,6 +92,17 @@ export function AgentsView({ settings, onSave }: AgentsViewProps): ReactNode {
           {/* Pipeline parameters */}
           <div className="flex flex-col gap-3 border-t border-[#2e2e48] pt-4">
             <span className="text-sm font-medium text-[#e4e4ed]">Pipeline</span>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[#9898b0]">Skill Selection Mode</span>
+              <select
+                value={draft.skillSelectionMode}
+                onChange={(e) => update({ skillSelectionMode: e.target.value as AppSettings["skillSelectionMode"] })}
+                className="w-44 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+              >
+                <option value="disable">Disable</option>
+                <option value="auto">Auto (agent selects)</option>
+              </select>
+            </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-[#9898b0]">Max Iterations</span>
               <input

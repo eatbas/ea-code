@@ -43,6 +43,12 @@ pub fn run() {
             // Settings commands
             commands::settings::get_settings,
             commands::settings::save_settings,
+            // Skills commands
+            commands::skills::list_skills,
+            commands::skills::get_skill,
+            commands::skills::create_skill,
+            commands::skills::update_skill,
+            commands::skills::delete_skill,
             // CLI health & version commands
             commands::cli::check_cli_health,
             commands::cli::get_cli_versions,

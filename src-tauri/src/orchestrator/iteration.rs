@@ -17,6 +17,7 @@ use super::parsing::{extract_question, parse_plan_audit_output};
 use super::plan_gate::run_plan_gate;
 use super::prompts::{self, PromptMeta};
 use super::run_setup::*;
+use super::skill_stage::run_skill_selection_stage;
 use super::stages::*;
 use super::user_questions::*;
 
@@ -106,13 +107,43 @@ pub async fn run_iteration(
         }
     }
 
+    // --- 3.5 Skill selection (optional) ---
+    let selected_skills_section = run_skill_selection_stage(
+        app,
+        request,
+        settings,
+        db,
+        run_id,
+        session_id,
+        iter_num,
+        iteration_db_id,
+        &meta,
+        &enhanced,
+        iter_ctx.selected_plan(),
+        judge_feedback.as_deref(),
+        run,
+        &mut stages,
+    )
+    .await?;
+    if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
+        return Ok(true);
+    }
+    if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
+
     // --- 4. Generate ---
     run.current_stage = Some(PipelineStage::Generate);
     let gen_r = execute_agent_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::Generate,
         &settings.generator_agent,
         &AgentInput {
-            prompt: prompts::build_generator_user(&request.prompt, &enhanced, iter_ctx.selected_plan(), judge_feedback.as_deref(), handoff_json.as_deref()),
+            prompt: prompts::build_generator_user(
+                &request.prompt,
+                &enhanced,
+                iter_ctx.selected_plan(),
+                selected_skills_section.as_deref(),
+                judge_feedback.as_deref(),
+                handoff_json.as_deref(),
+            ),
             context: Some(prompts::build_generator_system(&meta)),
             workspace_path: request.workspace_path.clone(),
         },
@@ -147,7 +178,7 @@ pub async fn run_iteration(
     run_review_fix_stages(
         app, request, settings, cancel_flag, answer_sender, db,
         run_id, session_id, iter_num, iteration_db_id,
-        &meta, &enhanced, judge_feedback.as_deref(), handoff_json.as_deref(),
+        &meta, &enhanced, selected_skills_section.as_deref(), judge_feedback.as_deref(), handoff_json.as_deref(),
         run, &mut stages, &mut iter_ctx,
     ).await?;
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {

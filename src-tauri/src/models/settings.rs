@@ -20,6 +20,8 @@ pub struct AppSettings {
     #[serde(default = "default_prompt_enhancer_agent")]
     pub prompt_enhancer_agent: AgentBackend,
     #[serde(default)]
+    pub skill_selector_agent: Option<AgentBackend>,
+    #[serde(default)]
     pub planner_agent: Option<AgentBackend>,
     #[serde(default)]
     pub plan_auditor_agent: Option<AgentBackend>,
@@ -43,6 +45,8 @@ pub struct AppSettings {
     pub opencode_model: String,
     /// Per-stage model selections.
     pub prompt_enhancer_model: String,
+    #[serde(default)]
+    pub skill_selector_model: Option<String>,
     #[serde(default)]
     pub planner_model: Option<String>,
     #[serde(default)]
@@ -73,6 +77,9 @@ pub struct AppSettings {
     /// Per-agent timeout in milliseconds (0 = no timeout).
     #[serde(default)]
     pub agent_timeout_ms: u64,
+    /// Skill selection mode: disable or auto.
+    #[serde(default = "default_skill_selection_mode")]
+    pub skill_selection_mode: String,
 }
 
 fn default_plan_timeout() -> u32 {
@@ -85,6 +92,10 @@ fn default_max_plan_revisions() -> u32 {
 
 fn default_agent_retry_count() -> u32 {
     1
+}
+
+fn default_skill_selection_mode() -> String {
+    "disable".to_string()
 }
 
 impl Default for AppSettings {
@@ -110,6 +121,7 @@ impl Default for AppSettings {
             kimi_model: "kimi-k2.5".to_string(),
             opencode_model: "opencode/glm-5".to_string(),
             prompt_enhancer_model: "sonnet".to_string(),
+            skill_selector_model: None,
             planner_model: None,
             plan_auditor_model: None,
             generator_model: "sonnet".to_string(),
@@ -124,6 +136,8 @@ impl Default for AppSettings {
             token_optimized_prompts: false,
             agent_retry_count: 1,
             agent_timeout_ms: 0,
+            skill_selector_agent: None,
+            skill_selection_mode: "disable".to_string(),
         }
     }
 }

@@ -6,7 +6,9 @@
 mod details;
 mod records;
 mod settings;
+mod skills;
 
 pub use details::*;
 pub use records::*;
 pub use settings::*;
+pub use skills::*;

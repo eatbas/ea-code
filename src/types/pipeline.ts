@@ -1,6 +1,7 @@
 /** Pipeline stage identifiers. */
 export type PipelineStage =
   | "prompt_enhance"
+  | "skill_select"
   | "plan"
   | "plan_audit"
   | "generate"

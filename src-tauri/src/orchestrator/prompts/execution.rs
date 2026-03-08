@@ -54,6 +54,7 @@ pub fn build_generator_user(
     original_prompt: &str,
     enhanced_prompt: &str,
     plan: Option<&str>,
+    selected_skills_section: Option<&str>,
     judge_feedback: Option<&str>,
     handoff_json: Option<&str>,
 ) -> String {
@@ -63,6 +64,11 @@ pub fn build_generator_user(
     ];
     if let Some(p) = plan {
         parts.push(format!("APPROVED EXECUTION PLAN:\n{p}"));
+    }
+    if let Some(skills) = selected_skills_section {
+        if !skills.trim().is_empty() {
+            parts.push(skills.to_string());
+        }
     }
     if let Some(feedback) = judge_feedback {
         parts.push(format!("PRIOR JUDGE FEEDBACK:\n{feedback}"));
@@ -212,6 +218,7 @@ pub fn build_fixer_user(
     original_prompt: &str,
     enhanced_prompt: &str,
     plan: Option<&str>,
+    selected_skills_section: Option<&str>,
     review_output: &str,
     judge_feedback: Option<&str>,
     handoff_json: Option<&str>,
@@ -222,6 +229,11 @@ pub fn build_fixer_user(
     ];
     if let Some(p) = plan {
         parts.push(format!("--- Approved Plan ---\n{p}"));
+    }
+    if let Some(skills) = selected_skills_section {
+        if !skills.trim().is_empty() {
+            parts.push(skills.to_string());
+        }
     }
     parts.push(format!("--- Review Output ---\n{review_output}"));
     if let Some(feedback) = judge_feedback {

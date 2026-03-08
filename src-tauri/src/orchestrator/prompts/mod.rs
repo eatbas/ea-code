@@ -6,10 +6,12 @@
 mod execution;
 mod judge;
 mod planning;
+mod skills;
 
 pub use execution::*;
 pub use judge::*;
 pub use planning::*;
+pub use skills::*;
 
 /// Prompt template version. Increment on any prompt text change.
 pub const PROMPT_VERSION: &str = "2.5.0";

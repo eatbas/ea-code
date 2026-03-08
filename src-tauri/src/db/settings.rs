@@ -29,6 +29,7 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         kimi_path: s.kimi_path.clone(),
         opencode_path: s.opencode_path.clone(),
         prompt_enhancer_agent: backend_to_str(&s.prompt_enhancer_agent),
+        skill_selector_agent: backend_to_opt(s.skill_selector_agent.as_ref()),
         planner_agent: backend_to_opt(s.planner_agent.as_ref()),
         plan_auditor_agent: backend_to_opt(s.plan_auditor_agent.as_ref()),
         generator_agent: backend_to_str(&s.generator_agent),
@@ -45,6 +46,7 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         kimi_model: s.kimi_model.clone(),
         opencode_model: s.opencode_model.clone(),
         prompt_enhancer_model: s.prompt_enhancer_model.clone(),
+        skill_selector_model: s.skill_selector_model.clone(),
         planner_model: s.planner_model.clone(),
         plan_auditor_model: s.plan_auditor_model.clone(),
         generator_model: s.generator_model.clone(),
@@ -58,6 +60,7 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         token_optimized_prompts: s.token_optimized_prompts,
         agent_retry_count: s.agent_retry_count as i32,
         agent_timeout_ms: s.agent_timeout_ms as i32,
+        skill_selection_mode: s.skill_selection_mode.clone(),
     };
 
     diesel::update(settings::table.find(1))
@@ -97,6 +100,7 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         kimi_path: row.kimi_path.clone(),
         opencode_path: row.opencode_path.clone(),
         prompt_enhancer_agent: parse_backend(&row.prompt_enhancer_agent),
+        skill_selector_agent: parse_optional_backend(row.skill_selector_agent.as_deref()),
         planner_agent: parse_optional_backend(row.planner_agent.as_deref()),
         plan_auditor_agent: parse_optional_backend(row.plan_auditor_agent.as_deref()),
         generator_agent: parse_backend(&row.generator_agent),
@@ -112,6 +116,7 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         kimi_model: row.kimi_model.clone(),
         opencode_model: row.opencode_model.clone(),
         prompt_enhancer_model: row.prompt_enhancer_model.clone(),
+        skill_selector_model: row.skill_selector_model.clone(),
         planner_model: row.planner_model.clone(),
         plan_auditor_model: row.plan_auditor_model.clone(),
         generator_model: row.generator_model.clone(),
@@ -125,6 +130,7 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         token_optimized_prompts: row.token_optimized_prompts,
         agent_retry_count: row.agent_retry_count as u32,
         agent_timeout_ms: row.agent_timeout_ms as u64,
+        skill_selection_mode: row.skill_selection_mode.clone(),
     }
 }
 
