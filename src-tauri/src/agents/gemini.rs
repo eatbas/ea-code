@@ -9,6 +9,7 @@ use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
 pub async fn run_gemini(
     input: &AgentInput,
     gemini_path: &str,
+    model: &str,
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
@@ -17,7 +18,7 @@ pub async fn run_gemini(
     let full_prompt = build_full_prompt(input);
     run_cli_agent(
         gemini_path,
-        &["-p", &full_prompt, "--yolo"],
+        &["-p", &full_prompt, "-m", model, "--yolo"],
         &input.workspace_path,
         app,
         run_id,

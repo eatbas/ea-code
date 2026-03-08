@@ -83,6 +83,7 @@ fn write_mcp_config(session_id: Option<&str>) -> Option<String> {
 pub async fn run_claude(
     input: &AgentInput,
     claude_path: &str,
+    model: &str,
     session_id: Option<&str>,
     app: &AppHandle,
     run_id: &str,
@@ -96,6 +97,8 @@ pub async fn run_claude(
     let mut args: Vec<String> = vec![
         "-p".to_string(),
         full_prompt,
+        "--model".to_string(),
+        model.to_string(),
         "--output-format".to_string(),
         "json".to_string(),
         "--allowedTools".to_string(),

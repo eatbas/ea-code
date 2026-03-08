@@ -32,6 +32,7 @@ fn stage_to_str(stage: &PipelineStage) -> String {
 /// Dispatches to the appropriate agent runner based on the backend setting.
 async fn dispatch_agent(
     backend: &AgentBackend,
+    model: &str,
     input: &AgentInput,
     settings: &AppSettings,
     session_id: Option<&str>,
@@ -45,6 +46,7 @@ async fn dispatch_agent(
             run_claude(
                 input,
                 &settings.claude_path,
+                model,
                 session_id,
                 app,
                 run_id,
@@ -53,11 +55,68 @@ async fn dispatch_agent(
             )
             .await
         }
-        AgentBackend::Codex => run_codex(input, &settings.codex_path, app, run_id, stage, db).await,
+        AgentBackend::Codex => {
+            run_codex(
+                input,
+                &settings.codex_path,
+                model,
+                app,
+                run_id,
+                stage,
+                db,
+            )
+            .await
+        }
         AgentBackend::Gemini => {
-            run_gemini(input, &settings.gemini_path, app, run_id, stage, db).await
+            run_gemini(
+                input,
+                &settings.gemini_path,
+                model,
+                app,
+                run_id,
+                stage,
+                db,
+            )
+            .await
         }
     }
+}
+
+/// Resolves the model to use for a given pipeline stage from the per-stage settings.
+/// Falls back to the first enabled model for the stage's CLI backend.
+fn resolve_stage_model(stage: &PipelineStage, settings: &AppSettings) -> String {
+    match stage {
+        PipelineStage::PromptEnhance => settings.prompt_enhancer_model.clone(),
+        PipelineStage::Plan => settings
+            .planner_model
+            .clone()
+            .unwrap_or_else(|| first_enabled_model_for_backend(settings.planner_agent.as_ref(), settings)),
+        PipelineStage::PlanAudit => settings
+            .plan_auditor_model
+            .clone()
+            .unwrap_or_else(|| first_enabled_model_for_backend(settings.plan_auditor_agent.as_ref(), settings)),
+        PipelineStage::Generate => settings.generator_model.clone(),
+        PipelineStage::Review => settings.reviewer_model.clone(),
+        PipelineStage::Fix => settings.fixer_model.clone(),
+        PipelineStage::Judge => settings.final_judge_model.clone(),
+        // Diff stages don't invoke an agent; return a placeholder.
+        PipelineStage::DiffAfterGenerate | PipelineStage::DiffAfterFix => String::new(),
+    }
+}
+
+/// Returns the first enabled model for a given backend from the comma-separated list.
+fn first_enabled_model_for_backend(backend: Option<&AgentBackend>, settings: &AppSettings) -> String {
+    let csv = match backend {
+        Some(AgentBackend::Claude) => &settings.claude_model,
+        Some(AgentBackend::Codex) => &settings.codex_model,
+        Some(AgentBackend::Gemini) => &settings.gemini_model,
+        None => return String::new(),
+    };
+    csv.split(',')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_string()
 }
 
 /// Emits a stage status transition event.
@@ -118,9 +177,11 @@ async fn execute_agent_stage(
     emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num);
 
     let stage_str = stage_to_str(&stage);
+    let model = resolve_stage_model(&stage, settings);
 
     match dispatch_agent(
         backend,
+        &model,
         input,
         settings,
         session_id,
@@ -149,6 +210,127 @@ async fn execute_agent_stage(
                 output: output.raw_text,
                 duration_ms,
                 error: None,
+            }
+        }
+        Err(e) => {
+            let duration_ms = start.elapsed().as_millis() as u64;
+            emit_stage(app, run_id, &stage, &StageStatus::Failed, iteration_num);
+            let _ = db::runs::insert_stage(
+                db,
+                iteration_db_id,
+                &stage_str,
+                "failed",
+                "",
+                duration_ms as i32,
+                Some(&e),
+            );
+            StageResult {
+                stage,
+                status: StageStatus::Failed,
+                output: String::new(),
+                duration_ms,
+                error: Some(e),
+            }
+        }
+    }
+}
+
+/// Marks a stage as skipped and persists the skip reason.
+fn execute_skipped_stage(
+    app: &AppHandle,
+    run_id: &str,
+    iteration_num: u32,
+    iteration_db_id: i32,
+    stage: PipelineStage,
+    reason: &str,
+    db: &DbPool,
+) -> StageResult {
+    emit_stage(app, run_id, &stage, &StageStatus::Skipped, iteration_num);
+
+    let stage_str = stage_to_str(&stage);
+    let _ = db::runs::insert_stage(db, iteration_db_id, &stage_str, "skipped", reason, 0, None);
+
+    StageResult {
+        stage,
+        status: StageStatus::Skipped,
+        output: reason.to_string(),
+        duration_ms: 0,
+        error: None,
+    }
+}
+
+/// Runs a plan auditor stage and marks it failed if the verdict is not APPROVED.
+async fn execute_plan_audit_stage(
+    app: &AppHandle,
+    run_id: &str,
+    iteration_num: u32,
+    iteration_db_id: i32,
+    backend: &AgentBackend,
+    input: &AgentInput,
+    settings: &AppSettings,
+    session_id: Option<&str>,
+    db: &DbPool,
+) -> StageResult {
+    let stage = PipelineStage::PlanAudit;
+    let stage_str = stage_to_str(&stage);
+    let start = Instant::now();
+    emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num);
+    let model = resolve_stage_model(&stage, settings);
+
+    match dispatch_agent(
+        backend,
+        &model,
+        input,
+        settings,
+        session_id,
+        app,
+        run_id,
+        stage.clone(),
+        db,
+    )
+    .await
+    {
+        Ok(output) => {
+            let duration_ms = start.elapsed().as_millis() as u64;
+            match parse_plan_audit_decision(&output.raw_text) {
+                Ok(()) => {
+                    emit_stage(app, run_id, &stage, &StageStatus::Completed, iteration_num);
+                    let _ = db::runs::insert_stage(
+                        db,
+                        iteration_db_id,
+                        &stage_str,
+                        "completed",
+                        &output.raw_text,
+                        duration_ms as i32,
+                        None,
+                    );
+                    StageResult {
+                        stage,
+                        status: StageStatus::Completed,
+                        output: output.raw_text,
+                        duration_ms,
+                        error: None,
+                    }
+                }
+                Err(verdict_error) => {
+                    emit_stage(app, run_id, &stage, &StageStatus::Failed, iteration_num);
+                    let _ = db::runs::insert_stage(
+                        db,
+                        iteration_db_id,
+                        &stage_str,
+                        "failed",
+                        &output.raw_text,
+                        duration_ms as i32,
+                        Some(&verdict_error),
+                    );
+                    StageResult {
+                        stage,
+                        status: StageStatus::Failed,
+                        output: output.raw_text,
+                        duration_ms,
+                        error: Some(verdict_error),
+                    }
+                }
             }
         }
         Err(e) => {
@@ -223,6 +405,30 @@ fn parse_judge_verdict(output: &str) -> (JudgeVerdict, String) {
         JudgeVerdict::NotComplete
     };
     (verdict, reasoning)
+}
+
+/// Parses the plan auditor first-line verdict.
+fn parse_plan_audit_decision(output: &str) -> Result<(), String> {
+    let first_line = output.lines().next().unwrap_or("").trim();
+    let reasoning = output.lines().skip(1).collect::<Vec<_>>().join("\n");
+
+    match first_line {
+        "APPROVED" => Ok(()),
+        "REJECTED" => {
+            if reasoning.trim().is_empty() {
+                Err("Plan Auditor rejected the plan".to_string())
+            } else {
+                Err(format!(
+                    "Plan Auditor rejected the plan: {}",
+                    reasoning.trim()
+                ))
+            }
+        }
+        _ => Err(
+            "Plan Auditor returned an invalid verdict. First line must be APPROVED or REJECTED."
+                .to_string(),
+        ),
+    }
 }
 
 fn is_cancelled(cancel_flag: &Arc<AtomicBool>) -> bool {
@@ -352,8 +558,38 @@ fn normalise_enhanced_prompt(enhanced_output: &str, fallback_prompt: &str) -> St
     }
 }
 
+fn build_planner_prompt(enhanced_prompt: &str) -> String {
+    format!(
+        "You are the Planner stage in a coding pipeline.\n\
+Create a concrete, implementation-ready plan for the coding task.\n\
+Be explicit about sequence, edge cases, and verification checks.\n\
+Return only the plan content.\n\n\
+--- Enhanced Prompt ---\n{enhanced_prompt}"
+    )
+}
+
+fn build_plan_auditor_prompt(enhanced_prompt: &str, plan_output: &str) -> String {
+    format!(
+        "You are the Plan Auditor stage in a coding pipeline.\n\
+Review the proposed plan against the enhanced prompt.\n\
+The first line MUST be exactly APPROVED or REJECTED.\n\
+After the first line, provide concise reasoning and required corrections if rejected.\n\n\
+--- Enhanced Prompt ---\n{enhanced_prompt}\n\n\
+--- Proposed Plan ---\n{plan_output}"
+    )
+}
+
+fn add_plan_context(base_context: Option<String>, audited_plan: Option<&str>) -> Option<String> {
+    match (audited_plan, base_context) {
+        (Some(plan), Some(context)) => Some(format!("--- Audited Plan ---\n{plan}\n\n{context}")),
+        (Some(plan), None) => Some(format!("--- Audited Plan ---\n{plan}")),
+        (None, Some(context)) => Some(context),
+        (None, None) => None,
+    }
+}
+
 /// Runs the full orchestration pipeline:
-///   prompt enhance → generate → diff → review → [ask user] → fix → diff → judge → loop
+///   prompt enhance → plan → plan audit → generate → diff → review → [ask user] → fix → diff → judge → loop
 pub async fn run_pipeline(
     app: AppHandle,
     request: PipelineRequest,
@@ -476,10 +712,140 @@ pub async fn run_pipeline(
             break;
         }
 
-        // --- 2. Generate ---
+        let mut audited_plan: Option<String> = None;
+        let planning_enabled =
+            settings.planner_agent.is_some() && settings.plan_auditor_agent.is_some();
+
+        if planning_enabled {
+            // --- 2. Plan ---
+            let plan_input = AgentInput {
+                prompt: build_planner_prompt(&enhanced_prompt),
+                context: None,
+                diff: None,
+                workspace_path: request.workspace_path.clone(),
+            };
+            run.current_stage = Some(PipelineStage::Plan);
+            let plan_result = execute_agent_stage(
+                &app,
+                &run_id,
+                iter_num,
+                iteration_db_id,
+                PipelineStage::Plan,
+                settings
+                    .planner_agent
+                    .as_ref()
+                    .expect("planner_agent is guaranteed when planning_enabled"),
+                &plan_input,
+                &settings,
+                Some(session_id.as_str()),
+                &db,
+            )
+            .await;
+            let plan_output = plan_result.output.clone();
+            let plan_failed = plan_result.status == StageStatus::Failed;
+            emit_artifact(&app, &run_id, "plan", &plan_output, iter_num, &db);
+            stages.push(plan_result);
+            if plan_failed || is_cancelled(&cancel_flag) {
+                run.iterations.push(Iteration {
+                    number: iter_num,
+                    stages,
+                    verdict: None,
+                    judge_reasoning: None,
+                });
+                if plan_failed {
+                    run.status = PipelineStatus::Failed;
+                    run.error = Some("Planner stage failed".to_string());
+                }
+                break;
+            }
+
+            // --- 3. Plan audit ---
+            let plan_audit_input = AgentInput {
+                prompt: build_plan_auditor_prompt(&enhanced_prompt, &plan_output),
+                context: None,
+                diff: None,
+                workspace_path: request.workspace_path.clone(),
+            };
+            run.current_stage = Some(PipelineStage::PlanAudit);
+            let plan_audit_result = execute_plan_audit_stage(
+                &app,
+                &run_id,
+                iter_num,
+                iteration_db_id,
+                settings
+                    .plan_auditor_agent
+                    .as_ref()
+                    .expect("plan_auditor_agent is guaranteed when planning_enabled"),
+                &plan_audit_input,
+                &settings,
+                Some(session_id.as_str()),
+                &db,
+            )
+            .await;
+            let plan_audit_output = plan_audit_result.output.clone();
+            let plan_audit_failed = plan_audit_result.status == StageStatus::Failed;
+            emit_artifact(
+                &app,
+                &run_id,
+                "plan_audit",
+                &plan_audit_output,
+                iter_num,
+                &db,
+            );
+            stages.push(plan_audit_result.clone());
+            if plan_audit_failed || is_cancelled(&cancel_flag) {
+                run.iterations.push(Iteration {
+                    number: iter_num,
+                    stages,
+                    verdict: None,
+                    judge_reasoning: None,
+                });
+                if plan_audit_failed {
+                    run.status = PipelineStatus::Failed;
+                    run.error = Some(
+                        plan_audit_result
+                            .error
+                            .clone()
+                            .unwrap_or_else(|| "Plan Auditor stage failed".to_string()),
+                    );
+                }
+                break;
+            }
+
+            audited_plan = Some(plan_output);
+        } else {
+            // --- 2. Plan (skipped) / 3. Plan audit (skipped) ---
+            let skip_reason =
+                "Planner and Plan Auditor must both be selected; skipping planning stages.";
+            run.current_stage = Some(PipelineStage::Plan);
+            let skipped_plan = execute_skipped_stage(
+                &app,
+                &run_id,
+                iter_num,
+                iteration_db_id,
+                PipelineStage::Plan,
+                skip_reason,
+                &db,
+            );
+            stages.push(skipped_plan);
+
+            run.current_stage = Some(PipelineStage::PlanAudit);
+            let skipped_audit = execute_skipped_stage(
+                &app,
+                &run_id,
+                iter_num,
+                iteration_db_id,
+                PipelineStage::PlanAudit,
+                skip_reason,
+                &db,
+            );
+            stages.push(skipped_audit);
+        }
+
+        // --- 4. Generate ---
         let gen_input = AgentInput {
             prompt: enhanced_prompt.clone(),
-            context: None,
+            context: add_plan_context(None, audited_plan.as_deref()),
             diff: None,
             workspace_path: request.workspace_path.clone(),
         };
@@ -545,7 +911,7 @@ pub async fn run_pipeline(
             }
         }
 
-        // --- 3. Diff after generate ---
+        // --- 5. Diff after generate ---
         run.current_stage = Some(PipelineStage::DiffAfterGenerate);
         let diff1 = execute_diff_stage(
             &app,
@@ -563,10 +929,10 @@ pub async fn run_pipeline(
             break;
         }
 
-        // --- 4. Review ---
+        // --- 6. Review ---
         let review_input = AgentInput {
             prompt: enhanced_prompt.clone(),
-            context: None,
+            context: add_plan_context(None, audited_plan.as_deref()),
             diff: Some(diff1_output.clone()),
             workspace_path: request.workspace_path.clone(),
         };
@@ -631,10 +997,10 @@ pub async fn run_pipeline(
             _ => review_output.clone(),
         };
 
-        // --- 5. Fix ---
+        // --- 7. Fix ---
         let fix_input = AgentInput {
             prompt: enhanced_prompt.clone(),
-            context: Some(fix_context),
+            context: add_plan_context(Some(fix_context), audited_plan.as_deref()),
             diff: Some(diff1_output),
             workspace_path: request.workspace_path.clone(),
         };
@@ -690,7 +1056,7 @@ pub async fn run_pipeline(
             let _ = answer;
         }
 
-        // --- 6. Diff after fix ---
+        // --- 8. Diff after fix ---
         run.current_stage = Some(PipelineStage::DiffAfterFix);
         let diff2 = execute_diff_stage(
             &app,
@@ -708,14 +1074,14 @@ pub async fn run_pipeline(
             break;
         }
 
-        // --- 7. Judge ---
+        // --- 9. Judge ---
         let judge_context = format!(
             "--- Review ---\n{}\n\n--- Fix ---\n{}",
             review_output, fix_output
         );
         let judge_input = AgentInput {
             prompt: enhanced_prompt,
-            context: Some(judge_context),
+            context: add_plan_context(Some(judge_context), audited_plan.as_deref()),
             diff: Some(diff2_output),
             workspace_path: request.workspace_path.clone(),
         };

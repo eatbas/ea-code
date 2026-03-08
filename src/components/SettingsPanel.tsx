@@ -68,6 +68,35 @@ function AgentSelect({
   );
 }
 
+/** Reusable optional select row with an explicit skip option. */
+function OptionalAgentSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: AgentBackend | null;
+  onChange: (v: AgentBackend | null) => void;
+}): ReactNode {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-[#9898b0]">{label}</span>
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value === "" ? null : (e.target.value as AgentBackend))}
+        className="rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+      >
+        <option value="">Not selected (Skip)</option>
+        {BACKEND_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 /** Health status indicator dot. */
 function HealthDot({ available, error }: { available: boolean; error?: string }): ReactNode {
   return (
@@ -155,6 +184,8 @@ export function SettingsPanel({
           <fieldset className="flex flex-col gap-2">
             <legend className="text-xs font-medium text-[#9898b0] mb-1">Agent Roles</legend>
             <AgentSelect label="Prompt Enhancer" value={draft.promptEnhancerAgent} onChange={(v) => update({ promptEnhancerAgent: v })} />
+            <OptionalAgentSelect label="Planner" value={draft.plannerAgent} onChange={(v) => update({ plannerAgent: v })} />
+            <OptionalAgentSelect label="Plan Auditor" value={draft.planAuditorAgent} onChange={(v) => update({ planAuditorAgent: v })} />
             <AgentSelect label="Coder" value={draft.generatorAgent} onChange={(v) => update({ generatorAgent: v })} />
             <AgentSelect label="Code Reviewer / Auditor" value={draft.reviewerAgent} onChange={(v) => update({ reviewerAgent: v })} />
             <AgentSelect label="Code Fixer" value={draft.fixerAgent} onChange={(v) => update({ fixerAgent: v })} />

@@ -14,6 +14,8 @@ pub struct SettingsRow {
     pub codex_path: String,
     pub gemini_path: String,
     pub prompt_enhancer_agent: String,
+    pub planner_agent: Option<String>,
+    pub plan_auditor_agent: Option<String>,
     pub generator_agent: String,
     pub reviewer_agent: String,
     pub fixer_agent: String,
@@ -21,15 +23,28 @@ pub struct SettingsRow {
     pub max_iterations: i32,
     pub require_git: bool,
     pub updated_at: String,
+    pub claude_model: String,
+    pub codex_model: String,
+    pub gemini_model: String,
+    pub prompt_enhancer_model: String,
+    pub planner_model: Option<String>,
+    pub plan_auditor_model: Option<String>,
+    pub generator_model: String,
+    pub reviewer_model: String,
+    pub fixer_model: String,
+    pub final_judge_model: String,
 }
 
 #[derive(AsChangeset)]
 #[diesel(table_name = settings)]
+#[diesel(treat_none_as_null = true)]
 pub struct SettingsChangeset {
     pub claude_path: String,
     pub codex_path: String,
     pub gemini_path: String,
     pub prompt_enhancer_agent: String,
+    pub planner_agent: Option<String>,
+    pub plan_auditor_agent: Option<String>,
     pub generator_agent: String,
     pub reviewer_agent: String,
     pub fixer_agent: String,
@@ -37,6 +52,16 @@ pub struct SettingsChangeset {
     pub max_iterations: i32,
     pub require_git: bool,
     pub updated_at: String,
+    pub claude_model: String,
+    pub codex_model: String,
+    pub gemini_model: String,
+    pub prompt_enhancer_model: String,
+    pub planner_model: Option<String>,
+    pub plan_auditor_model: Option<String>,
+    pub generator_model: String,
+    pub reviewer_model: String,
+    pub fixer_model: String,
+    pub final_judge_model: String,
 }
 
 // ── Projects ────────────────────────────────────────────────────────────

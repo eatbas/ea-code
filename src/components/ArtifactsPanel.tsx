@@ -6,11 +6,13 @@ interface ArtifactsPanelProps {
 }
 
 /** Tab identifiers for artifact display. */
-const TABS = ["review", "judge", "diff"] as const;
+const TABS = ["plan", "plan_audit", "review", "judge", "diff"] as const;
 type ArtifactTab = (typeof TABS)[number];
 
 /** Tab labels for display. */
 const TAB_LABELS: Record<ArtifactTab, string> = {
+  plan: "Plan",
+  plan_audit: "Plan Audit",
   review: "Review",
   judge: "Judge",
   diff: "Diff",
@@ -18,7 +20,7 @@ const TAB_LABELS: Record<ArtifactTab, string> = {
 
 /** Tabbed panel displaying pipeline output artefacts. */
 export function ArtifactsPanel({ artifacts }: ArtifactsPanelProps): ReactNode {
-  const [activeTab, setActiveTab] = useState<ArtifactTab>("review");
+  const [activeTab, setActiveTab] = useState<ArtifactTab>("plan");
   const content = artifacts[activeTab];
 
   return (

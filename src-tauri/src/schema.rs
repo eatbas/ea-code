@@ -8,6 +8,8 @@ diesel::table! {
         codex_path -> Text,
         gemini_path -> Text,
         prompt_enhancer_agent -> Text,
+        planner_agent -> Nullable<Text>,
+        plan_auditor_agent -> Nullable<Text>,
         generator_agent -> Text,
         reviewer_agent -> Text,
         fixer_agent -> Text,
@@ -15,6 +17,16 @@ diesel::table! {
         max_iterations -> Integer,
         require_git -> Bool,
         updated_at -> Timestamp,
+        claude_model -> Text,
+        codex_model -> Text,
+        gemini_model -> Text,
+        prompt_enhancer_model -> Text,
+        planner_model -> Nullable<Text>,
+        plan_auditor_model -> Nullable<Text>,
+        generator_model -> Text,
+        reviewer_model -> Text,
+        fixer_model -> Text,
+        final_judge_model -> Text,
     }
 }
 

@@ -1,6 +1,8 @@
 /** Agent role identifiers for the orchestration pipeline. */
 export type AgentRole =
   | "prompt_enhancer"
+  | "planner"
+  | "plan_auditor"
   | "coder"
   | "reviewer_auditor"
   | "code_fixer"
@@ -12,6 +14,8 @@ export type AgentBackend = "claude" | "codex" | "gemini";
 /** Pipeline stage identifiers. */
 export type PipelineStage =
   | "prompt_enhance"
+  | "plan"
+  | "plan_audit"
   | "generate"
   | "diff_after_generate"
   | "review"
@@ -73,12 +77,28 @@ export interface AppSettings {
   codexPath: string;
   geminiPath: string;
   promptEnhancerAgent: AgentBackend;
+  plannerAgent: AgentBackend | null;
+  planAuditorAgent: AgentBackend | null;
   generatorAgent: AgentBackend;
   reviewerAgent: AgentBackend;
   fixerAgent: AgentBackend;
   finalJudgeAgent: AgentBackend;
   maxIterations: number;
   requireGit: boolean;
+  /** Comma-separated list of enabled Claude models. */
+  claudeModel: string;
+  /** Comma-separated list of enabled Codex models. */
+  codexModel: string;
+  /** Comma-separated list of enabled Gemini models. */
+  geminiModel: string;
+  /** Per-stage model selections. */
+  promptEnhancerModel: string;
+  plannerModel: string | null;
+  planAuditorModel: string | null;
+  generatorModel: string;
+  reviewerModel: string;
+  fixerModel: string;
+  finalJudgeModel: string;
 }
 
 /** Default settings values. */
@@ -87,12 +107,41 @@ export const DEFAULT_SETTINGS: AppSettings = {
   codexPath: "codex",
   geminiPath: "gemini",
   promptEnhancerAgent: "claude",
+  plannerAgent: null,
+  planAuditorAgent: null,
   generatorAgent: "claude",
   reviewerAgent: "codex",
   fixerAgent: "claude",
   finalJudgeAgent: "codex",
   maxIterations: 3,
   requireGit: true,
+  claudeModel: "sonnet",
+  codexModel: "o4-mini",
+  geminiModel: "gemini-2.5-pro",
+  promptEnhancerModel: "sonnet",
+  plannerModel: null,
+  planAuditorModel: null,
+  generatorModel: "sonnet",
+  reviewerModel: "o4-mini",
+  fixerModel: "sonnet",
+  finalJudgeModel: "o4-mini",
+};
+
+/** Known model options per CLI, keyed by CLI name. */
+export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  claude: [
+    { value: "sonnet", label: "Sonnet" },
+    { value: "opus", label: "Opus" },
+    { value: "haiku", label: "Haiku" },
+  ],
+  codex: [
+    { value: "o4-mini", label: "Codex o4-mini" },
+  ],
+  gemini: [
+    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
+    { value: "gemini-3-pro-preview", label: "Gemini 3.0 Pro" },
+    { value: "gemini-3-flash-preview", label: "Gemini 3.0 Flash" },
+  ],
 };
 
 /** CLI health check result returned from the backend. */
@@ -167,7 +216,7 @@ export interface PipelineLogEvent {
 
 export interface PipelineArtifactEvent {
   runId: string;
-  kind: "diff" | "review" | "judge";
+  kind: "diff" | "plan" | "plan_audit" | "review" | "judge";
   content: string;
   iteration: number;
 }

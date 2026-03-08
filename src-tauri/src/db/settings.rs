@@ -27,6 +27,8 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         codex_path: s.codex_path.clone(),
         gemini_path: s.gemini_path.clone(),
         prompt_enhancer_agent: backend_to_str(&s.prompt_enhancer_agent),
+        planner_agent: backend_to_opt(s.planner_agent.as_ref()),
+        plan_auditor_agent: backend_to_opt(s.plan_auditor_agent.as_ref()),
         generator_agent: backend_to_str(&s.generator_agent),
         reviewer_agent: backend_to_str(&s.reviewer_agent),
         fixer_agent: backend_to_str(&s.fixer_agent),
@@ -34,6 +36,16 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         max_iterations: s.max_iterations as i32,
         require_git: s.require_git,
         updated_at: chrono::Utc::now().to_rfc3339(),
+        claude_model: s.claude_model.clone(),
+        codex_model: s.codex_model.clone(),
+        gemini_model: s.gemini_model.clone(),
+        prompt_enhancer_model: s.prompt_enhancer_model.clone(),
+        planner_model: s.planner_model.clone(),
+        plan_auditor_model: s.plan_auditor_model.clone(),
+        generator_model: s.generator_model.clone(),
+        reviewer_model: s.reviewer_model.clone(),
+        fixer_model: s.fixer_model.clone(),
+        final_judge_model: s.final_judge_model.clone(),
     };
 
     diesel::update(settings::table.find(1))
@@ -56,17 +68,33 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         }
     }
 
+    fn parse_optional_backend(s: Option<&str>) -> Option<AgentBackend> {
+        s.map(parse_backend)
+    }
+
     AppSettings {
         claude_path: row.claude_path.clone(),
         codex_path: row.codex_path.clone(),
         gemini_path: row.gemini_path.clone(),
         prompt_enhancer_agent: parse_backend(&row.prompt_enhancer_agent),
+        planner_agent: parse_optional_backend(row.planner_agent.as_deref()),
+        plan_auditor_agent: parse_optional_backend(row.plan_auditor_agent.as_deref()),
         generator_agent: parse_backend(&row.generator_agent),
         reviewer_agent: parse_backend(&row.reviewer_agent),
         fixer_agent: parse_backend(&row.fixer_agent),
         final_judge_agent: parse_backend(&row.final_judge_agent),
         max_iterations: row.max_iterations as u32,
         require_git: row.require_git,
+        claude_model: row.claude_model.clone(),
+        codex_model: row.codex_model.clone(),
+        gemini_model: row.gemini_model.clone(),
+        prompt_enhancer_model: row.prompt_enhancer_model.clone(),
+        planner_model: row.planner_model.clone(),
+        plan_auditor_model: row.plan_auditor_model.clone(),
+        generator_model: row.generator_model.clone(),
+        reviewer_model: row.reviewer_model.clone(),
+        fixer_model: row.fixer_model.clone(),
+        final_judge_model: row.final_judge_model.clone(),
     }
 }
 
@@ -77,4 +105,9 @@ fn backend_to_str(b: &crate::models::AgentBackend) -> String {
         crate::models::AgentBackend::Codex => "codex".to_string(),
         crate::models::AgentBackend::Gemini => "gemini".to_string(),
     }
+}
+
+/// Converts an optional `AgentBackend` to its nullable DB representation.
+fn backend_to_opt(b: Option<&crate::models::AgentBackend>) -> Option<String> {
+    b.map(backend_to_str)
 }

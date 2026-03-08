@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum AgentRole {
     PromptEnhancer,
+    Planner,
+    PlanAuditor,
     Coder,
     ReviewerAuditor,
     CodeFixer,
@@ -29,6 +31,8 @@ fn default_prompt_enhancer_agent() -> AgentBackend {
 #[serde(rename_all = "snake_case")]
 pub enum PipelineStage {
     PromptEnhance,
+    Plan,
+    PlanAudit,
     Generate,
     DiffAfterGenerate,
     Review,
@@ -193,12 +197,32 @@ pub struct AppSettings {
     pub gemini_path: String,
     #[serde(default = "default_prompt_enhancer_agent")]
     pub prompt_enhancer_agent: AgentBackend,
+    #[serde(default)]
+    pub planner_agent: Option<AgentBackend>,
+    #[serde(default)]
+    pub plan_auditor_agent: Option<AgentBackend>,
     pub generator_agent: AgentBackend,
     pub reviewer_agent: AgentBackend,
     pub fixer_agent: AgentBackend,
     pub final_judge_agent: AgentBackend,
     pub max_iterations: u32,
     pub require_git: bool,
+    /// Comma-separated list of enabled Claude models.
+    pub claude_model: String,
+    /// Comma-separated list of enabled Codex models.
+    pub codex_model: String,
+    /// Comma-separated list of enabled Gemini models.
+    pub gemini_model: String,
+    /// Per-stage model selections.
+    pub prompt_enhancer_model: String,
+    #[serde(default)]
+    pub planner_model: Option<String>,
+    #[serde(default)]
+    pub plan_auditor_model: Option<String>,
+    pub generator_model: String,
+    pub reviewer_model: String,
+    pub fixer_model: String,
+    pub final_judge_model: String,
 }
 
 impl Default for AppSettings {
@@ -208,12 +232,24 @@ impl Default for AppSettings {
             codex_path: "codex".to_string(),
             gemini_path: "gemini".to_string(),
             prompt_enhancer_agent: AgentBackend::Claude,
+            planner_agent: None,
+            plan_auditor_agent: None,
             generator_agent: AgentBackend::Claude,
             reviewer_agent: AgentBackend::Codex,
             fixer_agent: AgentBackend::Claude,
             final_judge_agent: AgentBackend::Codex,
             max_iterations: 3,
             require_git: true,
+            claude_model: "sonnet".to_string(),
+            codex_model: "o4-mini".to_string(),
+            gemini_model: "gemini-2.5-pro".to_string(),
+            prompt_enhancer_model: "sonnet".to_string(),
+            planner_model: None,
+            plan_auditor_model: None,
+            generator_model: "sonnet".to_string(),
+            reviewer_model: "o4-mini".to_string(),
+            fixer_model: "sonnet".to_string(),
+            final_judge_model: "o4-mini".to_string(),
         }
     }
 }

@@ -9,6 +9,7 @@ use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
 pub async fn run_codex(
     input: &AgentInput,
     codex_path: &str,
+    model: &str,
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
@@ -17,7 +18,7 @@ pub async fn run_codex(
     let full_prompt = build_full_prompt(input);
     run_cli_agent(
         codex_path,
-        &["--full-auto", &full_prompt],
+        &["--full-auto", "-m", model, &full_prompt],
         &input.workspace_path,
         app,
         run_id,

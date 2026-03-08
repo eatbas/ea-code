@@ -10,6 +10,8 @@ interface RunTimelineProps {
 /** Display labels for each pipeline stage. */
 const STAGE_LABELS: Record<PipelineStage, string> = {
   prompt_enhance: "Prompt",
+  plan: "Plan",
+  plan_audit: "Plan Audit",
   generate: "Generate",
   diff_after_generate: "Diff",
   review: "Review",
@@ -21,6 +23,8 @@ const STAGE_LABELS: Record<PipelineStage, string> = {
 /** All stages in pipeline order. */
 const STAGE_ORDER: PipelineStage[] = [
   "prompt_enhance",
+  "plan",
+  "plan_audit",
   "generate",
   "diff_after_generate",
   "review",

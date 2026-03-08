@@ -93,6 +93,7 @@ function App(): ReactNode {
           error={versionsError}
           onFetchVersions={fetchVersions}
           onUpdateCli={updateCli}
+          onSave={saveSettings}
         />
       );
     }
