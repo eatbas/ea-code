@@ -9,6 +9,7 @@ diesel::table! {
         gemini_path -> Text,
         kimi_path -> Text,
         opencode_path -> Text,
+        copilot_path -> Text,
         prompt_enhancer_agent -> Text,
         skill_selector_agent -> Nullable<Text>,
         planner_agent -> Nullable<Text>,
@@ -25,6 +26,7 @@ diesel::table! {
         gemini_model -> Text,
         kimi_model -> Text,
         opencode_model -> Text,
+        copilot_model -> Text,
         prompt_enhancer_model -> Text,
         skill_selector_model -> Nullable<Text>,
         planner_model -> Nullable<Text>,
@@ -41,7 +43,46 @@ diesel::table! {
         token_optimized_prompts -> Bool,
         agent_retry_count -> Integer,
         agent_timeout_ms -> Integer,
+        agent_max_turns -> Integer,
+        mode -> Text,
+        update_cli_on_run -> Bool,
+        fail_on_cli_update_error -> Bool,
+        cli_update_timeout_ms -> Integer,
         skill_selection_mode -> Text,
+    }
+}
+
+diesel::table! {
+    mcp_servers (id) {
+        id -> Text,
+        name -> Text,
+        description -> Text,
+        command -> Text,
+        args -> Text,
+        env -> Text,
+        is_enabled -> Bool,
+        is_builtin -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    cli_mcp_bindings (id) {
+        id -> Integer,
+        cli_name -> Text,
+        mcp_server_id -> Text,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    project_settings (id) {
+        id -> Integer,
+        project_id -> Integer,
+        setting_key -> Text,
+        setting_value -> Text,
+        updated_at -> Timestamp,
     }
 }
 
@@ -177,6 +218,8 @@ diesel::table! {
 }
 
 diesel::joinable!(sessions -> projects (project_id));
+diesel::joinable!(project_settings -> projects (project_id));
+diesel::joinable!(cli_mcp_bindings -> mcp_servers (mcp_server_id));
 diesel::joinable!(runs -> sessions (session_id));
 diesel::joinable!(iterations -> runs (run_id));
 diesel::joinable!(stages -> iterations (iteration_id));
@@ -185,5 +228,5 @@ diesel::joinable!(artifacts -> runs (run_id));
 diesel::joinable!(questions -> runs (run_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
-    settings, skills, projects, sessions, runs, iterations, stages, logs, artifacts, questions,
+    settings, mcp_servers, cli_mcp_bindings, skills, projects, project_settings, sessions, runs, iterations, stages, logs, artifacts, questions,
 );

@@ -65,6 +65,12 @@ export function SettingsView({ settings, onSave, health, onCheckHealth }: Settin
               </div>
               <div className="flex items-end gap-3">
                 <div className="flex-1">
+                  <TextInput label="Copilot (gh)" value={draft.copilotPath} onChange={(v) => update({ copilotPath: v })} />
+                </div>
+                {health && <HealthDot available={health.copilot.available} error={health.copilot.error} />}
+              </div>
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
                   <TextInput label="OpenCode" value={draft.opencodePath} onChange={(v) => update({ opencodePath: v })} />
                 </div>
                 {health && <HealthDot available={health.opencode.available} error={health.opencode.error} />}
@@ -141,6 +147,30 @@ export function SettingsView({ settings, onSave, health, onCheckHealth }: Settin
                 className="w-28 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
               />
               <span className="text-[10px] text-[#6b6b82]">Per-agent timeout in milliseconds (0 = no timeout)</span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[#9898b0]">Agent Max Turns</span>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={draft.agentMaxTurns}
+                onChange={(e) => update({ agentMaxTurns: Math.max(1, Math.min(100, Number(e.target.value))) })}
+                className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+              />
+              <span className="text-[10px] text-[#6b6b82]">Used by Claude via --max-turns</span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[#9898b0]">Mode</span>
+              <select
+                value={draft.mode}
+                onChange={(e) => update({ mode: e.target.value as AppSettings["mode"] })}
+                className="w-40 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+              >
+                <option value="workspace-write">workspace-write</option>
+                <option value="diff-first">diff-first</option>
+              </select>
+              <span className="text-[10px] text-[#6b6b82]">`diff-first` setting is saved for parity; runtime behaviour is unchanged.</span>
             </label>
           </section>
 

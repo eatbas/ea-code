@@ -39,6 +39,7 @@ pub async fn run_review_fix_stages(
     run: &mut PipelineRun,
     stages: &mut Vec<StageResult>,
     iter_ctx: &mut IterationContext,
+    workspace_context: &str,
 ) -> Result<(), String> {
     run.current_stage = Some(PipelineStage::DiffAfterGenerate);
     stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterGenerate, &request.workspace_path, db));
@@ -49,7 +50,10 @@ pub async fn run_review_fix_stages(
         app, run_id, iter_num, iteration_db_id, PipelineStage::Review, &settings.reviewer_agent,
         &AgentInput {
             prompt: prompts::build_reviewer_user(&request.prompt, enhanced, iter_ctx.selected_plan()),
-            context: Some(prompts::build_reviewer_system(meta)),
+            context: Some(compose_agent_context(
+                prompts::build_reviewer_system(meta),
+                workspace_context,
+            )),
             workspace_path: request.workspace_path.clone(),
         },
         settings, Some(session_id), db,
@@ -82,7 +86,10 @@ pub async fn run_review_fix_stages(
                 judge_feedback,
                 handoff_json,
             ),
-            context: Some(prompts::build_fixer_system(meta)),
+            context: Some(compose_agent_context(
+                prompts::build_fixer_system(meta),
+                workspace_context,
+            )),
             workspace_path: request.workspace_path.clone(),
         },
         settings, Some(session_id), db,
@@ -138,6 +145,7 @@ pub async fn run_judge_stage(
     iter_ctx: &mut IterationContext,
     previous_judge_output: &mut Option<String>,
     last_handoff: &mut Option<prompts::IterationHandoff>,
+    workspace_context: &str,
 ) -> Result<bool, String> {
     let rev_out = iter_ctx.review_output.clone().unwrap_or_default();
     let fix_out = iter_ctx.fix_output.clone().unwrap_or_default();
@@ -147,7 +155,10 @@ pub async fn run_judge_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::Judge, &settings.final_judge_agent,
         &AgentInput {
             prompt: prompts::build_judge_user(&request.prompt, enhanced, iter_ctx.selected_plan(), &rev_out, &fix_out, previous_judge_output.as_deref()),
-            context: Some(prompts::build_judge_system(meta)),
+            context: Some(compose_agent_context(
+                prompts::build_judge_system(meta),
+                workspace_context,
+            )),
             workspace_path: request.workspace_path.clone(),
         },
         settings, Some(session_id), db,

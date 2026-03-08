@@ -3,7 +3,13 @@ import { CLI_MODEL_OPTIONS } from "../../types";
 import { BACKEND_OPTIONS } from "../shared/constants";
 
 /** Settings key for each CLI's enabled-models field (comma-separated). */
-export type ModelCsvKey = "claudeModel" | "codexModel" | "geminiModel" | "kimiModel" | "opencodeModel";
+export type ModelCsvKey =
+  | "claudeModel"
+  | "codexModel"
+  | "geminiModel"
+  | "kimiModel"
+  | "opencodeModel"
+  | "copilotModel";
 
 /** Map from backend name to its comma-separated enabled-models settings key. */
 export const BACKEND_CSV_KEY: Record<AgentBackend, ModelCsvKey> = {
@@ -12,6 +18,7 @@ export const BACKEND_CSV_KEY: Record<AgentBackend, ModelCsvKey> = {
   gemini: "geminiModel",
   kimi: "kimiModel",
   opencode: "opencodeModel",
+  copilot: "copilotModel",
 };
 
 /** Parses a comma-separated model string into an array. */

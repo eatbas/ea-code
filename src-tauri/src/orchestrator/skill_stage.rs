@@ -11,6 +11,7 @@ use crate::models::*;
 
 use super::helpers::*;
 use super::prompts::{self, PromptMeta};
+use super::run_setup::compose_agent_context;
 use super::skill_selection::{
     build_selected_skills_section, build_skill_selector_user, parse_skill_selection_output,
 };
@@ -46,6 +47,7 @@ pub async fn run_skill_selection_stage(
     enhanced: &str,
     selected_plan: Option<&str>,
     previous_judge_output: Option<&str>,
+    workspace_context: &str,
     run: &mut PipelineRun,
     stages: &mut Vec<StageResult>,
 ) -> Result<Option<String>, String> {
@@ -132,7 +134,10 @@ pub async fn run_skill_selection_stage(
                 previous_judge_output,
                 &skill_catalog_json,
             ),
-            context: Some(prompts::build_skill_selector_system(meta)),
+            context: Some(compose_agent_context(
+                prompts::build_skill_selector_system(meta),
+                workspace_context,
+            )),
             workspace_path: request.workspace_path.clone(),
         },
         settings,

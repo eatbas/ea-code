@@ -11,6 +11,7 @@
 pub mod helpers;
 pub mod iteration;
 pub mod iteration_review;
+pub mod context_summary;
 pub mod parsing;
 pub mod plan_gate;
 pub mod pipeline;

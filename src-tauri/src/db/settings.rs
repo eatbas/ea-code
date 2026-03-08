@@ -1,4 +1,5 @@
 use diesel::prelude::*;
+use serde_json::{Map, Value};
 
 use crate::db::DbPool;
 use crate::models::AppSettings;
@@ -28,6 +29,7 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         gemini_path: s.gemini_path.clone(),
         kimi_path: s.kimi_path.clone(),
         opencode_path: s.opencode_path.clone(),
+        copilot_path: s.copilot_path.clone(),
         prompt_enhancer_agent: backend_to_str(&s.prompt_enhancer_agent),
         skill_selector_agent: backend_to_opt(s.skill_selector_agent.as_ref()),
         planner_agent: backend_to_opt(s.planner_agent.as_ref()),
@@ -45,6 +47,7 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         gemini_model: s.gemini_model.clone(),
         kimi_model: s.kimi_model.clone(),
         opencode_model: s.opencode_model.clone(),
+        copilot_model: s.copilot_model.clone(),
         prompt_enhancer_model: s.prompt_enhancer_model.clone(),
         skill_selector_model: s.skill_selector_model.clone(),
         planner_model: s.planner_model.clone(),
@@ -60,6 +63,11 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         token_optimized_prompts: s.token_optimized_prompts,
         agent_retry_count: s.agent_retry_count as i32,
         agent_timeout_ms: s.agent_timeout_ms as i32,
+        agent_max_turns: s.agent_max_turns as i32,
+        mode: s.mode.clone(),
+        update_cli_on_run: s.update_cli_on_run,
+        fail_on_cli_update_error: s.fail_on_cli_update_error,
+        cli_update_timeout_ms: s.cli_update_timeout_ms as i32,
         skill_selection_mode: s.skill_selection_mode.clone(),
     };
 
@@ -81,6 +89,7 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
             "codex" => AgentBackend::Codex,
             "gemini" => AgentBackend::Gemini,
             "kimi" => AgentBackend::Kimi,
+            "copilot" => AgentBackend::Copilot,
             "opencode" => AgentBackend::OpenCode,
             _ => {
                 eprintln!("Unknown backend in settings row: {s}; defaulting to claude");
@@ -99,6 +108,7 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         gemini_path: row.gemini_path.clone(),
         kimi_path: row.kimi_path.clone(),
         opencode_path: row.opencode_path.clone(),
+        copilot_path: row.copilot_path.clone(),
         prompt_enhancer_agent: parse_backend(&row.prompt_enhancer_agent),
         skill_selector_agent: parse_optional_backend(row.skill_selector_agent.as_deref()),
         planner_agent: parse_optional_backend(row.planner_agent.as_deref()),
@@ -115,6 +125,7 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         gemini_model: row.gemini_model.clone(),
         kimi_model: row.kimi_model.clone(),
         opencode_model: row.opencode_model.clone(),
+        copilot_model: row.copilot_model.clone(),
         prompt_enhancer_model: row.prompt_enhancer_model.clone(),
         skill_selector_model: row.skill_selector_model.clone(),
         planner_model: row.planner_model.clone(),
@@ -130,6 +141,11 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         token_optimized_prompts: row.token_optimized_prompts,
         agent_retry_count: row.agent_retry_count as u32,
         agent_timeout_ms: row.agent_timeout_ms as u64,
+        agent_max_turns: row.agent_max_turns as u32,
+        mode: row.mode.clone(),
+        update_cli_on_run: row.update_cli_on_run,
+        fail_on_cli_update_error: row.fail_on_cli_update_error,
+        cli_update_timeout_ms: row.cli_update_timeout_ms as u64,
         skill_selection_mode: row.skill_selection_mode.clone(),
     }
 }
@@ -141,6 +157,7 @@ fn backend_to_str(b: &crate::models::AgentBackend) -> String {
         crate::models::AgentBackend::Codex => "codex".to_string(),
         crate::models::AgentBackend::Gemini => "gemini".to_string(),
         crate::models::AgentBackend::Kimi => "kimi".to_string(),
+        crate::models::AgentBackend::Copilot => "copilot".to_string(),
         crate::models::AgentBackend::OpenCode => "opencode".to_string(),
     }
 }
@@ -148,4 +165,94 @@ fn backend_to_str(b: &crate::models::AgentBackend) -> String {
 /// Converts an optional `AgentBackend` to its nullable DB representation.
 fn backend_to_opt(b: Option<&crate::models::AgentBackend>) -> Option<String> {
     b.map(backend_to_str)
+}
+
+/// Loads merged settings for a workspace path (global + project overrides).
+pub fn get_merged_for_workspace(pool: &DbPool, workspace_path: &str) -> Result<AppSettings, String> {
+    let base = get(pool)?;
+    let maybe_project = super::projects::get_by_path(pool, workspace_path)?;
+    let Some(project) = maybe_project else {
+        return Ok(base);
+    };
+
+    let overrides = super::project_settings::get_map_for_project(pool, project.id)?;
+    merge_settings(base, &overrides)
+}
+
+/// Saves project-specific overrides for a workspace by diffing against global settings.
+pub fn save_project_overrides_for_workspace(
+    pool: &DbPool,
+    workspace_path: &str,
+    merged_settings: &AppSettings,
+) -> Result<(), String> {
+    let base = get(pool)?;
+    let project = ensure_project(pool, workspace_path)?;
+
+    let base_obj = app_settings_to_object(&base)?;
+    let merged_obj = app_settings_to_object(merged_settings)?;
+
+    let mut diff_entries = Vec::new();
+    for (key, merged_val) in merged_obj {
+        let base_val = base_obj.get(&key);
+        if base_val == Some(&merged_val) {
+            continue;
+        }
+        let stored = serde_json::to_string(&merged_val)
+            .map_err(|e| format!("Failed to serialise project setting value for {key}: {e}"))?;
+        diff_entries.push((key, stored));
+    }
+
+    super::project_settings::replace_for_project(pool, project.id, &diff_entries)
+}
+
+/// Clears project-specific overrides for a workspace.
+pub fn clear_project_overrides_for_workspace(pool: &DbPool, workspace_path: &str) -> Result<(), String> {
+    if let Some(project) = super::projects::get_by_path(pool, workspace_path)? {
+        super::project_settings::clear_for_project(pool, project.id)?;
+    }
+    Ok(())
+}
+
+fn ensure_project(pool: &DbPool, workspace_path: &str) -> Result<super::models::ProjectRow, String> {
+    if let Some(project) = super::projects::get_by_path(pool, workspace_path)? {
+        return Ok(project);
+    }
+
+    let workspace_name = std::path::Path::new(workspace_path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| workspace_path.to_string());
+    let ws_info = crate::git::workspace_info(workspace_path);
+    let project_id = super::projects::upsert(
+        pool,
+        workspace_path,
+        &workspace_name,
+        ws_info.is_git_repo,
+        ws_info.branch.as_deref(),
+    )?;
+
+    super::projects::get_by_path(pool, workspace_path)?
+        .filter(|p| p.id == project_id)
+        .ok_or_else(|| "Failed to load project after upsert".to_string())
+}
+
+fn app_settings_to_object(settings: &AppSettings) -> Result<Map<String, Value>, String> {
+    serde_json::to_value(settings)
+        .map_err(|e| format!("Failed to serialise settings: {e}"))?
+        .as_object()
+        .cloned()
+        .ok_or_else(|| "Settings value is not an object".to_string())
+}
+
+fn merge_settings(base: AppSettings, overrides: &std::collections::HashMap<String, String>) -> Result<AppSettings, String> {
+    let mut object = app_settings_to_object(&base)?;
+
+    for (key, value_raw) in overrides {
+        let value = serde_json::from_str::<Value>(value_raw)
+            .map_err(|e| format!("Invalid project override value for {key}: {e}"))?;
+        object.insert(key.clone(), value);
+    }
+
+    serde_json::from_value(Value::Object(object))
+        .map_err(|e| format!("Failed to deserialize merged settings: {e}"))
 }

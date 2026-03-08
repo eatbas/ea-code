@@ -28,10 +28,12 @@ const STAGES: StageConfig[] = [
 export interface AgentsViewProps {
   settings: AppSettings;
   onSave: (s: AppSettings) => void;
+  projectScoped?: boolean;
+  onResetProjectSettings?: () => Promise<void>;
 }
 
 /** Inline view for configuring agent role assignments and pipeline parameters. */
-export function AgentsView({ settings, onSave }: AgentsViewProps): ReactNode {
+export function AgentsView({ settings, onSave, projectScoped, onResetProjectSettings }: AgentsViewProps): ReactNode {
   const [draft, setDraft] = useState<AppSettings>(settings);
 
   useEffect(() => {
@@ -54,6 +56,19 @@ export function AgentsView({ settings, onSave }: AgentsViewProps): ReactNode {
           <p className="text-sm text-[#9898b0]">
             Configure which CLI backend and model handles each pipeline role.
           </p>
+          {projectScoped && (
+            <div className="rounded border border-[#2e2e48] bg-[#1a1a2e] px-3 py-2 text-xs text-[#9898b0]">
+              Project override mode: settings are saved for the active workspace.
+              {onResetProjectSettings && (
+                <button
+                  onClick={() => void onResetProjectSettings()}
+                  className="ml-3 rounded border border-[#2e2e48] bg-[#24243a] px-2 py-1 text-xs text-[#e4e4ed] hover:bg-[#2e2e48]"
+                >
+                  Reset Project Overrides
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Agent cards — 2-column grid */}
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
@@ -122,6 +137,57 @@ export function AgentsView({ settings, onSave }: AgentsViewProps): ReactNode {
                 className="rounded border-[#2e2e48] accent-[#6366f1]"
               />
               <span className="text-xs text-[#9898b0]">Require Git repository</span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[#9898b0]">Agent Max Turns</span>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={draft.agentMaxTurns}
+                onChange={(e) => update({ agentMaxTurns: Math.max(1, Math.min(100, Number(e.target.value))) })}
+                className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[#9898b0]">Mode</span>
+              <select
+                value={draft.mode}
+                onChange={(e) => update({ mode: e.target.value as AppSettings["mode"] })}
+                className="w-44 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+              >
+                <option value="workspace-write">workspace-write</option>
+                <option value="diff-first">diff-first</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={draft.updateCliOnRun}
+                onChange={(e) => update({ updateCliOnRun: e.target.checked })}
+                className="rounded border-[#2e2e48] accent-[#6366f1]"
+              />
+              <span className="text-xs text-[#9898b0]">Update CLIs on run start</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={draft.failOnCliUpdateError}
+                onChange={(e) => update({ failOnCliUpdateError: e.target.checked })}
+                className="rounded border-[#2e2e48] accent-[#6366f1]"
+              />
+              <span className="text-xs text-[#9898b0]">Fail run on CLI update error</span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[#9898b0]">CLI Update Timeout (ms)</span>
+              <input
+                type="number"
+                min={1000}
+                step={1000}
+                value={draft.cliUpdateTimeoutMs}
+                onChange={(e) => update({ cliUpdateTimeoutMs: Math.max(1000, Number(e.target.value)) })}
+                className="w-36 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+              />
             </label>
           </div>
 

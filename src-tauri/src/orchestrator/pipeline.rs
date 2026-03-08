@@ -85,6 +85,10 @@ pub async fn run_pipeline(
         },
     );
 
+    let workspace_context =
+        super::context_summary::build_workspace_context_summary(&request.workspace_path);
+    emit_artifact(&app, &run_id, "workspace_context", &workspace_context, 0, &db);
+
     let mut previous_judge_output: Option<String> = None;
     let mut last_handoff: Option<prompts::IterationHandoff> = None;
 
@@ -97,7 +101,7 @@ pub async fn run_pipeline(
         let should_break = run_iteration(
             &app, &request, &settings, &cancel_flag, &answer_sender, &db,
             &run_id, &session_id, iter_num, &mut run,
-            &mut previous_judge_output, &mut last_handoff,
+            &mut previous_judge_output, &mut last_handoff, &workspace_context,
         )
         .await?;
 

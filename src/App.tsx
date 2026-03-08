@@ -13,12 +13,13 @@ import { ChatView } from "./components/ChatView";
 import { AgentsView } from "./components/AgentsView";
 import { CliSetupView } from "./components/CliSetupView";
 import { SkillsView } from "./components/SkillsView";
+import { McpView } from "./components/McpView";
 import { QuestionDialog } from "./components/QuestionDialog";
 import type { PipelineRequest } from "./types";
 
 function App(): ReactNode {
-  const { settings, loading, saveSettings } = useSettings();
   const { workspace, selectFolder } = useWorkspace();
+  const { settings, loading, saveSettings, clearProjectSettings } = useSettings(workspace?.path);
   const { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { versions, loading: versionsLoading, updating: versionsUpdating, error: versionsError, fetchVersions, updateCli } = useCliVersions();
   const { sessions, loadSessions, loadProjects } = useHistory();
@@ -83,7 +84,14 @@ function App(): ReactNode {
     }
 
     if (activeView === "agents" && settings) {
-      return <AgentsView settings={settings} onSave={saveSettings} />;
+      return (
+        <AgentsView
+          settings={settings}
+          onSave={saveSettings}
+          projectScoped={Boolean(workspace?.path)}
+          onResetProjectSettings={workspace?.path ? clearProjectSettings : undefined}
+        />
+      );
     }
 
     if (activeView === "cli-setup" && settings) {
@@ -112,6 +120,10 @@ function App(): ReactNode {
           onDelete={deleteSkill}
         />
       );
+    }
+
+    if (activeView === "mcp") {
+      return <McpView />;
     }
 
     return (

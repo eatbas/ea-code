@@ -1,6 +1,8 @@
 pub mod artifacts;
 pub mod logs;
+pub mod mcp;
 pub mod models;
+pub mod project_settings;
 pub mod projects;
 pub mod questions;
 pub mod run_detail;

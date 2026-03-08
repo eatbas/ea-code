@@ -66,6 +66,15 @@ pub fn normalise_enhanced_prompt(enhanced_output: &str, fallback_prompt: &str) -
     }
 }
 
+/// Appends workspace snapshot context to a stage system prompt.
+pub fn compose_agent_context(system_prompt: String, workspace_context: &str) -> String {
+    let trimmed = workspace_context.trim();
+    if trimmed.is_empty() {
+        return system_prompt;
+    }
+    format!("{system_prompt}\n\n--- Workspace Context ---\n{trimmed}")
+}
+
 pub fn build_executive_summary_context(run: &PipelineRun) -> String {
     let mut lines = vec![
         format!("Run ID: {}", run.id),

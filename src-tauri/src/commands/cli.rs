@@ -9,7 +9,7 @@ pub async fn check_cli_health(settings: AppSettings) -> Result<CliHealth, String
 /// Fetches version and availability information for all CLI tools.
 #[tauri::command]
 pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, String> {
-    let (claude, codex, gemini, kimi, opencode) = tokio::join!(
+    let (claude, codex, gemini, kimi, copilot, opencode) = tokio::join!(
         build_cli_version_info(
             &settings.claude_path,
             "Claude CLI",
@@ -24,6 +24,7 @@ pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, S
             "@google/gemini-cli",
         ),
         build_cli_version_info(&settings.kimi_path, "Kimi CLI", "kimi", "kimi-cli",),
+        build_copilot_version_info(&settings.copilot_path),
         build_cli_version_info(
             &settings.opencode_path,
             "OpenCode CLI",
@@ -37,6 +38,7 @@ pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, S
         codex,
         gemini,
         kimi,
+        copilot,
         opencode,
     })
 }
@@ -50,6 +52,7 @@ pub async fn update_cli(cli_name: String) -> Result<String, String> {
         "gemini" => update_with_npm("@google/gemini-cli").await,
         "opencode" => update_with_npm("opencode-ai").await,
         "kimi" => update_kimi_cli().await,
+        "copilot" => update_copilot_cli().await,
         _ => Err(format!("Unknown CLI: {cli_name}")),
     }
 }
@@ -81,11 +84,12 @@ async fn check_single_cli(path: &str) -> CliStatus {
 
 /// Shared implementation for CLI health checks.
 pub(crate) async fn check_cli_health_inner(settings: &AppSettings) -> Result<CliHealth, String> {
-    let (claude, codex, gemini, kimi, opencode) = tokio::join!(
+    let (claude, codex, gemini, kimi, copilot, opencode) = tokio::join!(
         check_single_cli(&settings.claude_path),
         check_single_cli(&settings.codex_path),
         check_single_cli(&settings.gemini_path),
         check_single_cli(&settings.kimi_path),
+        check_single_cli(&settings.copilot_path),
         check_single_cli(&settings.opencode_path),
     );
 
@@ -94,6 +98,7 @@ pub(crate) async fn check_cli_health_inner(settings: &AppSettings) -> Result<Cli
         codex,
         gemini,
         kimi,
+        copilot,
         opencode,
     })
 }
@@ -131,6 +136,22 @@ async fn update_kimi_cli() -> Result<String, String> {
     update_with_npm("kimi-cli").await
 }
 
+/// Updates GitHub Copilot CLI extension via `gh extension upgrade gh-copilot`.
+async fn update_copilot_cli() -> Result<String, String> {
+    let output = tokio::process::Command::new("gh")
+        .args(["extension", "upgrade", "gh-copilot"])
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run gh: {e}"))?;
+
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(format!("Copilot update failed: {stderr}"))
+}
+
 /// Checks whether a binary is available via `which`.
 async fn check_binary_exists(path: &str) -> bool {
     matches!(
@@ -146,6 +167,22 @@ async fn check_binary_exists(path: &str) -> bool {
 async fn get_installed_version(path: &str) -> Option<String> {
     let output = tokio::process::Command::new(path)
         .arg("--version")
+        .output()
+        .await
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Some(extract_version_number(&raw))
+}
+
+/// Runs `<cli> <arg0> <arg1> ...` to extract the version string.
+async fn get_installed_version_with_args(path: &str, args: &[&str]) -> Option<String> {
+    let output = tokio::process::Command::new(path)
+        .args(args)
         .output()
         .await
         .ok()?;
@@ -227,6 +264,36 @@ async fn build_cli_version_info(
         latest_version: latest,
         up_to_date,
         update_command: format!("npm install -g {npm_package}@latest"),
+        available: true,
+        error: None,
+    }
+}
+
+/// Builds version information for GitHub Copilot (`gh copilot`).
+async fn build_copilot_version_info(path: &str) -> CliVersionInfo {
+    let available = check_binary_exists(path).await;
+
+    if !available {
+        return CliVersionInfo {
+            name: "GitHub Copilot CLI".to_string(),
+            cli_name: "copilot".to_string(),
+            installed_version: None,
+            latest_version: None,
+            up_to_date: false,
+            update_command: "gh extension upgrade gh-copilot".to_string(),
+            available: false,
+            error: Some(format!("{path} not found in PATH")),
+        };
+    }
+
+    let installed = get_installed_version_with_args(path, &["copilot", "--version"]).await;
+    CliVersionInfo {
+        name: "GitHub Copilot CLI".to_string(),
+        cli_name: "copilot".to_string(),
+        installed_version: installed.clone(),
+        latest_version: installed,
+        up_to_date: true,
+        update_command: "gh extension upgrade gh-copilot".to_string(),
         available: true,
         error: None,
     }

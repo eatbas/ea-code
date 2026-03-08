@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { SessionSummary } from "../types";
 
 /** Which view the sidebar is navigating to. */
-export type ActiveView = "home" | "agents" | "cli-setup" | "skills";
+export type ActiveView = "home" | "agents" | "cli-setup" | "skills" | "mcp";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -17,7 +17,7 @@ interface SidebarProps {
 
 /** Collapsible left sidebar with new thread and settings sub-navigation. */
 export function Sidebar({ collapsed, onToggle, onNewSession, activeView, onNavigate, sessions, activeSessionId, onSelectSession }: SidebarProps): ReactNode {
-  const isSettings = activeView === "agents" || activeView === "cli-setup" || activeView === "skills";
+  const isSettings = activeView === "agents" || activeView === "cli-setup" || activeView === "skills" || activeView === "mcp";
 
   function handleSettingsClick(): void {
     onNavigate(isSettings ? "home" : "agents");
@@ -130,6 +130,22 @@ export function Sidebar({ collapsed, onToggle, onNewSession, activeView, onNavig
               <path d="M3 16.5L12 21l9-4.5" />
             </svg>
             Skills
+          </button>
+
+          <button
+            onClick={() => onNavigate("mcp")}
+            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+              activeView === "mcp"
+                ? "bg-[#24243a] text-[#e4e4ed]"
+                : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+              <path d="M9 9h6v6H9z" />
+              <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
+            </svg>
+            MCP Servers
           </button>
         </div>
 

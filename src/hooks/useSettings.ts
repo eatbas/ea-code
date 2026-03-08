@@ -7,10 +7,11 @@ interface UseSettingsReturn {
   loading: boolean;
   error: string | null;
   saveSettings: (updated: AppSettings) => Promise<void>;
+  clearProjectSettings: () => Promise<void>;
 }
 
 /** Hook to load and persist application settings via Tauri commands. */
-export function useSettings(): UseSettingsReturn {
+export function useSettings(projectPath?: string): UseSettingsReturn {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +21,9 @@ export function useSettings(): UseSettingsReturn {
 
     async function loadSettings(): Promise<void> {
       try {
-        const result = await invoke<AppSettings>("get_settings");
+        const result = projectPath
+          ? await invoke<AppSettings>("get_project_settings", { projectPath })
+          : await invoke<AppSettings>("get_settings");
         if (!cancelled) {
           setSettings(result);
           setError(null);
@@ -41,17 +44,35 @@ export function useSettings(): UseSettingsReturn {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [projectPath]);
 
   const saveSettings = useCallback(async (updated: AppSettings): Promise<void> => {
     try {
-      await invoke("save_settings", { newSettings: updated });
+      if (projectPath) {
+        await invoke("save_project_settings", { projectPath, newSettings: updated });
+      } else {
+        await invoke("save_settings", { newSettings: updated });
+      }
       setSettings(updated);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, []);
+  }, [projectPath]);
 
-  return { settings, loading, error, saveSettings };
+  const clearProjectSettings = useCallback(async (): Promise<void> => {
+    if (!projectPath) {
+      return;
+    }
+    try {
+      await invoke("clear_project_settings", { projectPath });
+      const refreshed = await invoke<AppSettings>("get_project_settings", { projectPath });
+      setSettings(refreshed);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [projectPath]);
+
+  return { settings, loading, error, saveSettings, clearProjectSettings };
 }

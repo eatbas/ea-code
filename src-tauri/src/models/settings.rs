@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::agents::{
+    default_copilot_model, default_copilot_path,
     default_executive_summary_agent, default_executive_summary_model, default_kimi_model,
     default_kimi_path, default_opencode_model, default_opencode_path,
     default_prompt_enhancer_agent, AgentBackend,
@@ -15,6 +16,8 @@ pub struct AppSettings {
     pub gemini_path: String,
     #[serde(default = "default_kimi_path")]
     pub kimi_path: String,
+    #[serde(default = "default_copilot_path")]
+    pub copilot_path: String,
     #[serde(default = "default_opencode_path")]
     pub opencode_path: String,
     #[serde(default = "default_prompt_enhancer_agent")]
@@ -40,6 +43,9 @@ pub struct AppSettings {
     /// Comma-separated list of enabled Kimi models.
     #[serde(default = "default_kimi_model")]
     pub kimi_model: String,
+    /// Comma-separated list of enabled Copilot models.
+    #[serde(default = "default_copilot_model")]
+    pub copilot_model: String,
     /// Comma-separated list of enabled OpenCode models.
     #[serde(default = "default_opencode_model")]
     pub opencode_model: String,
@@ -77,6 +83,21 @@ pub struct AppSettings {
     /// Per-agent timeout in milliseconds (0 = no timeout).
     #[serde(default)]
     pub agent_timeout_ms: u64,
+    /// Maximum agentic turns per invocation for CLIs that support it.
+    #[serde(default = "default_agent_max_turns")]
+    pub agent_max_turns: u32,
+    /// Execution mode: workspace-write or diff-first.
+    #[serde(default = "default_execution_mode")]
+    pub mode: String,
+    /// Run CLI update checks before each pipeline run.
+    #[serde(default = "default_update_cli_on_run")]
+    pub update_cli_on_run: bool,
+    /// Abort runs when a CLI update command fails.
+    #[serde(default)]
+    pub fail_on_cli_update_error: bool,
+    /// Per-CLI startup update timeout in milliseconds.
+    #[serde(default = "default_cli_update_timeout_ms")]
+    pub cli_update_timeout_ms: u64,
     /// Skill selection mode: disable or auto.
     #[serde(default = "default_skill_selection_mode")]
     pub skill_selection_mode: String,
@@ -98,6 +119,22 @@ fn default_skill_selection_mode() -> String {
     "disable".to_string()
 }
 
+fn default_agent_max_turns() -> u32 {
+    25
+}
+
+fn default_execution_mode() -> String {
+    "workspace-write".to_string()
+}
+
+fn default_update_cli_on_run() -> bool {
+    true
+}
+
+fn default_cli_update_timeout_ms() -> u64 {
+    600_000
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -105,6 +142,7 @@ impl Default for AppSettings {
             codex_path: "codex".to_string(),
             gemini_path: "gemini".to_string(),
             kimi_path: "kimi".to_string(),
+            copilot_path: "gh".to_string(),
             opencode_path: "opencode".to_string(),
             prompt_enhancer_agent: AgentBackend::Claude,
             planner_agent: None,
@@ -119,6 +157,7 @@ impl Default for AppSettings {
             codex_model: "codex-5.3".to_string(),
             gemini_model: "gemini-2.5-pro".to_string(),
             kimi_model: "kimi-k2.5".to_string(),
+            copilot_model: "default".to_string(),
             opencode_model: "opencode/glm-5".to_string(),
             prompt_enhancer_model: "sonnet".to_string(),
             skill_selector_model: None,
@@ -136,6 +175,11 @@ impl Default for AppSettings {
             token_optimized_prompts: false,
             agent_retry_count: 1,
             agent_timeout_ms: 0,
+            agent_max_turns: 25,
+            mode: "workspace-write".to_string(),
+            update_cli_on_run: true,
+            fail_on_cli_update_error: false,
+            cli_update_timeout_ms: 600_000,
             skill_selector_agent: None,
             skill_selection_mode: "disable".to_string(),
         }

@@ -6,6 +6,7 @@ export const BACKEND_OPTIONS: { value: AgentBackend; label: string }[] = [
   { value: "codex", label: "Codex" },
   { value: "gemini", label: "Gemini" },
   { value: "kimi", label: "Kimi" },
+  { value: "copilot", label: "Copilot" },
   { value: "opencode", label: "OpenCode" },
 ];
 

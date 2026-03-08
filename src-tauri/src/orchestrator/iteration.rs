@@ -37,6 +37,7 @@ pub async fn run_iteration(
     run: &mut PipelineRun,
     previous_judge_output: &mut Option<String>,
     last_handoff: &mut Option<prompts::IterationHandoff>,
+    workspace_context: &str,
 ) -> Result<bool, String> {
     run.current_iteration = iter_num;
     let mut stages: Vec<StageResult> = Vec::new();
@@ -65,7 +66,10 @@ pub async fn run_iteration(
         &settings.prompt_enhancer_agent,
         &AgentInput {
             prompt: prompts::build_prompt_enhancer_user(&request.prompt),
-            context: Some(prompts::build_prompt_enhancer_system(&meta)),
+            context: Some(compose_agent_context(
+                prompts::build_prompt_enhancer_system(&meta),
+                workspace_context,
+            )),
             workspace_path: request.workspace_path.clone(),
         },
         settings, Some(session_id), db,
@@ -88,7 +92,7 @@ pub async fn run_iteration(
         app, request, settings, cancel_flag, db,
         run_id, session_id, iter_num, iteration_db_id,
         &meta, &enhanced, judge_feedback.as_deref(),
-        run, &mut stages, &mut iter_ctx,
+        run, &mut stages, &mut iter_ctx, workspace_context,
     ).await?;
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         return Ok(true);
@@ -99,7 +103,7 @@ pub async fn run_iteration(
         let should_break = run_plan_gate(
             app, settings, cancel_flag, answer_sender, db,
             run_id, iter_num, iteration_db_id,
-            &meta, &enhanced,
+            &meta, &enhanced, workspace_context,
             run, &mut stages, &mut iter_ctx,
         ).await?;
         if should_break {
@@ -121,6 +125,7 @@ pub async fn run_iteration(
         &enhanced,
         iter_ctx.selected_plan(),
         judge_feedback.as_deref(),
+        workspace_context,
         run,
         &mut stages,
     )
@@ -144,7 +149,10 @@ pub async fn run_iteration(
                 judge_feedback.as_deref(),
                 handoff_json.as_deref(),
             ),
-            context: Some(prompts::build_generator_system(&meta)),
+            context: Some(compose_agent_context(
+                prompts::build_generator_system(&meta),
+                workspace_context,
+            )),
             workspace_path: request.workspace_path.clone(),
         },
         settings, Some(session_id), db,
@@ -179,7 +187,7 @@ pub async fn run_iteration(
         app, request, settings, cancel_flag, answer_sender, db,
         run_id, session_id, iter_num, iteration_db_id,
         &meta, &enhanced, selected_skills_section.as_deref(), judge_feedback.as_deref(), handoff_json.as_deref(),
-        run, &mut stages, &mut iter_ctx,
+        run, &mut stages, &mut iter_ctx, workspace_context,
     ).await?;
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         return Ok(true);
@@ -191,7 +199,7 @@ pub async fn run_iteration(
         run_id, session_id, iter_num, iteration_db_id,
         &meta, &enhanced,
         run, &mut stages, &mut iter_ctx,
-        previous_judge_output, last_handoff,
+        previous_judge_output, last_handoff, workspace_context,
     ).await
 }
 
@@ -213,6 +221,7 @@ async fn run_planning_stages(
     run: &mut PipelineRun,
     stages: &mut Vec<StageResult>,
     iter_ctx: &mut IterationContext,
+    workspace_context: &str,
 ) -> Result<(), String> {
     let planning_enabled = settings.planner_agent.is_some() && settings.plan_auditor_agent.is_some();
     if !planning_enabled {
@@ -227,7 +236,10 @@ async fn run_planning_stages(
         settings.planner_agent.as_ref().unwrap_or(&crate::models::AgentBackend::Claude),
         &AgentInput {
             prompt: prompts::build_planner_user(&request.prompt, enhanced, iter_ctx.selected_plan(), judge_feedback),
-            context: Some(prompts::build_planner_system(meta)),
+            context: Some(compose_agent_context(
+                prompts::build_planner_system(meta),
+                workspace_context,
+            )),
             workspace_path: request.workspace_path.clone(),
         },
         settings, Some(session_id), db,
@@ -251,7 +263,10 @@ async fn run_planning_stages(
         settings.plan_auditor_agent.as_ref().unwrap_or(&crate::models::AgentBackend::Claude),
         &AgentInput {
             prompt: prompts::build_plan_auditor_user(&request.prompt, enhanced, &plan_out, None, None),
-            context: Some(prompts::build_plan_auditor_system(meta)),
+            context: Some(compose_agent_context(
+                prompts::build_plan_auditor_system(meta),
+                workspace_context,
+            )),
             workspace_path: request.workspace_path.clone(),
         },
         settings, Some(session_id), db,

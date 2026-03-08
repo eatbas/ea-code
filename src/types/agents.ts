@@ -10,7 +10,7 @@ export type AgentRole =
   | "executive_summary";
 
 /** Supported CLI agent backends. */
-export type AgentBackend = "claude" | "codex" | "gemini" | "kimi" | "opencode";
+export type AgentBackend = "claude" | "codex" | "gemini" | "kimi" | "copilot" | "opencode";
 
 /** CLI health check result returned from the backend. */
 export interface CliHealth {
@@ -18,6 +18,7 @@ export interface CliHealth {
   codex: CliStatus;
   gemini: CliStatus;
   kimi: CliStatus;
+  copilot: CliStatus;
   opencode: CliStatus;
 }
 
@@ -46,5 +47,6 @@ export interface AllCliVersions {
   codex: CliVersionInfo;
   gemini: CliVersionInfo;
   kimi: CliVersionInfo;
+  copilot: CliVersionInfo;
   opencode: CliVersionInfo;
 }

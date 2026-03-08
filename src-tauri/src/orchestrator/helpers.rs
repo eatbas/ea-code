@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
 use crate::agents::{
-    run_claude, run_codex, run_gemini, run_kimi, run_opencode, AgentInput, AgentOutput,
+    run_claude, run_codex, run_copilot, run_gemini, run_kimi, run_opencode, AgentInput, AgentOutput,
 };
 use crate::db::{self, DbPool};
 use crate::events::*;
@@ -47,19 +47,22 @@ pub async fn dispatch_agent(
     match backend {
         AgentBackend::Claude => {
             run_claude(
-                input, &settings.claude_path, model, session_id,
+                input, &settings.claude_path, model, settings.agent_max_turns, session_id,
                 app, run_id, stage, db,
             )
             .await
         }
         AgentBackend::Codex => {
-            run_codex(input, &settings.codex_path, model, app, run_id, stage, db).await
+            run_codex(input, &settings.codex_path, model, session_id, app, run_id, stage, db).await
         }
         AgentBackend::Gemini => {
             run_gemini(input, &settings.gemini_path, model, app, run_id, stage, db).await
         }
         AgentBackend::Kimi => {
             run_kimi(input, &settings.kimi_path, model, app, run_id, stage, db).await
+        }
+        AgentBackend::Copilot => {
+            run_copilot(input, &settings.copilot_path, model, app, run_id, stage, db).await
         }
         AgentBackend::OpenCode => {
             run_opencode(input, &settings.opencode_path, model, app, run_id, stage, db).await
@@ -101,6 +104,7 @@ fn first_enabled_model_for_backend(
         Some(AgentBackend::Codex) => &settings.codex_model,
         Some(AgentBackend::Gemini) => &settings.gemini_model,
         Some(AgentBackend::Kimi) => &settings.kimi_model,
+        Some(AgentBackend::Copilot) => &settings.copilot_model,
         Some(AgentBackend::OpenCode) => &settings.opencode_model,
         None => return String::new(),
     };
@@ -176,6 +180,7 @@ pub fn backend_to_db_str(backend: &AgentBackend) -> &'static str {
         AgentBackend::Codex => "codex",
         AgentBackend::Gemini => "gemini",
         AgentBackend::Kimi => "kimi",
+        AgentBackend::Copilot => "copilot",
         AgentBackend::OpenCode => "opencode",
     }
 }
