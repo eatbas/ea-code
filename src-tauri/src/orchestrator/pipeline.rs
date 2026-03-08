@@ -81,6 +81,7 @@ pub async fn run_pipeline(
         "pipeline:started",
         PipelineStartedPayload {
             run_id: run_id.clone(),
+            session_id: session_id.clone(),
             prompt: request.prompt.clone(),
             workspace_path: request.workspace_path.clone(),
         },
@@ -175,7 +176,9 @@ async fn run_direct_task(
 
     match result {
         Ok(out) => {
-            emit_stage(app, run_id, &PipelineStage::DirectTask, &StageStatus::Completed, 1);
+            emit_stage_with_duration(app, run_id, &PipelineStage::DirectTask, &StageStatus::Completed, 1, Some(duration_ms));
+            // Emit the raw CLI output as a "result" artefact so the frontend can parse it
+            emit_artifact(app, run_id, "result", &out.raw_text, 1, db);
             let _ = db::runs::insert_stage(
                 db, iteration_db_id, "direct_task", "completed",
                 &out.raw_text, duration_ms as i32, None,
@@ -196,7 +199,7 @@ async fn run_direct_task(
             run.final_verdict = Some(JudgeVerdict::Complete);
         }
         Err(e) => {
-            emit_stage(app, run_id, &PipelineStage::DirectTask, &StageStatus::Failed, 1);
+            emit_stage_with_duration(app, run_id, &PipelineStage::DirectTask, &StageStatus::Failed, 1, Some(duration_ms));
             let _ = db::runs::insert_stage(
                 db, iteration_db_id, "direct_task", "failed",
                 "", duration_ms as i32, Some(&e),

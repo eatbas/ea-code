@@ -17,6 +17,7 @@ import type {
 interface UsePipelineReturn {
   run: PipelineRun | null;
   logs: string[];
+  stageLogs: Record<string, string[]>;
   artifacts: Record<string, string>;
   pendingQuestion: PipelineQuestionEvent | null;
   startPipeline: (request: PipelineRequest) => Promise<void>;
@@ -29,6 +30,7 @@ interface UsePipelineReturn {
 export function usePipeline(): UsePipelineReturn {
   const [run, setRun] = useState<PipelineRun | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [stageLogs, setStageLogs] = useState<Record<string, string[]>>({});
   const [artifacts, setArtifacts] = useState<Record<string, string>>({});
   const [pendingQuestion, setPendingQuestion] = useState<PipelineQuestionEvent | null>(null);
 
@@ -45,6 +47,7 @@ export function usePipeline(): UsePipelineReturn {
         const payload = event.payload;
         const newRun: PipelineRun = {
           id: payload.runId,
+          sessionId: payload.sessionId,
           status: "running",
           prompt: payload.prompt,
           workspacePath: payload.workspacePath,
@@ -55,6 +58,7 @@ export function usePipeline(): UsePipelineReturn {
         };
         setRun(newRun);
         setLogs([]);
+        setStageLogs({});
         setArtifacts({});
         setPendingQuestion(null);
       }),
@@ -63,7 +67,7 @@ export function usePipeline(): UsePipelineReturn {
     // Stage status update
     unlisteners.push(
       listen<PipelineStageEvent>("pipeline:stage", (event) => {
-        const { stage, status, iteration } = event.payload;
+        const { stage, status, iteration, durationMs } = event.payload;
         setRun((prev) => {
           if (!prev) return prev;
           const updated = { ...prev, currentStage: stage, currentIteration: iteration };
@@ -87,11 +91,11 @@ export function usePipeline(): UsePipelineReturn {
             stage,
             status,
             output: "",
-            durationMs: 0,
+            durationMs: durationMs ?? 0,
           };
 
           if (existingIdx >= 0) {
-            stages[existingIdx] = { ...stages[existingIdx], status };
+            stages[existingIdx] = { ...stages[existingIdx], status, durationMs: durationMs ?? stages[existingIdx].durationMs };
           } else {
             stages.push(stageResult);
           }
@@ -105,12 +109,18 @@ export function usePipeline(): UsePipelineReturn {
       }),
     );
 
-    // Log line
+    // Log line — add to both flat logs and per-stage logs
     unlisteners.push(
       listen<PipelineLogEvent>("pipeline:log", (event) => {
-        const { line, stream } = event.payload;
+        const { stage, line, stream } = event.payload;
         const prefix = stream === "stderr" ? "[stderr] " : "";
-        setLogs((prev) => [...prev, `${prefix}${line}`]);
+        const formatted = `${prefix}${line}`;
+        setLogs((prev) => [...prev, formatted]);
+        setStageLogs((prev) => {
+          const key = stage as string;
+          const existing = prev[key] ?? [];
+          return { ...prev, [key]: [...existing, formatted] };
+        });
       }),
     );
 
@@ -132,7 +142,7 @@ export function usePipeline(): UsePipelineReturn {
     // Pipeline completed
     unlisteners.push(
       listen<PipelineCompletedEvent>("pipeline:completed", (event) => {
-        const { verdict, totalIterations } = event.payload;
+        const { verdict, totalIterations, durationMs } = event.payload;
         setRun((prev) => {
           if (!prev) return prev;
           return {
@@ -140,6 +150,7 @@ export function usePipeline(): UsePipelineReturn {
             status: "completed",
             finalVerdict: verdict,
             currentIteration: totalIterations,
+            durationMs,
             completedAt: new Date().toISOString(),
             currentStage: undefined,
           };
@@ -223,9 +234,10 @@ export function usePipeline(): UsePipelineReturn {
   const resetRun = useCallback((): void => {
     setRun(null);
     setLogs([]);
+    setStageLogs({});
     setArtifacts({});
     setPendingQuestion(null);
   }, []);
 
-  return { run, logs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun };
+  return { run, logs, stageLogs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun };
 }

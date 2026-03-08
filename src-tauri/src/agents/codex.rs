@@ -35,6 +35,7 @@ pub async fn run_codex(
     run_cli_agent(
         codex_path,
         &args_refs,
+        Some(3), // prompt is at index 3: ["--full-auto", "-m", model, prompt, ...]
         &input.workspace_path,
         app,
         run_id,

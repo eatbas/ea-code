@@ -1,23 +1,37 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
-import type { PipelineRun } from "../types";
+import type { PipelineRun, RunOptions, CliHealth } from "../types";
 import { isActive, isTerminal, statusInfo } from "../utils/statusHelpers";
+import { StageCard } from "./shared/StageCard";
+import { ThinkingIndicator } from "./shared/ThinkingIndicator";
+import { ResultCard } from "./shared/ResultCard";
+import { ArtifactCard } from "./shared/ArtifactCard";
+import { PromptInputBar } from "./shared/PromptInputBar";
+
+/** Artefact kinds consumed by ResultCard — excluded from the generic list. */
+const RESULT_ARTIFACT_KINDS = new Set(["result", "executive_summary", "judge"]);
 
 interface ChatViewProps {
   run: PipelineRun;
-  logs: string[];
+  stageLogs: Record<string, string[]>;
   artifacts: Record<string, string>;
+  cliHealth: CliHealth | null;
   onCancel: () => void;
   onBackToHome: () => void;
+  onContinue: (options: RunOptions) => void;
+  onViewSession: () => void;
 }
 
-/** Chat-style running view with user prompt bubble and streaming agent output. */
+/** Chat-style running view with stage timeline, result card, and follow-up input. */
 export function ChatView({
   run,
-  logs,
+  stageLogs,
   artifacts,
+  cliHealth,
   onCancel,
   onBackToHome,
+  onContinue,
+  onViewSession,
 }: ChatViewProps): ReactNode {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -27,18 +41,23 @@ export function ChatView({
     if (el) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [logs.length, Object.keys(artifacts).length]);
+  }, [run.iterations.length, Object.keys(artifacts).length, Object.keys(stageLogs).length]);
 
   const { label: statusLabel, colour: statusColour } = statusInfo(run.status);
 
-  /** Combine artifacts into a readable output block. */
-  const artifactEntries = Object.entries(artifacts);
+  // Flatten all completed stages for timeline display
+  const allStages = run.iterations.flatMap((iter) => iter.stages);
+
+  // Non-result artifacts for the generic list
+  const otherArtifacts = Object.entries(artifacts).filter(
+    ([kind]) => !RESULT_ARTIFACT_KINDS.has(kind) && kind !== "workspace_context",
+  );
 
   return (
     <div className="flex h-full flex-col bg-[#0f0f14]">
-      {/* Scrollable chat area */}
+      {/* Scrollable timeline area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 pt-6 pb-4">
-        <div className="mx-auto max-w-2xl flex flex-col gap-4">
+        <div className="mx-auto max-w-2xl flex flex-col gap-3">
           {/* User prompt — right-aligned bubble */}
           <div className="flex justify-end">
             <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#2a2a3e] px-4 py-3 text-sm text-[#e4e4ed] whitespace-pre-wrap">
@@ -46,69 +65,43 @@ export function ChatView({
             </div>
           </div>
 
-          {/* Agent output — left-aligned */}
-          <div className="flex justify-start">
-            <div className="w-full rounded-2xl rounded-bl-md border border-[#2e2e48] bg-[#1a1a24] px-4 py-3">
-              {/* Status indicator */}
-              <div className="flex items-center gap-2 mb-3">
-                {isActive(run.status) && (
-                  <svg className="animate-spin h-3.5 w-3.5" style={{ color: statusColour }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                )}
-                {isTerminal(run.status) && (
-                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statusColour }} />
-                )}
-                <span className="text-xs font-medium" style={{ color: statusColour }}>
-                  {statusLabel}
-                </span>
-                {run.currentStage && isActive(run.status) && (
-                  <span className="text-xs text-[#9898b0]">
-                    — {run.currentStage}
-                  </span>
-                )}
-              </div>
+          {/* Stage timeline cards */}
+          {allStages.map((stage, idx) => (
+            <StageCard key={`${stage.stage}-${idx}`} stage={stage} logs={stageLogs[stage.stage]} />
+          ))}
 
-              {/* Streaming logs */}
-              {logs.length > 0 && (
-                <div className="font-mono text-xs text-[#e4e4ed] max-h-80 overflow-y-auto mb-3">
-                  {logs.map((line, idx) => (
-                    <div key={idx} className="whitespace-pre-wrap break-all leading-5">
-                      {line}
-                    </div>
-                  ))}
-                </div>
-              )}
+          {/* Thinking indicator for currently running stage */}
+          {isActive(run.status) && run.currentStage && (
+            <ThinkingIndicator stage={run.currentStage} />
+          )}
 
-              {/* Artifacts */}
-              {artifactEntries.length > 0 && (
-                <div className="flex flex-col gap-2 border-t border-[#2e2e48] pt-3">
-                  {artifactEntries.map(([kind, content]) => (
-                    <details key={kind} className="group">
-                      <summary className="cursor-pointer text-xs font-medium text-[#9898b0] hover:text-[#e4e4ed] transition-colors">
-                        {kind}
-                      </summary>
-                      <pre className="mt-2 font-mono text-xs text-[#e4e4ed] whitespace-pre-wrap break-words max-h-60 overflow-y-auto rounded bg-[#0f0f14] p-3">
-                        {content}
-                      </pre>
-                    </details>
-                  ))}
-                </div>
-              )}
+          {/* Result card when pipeline reaches terminal state */}
+          {isTerminal(run.status) && (
+            <ResultCard run={run} artifacts={artifacts} />
+          )}
+
+          {/* Other artefacts (diff, plan, review) as collapsible cards */}
+          {otherArtifacts.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {otherArtifacts.map(([kind, content]) => (
+                <ArtifactCard key={kind} kind={kind} content={content} />
+              ))}
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Bottom input bar — always visible */}
-      <div className="flex w-full max-w-2xl mx-auto flex-col items-center gap-3 px-6 pb-6 pt-2">
-        <div className="flex w-full items-end gap-2 rounded-xl border border-[#2e2e48] bg-[#1a1a24] px-4 py-3">
-          <span className="flex-1 text-sm text-[#9898b0] text-center">
-            {isActive(run.status) ? "Pipeline is running..." : "Pipeline finished."}
-          </span>
-
-          {isActive(run.status) && (
+      {/* Bottom bar */}
+      <div className="flex w-full max-w-2xl mx-auto flex-col gap-2 px-6 pb-6 pt-2">
+        {isActive(run.status) && (
+          <div className="flex w-full items-center gap-2 rounded-xl border border-[#2e2e48] bg-[#1a1a24] px-4 py-3">
+            <div className="flex items-center gap-2 flex-1">
+              <svg className="animate-spin h-3.5 w-3.5" style={{ color: statusColour }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span className="text-sm text-[#9898b0]">{statusLabel}...</span>
+            </div>
             <button
               onClick={onCancel}
               className="shrink-0 rounded-lg bg-[#ef4444] p-2 text-white hover:bg-red-400 transition-colors"
@@ -119,21 +112,32 @@ export function ChatView({
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
-          )}
+          </div>
+        )}
 
-          {isTerminal(run.status) && (
-            <button
-              onClick={onBackToHome}
-              className="shrink-0 rounded-lg bg-[#6366f1] p-2 text-white hover:bg-[#818cf8] transition-colors"
-              title="New run"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </button>
-          )}
-        </div>
+        {isTerminal(run.status) && (
+          <>
+            <PromptInputBar
+              placeholder="Continue this session..."
+              cliHealth={cliHealth}
+              onSubmit={onContinue}
+            />
+            <div className="flex items-center justify-between px-1 text-xs text-[#9898b0]">
+              <button
+                onClick={onViewSession}
+                className="hover:text-[#e4e4ed] transition-colors"
+              >
+                View session
+              </button>
+              <button
+                onClick={onBackToHome}
+                className="hover:text-[#e4e4ed] transition-colors"
+              >
+                New conversation
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

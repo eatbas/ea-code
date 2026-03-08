@@ -7,6 +7,7 @@ use crate::models::{JudgeVerdict, PipelineStage, StageStatus};
 #[serde(rename_all = "camelCase")]
 pub struct PipelineStartedPayload {
     pub run_id: String,
+    pub session_id: String,
     pub prompt: String,
     pub workspace_path: String,
 }
@@ -19,6 +20,8 @@ pub struct PipelineStagePayload {
     pub stage: PipelineStage,
     pub status: StageStatus,
     pub iteration: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
 }
 
 /// Emitted for each line of CLI output (stdout or stderr).

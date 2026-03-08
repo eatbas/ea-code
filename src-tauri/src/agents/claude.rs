@@ -61,6 +61,7 @@ pub async fn run_claude(
     let mut output = run_cli_agent(
         claude_path,
         &args_refs,
+        Some(1), // prompt is at index 1: ["-p", prompt, ...]
         &input.workspace_path,
         app,
         run_id,

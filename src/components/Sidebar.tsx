@@ -18,6 +18,14 @@ interface SidebarProps {
   sessions: SessionSummary[];
   activeSessionId?: string;
   onSelectSession: (sessionId: string) => void;
+  /** Whether the pipeline is actively running (show spinner). */
+  isRunning?: boolean;
+  /** Whether a terminal pipeline run exists that can be navigated back to. */
+  hasTerminalRun?: boolean;
+  /** Navigate back to the current pipeline run view. */
+  onGoToRun?: () => void;
+  /** Archive (delete) a session by ID. */
+  onArchiveSession?: (sessionId: string) => void;
 }
 
 /** Collapsible left sidebar with new thread and settings sub-navigation. */
@@ -34,6 +42,10 @@ export function Sidebar({
   sessions,
   activeSessionId,
   onSelectSession,
+  isRunning,
+  hasTerminalRun,
+  onGoToRun,
+  onArchiveSession,
 }: SidebarProps): ReactNode {
   const isSettings = activeView === "agents" || activeView === "cli-setup" || activeView === "skills" || activeView === "mcp";
 
@@ -199,6 +211,34 @@ export function Sidebar({
         </button>
       </div>
 
+      {/* Running indicator — non-clickable spinner while pipeline is active */}
+      {isRunning && (
+        <div className="flex items-center gap-2 px-6 pb-2 text-sm text-[#9898b0]">
+          <svg className="h-3.5 w-3.5 animate-spin text-[#6366f1]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Running...
+        </div>
+      )}
+
+      {/* Current run — clickable when pipeline has finished */}
+      {!isRunning && hasTerminalRun && onGoToRun && (
+        <div className="px-3 pb-1">
+          <button
+            onClick={onGoToRun}
+            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+              activeView === "home" && !activeSessionId
+                ? "bg-[#24243a] text-[#e4e4ed]"
+                : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+            }`}
+          >
+            <div className="h-2 w-2 rounded-full bg-[#22c55e]" />
+            Current run
+          </button>
+        </div>
+      )}
+
       <ProjectThreadsList
         projects={projects}
         sessions={sessions}
@@ -206,6 +246,7 @@ export function Sidebar({
         activeSessionId={activeSessionId}
         onSelectProject={onSelectProject}
         onSelectSession={onSelectSession}
+        onArchiveSession={onArchiveSession}
       />
 
       <div className="px-3 pb-3">

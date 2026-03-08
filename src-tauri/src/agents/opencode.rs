@@ -19,6 +19,7 @@ pub async fn run_opencode(
     run_cli_agent(
         opencode_path,
         &["run", "--model", model, &full_prompt],
+        Some(3), // prompt is at index 3: ["run", "--model", model, prompt]
         &input.workspace_path,
         app,
         run_id,

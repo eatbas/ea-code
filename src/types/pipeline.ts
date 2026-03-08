@@ -48,6 +48,7 @@ export interface Iteration {
 /** Full pipeline run state for the frontend. */
 export interface PipelineRun {
   id: string;
+  sessionId?: string;
   status: PipelineStatus;
   prompt: string;
   workspacePath: string;
@@ -57,6 +58,7 @@ export interface PipelineRun {
   maxIterations: number;
   startedAt?: string;
   completedAt?: string;
+  durationMs?: number;
   finalVerdict?: JudgeVerdict;
   error?: string;
 }

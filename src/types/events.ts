@@ -5,6 +5,7 @@ import type { PipelineStage, StageStatus, JudgeVerdict } from "./pipeline";
 /** Emitted when a new pipeline run begins. */
 export interface PipelineStartedEvent {
   runId: string;
+  sessionId: string;
   prompt: string;
   workspacePath: string;
 }
@@ -15,6 +16,7 @@ export interface PipelineStageEvent {
   stage: PipelineStage;
   status: StageStatus;
   iteration: number;
+  durationMs?: number;
 }
 
 /** Emitted for each log line produced by an agent. */
@@ -28,7 +30,7 @@ export interface PipelineLogEvent {
 /** Emitted when a pipeline artefact is produced. */
 export interface PipelineArtifactEvent {
   runId: string;
-  kind: "diff" | "plan" | "plan_audit" | "plan_final" | "review" | "judge" | "executive_summary" | "selected_skills";
+  kind: string;
   content: string;
   iteration: number;
 }

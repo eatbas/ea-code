@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 import type { ProjectSummary, SessionSummary } from "../types";
 
 interface ProjectThreadsListProps {
@@ -8,6 +9,7 @@ interface ProjectThreadsListProps {
   activeSessionId?: string;
   onSelectProject: (projectPath: string) => void | Promise<void>;
   onSelectSession: (sessionId: string) => void;
+  onArchiveSession?: (sessionId: string) => void;
 }
 
 function getProjectName(project: ProjectSummary): string {
@@ -27,7 +29,26 @@ export function ProjectThreadsList({
   activeSessionId,
   onSelectProject,
   onSelectSession,
+  onArchiveSession,
 }: ProjectThreadsListProps): ReactNode {
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  function handleArchiveClick(e: React.MouseEvent, sessionId: string): void {
+    e.stopPropagation();
+    setConfirmingId(sessionId);
+  }
+
+  function handleConfirm(e: React.MouseEvent, sessionId: string): void {
+    e.stopPropagation();
+    onArchiveSession?.(sessionId);
+    setConfirmingId(null);
+  }
+
+  function handleCancel(e: React.MouseEvent): void {
+    e.stopPropagation();
+    setConfirmingId(null);
+  }
+
   return (
     <div className="flex-1 overflow-y-auto px-2">
       <div className="mb-2 px-2 pt-1">
@@ -66,19 +87,63 @@ export function ProjectThreadsList({
                     <div className="flex flex-col gap-0.5 py-1">
                       {sessions.map((session) => {
                         const isActiveSession = session.id === activeSessionId;
+                        const isConfirming = confirmingId === session.id;
+
+                        if (isConfirming) {
+                          return (
+                            <div
+                              key={session.id}
+                              className="flex items-center gap-1 rounded-md bg-[#24243a] px-3 py-1.5"
+                            >
+                              <span className="flex-1 truncate text-xs text-[#e4e4ed]">Delete?</span>
+                              <button
+                                onClick={(e) => handleConfirm(e, session.id)}
+                                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-[#ef4444] hover:bg-[#ef4444]/20 transition-colors"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                onClick={handleCancel}
+                                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-[#9898b0] hover:bg-[#2e2e48] transition-colors"
+                              >
+                                No
+                              </button>
+                            </div>
+                          );
+                        }
+
                         return (
-                          <button
+                          <div
                             key={session.id}
-                            onClick={() => onSelectSession(session.id)}
-                            className={`flex w-full items-center justify-between gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
+                            className={`group flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
                               isActiveSession
                                 ? "bg-[#24243a] text-[#e4e4ed]"
                                 : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
                             }`}
                           >
-                            <span className="truncate">{session.lastPrompt ?? session.title}</span>
-                            <span className="shrink-0 text-xs text-[#6f7086]">{session.runCount}</span>
-                          </button>
+                            <button
+                              onClick={() => onSelectSession(session.id)}
+                              className="flex-1 truncate text-left"
+                            >
+                              {session.lastPrompt ?? session.title}
+                            </button>
+                            {onArchiveSession ? (
+                              <button
+                                onClick={(e) => handleArchiveClick(e, session.id)}
+                                className="shrink-0 rounded p-0.5 text-[#6f7086] opacity-0 hover:text-[#ef4444] group-hover:opacity-100 transition-all"
+                                title="Archive session"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6" />
+                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                  <path d="M10 11v6" />
+                                  <path d="M14 11v6" />
+                                </svg>
+                              </button>
+                            ) : (
+                              <span className="shrink-0 text-xs text-[#6f7086]">{session.runCount}</span>
+                            )}
+                          </div>
                         );
                       })}
                     </div>

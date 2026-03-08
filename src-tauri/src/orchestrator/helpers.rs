@@ -115,6 +115,18 @@ pub fn emit_stage(
     status: &StageStatus,
     iteration: u32,
 ) {
+    emit_stage_with_duration(app, run_id, stage, status, iteration, None);
+}
+
+/// Emits a stage status transition event with an optional duration.
+pub fn emit_stage_with_duration(
+    app: &AppHandle,
+    run_id: &str,
+    stage: &PipelineStage,
+    status: &StageStatus,
+    iteration: u32,
+    duration_ms: Option<u64>,
+) {
     let _ = app.emit(
         "pipeline:stage",
         PipelineStagePayload {
@@ -122,6 +134,7 @@ pub fn emit_stage(
             stage: stage.clone(),
             status: status.clone(),
             iteration,
+            duration_ms,
         },
     );
 }

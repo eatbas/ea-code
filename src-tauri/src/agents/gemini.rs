@@ -19,6 +19,7 @@ pub async fn run_gemini(
     run_cli_agent(
         gemini_path,
         &["-p", &full_prompt, "-m", model, "--yolo"],
+        Some(1), // prompt is at index 1: ["-p", prompt, ...]
         &input.workspace_path,
         app,
         run_id,

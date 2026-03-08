@@ -19,6 +19,7 @@ pub async fn run_kimi(
     run_cli_agent(
         kimi_path,
         &["--print", "-p", &full_prompt, "--model", model],
+        Some(2), // prompt is at index 2: ["--print", "-p", prompt, ...]
         &input.workspace_path,
         app,
         run_id,

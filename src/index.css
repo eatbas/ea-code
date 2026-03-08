@@ -31,3 +31,9 @@ body {
 button {
   cursor: pointer;
 }
+
+/* Thinking indicator sweep animation */
+@keyframes thinking-sweep {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(120%); }
+}
