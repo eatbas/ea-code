@@ -126,16 +126,44 @@ async fn run_npm(args: &[&str]) -> Result<std::process::Output, String> {
         .map_err(|_| "npm command timed out after 20 seconds".to_string())?
         .map_err(|e| format!("Failed to run npm: {e}"))
 }
-async fn get_installed_version(path: &str) -> Option<String> {
-    let output = timeout(Duration::from_secs(15), tokio::process::Command::new(path).arg("--version").output())
-        .await
-        .ok()?
-        .ok()?;
-    if !output.status.success() {
-        return None;
+
+fn extract_version_from_output(output: &std::process::Output) -> Option<String> {
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if !stdout.is_empty() {
+        return Some(extract_version_number(&stdout));
     }
-    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Some(extract_version_number(&raw))
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    (!stderr.is_empty()).then(|| extract_version_number(&stderr))
+}
+
+async fn get_installed_version(path: &str) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    let candidates = if std::path::Path::new(path).extension().is_none() {
+        vec![
+            path.to_string(),
+            format!("{path}.cmd"),
+            format!("{path}.exe"),
+            format!("{path}.bat"),
+        ]
+    } else {
+        vec![path.to_string()]
+    };
+    #[cfg(not(target_os = "windows"))]
+    let candidates = vec![path.to_string()];
+
+    for candidate in candidates {
+        let output =
+            timeout(Duration::from_secs(15), tokio::process::Command::new(&candidate).arg("--version").output())
+                .await
+                .ok()?
+                .ok()?;
+        if output.status.success() {
+            if let Some(version) = extract_version_from_output(&output) {
+                return Some(version);
+            }
+        }
+    }
+    None
 }
 async fn get_latest_npm_version(package_name: &str) -> Option<String> {
     let output = run_npm(&["view", package_name, "version"]).await.ok()?;
