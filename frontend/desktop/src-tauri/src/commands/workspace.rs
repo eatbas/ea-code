@@ -16,7 +16,7 @@ pub async fn select_workspace(
         return Err("Selected path is not a directory".to_string());
     }
 
-    let info = crate::git::workspace_info(&path);
+    let info = crate::git::workspace_info(&path).await;
     let workspace_name = std::path::Path::new(&path)
         .file_name()
         .and_then(|os| os.to_str())

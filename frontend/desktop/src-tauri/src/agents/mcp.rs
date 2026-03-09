@@ -14,20 +14,18 @@ fn locate_history_mcp_binary() -> Option<String> {
         }
     }
 
-    let lookup_cmd = if cfg!(windows) { "where" } else { "which" };
-    if let Ok(output) = std::process::Command::new(lookup_cmd)
-        .arg("ea-code-mcp")
-        .output()
-    {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .next()
-                .unwrap_or_default()
-                .trim()
-                .to_string();
-            if !path.is_empty() {
-                return Some(path);
+    let names: &[&str] = if cfg!(windows) {
+        &["ea-code-mcp.exe", "ea-code-mcp"]
+    } else {
+        &["ea-code-mcp"]
+    };
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            for name in names {
+                let candidate = dir.join(name);
+                if candidate.exists() {
+                    return Some(candidate.to_string_lossy().to_string());
+                }
             }
         }
     }

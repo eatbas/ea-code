@@ -40,7 +40,7 @@ pub async fn run_pipeline(
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| request.workspace_path.clone());
-    let ws_info = crate::git::workspace_info(&request.workspace_path);
+    let ws_info = crate::git::workspace_info(&request.workspace_path).await;
     let project_id = db::projects::upsert(
         &db, &request.workspace_path, &workspace_name,
         ws_info.is_git_repo, ws_info.branch.as_deref(),
@@ -92,7 +92,7 @@ pub async fn run_pipeline(
         run_direct_task(&app, &request, &settings, &cancel_flag, &db, &run_id, &mut run).await?;
     } else {
         let workspace_context =
-            super::context_summary::build_workspace_context_summary(&request.workspace_path);
+            super::context_summary::build_workspace_context_summary(&request.workspace_path).await;
         emit_artifact(&app, &run_id, "workspace_context", &workspace_context, 0, &db);
 
         let mut previous_judge_output: Option<String> = None;

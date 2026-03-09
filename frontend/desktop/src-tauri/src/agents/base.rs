@@ -1,47 +1,13 @@
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-
+#[cfg(target_os = "windows")]
+use crate::commands::git_bash::find_git_bash;
 use crate::db::{self, DbPool};
 use crate::events::PipelineLogPayload;
 use crate::models::PipelineStage;
-
 #[cfg(target_os = "windows")]
 const GIT_BASH_INSTALL_URL: &str = "https://git-scm.com/download/win";
-
-#[cfg(target_os = "windows")]
-fn find_git_bash() -> Option<String> {
-    let mut candidates = Vec::new();
-    if let Ok(program_files) = std::env::var("ProgramFiles") {
-        candidates.push(format!("{program_files}\\Git\\bin\\bash.exe"));
-    }
-    if let Ok(program_files_x86) = std::env::var("ProgramFiles(x86)") {
-        candidates.push(format!("{program_files_x86}\\Git\\bin\\bash.exe"));
-    }
-    if let Ok(local_app_data) = std::env::var("LocalAppData") {
-        candidates.push(format!("{local_app_data}\\Programs\\Git\\bin\\bash.exe"));
-    }
-
-    for path in candidates {
-        if std::path::Path::new(&path).exists() {
-            return Some(path);
-        }
-    }
-
-    let where_output = std::process::Command::new("where")
-        .arg("bash")
-        .output()
-        .ok()?;
-    if !where_output.status.success() {
-        return None;
-    }
-    String::from_utf8_lossy(&where_output.stdout)
-        .lines()
-        .map(str::trim)
-        .find(|line| line.to_ascii_lowercase().contains("\\git\\") && !line.is_empty())
-        .map(str::to_string)
-}
-
 /// Writes the prompt to a temp file so it can be read by bash via `$(cat ...)`,
 /// avoiding Windows `CreateProcess` argument mangling for multi-line content.
 #[cfg(target_os = "windows")]
@@ -66,7 +32,6 @@ fn write_prompt_temp_file(prompt: &str) -> Result<String, String> {
 fn remove_prompt_temp_file(path: &str) {
     let _ = std::fs::remove_file(path);
 }
-
 /// Converts a Windows path like `C:\Users\...` to a Git Bash path `/c/Users/...`.
 #[cfg(target_os = "windows")]
 fn windows_path_to_bash_path(windows_path: &str) -> String {

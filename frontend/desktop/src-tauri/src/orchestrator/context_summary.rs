@@ -7,8 +7,8 @@ const MAX_TREE_LINES: usize = 120;
 const MAX_TEST_FILES: usize = 40;
 
 /// Builds a capped workspace context summary for agent system prompts.
-pub fn build_workspace_context_summary(workspace_path: &str) -> String {
-    let mut sections = vec![build_workspace_header(workspace_path)];
+pub async fn build_workspace_context_summary(workspace_path: &str) -> String {
+    let mut sections = vec![build_workspace_header(workspace_path).await];
 
     if let Some(section) = build_package_section(workspace_path) {
         sections.push(section);
@@ -26,8 +26,8 @@ pub fn build_workspace_context_summary(workspace_path: &str) -> String {
     truncate_chars(&sections.join("\n\n"), CONTEXT_CHAR_CAP)
 }
 
-fn build_workspace_header(workspace_path: &str) -> String {
-    let info = crate::git::workspace_info(workspace_path);
+async fn build_workspace_header(workspace_path: &str) -> String {
+    let info = crate::git::workspace_info(workspace_path).await;
     let mut lines = vec![
         "WORKSPACE SNAPSHOT".to_string(),
         format!("Path: {workspace_path}"),

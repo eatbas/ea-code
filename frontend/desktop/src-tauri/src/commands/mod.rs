@@ -1,4 +1,7 @@
 pub(crate) mod cli;
+pub(crate) mod cli_util;
+#[cfg(target_os = "windows")]
+pub(crate) mod git_bash;
 pub(crate) mod history;
 pub(crate) mod mcp;
 pub(crate) mod pipeline;

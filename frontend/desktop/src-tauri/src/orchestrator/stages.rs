@@ -176,7 +176,7 @@ pub fn execute_skipped_stage(
 }
 
 /// Captures a git diff and wraps it in a `StageResult`, persisting to DB.
-pub fn execute_diff_stage(
+pub async fn execute_diff_stage(
     app: &AppHandle,
     run_id: &str,
     iteration_num: u32,
@@ -188,7 +188,7 @@ pub fn execute_diff_stage(
     let start = Instant::now();
     emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num);
 
-    let diff = crate::git::git_diff(workspace_path);
+    let diff = crate::git::git_diff(workspace_path).await;
     let duration_ms = start.elapsed().as_millis() as u64;
 
     emit_stage(app, run_id, &stage, &StageStatus::Completed, iteration_num);

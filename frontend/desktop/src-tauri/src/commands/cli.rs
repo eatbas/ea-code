@@ -1,11 +1,12 @@
 use crate::models::*;
+use super::cli_util::{extract_version_from_output, get_latest_npm_version, run_npm};
+#[cfg(target_os = "windows")]
+use super::git_bash;
+#[cfg(not(target_os = "windows"))]
 use tokio::time::{timeout, Duration};
+#[cfg(not(target_os = "windows"))]
 fn path_probe_command() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "where"
-    } else {
-        "which"
-    }
+    "which"
 }
 
 #[tauri::command]
@@ -49,7 +50,18 @@ pub async fn update_cli(cli_name: String) -> Result<String, String> {
     }
 }
 async fn check_single_cli(path: &str) -> CliStatus {
+    #[cfg(target_os = "windows")]
+    {
+        let available = git_bash::command_exists(path).await;
+        return if available {
+            CliStatus { available: true, path: path.to_string(), error: None }
+        } else {
+            CliStatus { available: false, path: path.to_string(), error: Some(format!("{path} not found in Git Bash PATH")) }
+        };
+    }
+    #[cfg(not(target_os = "windows"))]
     let probe = path_probe_command();
+    #[cfg(not(target_os = "windows"))]
     match tokio::process::Command::new(probe).arg(path).output().await {
         Ok(output) if output.status.success() => CliStatus { available: true, path: path.to_string(), error: None },
         Ok(_) => CliStatus { available: false, path: path.to_string(), error: Some(format!("{path} not found in PATH")) },
@@ -86,6 +98,11 @@ async fn update_with_npm(npm_package: &str) -> Result<String, String> {
 }
 async fn update_kimi_cli() -> Result<String, String> {
     if check_binary_exists("uv").await {
+        #[cfg(target_os = "windows")]
+        let output = git_bash::run_binary("uv", &["tool", "upgrade", "kimi-cli", "--no-cache"], 20)
+            .await
+            .ok_or_else(|| "Failed to run uv via Git Bash".to_string())?;
+        #[cfg(not(target_os = "windows"))]
         let output = tokio::process::Command::new("uv")
             .args(["tool", "upgrade", "kimi-cli", "--no-cache"])
             .output()
@@ -101,7 +118,13 @@ async fn update_kimi_cli() -> Result<String, String> {
     update_with_npm("kimi-cli").await
 }
 async fn check_binary_exists(path: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        return git_bash::command_exists(path).await;
+    }
+    #[cfg(not(target_os = "windows"))]
     let probe = path_probe_command();
+    #[cfg(not(target_os = "windows"))]
     matches!(
         tokio::process::Command::new(probe)
             .arg(path)
@@ -114,84 +137,46 @@ async fn check_binary_exists(path: &str) -> bool {
 pub(crate) async fn is_cli_available(path: &str) -> bool {
     check_binary_exists(path).await
 }
-async fn run_npm(args: &[&str]) -> Result<std::process::Output, String> {
-    if cfg!(target_os = "windows") {
-        if let Ok(Ok(output)) =
-            timeout(Duration::from_secs(20), tokio::process::Command::new("npm.cmd").args(args).output()).await
-        {
-            return Ok(output);
-        }
-    }
-    timeout(Duration::from_secs(20), tokio::process::Command::new("npm").args(args).output()).await
-        .map_err(|_| "npm command timed out after 20 seconds".to_string())?
-        .map_err(|e| format!("Failed to run npm: {e}"))
-}
-
-fn extract_version_from_output(output: &std::process::Output) -> Option<String> {
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if !stdout.is_empty() {
-        return Some(extract_version_number(&stdout));
-    }
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    (!stderr.is_empty()).then(|| extract_version_number(&stderr))
-}
-
 async fn get_installed_version(path: &str) -> Option<String> {
     #[cfg(target_os = "windows")]
-    let candidates = if std::path::Path::new(path).extension().is_none() {
-        vec![
-            path.to_string(),
-            format!("{path}.cmd"),
-            format!("{path}.exe"),
-            format!("{path}.bat"),
-        ]
-    } else {
-        vec![path.to_string()]
-    };
+    {
+        let output = git_bash::run_binary(path, &["--version"], 15).await?;
+        if !output.status.success() {
+            return None;
+        }
+        extract_version_from_output(&output)
+    }
     #[cfg(not(target_os = "windows"))]
-    let candidates = vec![path.to_string()];
-
-    for candidate in candidates {
-        let output =
-            timeout(Duration::from_secs(15), tokio::process::Command::new(&candidate).arg("--version").output())
-                .await
-                .ok()?
-                .ok()?;
-        if output.status.success() {
-            if let Some(version) = extract_version_from_output(&output) {
-                return Some(version);
+    {
+        let candidates = vec![path.to_string()];
+        for candidate in candidates {
+            let output = timeout(
+                Duration::from_secs(15),
+                tokio::process::Command::new(&candidate).arg("--version").output(),
+            )
+            .await
+            .ok()?
+            .ok()?;
+            if output.status.success() {
+                if let Some(version) = extract_version_from_output(&output) {
+                    return Some(version);
+                }
             }
         }
+        None
     }
-    None
-}
-async fn get_latest_npm_version(package_name: &str) -> Option<String> {
-    let output = run_npm(&["view", package_name, "version"]).await.ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 async fn get_latest_kimi_version(has_uv: bool) -> Option<String> {
     if has_uv {
+        #[cfg(target_os = "windows")]
+        let output = git_bash::run_binary("uvx", &["--from", "kimi-cli", "kimi", "--version"], 20).await?;
+        #[cfg(not(target_os = "windows"))]
         let output = timeout(Duration::from_secs(20), tokio::process::Command::new("uvx").args(["--from", "kimi-cli", "kimi", "--version"]).output()).await.ok()?.ok()?;
         if output.status.success() {
-            let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            return Some(extract_version_number(&raw));
+            return extract_version_from_output(&output);
         }
     }
     get_latest_npm_version("kimi-cli").await
-}
-fn extract_version_number(raw: &str) -> String {
-    for token in raw.split_whitespace() {
-        let trimmed = token.trim_start_matches('v');
-        let looks_like_version =
-            trimmed.chars().next().map_or(false, |c| c.is_ascii_digit()) && trimmed.contains('.');
-        if looks_like_version {
-            return trimmed.to_string();
-        }
-    }
-    raw.to_string()
 }
 async fn build_cli_version_info(
     path: &str,
@@ -285,14 +270,23 @@ async fn build_git_bash_version_info() -> CliVersionInfo {
     }
 }
 async fn get_latest_git_bash_version() -> Option<String> {
-    if !cfg!(target_os = "windows") {
-        return None;
+    #[cfg(target_os = "windows")]
+    {
+        let output = git_bash::run_binary(
+            "winget",
+            &["show", "--id", "Git.Git", "--exact", "--accept-source-agreements", "--disable-interactivity"],
+            20,
+        )
+        .await?;
+        if !output.status.success() {
+            return None;
+        }
+        return String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("Version:").map(|s| s.trim().to_string()));
     }
-    let output = timeout(Duration::from_secs(20), tokio::process::Command::new("winget").args(["show", "--id", "Git.Git", "--exact", "--accept-source-agreements", "--disable-interactivity"]).output()).await.ok()?.ok()?;
-    if !output.status.success() {
-        return None;
+    #[cfg(not(target_os = "windows"))]
+    {
+        None
     }
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .find_map(|line| line.trim().strip_prefix("Version:").map(|s| s.trim().to_string()))
 }

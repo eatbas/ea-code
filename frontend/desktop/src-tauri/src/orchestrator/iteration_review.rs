@@ -51,7 +51,7 @@ pub async fn run_review_fix_stages(
     })?;
 
     run.current_stage = Some(PipelineStage::DiffAfterGenerate);
-    stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterGenerate, &request.workspace_path, db));
+    stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterGenerate, &request.workspace_path, db).await);
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     run.current_stage = Some(PipelineStage::Review);
@@ -130,7 +130,7 @@ pub async fn run_review_fix_stages(
     }
 
     run.current_stage = Some(PipelineStage::DiffAfterFix);
-    stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterFix, &request.workspace_path, db));
+    stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterFix, &request.workspace_path, db).await);
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     Ok(())
