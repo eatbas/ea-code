@@ -87,6 +87,7 @@ pub async fn run_iteration(
     let enhanced = normalise_enhanced_prompt(&pe_result.output, &request.prompt);
     iter_ctx.enhanced_prompt = enhanced.clone();
     persist_iteration_context(db, run_id, iter_num, &iter_ctx);
+    emit_artifact(app, run_id, "enhanced_prompt", &enhanced, iter_num, db);
     if pe_result.status == StageStatus::Failed {
         stages.push(pe_result);
         run.iterations.push(Iteration { number: iter_num, stages, verdict: None, judge_reasoning: None });
@@ -95,6 +96,16 @@ pub async fn run_iteration(
         return Ok(true);
     }
     stages.push(pe_result);
+
+    // DEBUG BREAK: Stop after Prompt Enhancer for step-by-step testing.
+    // Remove this block to resume full pipeline.
+    {
+        run.iterations.push(Iteration { number: iter_num, stages, verdict: Some(JudgeVerdict::Complete), judge_reasoning: Some("DEBUG: Pipeline broken after Prompt Enhancer".to_string()) });
+        run.status = PipelineStatus::Completed;
+        run.final_verdict = Some(JudgeVerdict::Complete);
+        return Ok(true);
+    }
+
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
 
     // --- 2-3. Plan + Plan Audit ---

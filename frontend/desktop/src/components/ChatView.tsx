@@ -6,6 +6,7 @@ import { StageCard } from "./shared/StageCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
 import { ResultCard } from "./shared/ResultCard";
 import { ArtifactCard } from "./shared/ArtifactCard";
+import { PromptCard } from "./shared/PromptCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
 
 /** Artefact kinds consumed by ResultCard — excluded from the generic list. */
@@ -53,8 +54,9 @@ export function ChatView({
   const allStages = run.iterations.flatMap((iter) => iter.stages);
 
   // Non-result artifacts for the generic list
+  const enhancedPrompt = artifacts["enhanced_prompt"];
   const otherArtifacts = Object.entries(artifacts).filter(
-    ([kind]) => !RESULT_ARTIFACT_KINDS.has(kind) && kind !== "workspace_context",
+    ([kind]) => !RESULT_ARTIFACT_KINDS.has(kind) && kind !== "workspace_context" && kind !== "enhanced_prompt",
   );
 
   return (
@@ -73,6 +75,11 @@ export function ChatView({
           {allStages.map((stage, idx) => (
             <StageCard key={`${stage.stage}-${idx}`} stage={stage} logs={stageLogs[stage.stage]} />
           ))}
+
+          {/* Original vs Enhanced prompt comparison */}
+          {enhancedPrompt && (
+            <PromptCard originalPrompt={run.prompt} enhancedPrompt={enhancedPrompt} />
+          )}
 
           {/* Thinking indicator for currently running stage */}
           {isActive(run.status) && run.currentStage && (

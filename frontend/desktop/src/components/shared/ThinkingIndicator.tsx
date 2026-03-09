@@ -27,12 +27,12 @@ export function ThinkingIndicator({ stage }: ThinkingIndicatorProps): ReactNode 
       <div
         className="pointer-events-none absolute inset-0"
         style={{
-          background: "linear-gradient(90deg, transparent 0%, rgba(120,180,255,0.08) 35%, rgba(120,180,255,0.34) 50%, rgba(120,180,255,0.08) 65%, transparent 100%)",
+          background: "linear-gradient(90deg, transparent 0%, rgba(34,197,94,0.08) 35%, rgba(34,197,94,0.34) 50%, rgba(34,197,94,0.08) 65%, transparent 100%)",
           animation: "thinking-sweep 1.6s linear infinite",
         }}
       />
       <div className="relative z-10 flex items-center gap-2">
-        <span className="text-xs font-semibold tracking-wide text-[#7db4ff]">
+        <span className="text-xs font-semibold tracking-wide text-[#4ade80]">
           {STAGE_LABELS[stage] ?? stage}...
         </span>
         <span className="ml-auto text-[10px] tabular-nums text-[#9898b0] opacity-80">

@@ -107,7 +107,6 @@ export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[
   ],
   gemini: [
     { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
-    { value: "gemini-3-pro-preview", label: "Gemini 3.0 Pro" },
     { value: "gemini-3-flash-preview", label: "Gemini 3.0 Flash" },
   ],
   kimi: [

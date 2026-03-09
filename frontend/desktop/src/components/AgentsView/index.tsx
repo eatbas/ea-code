@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { AppSettings, AgentBackend, CliHealth } from "../../types";
 import { sanitiseAgentAssignmentsForEnabledModels } from "../../utils/agentSettings";
 import { CascadingSelect } from "./CascadingSelect";
@@ -41,22 +41,24 @@ export function AgentsView({
   cliHealthChecking,
 }: AgentsViewProps): ReactNode {
   const [draft, setDraft] = useState<AppSettings>(settings);
+  const draftRef = useRef<AppSettings>(settings);
 
   useEffect(() => {
-    setDraft(sanitiseAgentAssignmentsForEnabledModels(settings));
+    const sanitised = sanitiseAgentAssignmentsForEnabledModels(settings);
+    draftRef.current = sanitised;
+    setDraft(sanitised);
   }, [settings]);
 
   function update(patch: Partial<AppSettings>): void {
-    setDraft((prev) => {
-      const next = { ...prev, ...patch };
-      onSave(next);
-      return next;
-    });
+    const next = { ...draftRef.current, ...patch };
+    draftRef.current = next;
+    setDraft(next);
+    onSave(next);
   }
 
   function handleFreshStart(): void {
     const cleared: AppSettings = {
-      ...draft,
+      ...draftRef.current,
       promptEnhancerAgent: null,
       skillSelectorAgent: null,
       plannerAgent: null,
@@ -76,6 +78,7 @@ export function AgentsView({
       finalJudgeModel: "",
       executiveSummaryModel: "",
     };
+    draftRef.current = cleared;
     setDraft(cleared);
     onSave(cleared);
   }
