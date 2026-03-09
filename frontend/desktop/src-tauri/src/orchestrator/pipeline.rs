@@ -120,8 +120,10 @@ pub async fn run_pipeline(
             run.status = PipelineStatus::Cancelled;
         }
 
-        run.current_stage = Some(PipelineStage::ExecutiveSummary);
-        run_executive_summary(&app, &run_id, &run, &settings, &session_id, &db).await;
+        // DEBUG: Skip executive summary while pipeline is broken for step-by-step testing.
+        // Uncomment to restore:
+        // run.current_stage = Some(PipelineStage::ExecutiveSummary);
+        // run_executive_summary(&app, &run_id, &run, &settings, &session_id, &db).await;
     }
 
     let total_duration_ms = pipeline_start.elapsed().as_millis() as u64;

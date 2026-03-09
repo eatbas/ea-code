@@ -11,7 +11,7 @@ export const BACKEND_OPTIONS: { value: AgentBackend; label: string }[] = [
 
 /** Display labels for each pipeline stage. */
 export const STAGE_LABELS: Record<PipelineStage, string> = {
-  prompt_enhance: "Prompt",
+  prompt_enhance: "Enhancing Prompt",
   skill_select: "Skills",
   plan: "Plan",
   plan_audit: "Plan Audit",

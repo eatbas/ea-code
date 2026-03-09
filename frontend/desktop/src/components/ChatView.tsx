@@ -71,15 +71,55 @@ export function ChatView({
             </div>
           </div>
 
-          {/* Stage timeline cards */}
-          {allStages.map((stage, idx) => (
-            <StageCard key={`${stage.stage}-${idx}`} stage={stage} logs={stageLogs[stage.stage]} />
-          ))}
+          {/* Prompt received — collapsible card matching stage card style */}
+          <article className="rounded-lg border border-[#2e2e48] bg-[#14141e] overflow-hidden">
+            <details>
+              <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[#1a1a2a] transition-colors">
+                <svg
+                  className="h-3 w-3 text-[#9898b0] transition-transform [details[open]>&]:rotate-90"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                <span
+                  className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
+                  style={{ background: "rgba(34, 197, 94, 0.22)" }}
+                >
+                  Prompt Received
+                </span>
+              </summary>
+              <div className="px-3 pb-3">
+                <div className="rounded bg-[#0f0f14] px-3 py-2 text-xs text-[#c8c8d8] whitespace-pre-wrap leading-relaxed">
+                  {run.prompt}
+                </div>
+              </div>
+            </details>
+          </article>
 
-          {/* Original vs Enhanced prompt comparison */}
-          {enhancedPrompt && (
-            <PromptCard originalPrompt={run.prompt} enhancedPrompt={enhancedPrompt} />
-          )}
+          {/* Stage timeline cards with inline prompt displays */}
+          {allStages.map((stage, idx) => (
+            <div key={`${stage.stage}-${idx}`} className="flex flex-col gap-2">
+              <StageCard stage={stage} logs={stageLogs[stage.stage]} />
+
+              {/* After PROMPT stage — show the original prompt */}
+              {stage.stage === "prompt_enhance" && stage.status === "completed" && !enhancedPrompt && (
+                <div className="rounded-lg border border-[#2e2e48] bg-[#14141e] px-3 py-2">
+                  <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
+                    Original Prompt
+                  </span>
+                  <div className="rounded bg-[#0f0f14] px-3 py-2 text-xs text-[#c8c8d8] whitespace-pre-wrap leading-relaxed">
+                    {run.prompt}
+                  </div>
+                </div>
+              )}
+
+              {/* After PROMPT stage when enhanced prompt is ready — show both */}
+              {stage.stage === "prompt_enhance" && stage.status === "completed" && enhancedPrompt && (
+                <PromptCard originalPrompt={run.prompt} enhancedPrompt={enhancedPrompt} />
+              )}
+            </div>
+          ))}
 
           {/* Thinking indicator for currently running stage */}
           {isActive(run.status) && run.currentStage && (
