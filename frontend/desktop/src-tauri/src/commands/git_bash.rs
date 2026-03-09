@@ -1,14 +1,26 @@
 #[cfg(target_os = "windows")]
 use std::path::Path;
 #[cfg(target_os = "windows")]
-use std::process::Output;
+use std::process::{Output, Stdio};
+#[cfg(target_os = "windows")]
+use std::sync::OnceLock;
 #[cfg(target_os = "windows")]
 use tokio::process::Command;
 #[cfg(target_os = "windows")]
 use tokio::time::{timeout, Duration};
 
 #[cfg(target_os = "windows")]
-pub(crate) fn find_git_bash() -> Option<String> {
+static GIT_BASH_PATH: OnceLock<Option<String>> = OnceLock::new();
+
+#[cfg(target_os = "windows")]
+pub(crate) fn find_git_bash() -> Option<&'static str> {
+    GIT_BASH_PATH
+        .get_or_init(find_git_bash_inner)
+        .as_deref()
+}
+
+#[cfg(target_os = "windows")]
+fn find_git_bash_inner() -> Option<String> {
     let mut candidates = Vec::new();
     if let Ok(program_files) = std::env::var("ProgramFiles") {
         candidates.push(format!("{program_files}\\Git\\bin\\bash.exe"));
@@ -69,13 +81,32 @@ pub(crate) fn find_git_bash() -> Option<String> {
 #[cfg(target_os = "windows")]
 async fn run_git_bash(script: &str, args: &[&str], timeout_secs: u64) -> Option<Output> {
     let git_bash = find_git_bash()?;
-    timeout(
+    eprintln!("[ea-code] git_bash::run: script={script:?} args={args:?} timeout={timeout_secs}s");
+    let start = std::time::Instant::now();
+    let result = timeout(
         Duration::from_secs(timeout_secs),
-        Command::new(git_bash).arg("-lc").arg(script).args(args).output(),
+        Command::new(git_bash)
+            .arg("-lc")
+            .arg(script)
+            .args(args)
+            .stdin(Stdio::null())
+            .output(),
     )
-    .await
-    .ok()?
-    .ok()
+    .await;
+    let elapsed = start.elapsed();
+    match &result {
+        Ok(Ok(output)) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            eprintln!(
+                "[ea-code] git_bash::run: completed in {elapsed:.1?} status={} stdout={:?} stderr={:?}",
+                output.status, stdout.trim(), stderr.trim()
+            );
+        }
+        Ok(Err(e)) => eprintln!("[ea-code] git_bash::run: failed in {elapsed:.1?} error={e}"),
+        Err(_) => eprintln!("[ea-code] git_bash::run: TIMED OUT after {elapsed:.1?}"),
+    }
+    result.ok()?.ok()
 }
 
 #[cfg(target_os = "windows")]

@@ -1,5 +1,5 @@
 use crate::models::*;
-use super::cli_util::{extract_version_from_output, get_latest_npm_version, run_npm};
+use super::cli_util::{extract_version_from_output, run_npm};
 #[cfg(target_os = "windows")]
 use super::git_bash;
 #[cfg(not(target_os = "windows"))]
@@ -15,6 +15,8 @@ pub async fn check_cli_health(settings: AppSettings) -> Result<CliHealth, String
 }
 #[tauri::command]
 pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, String> {
+    let start = std::time::Instant::now();
+    eprintln!("[ea-code] get_cli_versions: starting all version checks...");
     let (claude, codex, gemini, kimi, opencode, git_bash) = tokio::join!(
         build_cli_version_info(&settings.claude_path, "Claude CLI", "claude", "@anthropic-ai/claude-code"),
         build_cli_version_info(&settings.codex_path, "Codex CLI", "codex", "@openai/codex",),
@@ -29,6 +31,7 @@ pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, S
             }
         },
     );
+    eprintln!("[ea-code] get_cli_versions: completed in {:.1?}", start.elapsed());
     Ok(AllCliVersions {
         claude,
         codex,
@@ -46,6 +49,7 @@ pub async fn update_cli(cli_name: String) -> Result<String, String> {
         "gemini" => update_with_npm("@google/gemini-cli").await,
         "opencode" => update_with_npm("opencode-ai").await,
         "kimi" => update_kimi_cli().await,
+        "gitBash" => update_git_bash().await,
         _ => Err(format!("Unknown CLI: {cli_name}")),
     }
 }
@@ -117,6 +121,25 @@ async fn update_kimi_cli() -> Result<String, String> {
     }
     update_with_npm("kimi-cli").await
 }
+async fn update_git_bash() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let output = git_bash::run_binary(
+            "winget",
+            &["upgrade", "--id", "Git.Git", "--exact", "--accept-source-agreements", "--disable-interactivity"],
+            120,
+        )
+        .await
+        .ok_or_else(|| "Failed to run winget via Git Bash".to_string())?;
+        if output.status.success() {
+            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+        }
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(format!("Update failed: {stderr}"));
+    }
+    #[cfg(not(target_os = "windows"))]
+    Err("Git Bash update is only supported on Windows".to_string())
+}
 async fn check_binary_exists(path: &str) -> bool {
     #[cfg(target_os = "windows")]
     {
@@ -140,7 +163,7 @@ pub(crate) async fn is_cli_available(path: &str) -> bool {
 async fn get_installed_version(path: &str) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
-        let output = git_bash::run_binary(path, &["--version"], 15).await?;
+        let output = git_bash::run_binary(path, &["--version"], 5).await?;
         if !output.status.success() {
             return None;
         }
@@ -148,79 +171,58 @@ async fn get_installed_version(path: &str) -> Option<String> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let candidates = vec![path.to_string()];
-        for candidate in candidates {
-            let output = timeout(
-                Duration::from_secs(15),
-                tokio::process::Command::new(&candidate).arg("--version").output(),
-            )
-            .await
-            .ok()?
-            .ok()?;
-            if output.status.success() {
-                if let Some(version) = extract_version_from_output(&output) {
-                    return Some(version);
-                }
-            }
+        let output = timeout(
+            Duration::from_secs(5),
+            tokio::process::Command::new(path).arg("--version").output(),
+        )
+        .await
+        .ok()?
+        .ok()?;
+        if output.status.success() {
+            return extract_version_from_output(&output);
         }
         None
     }
 }
-async fn get_latest_kimi_version(has_uv: bool) -> Option<String> {
-    if has_uv {
-        #[cfg(target_os = "windows")]
-        let output = git_bash::run_binary("uvx", &["--from", "kimi-cli", "kimi", "--version"], 20).await?;
-        #[cfg(not(target_os = "windows"))]
-        let output = timeout(Duration::from_secs(20), tokio::process::Command::new("uvx").args(["--from", "kimi-cli", "kimi", "--version"]).output()).await.ok()?.ok()?;
-        if output.status.success() {
-            return extract_version_from_output(&output);
+/// Fetches the latest version via HTTP (no process spawns).
+async fn get_latest_version(cli_name: &str, npm_package: &str) -> Option<String> {
+    if cli_name == "kimi" {
+        if let Some(v) = super::cli_http::get_latest_pypi_version("kimi-cli").await {
+            return Some(v);
         }
+        return super::cli_http::get_latest_npm_version_http(npm_package).await;
     }
-    get_latest_npm_version("kimi-cli").await
+    super::cli_http::get_latest_npm_version_http(npm_package).await
 }
+
 async fn build_cli_version_info(
     path: &str,
     display_name: &str,
     cli_name: &str,
     npm_package: &str,
 ) -> CliVersionInfo {
-    let available = check_binary_exists(path).await;
-    let has_uv = cli_name == "kimi" && check_binary_exists("uv").await;
-    let (installed, latest) = tokio::join!(
-        async {
-            if available {
-                get_installed_version(path).await
-            } else {
-                None
-            }
-        },
-        async {
-            if cli_name == "kimi" {
-                get_latest_kimi_version(has_uv).await
-            } else {
-                get_latest_npm_version(npm_package).await
-            }
-        },
+    let start = std::time::Instant::now();
+    let (installed, latest, exists) = tokio::join!(
+        get_installed_version(path),
+        get_latest_version(cli_name, npm_package),
+        check_binary_exists(path),
     );
-    let up_to_date = match (&installed, &latest) {
-        (Some(i), Some(l)) => i == l,
-        _ => false,
-    };
-    let installed_and_latest_error = if cli_name == "kimi" {
-        format!("Failed to read installed version and latest Kimi version for {path}")
+    let available = installed.is_some() || exists;
+    eprintln!(
+        "[ea-code] {cli_name}: installed={installed:?} latest={latest:?} exists={exists} available={available} ({:.1?})",
+        start.elapsed()
+    );
+    let up_to_date = matches!((&installed, &latest), (Some(i), Some(l)) if i == l);
+    let update_command = if cli_name == "kimi" {
+        "uv tool upgrade kimi-cli --no-cache".to_string()
     } else {
-        format!("Failed to read installed version and latest npm version for {path}")
-    };
-    let latest_error = if cli_name == "kimi" {
-        "Failed to fetch latest Kimi version".to_string()
-    } else {
-        format!("Failed to fetch latest npm version for package {npm_package}")
+        format!("npm install -g {npm_package}@latest")
     };
     let error = match (available, &installed, &latest) {
         (false, _, _) => Some(format!("{path} not found in PATH")),
-        (true, None, None) => Some(installed_and_latest_error),
+        (true, None, None) => Some(format!("Failed to read version info for {path}")),
         (true, None, Some(_)) => Some(format!("Failed to read installed version from {path} --version")),
-        (true, Some(_), None) => Some(latest_error),
+        (true, Some(_), None) => Some(format!("Failed to fetch latest version for {npm_package}")),
         (true, Some(_), Some(_)) => None,
     };
     CliVersionInfo {
@@ -229,23 +231,18 @@ async fn build_cli_version_info(
         installed_version: installed,
         latest_version: latest,
         up_to_date,
-        update_command: if has_uv { "uv tool upgrade kimi-cli --no-cache".to_string() } else { format!("npm install -g {npm_package}@latest") },
+        update_command,
         available,
         error,
     }
 }
 async fn build_git_bash_version_info() -> CliVersionInfo {
-    let available = check_binary_exists("bash").await;
-    let (installed, latest) = tokio::join!(
-        async {
-            if available {
-                get_installed_version("git").await
-            } else {
-                None
-            }
-        },
-        get_latest_git_bash_version(),
+    let (installed, latest, exists) = tokio::join!(
+        get_installed_version("git"),
+        super::cli_http::get_latest_git_version_http(),
+        check_binary_exists("bash"),
     );
+    let available = installed.is_some() || exists;
     let up_to_date = matches!((&installed, &latest), (Some(i), Some(l)) if i == l || i.starts_with(l));
     let error = match (available, &installed, &latest) {
         (false, _, _) => Some("Git Bash is required on Windows to run agents".to_string()),
@@ -264,29 +261,8 @@ async fn build_git_bash_version_info() -> CliVersionInfo {
         installed_version: installed,
         latest_version: latest,
         up_to_date,
-        update_command: String::new(),
+        update_command: "winget upgrade --id Git.Git".to_string(),
         available,
         error,
-    }
-}
-async fn get_latest_git_bash_version() -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        let output = git_bash::run_binary(
-            "winget",
-            &["show", "--id", "Git.Git", "--exact", "--accept-source-agreements", "--disable-interactivity"],
-            20,
-        )
-        .await?;
-        if !output.status.success() {
-            return None;
-        }
-        return String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .find_map(|line| line.trim().strip_prefix("Version:").map(|s| s.trim().to_string()));
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        None
     }
 }

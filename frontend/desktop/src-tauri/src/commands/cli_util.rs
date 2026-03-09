@@ -37,11 +37,3 @@ pub(super) async fn run_npm(args: &[&str]) -> Result<std::process::Output, Strin
         .map_err(|_| "npm command timed out after 20 seconds".to_string())?
         .map_err(|e| format!("Failed to run npm: {e}"))
 }
-
-pub(super) async fn get_latest_npm_version(package_name: &str) -> Option<String> {
-    let output = run_npm(&["view", package_name, "version"]).await.ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}

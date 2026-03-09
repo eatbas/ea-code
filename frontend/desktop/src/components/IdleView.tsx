@@ -136,6 +136,7 @@ export function IdleView({
           placeholder="What would you like to build?"
           cliHealth={cliHealth}
           settings={settings}
+          hasProjectSelected={Boolean(workspace)}
           onMissingAgentSetup={onMissingAgentSetup}
           onSubmit={onRun}
         />

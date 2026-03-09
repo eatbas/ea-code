@@ -47,11 +47,11 @@ export function AgentsView({
   }, [settings]);
 
   function update(patch: Partial<AppSettings>): void {
-    setDraft((prev) => ({ ...prev, ...patch }));
-  }
-
-  function handleSave(): void {
-    onSave(draft);
+    setDraft((prev) => {
+      const next = { ...prev, ...patch };
+      onSave(next);
+      return next;
+    });
   }
 
   function handleFreshStart(): void {
@@ -105,12 +105,19 @@ export function AgentsView({
             {STAGES.map((stage) => {
               const currentBackend = draft[stage.backendKey] as AgentBackend | null;
               const currentModel = draft[stage.modelKey] as string | null;
+              const isMandatoryUnconfigured = !stage.optional && (!currentBackend || !currentModel);
 
               return (
                 <div
                   key={stage.label}
-                  className="rounded-lg border border-[#2e2e48] bg-[#1a1a24] p-4 flex flex-col gap-2"
+                  className="relative rounded-lg border border-[#2e2e48] bg-[#1a1a24] p-4 flex flex-col gap-2"
                 >
+                  {isMandatoryUnconfigured && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-y-0 left-0 w-1.5 rounded-l-lg bg-[#dc2626]"
+                    />
+                  )}
                   <span className="text-xs font-medium text-[#9898b0]">
                     {stage.label}
                     <span className="ml-1 text-[#6b6b80]">
@@ -165,13 +172,6 @@ export function AgentsView({
             </div>
           </div>
 
-          {/* Save */}
-          <button
-            onClick={handleSave}
-            className="self-start rounded bg-[#e4e4ed] px-4 py-2 text-sm font-medium text-[#0f0f14] hover:bg-white transition-colors"
-          >
-            Save
-          </button>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 pub(crate) mod cli;
+pub(crate) mod cli_http;
 pub(crate) mod cli_util;
 #[cfg(target_os = "windows")]
 pub(crate) mod git_bash;

@@ -9,10 +9,16 @@ import {
 import { BACKEND_OPTIONS } from "./constants";
 import { PopoverSelect } from "./PopoverSelect";
 
+interface PromptInputToast {
+  message: string;
+  showSettingsLink: boolean;
+}
+
 interface PromptInputBarProps {
   placeholder?: string;
   cliHealth: CliHealth | null;
   settings: AppSettings | null;
+  hasProjectSelected?: boolean;
   onMissingAgentSetup?: () => void;
   onSubmit: (options: RunOptions) => void;
 }
@@ -22,6 +28,7 @@ export function PromptInputBar({
   placeholder,
   cliHealth,
   settings,
+  hasProjectSelected = true,
   onMissingAgentSetup,
   onSubmit,
 }: PromptInputBarProps): ReactNode {
@@ -30,25 +37,37 @@ export function PromptInputBar({
   const [noPlan, setNoPlan] = useState(false);
   const [directAgent, setDirectAgent] = useState<AgentBackend>("claude");
   const [directModel, setDirectModel] = useState<string>("sonnet");
+  const [toast, setToast] = useState<PromptInputToast | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const toastTimerRef = useRef<number | undefined>(undefined);
 
   const availableBackends = BACKEND_OPTIONS.filter(
     (opt) => cliHealth?.[opt.value]?.available,
   );
 
   const hasPrompt = prompt.trim().length > 0;
+  const missingProject = !hasProjectSelected;
   const missingMinimumAgents = !settings || !hasMinimumAgentsConfigured(settings);
   const missingMinimumAgentModels = settings
     ? missingMinimumAgentModelLabels(settings).length > 0
     : true;
   const blockedByMinimumAgents = !directTask && (missingMinimumAgents || missingMinimumAgentModels);
-  const canRun = hasPrompt && !blockedByMinimumAgents;
+  const canRun = hasPrompt && !missingProject && !blockedByMinimumAgents;
+  const canAttemptSubmit = hasPrompt;
 
   let disabledReason = directTask ? "Run direct task" : "Run pipeline";
-  if (blockedByMinimumAgents) {
+  if (!hasPrompt) {
+    disabledReason = "Type a prompt before sending.";
+  } else if (missingProject && blockedByMinimumAgents) {
+    disabledReason = missingMinimumAgents
+      ? "No project selected and no agents selected. Select a project and configure minimum agent roles before sending."
+      : "No project selected and agent models are not selected. Select a project and configure required models before sending.";
+  } else if (missingProject) {
+    disabledReason = "No project selected. Select a project before sending.";
+  } else if (blockedByMinimumAgents) {
     disabledReason = missingMinimumAgentModels
-      ? "Go to Settings/CLI Setup and select models, then go to Settings/Agents and set the minimum roles."
-      : "Go to Settings/Agents and set the minimum agent roles before sending.";
+      ? "Agent models are not selected. Go to Settings/CLI Setup and choose models before sending."
+      : "No agents selected. Go to Settings/Agents and set the minimum agent roles before sending.";
   }
 
   useEffect(() => {
@@ -56,9 +75,37 @@ export function PromptInputBar({
     if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 160)}px`; }
   }, [prompt]);
 
+  useEffect(() => (
+    () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    }
+  ), []);
+
+  function showErrorToast(message: string, showSettingsLink: boolean): void {
+    setToast({ message, showSettingsLink });
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+    }, 3500);
+  }
+
+  function showMissingSetupToast(): void {
+    if (missingProject) {
+      showErrorToast("Please select a project.", false);
+      return;
+    }
+    if (missingMinimumAgents || missingMinimumAgentModels) {
+      showErrorToast("Please select the agents under Settings/Agents.", true);
+    }
+  }
+
   function handleSubmit(): void {
-    if (blockedByMinimumAgents) {
-      onMissingAgentSetup?.();
+    if (missingProject || blockedByMinimumAgents) {
+      showMissingSetupToast();
       return;
     }
 
@@ -97,16 +144,11 @@ export function PromptInputBar({
         />
         <span
           className="shrink-0"
-          title={disabledReason}
-          onClick={() => {
-            if (blockedByMinimumAgents) {
-              onMissingAgentSetup?.();
-            }
-          }}
+          title={!canRun ? disabledReason : undefined}
         >
           <button
             onClick={handleSubmit}
-            disabled={!canRun}
+            disabled={!canAttemptSubmit}
             className="rounded-lg bg-[#e4e4ed] p-2 text-[#0f0f14] hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             title={canRun ? disabledReason : undefined}
           >
@@ -172,6 +214,27 @@ export function PromptInputBar({
           </div>
         )}
       </div>
+      {toast && (
+        <div className="fixed right-6 top-6 z-[100] max-w-sm">
+          <div
+            role="alert"
+            className="rounded-lg border border-[#6f1d1d] bg-[#2a1518] px-4 py-3 text-sm text-[#ffd8d8] shadow-lg"
+          >
+            <p>{toast.message}</p>
+            {toast.showSettingsLink && onMissingAgentSetup && (
+              <button
+                onClick={() => {
+                  setToast(null);
+                  onMissingAgentSetup();
+                }}
+                className="mt-2 text-xs font-medium text-[#ffb4b4] underline hover:text-[#ffd8d8] transition-colors"
+              >
+                Open Settings/Agents
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
