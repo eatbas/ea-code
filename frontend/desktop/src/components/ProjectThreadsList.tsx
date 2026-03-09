@@ -8,11 +8,12 @@ interface ProjectThreadsListProps {
   sessions: SessionSummary[];
   activeProjectPath?: string;
   activeSessionId?: string;
+  /** Session ID of the currently running pipeline (shows spinner). */
+  runningSessionId?: string;
   onSelectProject: (projectPath: string) => void | Promise<void>;
   onSelectSession: (sessionId: string) => void;
   onArchiveSession?: (sessionId: string) => void;
 }
-
 
 /** Renders projects with nested sessions for the active project. */
 export function ProjectThreadsList({
@@ -20,6 +21,7 @@ export function ProjectThreadsList({
   sessions,
   activeProjectPath,
   activeSessionId,
+  runningSessionId,
   onSelectProject,
   onSelectSession,
   onArchiveSession,
@@ -80,6 +82,7 @@ export function ProjectThreadsList({
                     <div className="flex flex-col gap-0.5 py-1">
                       {sessions.map((session) => {
                         const isActiveSession = session.id === activeSessionId;
+                        const isRunningSession = session.id === runningSessionId;
                         const isConfirming = confirmingId === session.id;
 
                         if (isConfirming) {
@@ -114,6 +117,12 @@ export function ProjectThreadsList({
                                 : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
                             }`}
                           >
+                            {isRunningSession && (
+                              <svg className="h-3 w-3 shrink-0 animate-spin text-[#22c55e]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                            )}
                             <button
                               onClick={() => onSelectSession(session.id)}
                               className="flex-1 truncate text-left"

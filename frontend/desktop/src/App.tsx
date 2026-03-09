@@ -102,6 +102,15 @@ function App(): ReactNode {
   }
 
   const handleSelectSession = useCallback(async (_sessionId: string): Promise<void> => {
+    // If the selected session is the current pipeline run, navigate to the live ChatView.
+    const isCurrentRun = run && (isRunActive(run) || isRunTerminal(run)) && run.sessionId === _sessionId;
+    if (isCurrentRun) {
+      setActiveSessionId(undefined);
+      setSessionDetail(null);
+      setActiveView("home");
+      return;
+    }
+
     setActiveSessionId(_sessionId);
     setActiveView("home");
     setSessionDetailLoading(true);
@@ -114,7 +123,7 @@ function App(): ReactNode {
     } finally {
       setSessionDetailLoading(false);
     }
-  }, [loadSessionDetail, toast]);
+  }, [loadSessionDetail, toast, run]);
 
   const handleSelectProject = useCallback(async (projectPath: string): Promise<void> => {
     await openWorkspace(projectPath);
@@ -241,13 +250,7 @@ function App(): ReactNode {
           sessions={sessions}
           activeSessionId={activeSessionId}
           onSelectSession={handleSelectSession}
-          isRunning={isRunActive(run)}
-          hasTerminalRun={isRunTerminal(run)}
-          onGoToRun={() => {
-            setActiveSessionId(undefined);
-            setSessionDetail(null);
-            setActiveView("home");
-          }}
+          runningSessionId={isRunActive(run) ? run?.sessionId : undefined}
           onArchiveSession={(sessionId) => {
             void deleteSession(sessionId).then(
               () => toast.success("Session archived."),

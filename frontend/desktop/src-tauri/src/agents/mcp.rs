@@ -4,46 +4,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::db::DbPool;
 
-fn locate_history_mcp_binary() -> Option<String> {
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let candidate = dir.join("ea-code-mcp");
-            if candidate.exists() {
-                return Some(candidate.to_string_lossy().to_string());
-            }
-        }
-    }
-
-    let names: &[&str] = if cfg!(windows) {
-        &["ea-code-mcp.exe", "ea-code-mcp"]
-    } else {
-        &["ea-code-mcp"]
-    };
-    if let Some(path_var) = std::env::var_os("PATH") {
-        for dir in std::env::split_paths(&path_var) {
-            for name in names {
-                let candidate = dir.join(name);
-                if candidate.exists() {
-                    return Some(candidate.to_string_lossy().to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
-fn resolve_server_command(command: &str) -> Option<String> {
-    if command == "ea-code-mcp" {
-        return locate_history_mcp_binary();
-    }
-    Some(command.to_string())
-}
-
 /// Builds a temporary MCP config file for a CLI from active DB-backed servers.
 pub fn build_mcp_config_for_cli(
     db: &DbPool,
     cli_name: &str,
-    session_id: Option<&str>,
+    _session_id: Option<&str>,
 ) -> Option<String> {
     let active = match crate::db::mcp::get_active_servers_for_cli(db, cli_name) {
         Ok(rows) => rows,
@@ -58,24 +23,8 @@ pub fn build_mcp_config_for_cli(
 
     let mut servers = BTreeMap::<String, serde_json::Value>::new();
     for server in active {
-        let command = match resolve_server_command(&server.command) {
-            Some(cmd) => cmd,
-            None => {
-                eprintln!(
-                    "Skipping MCP server {} because command could not be resolved",
-                    server.id
-                );
-                continue;
-            }
-        };
-
-        let mut args = server.args.clone();
-        if server.id == "ea-code-history" {
-            if let Some(sid) = session_id {
-                args.push("--session-id".to_string());
-                args.push(sid.to_string());
-            }
-        }
+        let command = server.command.clone();
+        let args = server.args.clone();
 
         let mut payload = serde_json::Map::new();
         payload.insert("command".to_string(), serde_json::Value::String(command));

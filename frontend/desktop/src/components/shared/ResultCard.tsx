@@ -1,79 +1,103 @@
 import type { ReactNode } from "react";
-import type { PipelineRun } from "../../types";
-import { formatDuration, formatTokens, parseCliResult } from "../../utils/formatters";
+import type { PipelineStage } from "../../types";
+import { formatDuration, formatTimestamp, formatTokens, parseCliResult } from "../../utils/formatters";
 import { STAGE_LABELS } from "./constants";
 
 interface ResultCardProps {
-  run: PipelineRun;
-  artifacts: Record<string, string>;
+  /** Run status — "completed", "failed", "cancelled", etc. */
+  status: string;
+  finalVerdict?: string;
+  iterationCount: number;
+  totalDurationMs?: number;
+  completedAt?: string;
+  executiveSummary?: string;
+  error?: string;
+  /** Stage timing rows for collapsible breakdown. */
+  stageRows?: { name: string; durationMs: number }[];
+  /** Raw artifact map — used for tokens, raw output, and judge detail sections. */
+  artifacts?: Record<string, string>;
 }
 
-/** Final result card shown when a pipeline run completes. Green/red tinted. */
-export function ResultCard({ run, artifacts }: ResultCardProps): ReactNode {
-  const isOk = run.status === "completed";
-  const tint = isOk ? "rgba(40,180,95,0.10)" : "rgba(230,75,75,0.10)";
-  const borderTint = isOk ? "rgba(40,180,95,0.30)" : "rgba(230,75,75,0.30)";
-  const verdictColour = isOk ? "#22c55e" : "#ef4444";
+/** Unified result card used by both ChatView and RunCard (session history). */
+export function ResultCard({
+  status,
+  finalVerdict,
+  iterationCount,
+  totalDurationMs,
+  completedAt,
+  executiveSummary,
+  error,
+  stageRows,
+  artifacts,
+}: ResultCardProps): ReactNode {
+  const statusColour = status === "completed"
+    ? "#22c55e"
+    : status === "failed"
+      ? "#ef4444"
+      : status === "cancelled"
+        ? "#f59e0b"
+        : "#9898b0";
 
-  // Try to extract structured data from result artifact (direct task CLI JSON)
-  const cliResult = artifacts["result"] ? parseCliResult(artifacts["result"]) : null;
+  const isOk = status === "completed";
+  const bgTint = isOk ? "rgba(40,180,95,0.10)" : status === "failed" ? "rgba(230,75,75,0.10)" : "#1a1a24";
+  const borderTint = isOk ? "rgba(40,180,95,0.30)" : status === "failed" ? "rgba(230,75,75,0.30)" : "#2e2e48";
 
-  // Result text: CLI result → executive_summary → fallback
-  const resultText = cliResult?.result
-    ?? artifacts["executive_summary"]
-    ?? undefined;
-
-  // Metrics
-  const totalDuration = cliResult?.durationMs ?? computeDuration(run);
+  // Extract token info from CLI result artifact if available
+  const cliResult = artifacts?.["result"] ? parseCliResult(artifacts["result"]) : null;
   const inputTokens = cliResult?.usage?.inputTokens;
   const outputTokens = cliResult?.usage?.outputTokens;
   const cacheReadTokens = cliResult?.usage?.cacheReadInputTokens;
-
   const totalInputDisplay = (inputTokens ?? 0) + (cacheReadTokens ?? 0);
   const hasTokens = inputTokens !== undefined || outputTokens !== undefined;
 
-  // Stage breakdown rows
-  const stageRows = run.iterations.flatMap((iter) =>
-    iter.stages.filter((s) => s.durationMs > 0).map((s) => ({
-      name: STAGE_LABELS[s.stage] ?? s.stage,
-      durationMs: s.durationMs,
-    })),
-  );
+  // Use CLI result text or executive summary
+  const resultText = cliResult?.result ?? executiveSummary;
 
   return (
     <div
-      className="rounded-lg border p-3"
-      style={{ background: tint, borderColor: borderTint }}
+      className="rounded-lg border px-3 py-2"
+      style={{ background: bgTint, borderColor: borderTint }}
     >
-      {/* Verdict */}
-      <div className="mb-2 text-xs font-bold" style={{ color: verdictColour }}>
-        {run.finalVerdict === "COMPLETE" ? "COMPLETE" : run.finalVerdict === "NOT COMPLETE" ? "NOT COMPLETE" : run.status.toUpperCase()}
+      {/* Status row */}
+      <div className="flex items-center gap-2">
+        <div className="h-2 w-2 rounded-full" style={{ backgroundColor: statusColour }} />
+        <span className="text-xs font-medium capitalize" style={{ color: statusColour }}>
+          {status}
+        </span>
+        {finalVerdict && (
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold"
+            style={{ color: statusColour, backgroundColor: `${statusColour}15` }}
+          >
+            {finalVerdict}
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2 text-[11px] text-[#6f7086]">
+          {iterationCount > 0 && (
+            <span>{iterationCount} {iterationCount === 1 ? "iteration" : "iterations"}</span>
+          )}
+          {totalDurationMs != null && totalDurationMs > 0 && (
+            <span>{formatDuration(totalDurationMs)}</span>
+          )}
+          {completedAt && (
+            <span>{formatTimestamp(completedAt)}</span>
+          )}
+        </div>
       </div>
 
-      {/* Result text */}
+      {/* Result / executive summary text */}
       {resultText && (
-        <p className="mb-3 text-sm leading-relaxed text-[#e4e4ed] whitespace-pre-wrap">
+        <p className="mt-2 text-xs text-[#c4c4d4] whitespace-pre-wrap leading-relaxed">
           {resultText}
         </p>
       )}
-
-      {/* Metrics */}
-      <div className="flex flex-wrap items-center gap-3 border-t border-[#2e2e48]/50 pt-2 text-[11px]">
-        {run.currentIteration > 0 && (
-          <span className="text-[#9898b0]">
-            <strong>Iterations:</strong> {run.currentIteration}
-          </span>
-        )}
-        {totalDuration !== undefined && totalDuration > 0 && (
-          <span className="text-[#9898b0]">
-            <strong>Time:</strong> {formatDuration(totalDuration)}
-          </span>
-        )}
-      </div>
+      {error && (
+        <p className="mt-1.5 text-xs text-[#ef4444]">{error}</p>
+      )}
 
       {/* Token display */}
       {hasTokens && (
-        <div className="mt-1 flex items-center gap-3 text-[10px]">
+        <div className="mt-1.5 flex items-center gap-3 text-[10px]">
           {totalInputDisplay > 0 && (
             <span className="text-blue-400">↑~{formatTokens(totalInputDisplay)}</span>
           )}
@@ -83,11 +107,11 @@ export function ResultCard({ run, artifacts }: ResultCardProps): ReactNode {
         </div>
       )}
 
-      {/* Cost breakdown table */}
-      {stageRows.length > 0 && (
+      {/* Collapsible: cost breakdown */}
+      {stageRows && stageRows.length > 0 && (
         <details className="mt-2">
           <summary className="cursor-pointer text-[10px] text-[#9898b0] opacity-70">
-            Cost breakdown
+            Stage breakdown
           </summary>
           <table className="mt-1.5 w-full text-[10px]">
             <thead>
@@ -108,8 +132,8 @@ export function ResultCard({ run, artifacts }: ResultCardProps): ReactNode {
         </details>
       )}
 
-      {/* Raw output */}
-      {artifacts["result"] && (
+      {/* Collapsible: raw output */}
+      {artifacts?.["result"] && (
         <details className="mt-2">
           <summary className="cursor-pointer text-[10px] text-[#9898b0] opacity-70">
             Raw output
@@ -120,8 +144,8 @@ export function ResultCard({ run, artifacts }: ResultCardProps): ReactNode {
         </details>
       )}
 
-      {/* Judge details */}
-      {artifacts["judge"] && (
+      {/* Collapsible: judge details */}
+      {artifacts?.["judge"] && (
         <details className="mt-2">
           <summary className="cursor-pointer text-[10px] text-[#9898b0] opacity-70">
             Judge details
@@ -135,11 +159,23 @@ export function ResultCard({ run, artifacts }: ResultCardProps): ReactNode {
   );
 }
 
+/** Builds stage timing rows from a stages array. Works with both StageResult and StageEntry shapes. */
+export function buildStageRows(
+  stages: { stage: string; durationMs: number }[],
+): { name: string; durationMs: number }[] {
+  return stages
+    .filter((s) => s.durationMs > 0)
+    .map((s) => ({
+      name: STAGE_LABELS[s.stage as PipelineStage] ?? s.stage,
+      durationMs: s.durationMs,
+    }));
+}
+
 /** Computes duration from startedAt/completedAt ISO strings. */
-function computeDuration(run: PipelineRun): number | undefined {
-  if (!run.startedAt || !run.completedAt) return undefined;
-  const start = new Date(run.startedAt).getTime();
-  const end = new Date(run.completedAt).getTime();
+export function computeDuration(startedAt?: string, completedAt?: string): number | undefined {
+  if (!startedAt || !completedAt) return undefined;
+  const start = new Date(startedAt).getTime();
+  const end = new Date(completedAt).getTime();
   if (isNaN(start) || isNaN(end)) return undefined;
   return end - start;
 }

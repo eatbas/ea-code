@@ -8,7 +8,7 @@ use crate::agents::AgentInput;
 use crate::db::{self, DbPool};
 use crate::models::*;
 
-use super::helpers::{dispatch_agent, emit_stage, resolve_stage_model, stage_to_str};
+use super::helpers::{dispatch_agent, emit_stage, emit_stage_with_duration, resolve_stage_model, stage_to_str};
 
 /// Runs an agent stage with retry-on-failure support.
 ///
@@ -66,7 +66,7 @@ pub async fn execute_agent_stage(
         {
             Ok(output) => {
                 let duration_ms = start.elapsed().as_millis() as u64;
-                emit_stage(app, run_id, &stage, &StageStatus::Completed, iteration_num);
+                emit_stage_with_duration(app, run_id, &stage, &StageStatus::Completed, iteration_num, Some(duration_ms));
                 let _ = db::runs::insert_stage(
                     db, iteration_db_id, &stage_str, "completed",
                     &output.raw_text, duration_ms as i32, None,
@@ -93,7 +93,7 @@ pub async fn execute_agent_stage(
 
     // All attempts exhausted — return the last error.
     let duration_ms = start.elapsed().as_millis() as u64;
-    emit_stage(app, run_id, &stage, &StageStatus::Failed, iteration_num);
+    emit_stage_with_duration(app, run_id, &stage, &StageStatus::Failed, iteration_num, Some(duration_ms));
     let _ = db::runs::insert_stage(
         db, iteration_db_id, &stage_str, "failed",
         "", duration_ms as i32, Some(&last_error),
@@ -130,7 +130,7 @@ pub async fn execute_run_level_agent_stage(
     {
         Ok(output) => {
             let duration_ms = start.elapsed().as_millis() as u64;
-            emit_stage(app, run_id, &stage, &StageStatus::Completed, iteration_num);
+            emit_stage_with_duration(app, run_id, &stage, &StageStatus::Completed, iteration_num, Some(duration_ms));
             StageResult {
                 stage,
                 status: StageStatus::Completed,
@@ -141,7 +141,7 @@ pub async fn execute_run_level_agent_stage(
         }
         Err(e) => {
             let duration_ms = start.elapsed().as_millis() as u64;
-            emit_stage(app, run_id, &stage, &StageStatus::Failed, iteration_num);
+            emit_stage_with_duration(app, run_id, &stage, &StageStatus::Failed, iteration_num, Some(duration_ms));
             StageResult {
                 stage,
                 status: StageStatus::Failed,
@@ -191,7 +191,7 @@ pub async fn execute_diff_stage(
     let diff = crate::git::git_diff(workspace_path).await;
     let duration_ms = start.elapsed().as_millis() as u64;
 
-    emit_stage(app, run_id, &stage, &StageStatus::Completed, iteration_num);
+    emit_stage_with_duration(app, run_id, &stage, &StageStatus::Completed, iteration_num, Some(duration_ms));
     super::helpers::emit_artifact(app, run_id, "diff", &diff, iteration_num, db);
 
     let stage_str = stage_to_str(&stage);

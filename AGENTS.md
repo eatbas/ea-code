@@ -1,4 +1,4 @@
-# AGENTS.md — Guidance for AI Agents Working on EA Code
+# AGENTS.md - Guidance for AI Agents Working on EA Code
 
 This file provides instructions for any AI agent (Claude Code, Codex, Gemini, Copilot, etc.) that modifies this codebase.
 
@@ -8,32 +8,48 @@ This file provides instructions for any AI agent (Claude Code, Codex, Gemini, Co
 
 1. **Verify before delivering.** Every change must pass the relevant build check before being presented to the user.
 2. **Keep files small.** No file exceeds 300 lines. Split proactively.
-3. **Reuse, don't repeat.** Extract shared logic into hooks, components, or modules.
+3. **Reuse, do not repeat.** Extract shared logic into hooks, components, or modules.
 4. **Match existing patterns.** Read surrounding code before writing new code.
+
+---
+
+## Scope Selection (Important)
+
+- **Default scope is desktop app code.** Start in `frontend/desktop/` unless the user explicitly asks for website work.
+- **Do not inspect `frontend/web/`** unless the request clearly says `website`, `web`, or points to a path under `frontend/web/`.
+- If the request is ambiguous, assume desktop scope and state that assumption briefly.
 
 ---
 
 ## Build Verification Checklist
 
-### After touching Rust code (`src-tauri/**/*.rs`)
+### After touching Rust code (`frontend/desktop/src-tauri/**/*.rs`)
 
 ```sh
-cd src-tauri && cargo check
+cd frontend/desktop/src-tauri && cargo check
 ```
 
 If `cargo check` fails, fix **all** errors before proceeding. Do not present broken code.
 
-### After touching TypeScript/React code (`src/**/*.{ts,tsx}`)
+### After touching desktop TypeScript/React (`frontend/desktop/src/**/*.{ts,tsx}`)
 
 ```sh
-npx tsc --noEmit
+cd frontend/desktop && npx tsc --noEmit
 ```
 
 If `tsc` fails, fix **all** errors before proceeding. Do not present broken code.
 
-### After touching both
+### After touching website TypeScript/React (`frontend/web/src/**/*.{ts,tsx}`)
 
-Run both checks.
+```sh
+cd frontend/web && npx tsc --noEmit
+```
+
+If `tsc` fails, fix **all** errors before proceeding. Do not present broken code.
+
+### After touching both desktop Rust and desktop TypeScript
+
+Run both desktop checks.
 
 ---
 
@@ -47,15 +63,15 @@ When a file grows beyond this:
 
 Split into a directory module:
 
-```
+```text
 # Before
-src/orchestrator.rs  (500+ lines)
+frontend/desktop/src-tauri/src/orchestrator.rs  (500+ lines)
 
 # After
-src/orchestrator/
-├── mod.rs           # Re-exports public API
-├── pipeline.rs      # Pipeline loop logic
-└── stages.rs        # Individual stage handlers
+frontend/desktop/src-tauri/src/orchestrator/
+|- mod.rs           # Re-exports public API
+|- pipeline.rs      # Pipeline loop logic
+`- stages.rs        # Individual stage handlers
 ```
 
 Update `mod.rs` to re-export so callers are unaffected:
@@ -72,15 +88,15 @@ pub use stages::*;
 
 Split into a component folder:
 
-```
+```text
 # Before
-src/components/Sidebar.tsx  (400+ lines)
+frontend/desktop/src/components/Sidebar.tsx  (400+ lines)
 
 # After
-src/components/Sidebar/
-├── index.tsx          # Main Sidebar component
-├── SessionList.tsx    # Session list sub-component
-└── ProjectPicker.tsx  # Project picker sub-component
+frontend/desktop/src/components/Sidebar/
+|- index.tsx          # Main Sidebar component
+|- SessionList.tsx    # Session list sub-component
+`- ProjectPicker.tsx  # Project picker sub-component
 ```
 
 ---
@@ -89,10 +105,10 @@ src/components/Sidebar/
 
 ### Do Not Duplicate
 
-- **UI patterns** — If two components share similar markup (buttons, cards, status badges), extract a shared component into `src/components/shared/`.
-- **Hooks** — Shared state logic belongs in `src/hooks/`. Compose small hooks rather than creating monolithic ones.
-- **Rust utilities** — Common helpers go in dedicated modules. Agent adapters must implement the `AgentRunner` trait.
-- **Types** — Frontend types are defined once in `src/types/index.ts`. Rust equivalents in `src-tauri/src/models.rs`. Keep them synchronised.
+- **UI patterns** - If two components share similar markup (buttons, cards, status badges), extract a shared component into `frontend/desktop/src/components/shared/`.
+- **Hooks** - Shared state logic belongs in `frontend/desktop/src/hooks/`. Compose small hooks rather than creating monolithic ones.
+- **Rust utilities** - Common helpers go in dedicated modules. Agent adapters must implement the `AgentRunner` trait.
+- **Types** - Frontend types are defined once in `frontend/desktop/src/types/index.ts`. Rust equivalents live in `frontend/desktop/src-tauri/src/models/`. Keep them synchronised.
 
 ### Before Creating a New File
 
@@ -110,7 +126,7 @@ src/components/Sidebar/
 
 ### TypeScript
 
-- `strict: true` — no `any`, no implicit returns, no unused variables.
+- `strict: true` - no `any`, no implicit returns, no unused variables.
 - Functional components with explicit prop interfaces.
 - Named exports preferred over default exports.
 - `const` by default; `let` only when mutation is required.
@@ -119,7 +135,7 @@ src/components/Sidebar/
 
 - `#[serde(rename_all = "camelCase")]` on all structs exposed to the frontend.
 - Proper error handling: `Result<T, String>` for Tauri commands.
-- No `unwrap()` on fallible operations in production code paths — use `?` or explicit error handling.
+- No `unwrap()` on fallible operations in production code paths - use `?` or explicit error handling.
 - Tauri command parameters must use camelCase to match frontend `invoke()` calls.
 
 ### CSS
@@ -130,7 +146,7 @@ src/components/Sidebar/
 
 ## Architecture Awareness
 
-### Frontend → Backend Communication
+### Frontend -> Backend Communication
 
 - Frontend calls Rust via `invoke("command_name", { paramName: value })`.
 - Backend emits events to frontend via Tauri's event system.
@@ -139,13 +155,13 @@ src/components/Sidebar/
 ### Database
 
 - SQLite via Diesel ORM 2.2.
-- Schema defined in `src-tauri/migrations/`.
-- Auto-generated schema: `src-tauri/src/schema.rs` — **do not edit manually**.
-- Models: `src-tauri/src/db/models.rs` (Diesel), `src-tauri/src/models.rs` (Tauri commands).
+- Schema defined in `frontend/desktop/src-tauri/migrations/`.
+- Auto-generated schema: `frontend/desktop/src-tauri/src/schema.rs` - **do not edit manually**.
+- Models: `frontend/desktop/src-tauri/src/db/models/` (Diesel), `frontend/desktop/src-tauri/src/models/` (Tauri command payloads).
 
 ### Pipeline
 
-- `orchestrator.rs` drives the generate → diff → review → fix → judge loop.
+- `frontend/desktop/src-tauri/src/orchestrator/` drives the generate -> diff -> review -> fix -> judge loop.
 - Agents are invoked via `tokio::process::Command` (async).
 - Cancellation uses `Arc<AtomicBool>` checked between stages.
 
@@ -155,10 +171,10 @@ src/components/Sidebar/
 
 - **Do not commit** unless the user explicitly requests it.
 - **Do not add dependencies** without justification.
-- **Do not leave TODO comments** — implement the full solution or flag it to the user.
+- **Do not leave TODO comments** - implement the full solution or flag it to the user.
 - **Do not write placeholder code** like `// ... rest of code` or `unimplemented!()`.
 - **Do not modify `.gitignore`, `Cargo.lock`, or `package-lock.json`** without reason.
-- **Do not modify `schema.rs`** directly — it is auto-generated by Diesel.
+- **Do not modify `schema.rs`** directly - it is auto-generated by Diesel.
 
 ---
 
@@ -166,15 +182,16 @@ src/components/Sidebar/
 
 | Purpose | Path |
 |---|---|
-| Frontend types | `src/types/index.ts` |
-| React hooks | `src/hooks/` |
-| UI components | `src/components/` |
-| Tauri commands | `src-tauri/src/commands.rs` |
-| Rust models (serde) | `src-tauri/src/models.rs` |
-| DB models (Diesel) | `src-tauri/src/db/models.rs` |
-| DB queries | `src-tauri/src/db/{table}.rs` |
-| Agent adapters | `src-tauri/src/agents/` |
-| Pipeline engine | `src-tauri/src/orchestrator.rs` |
-| Diesel schema | `src-tauri/src/schema.rs` (auto-generated) |
-| Migrations | `src-tauri/migrations/` |
-| MCP server | `src-tauri/src/bin/mcp_server.rs` |
+| Desktop frontend types | `frontend/desktop/src/types/index.ts` |
+| Desktop React hooks | `frontend/desktop/src/hooks/` |
+| Desktop UI components | `frontend/desktop/src/components/` |
+| Website frontend root | `frontend/web/src/` |
+| Tauri commands | `frontend/desktop/src-tauri/src/commands/` |
+| Rust models (serde) | `frontend/desktop/src-tauri/src/models/` |
+| DB models (Diesel) | `frontend/desktop/src-tauri/src/db/models/` |
+| DB queries | `frontend/desktop/src-tauri/src/db/{table}.rs` |
+| Agent adapters | `frontend/desktop/src-tauri/src/agents/` |
+| Pipeline engine | `frontend/desktop/src-tauri/src/orchestrator/` |
+| Diesel schema | `frontend/desktop/src-tauri/src/schema.rs` (auto-generated) |
+| Migrations | `frontend/desktop/src-tauri/migrations/` |
+| MCP server | `frontend/desktop/src-tauri/src/bin/mcp_server/` |

@@ -1,13 +1,21 @@
-# CLAUDE.md — EA Code Project Instructions
+# CLAUDE.md - EA Code Project Instructions
 
 ## Project Overview
 
-Tauri v2 desktop application that orchestrates Claude, Codex, and Gemini CLIs in a self-improving dev loop, plus a marketing website.
+Tauri v2 desktop application that orchestrates Claude, Codex, and Gemini CLIs in a self-improving development loop, plus a separate marketing website.
 
 - **Desktop App**: React 19 + TypeScript 5.8 + Tailwind CSS v4 (Tauri v2 frontend)
 - **Website**: React 19 + TypeScript 5.8 + Tailwind CSS v4 (Vite SPA)
 - **Backend**: Rust (Tauri v2) + SQLite (Diesel ORM 2.2)
 - **Database**: `~/.config/ea-code/ea-code.db`
+
+---
+
+## Scope Rules (Desktop First)
+
+- Default to `frontend/desktop/` for investigation and edits.
+- Do **not** inspect `frontend/web/` unless the user explicitly says `website`, `web`, or asks for work under that path.
+- If the request is not explicit, assume desktop scope.
 
 ---
 
@@ -47,27 +55,23 @@ Do **not** deliver code that fails `tsc --noEmit`. If the check fails, fix every
 
 ## File Size Limit (300 Lines)
 
-No single source file should exceed **300 lines** of code (excluding blank lines and comments as a rough guide — use total line count in practice).
+No single source file should exceed **300 lines** of code (excluding blank lines and comments as a rough guide - use total line count in practice).
 
 When a file approaches or exceeds this limit:
 
-1. **Identify logical boundaries** — group related functions, types, or components.
-2. **Extract into a subfolder module** — e.g., `orchestrator.rs` → `orchestrator/mod.rs` + `orchestrator/pipeline.rs` + `orchestrator/stages.rs`.
+1. **Identify logical boundaries** - group related functions, types, or components.
+2. **Extract into a subfolder module** - e.g., `orchestrator.rs` -> `orchestrator/mod.rs` + `orchestrator/pipeline.rs` + `orchestrator/stages.rs`.
 3. **Re-export** the public API from `mod.rs` so callers are unaffected.
-4. **Frontend equivalent** — split large components into a folder: `Component/index.tsx` + `Component/SubPart.tsx`.
-
-### Currently Over Limit
-
-All files are currently within the 300-line limit after the v0.2.0 refactoring.
+4. **Frontend equivalent** - split large components into a folder: `Component/index.tsx` + `Component/SubPart.tsx`.
 
 ---
 
-## Code Reuse & DRY
+## Code Reuse and DRY
 
-- **Components**: Extract reusable UI elements into `src/components/shared/` or co-located files. Never duplicate JSX across views.
-- **Hooks**: Shared stateful logic belongs in `src/hooks/`. Prefer composition of small hooks over monolithic ones.
-- **Rust**: Common utilities go in dedicated modules. Agent adapters share the `AgentRunner` trait from `agents/base.rs`.
-- **Types**: Frontend types live in `src/types/` (split by domain, re-exported from `index.ts`). Rust models in `src-tauri/src/models/` (split by domain, re-exported from `mod.rs`). Keep them in sync.
+- **Components**: Extract reusable UI elements into `frontend/desktop/src/components/shared/` or co-located files. Never duplicate JSX across views.
+- **Hooks**: Shared stateful logic belongs in `frontend/desktop/src/hooks/`. Prefer composition of small hooks over monolithic ones.
+- **Rust**: Common utilities go in dedicated modules. Agent adapters share the `AgentRunner` trait from `frontend/desktop/src-tauri/src/agents/base.rs`.
+- **Types**: Frontend types live in `frontend/desktop/src/types/` (split by domain, re-exported from `index.ts`). Rust models live in `frontend/desktop/src-tauri/src/models/` (split by domain, re-exported from `mod.rs`). Keep them in sync.
 
 ---
 
@@ -75,16 +79,16 @@ All files are currently within the 300-line limit after the v0.2.0 refactoring.
 
 ### General
 
-- **British English** in all comments, documentation, and user-facing text (e.g., "optimise", "behaviour", "colour").
-- **Explicit types** — no `any` in TypeScript, no unnecessary `unwrap()` in Rust.
-- **No placeholder comments** — never write `// ... rest of code` or `// TODO: implement`. Output complete, functional code.
-- **Idiomatic code** — use language-native patterns, but avoid overly clever one-liners that hinder debugging.
+- **British English** in comments, documentation, and user-facing text (e.g., "optimise", "behaviour", "colour").
+- **Explicit types** - no `any` in TypeScript, no unnecessary `unwrap()` in Rust.
+- **No placeholder comments** - never write `// ... rest of code` or `// TODO: implement`.
+- **Idiomatic code** - use language-native patterns, but avoid unclear one-liners that hinder debugging.
 
 ### TypeScript / React
 
 - Strict mode enabled (`strict: true` in tsconfig).
 - Functional components only. Use hooks for state and side effects.
-- Props must have explicit interface definitions — no inline anonymous types.
+- Props must have explicit interface definitions - no inline anonymous types.
 - Prefer named exports over default exports.
 - Use `const` by default; `let` only when reassignment is required.
 
@@ -93,52 +97,38 @@ All files are currently within the 300-line limit after the v0.2.0 refactoring.
 - `#[serde(rename_all = "camelCase")]` on all structs exposed to the frontend.
 - Tauri command parameter names must match camelCase in frontend `invoke()` calls.
 - Handle errors with `Result<T, String>` for Tauri commands (or a proper error enum).
-- Use `Arc<AtomicBool>` pattern for cancellation (see `AppState`).
+- Use `Arc<AtomicBool>` pattern for cancellation.
 
 ### CSS / Styling
 
-- Tailwind CSS v4 utility classes. No inline `style={}` unless absolutely necessary.
-- Consistent spacing and colour tokens from the Tailwind theme.
+- Tailwind CSS v4 utility classes.
+- No inline `style={}` unless absolutely necessary.
 
 ---
 
 ## Architecture Quick Reference
 
-```
+```text
 frontend/
-├── desktop/                      # Tauri desktop app
-│   ├── src/                      # React frontend (TS)
-│   │   ├── components/           # UI components (keep < 300 lines each)
-│   │   │   ├── shared/           # Reusable form inputs, constants
-│   │   │   └── AgentsView/       # Split component folder
-│   │   ├── hooks/                # Custom React hooks
-│   │   ├── types/                # Shared type definitions (split by domain)
-│   │   ├── utils/                # Pure helper functions
-│   │   ├── App.tsx               # Root layout and routing
-│   │   └── main.tsx              # Entry point
-│   ├── src-tauri/                # Rust backend
-│   │   ├── src/
-│   │   │   ├── agents/           # CLI adapters (base trait + claude/codex/gemini)
-│   │   │   ├── bin/mcp_server/   # MCP server binary (split into submodules)
-│   │   │   ├── commands/         # Tauri IPC commands (split by domain)
-│   │   │   ├── db/               # Diesel ORM layer (models, queries per table)
-│   │   │   ├── models/           # Shared Rust types (split by domain)
-│   │   │   ├── orchestrator/     # Pipeline engine (split into submodules)
-│   │   │   ├── schema.rs         # Diesel schema (auto-generated)
-│   │   │   └── lib.rs            # Tauri app builder
-│   │   └── migrations/           # Diesel SQL migrations
-│   ├── package.json
-│   ├── vite.config.ts
-│   └── tsconfig.json
-│
-└── web/                          # Marketing website (Vite + React + Tailwind)
-    ├── src/
-    │   ├── components/
-    │   ├── App.tsx
-    │   └── main.tsx
-    ├── package.json
-    ├── vite.config.ts
-    └── tsconfig.json
+|- desktop/                      # Tauri desktop app
+|  |- src/                       # React frontend (TS)
+|  |  |- components/             # UI components
+|  |  |  `- shared/              # Reusable UI pieces
+|  |  |- hooks/                  # Custom React hooks
+|  |  |- types/                  # Shared type definitions
+|  |  `- utils/                  # Pure helper functions
+|  `- src-tauri/                 # Rust backend
+|     |- src/
+|     |  |- agents/              # CLI adapters
+|     |  |- bin/mcp_server/      # MCP server binary
+|     |  |- commands/            # Tauri IPC commands
+|     |  |- db/                  # Diesel ORM layer
+|     |  |- models/              # Shared Rust types
+|     |  |- orchestrator/        # Pipeline engine
+|     |  `- schema.rs            # Diesel schema (auto-generated)
+|     `- migrations/             # Diesel SQL migrations
+`- web/                          # Marketing website (only inspect when requested)
+   `- src/
 ```
 
 ---

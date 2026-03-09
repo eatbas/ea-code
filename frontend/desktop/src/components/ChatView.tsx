@@ -6,7 +6,7 @@ import { useToast } from "./shared/Toast";
 import { isActive, isTerminal, statusInfo } from "../utils/statusHelpers";
 import { StageCard } from "./shared/StageCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
-import { ResultCard } from "./shared/ResultCard";
+import { ResultCard, buildStageRows, computeDuration } from "./shared/ResultCard";
 import { ArtifactCard } from "./shared/ArtifactCard";
 import { PromptCard } from "./shared/PromptCard";
 import { FinalPlanCard } from "./shared/FinalPlanCard";
@@ -156,7 +156,17 @@ export function ChatView({
 
           {/* Result card when pipeline reaches terminal state */}
           {isTerminal(run.status) && (
-            <ResultCard run={run} artifacts={artifacts} />
+            <ResultCard
+              status={run.status}
+              finalVerdict={run.finalVerdict}
+              iterationCount={run.currentIteration || run.iterations.length}
+              totalDurationMs={computeDuration(run.startedAt, run.completedAt)}
+              completedAt={run.completedAt}
+              executiveSummary={artifacts["executive_summary"]}
+              error={run.error}
+              stageRows={buildStageRows(allStages)}
+              artifacts={artifacts}
+            />
           )}
 
           {/* Other artefacts (diff, plan, review) as collapsible cards */}

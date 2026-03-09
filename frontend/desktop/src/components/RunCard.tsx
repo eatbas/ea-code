@@ -1,10 +1,11 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import type { RunDetail, StageEntry, PipelineStage } from "../types";
-import { formatDuration, formatTimestamp } from "../utils/formatters";
+import { formatDuration } from "../utils/formatters";
 import { STAGE_LABELS, STAGE_COLOURS } from "./shared/constants";
 import { PromptCard } from "./shared/PromptCard";
 import { FinalPlanCard } from "./shared/FinalPlanCard";
+import { ResultCard, buildStageRows, computeDuration } from "./shared/ResultCard";
 
 interface RunCardProps {
   run: RunDetail;
@@ -66,19 +67,47 @@ function HistoryStageCard({ entry }: { entry: StageEntry }): ReactNode {
   );
 }
 
+/** Collapsible Prompt Received card matching ChatView style. */
+function PromptReceivedCard({ prompt }: { prompt: string }): ReactNode {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <article
+      className="rounded-lg border border-[#2e2e48] bg-[#14141e] overflow-hidden cursor-pointer"
+      onClick={() => setOpen((prev) => !prev)}
+    >
+      <div className="flex items-center gap-2 px-3 py-2 hover:bg-[#1a1a2a] transition-colors">
+        <svg
+          className={`h-3 w-3 text-[#9898b0] transition-transform ${open ? "rotate-90" : ""}`}
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path d="M8 5v14l11-7z" />
+        </svg>
+        <span
+          className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
+          style={{ background: "rgba(34, 197, 94, 0.22)" }}
+        >
+          Prompt Received
+        </span>
+        <span className="ml-auto rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#22c55e] bg-[#22c55e]/10">
+          Completed
+        </span>
+      </div>
+      {open && (
+        <div className="px-3 pb-3">
+          <div className="rounded bg-[#0f0f14] px-3 py-2 text-xs text-[#c8c8d8] whitespace-pre-wrap leading-relaxed">
+            {prompt}
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
 /** Displays a single historical run with full step-by-step timeline. */
 export function RunCard({ run }: RunCardProps): ReactNode {
-  const statusColour = run.status === "completed"
-    ? "#22c55e"
-    : run.status === "failed"
-      ? "#ef4444"
-      : run.status === "cancelled"
-        ? "#f59e0b"
-        : "#9898b0";
-
-  const totalDurationMs = run.startedAt && run.completedAt
-    ? new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime()
-    : 0;
+  const allStages = run.iterations.flatMap((iter) => iter.stages);
 
   return (
     <div className="flex flex-col gap-3">
@@ -90,35 +119,11 @@ export function RunCard({ run }: RunCardProps): ReactNode {
       </div>
 
       {/* Prompt received */}
-      <article className="rounded-lg border border-[#2e2e48] bg-[#14141e] overflow-hidden">
-        <details>
-          <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[#1a1a2a] transition-colors">
-            <svg
-              className="h-3 w-3 text-[#9898b0] transition-transform [details[open]>&]:rotate-90"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="M8 5v14l11-7z" />
-            </svg>
-            <span
-              className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
-              style={{ background: "rgba(34, 197, 94, 0.22)" }}
-            >
-              Prompt Received
-            </span>
-          </summary>
-          <div className="px-3 pb-3">
-            <div className="rounded bg-[#0f0f14] px-3 py-2 text-xs text-[#c8c8d8] whitespace-pre-wrap leading-relaxed">
-              {run.prompt}
-            </div>
-          </div>
-        </details>
-      </article>
+      <PromptReceivedCard prompt={run.prompt} />
 
       {/* Iteration stages */}
       {run.iterations.map((iter) => (
         <div key={iter.number} className="flex flex-col gap-2">
-          {/* Stage cards */}
           {iter.stages.map((entry) => (
             <div key={entry.id} className="flex flex-col gap-2">
               <HistoryStageCard entry={entry} />
@@ -145,45 +150,17 @@ export function RunCard({ run }: RunCardProps): ReactNode {
         </div>
       ))}
 
-      {/* Result summary */}
-      <div
-        className="rounded-lg border px-3 py-2"
-        style={{
-          background: run.status === "completed" ? "rgba(40,180,95,0.10)" : run.status === "failed" ? "rgba(230,75,75,0.10)" : "#1a1a24",
-          borderColor: run.status === "completed" ? "rgba(40,180,95,0.30)" : run.status === "failed" ? "rgba(230,75,75,0.30)" : "#2e2e48",
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: statusColour }} />
-          <span className="text-xs font-medium capitalize" style={{ color: statusColour }}>
-            {run.status}
-          </span>
-          {run.finalVerdict && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold" style={{ color: statusColour, backgroundColor: `${statusColour}15` }}>
-              {run.finalVerdict}
-            </span>
-          )}
-          <div className="ml-auto flex items-center gap-2 text-[11px] text-[#6f7086]">
-            {run.iterations.length > 0 && (
-              <span>{run.iterations.length} {run.iterations.length === 1 ? "iteration" : "iterations"}</span>
-            )}
-            {totalDurationMs > 0 && (
-              <span>{formatDuration(totalDurationMs)}</span>
-            )}
-            {run.completedAt && (
-              <span>{formatTimestamp(run.completedAt)}</span>
-            )}
-          </div>
-        </div>
-        {run.executiveSummary && (
-          <p className="mt-2 text-xs text-[#c4c4d4] whitespace-pre-wrap leading-relaxed">
-            {run.executiveSummary}
-          </p>
-        )}
-        {run.error && (
-          <p className="mt-1.5 text-xs text-[#ef4444]">{run.error}</p>
-        )}
-      </div>
+      {/* Result summary — shared component, identical to ChatView */}
+      <ResultCard
+        status={run.status}
+        finalVerdict={run.finalVerdict}
+        iterationCount={run.iterations.length}
+        totalDurationMs={computeDuration(run.startedAt, run.completedAt)}
+        completedAt={run.completedAt}
+        executiveSummary={run.executiveSummary}
+        error={run.error}
+        stageRows={buildStageRows(allStages)}
+      />
     </div>
   );
 }

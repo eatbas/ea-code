@@ -1,11 +1,8 @@
 use std::collections::{BTreeSet, HashMap};
-
 use diesel::prelude::*;
 use diesel::upsert::excluded;
-
 use crate::db::DbPool;
 use crate::schema::{cli_mcp_bindings, mcp_servers};
-
 use super::models::{
     CliMcpBindingRow, McpServerChangeset, McpServerRow, NewCliMcpBinding, NewMcpServer,
 };
@@ -23,15 +20,6 @@ struct BuiltinMcpSpec {
 }
 
 const BUILTIN_MCP_SERVERS: &[BuiltinMcpSpec] = &[
-    BuiltinMcpSpec {
-        id: "ea-code-history",
-        name: "EA Code History",
-        description: "Session-aware local history tools from ea-code-mcp.",
-        command: "ea-code-mcp",
-        args_json: "[]",
-        env_json: "{}",
-        bindings: &["claude", "codex"],
-    },
     BuiltinMcpSpec {
         id: "context7",
         name: "Context7",
@@ -68,8 +56,7 @@ pub fn list_servers(pool: &DbPool) -> Result<Vec<McpServerRow>, String> {
         .map_err(|e| format!("Failed to list MCP servers: {e}"))
 }
 
-/// Ensures the built-in MCP catalogue matches the curated set.
-/// Keeps only: ea-code-history, context7, playwright.
+/// Ensures the built-in MCP catalogue matches the curated set: context7 and playwright.
 pub fn sync_builtin_catalog(pool: &DbPool) -> Result<(), String> {
     let mut conn = super::get_conn(pool)?;
     let now = super::now_rfc3339();
@@ -200,10 +187,6 @@ pub fn delete_custom_server(pool: &DbPool, server_id: &str) -> Result<(), String
 }
 
 pub fn set_server_enabled(pool: &DbPool, server_id: &str, enabled: bool) -> Result<(), String> {
-    if server_id == "ea-code-history" && !enabled {
-        return Err("EA Code History MCP cannot be disabled".to_string());
-    }
-
     let mut conn = super::get_conn(pool)?;
     let now = super::now_rfc3339();
     let affected = diesel::update(mcp_servers::table.find(server_id))
@@ -219,17 +202,11 @@ pub fn set_server_enabled(pool: &DbPool, server_id: &str, enabled: bool) -> Resu
 pub fn replace_bindings(pool: &DbPool, server_id: &str, cli_names: &[String]) -> Result<(), String> {
     let mut conn = super::get_conn(pool)?;
 
-    let mut filtered = cli_names
+    let filtered = cli_names
         .iter()
         .map(|s| s.trim().to_lowercase())
         .filter(|cli| MCP_CAPABLE_CLIS.contains(&cli.as_str()))
         .collect::<BTreeSet<_>>();
-    if server_id == "ea-code-history" {
-        filtered = MCP_CAPABLE_CLIS
-            .iter()
-            .map(|cli| (*cli).to_string())
-            .collect::<BTreeSet<_>>();
-    }
 
     conn.transaction(|conn| {
         diesel::delete(cli_mcp_bindings::table.filter(cli_mcp_bindings::mcp_server_id.eq(server_id)))

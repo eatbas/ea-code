@@ -17,7 +17,7 @@ export function McpView(): ReactNode {
   const [busy, setBusy] = useState<string | null>(null);
   const [context7ApiKey, setContext7ApiKeyValue] = useState<string>("");
 
-  const builtinOrder = ["ea-code-history", "context7", "playwright"];
+  const builtinOrder = ["context7", "playwright"];
   const builtinServers = useMemo(
     () =>
       servers
@@ -37,9 +37,6 @@ export function McpView(): ReactNode {
   }, [builtinServers]);
 
   async function toggleEnabled(server: McpServer, enabled: boolean): Promise<void> {
-    if (server.id === "ea-code-history" && !enabled) {
-      return;
-    }
     setBusy(server.id);
     try {
       await setEnabled(server.id, enabled);
@@ -49,9 +46,6 @@ export function McpView(): ReactNode {
   }
 
   async function toggleBinding(server: McpServer, cliName: string): Promise<void> {
-    if (server.id === "ea-code-history") {
-      return;
-    }
     const current = new Set(server.cliBindings);
     if (current.has(cliName)) current.delete(cliName); else current.add(cliName);
     setBusy(server.id);
@@ -76,13 +70,12 @@ export function McpView(): ReactNode {
       <div className="flex-1 overflow-y-auto px-8 py-8">
         <div className="mx-auto flex max-w-4xl flex-col gap-6">
           <h1 className="text-xl font-bold text-[#e4e4ed]">MCP Servers</h1>
-          <p className="text-sm text-[#9898b0]">Only curated servers are available: EA history, Context7, and Playwright.</p>
+          <p className="text-sm text-[#9898b0]">Only curated servers are available: Context7 and Playwright.</p>
 
           {loading && <div className="text-sm text-[#9898b0]">Loading MCP servers...</div>}
 
           <div className="grid gap-4 md:grid-cols-2">
             {builtinServers.map((server) => {
-              const isHistory = server.id === "ea-code-history";
               const isContext7 = server.id === "context7";
               return (
                 <div key={server.id} className="rounded-lg border border-[#2e2e48] bg-[#1a1a24] p-4">
@@ -98,14 +91,10 @@ export function McpView(): ReactNode {
                     <input
                       type="checkbox"
                       checked={server.isEnabled}
-                      disabled={isHistory}
                       onChange={(e) => void toggleEnabled(server, e.target.checked)}
                     />
                     Enabled
                   </label>
-                  {isHistory && (
-                    <p className="mt-1 text-[11px] text-[#9898b0]">Required and always enabled.</p>
-                  )}
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     {capableClis.map((cli) => {
@@ -113,9 +102,8 @@ export function McpView(): ReactNode {
                       return (
                         <button
                           key={`${server.id}-${cli}`}
-                          disabled={isHistory}
                           onClick={() => void toggleBinding(server, cli)}
-                          className={`rounded px-2 py-1 text-xs ${bound ? "bg-[#6366f1]/20 text-[#e4e4ed]" : "bg-[#24243a] text-[#9898b0]"} ${isHistory ? "cursor-not-allowed opacity-60" : ""}`}
+                          className={`rounded px-2 py-1 text-xs ${bound ? "bg-[#6366f1]/20 text-[#e4e4ed]" : "bg-[#24243a] text-[#9898b0]"}`}
                         >
                           {cli}
                         </button>

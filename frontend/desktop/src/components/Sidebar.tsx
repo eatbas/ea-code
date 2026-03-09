@@ -45,12 +45,8 @@ interface SidebarProps {
   sessions: SessionSummary[];
   activeSessionId?: string;
   onSelectSession: (sessionId: string) => void;
-  /** Whether the pipeline is actively running (show spinner). */
-  isRunning?: boolean;
-  /** Whether a terminal pipeline run exists that can be navigated back to. */
-  hasTerminalRun?: boolean;
-  /** Navigate back to the current pipeline run view. */
-  onGoToRun?: () => void;
+  /** Session ID of the currently running pipeline (shows spinner on that session). */
+  runningSessionId?: string;
   /** Archive (delete) a session by ID. */
   onArchiveSession?: (sessionId: string) => void;
 }
@@ -69,14 +65,10 @@ export function Sidebar({
   sessions,
   activeSessionId,
   onSelectSession,
-  isRunning,
-  hasTerminalRun,
-  onGoToRun,
+  runningSessionId,
   onArchiveSession,
 }: SidebarProps): ReactNode {
   const isSettings = activeView === "agents" || activeView === "cli-setup" || activeView === "skills" || activeView === "mcp";
-  const isHomeRootView = activeView === "home" && !activeSessionId;
-  const canGoToRun = !!onGoToRun && (isRunning || hasTerminalRun);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const currentYear = new Date().getFullYear();
 
@@ -228,35 +220,12 @@ export function Sidebar({
         </button>
       </div>
 
-      {/* Current run stays reachable while running and after completion. */}
-      {canGoToRun && (
-        <div className="px-3 pb-1">
-          <button
-            onClick={() => onGoToRun?.()}
-            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-              isHomeRootView
-                ? "bg-[#24243a] text-[#e4e4ed]"
-                : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
-            }`}
-          >
-            {isRunning ? (
-              <svg className="h-3.5 w-3.5 animate-spin text-[#6366f1]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            ) : (
-              <div className="h-2 w-2 rounded-full bg-[#22c55e]" />
-            )}
-            {isRunning ? "Running..." : "Current run"}
-          </button>
-        </div>
-      )}
-
       <ProjectThreadsList
         projects={projects}
         sessions={sessions}
         activeProjectPath={activeProjectPath}
         activeSessionId={activeSessionId}
+        runningSessionId={runningSessionId}
         onSelectProject={onSelectProject}
         onSelectSession={onSelectSession}
         onArchiveSession={onArchiveSession}
