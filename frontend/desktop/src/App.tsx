@@ -7,6 +7,7 @@ import { useCliVersions } from "./hooks/useCliVersions";
 import { useCliHealth } from "./hooks/useCliHealth";
 import { useHistory } from "./hooks/useHistory";
 import { useSkills } from "./hooks/useSkills";
+import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { Sidebar } from "./components/Sidebar";
 import type { ActiveView } from "./components/Sidebar";
 import { IdleView } from "./components/IdleView";
@@ -17,6 +18,7 @@ import { CliSetupView } from "./components/CliSetupView";
 import { SkillsView } from "./components/SkillsView";
 import { McpView } from "./components/McpView";
 import { QuestionDialog } from "./components/QuestionDialog";
+import { UpdateInstallBanner } from "./components/shared/UpdateInstallBanner";
 import type { PipelineRequest, PipelineRun, RunOptions, SessionDetail } from "./types";
 
 /** Whether the pipeline is actively in progress (running or awaiting user input). */
@@ -37,6 +39,7 @@ function App(): ReactNode {
   const { health: cliHealth, checking: cliHealthChecking, checkHealth } = useCliHealth();
   const { projects, sessions, loadSessions, loadProjects, loadSessionDetail, deleteSession } = useHistory();
   const { skills, loading: skillsLoading, error: skillsError, createSkill, updateSkill, deleteSkill } = useSkills();
+  const { installing: installingUpdate, updateVersion } = useUpdateCheck();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ActiveView>("home");
@@ -269,6 +272,8 @@ function App(): ReactNode {
           onAnswer={answerQuestion}
         />
       )}
+
+      {installingUpdate && <UpdateInstallBanner version={updateVersion} />}
     </div>
   );
 }

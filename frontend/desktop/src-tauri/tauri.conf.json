@@ -3,6 +3,14 @@
   "productName": "EA Code",
   "version": "0.1.0",
   "identifier": "com.eatbas.ea-code",
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMyN0NEQzlCRDY5MkM0NkYKUldSdnhKTFdtOXg4TXVvblRLSFpqTEpFM0ZUaXhjcnkxbENlcTB6MmpmRzhLTGpmRHhNYkU5L3MK",
+      "endpoints": [
+        "https://github.com/eatbas/ea-code/releases/latest/download/latest.json"
+      ]
+    }
+  },
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -26,7 +34,13 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

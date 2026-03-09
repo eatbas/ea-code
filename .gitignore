@@ -6,9 +6,9 @@ dist/
 build/
 
 # Tauri
-src-tauri/target/
-src-tauri/WixTools/
-src-tauri/Frameworks/
+frontend/desktop/src-tauri/target/
+frontend/desktop/src-tauri/WixTools/
+frontend/desktop/src-tauri/Frameworks/
 
 # Environment
 .env

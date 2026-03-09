@@ -2,9 +2,10 @@
 
 ## Project Overview
 
-Tauri v2 desktop application that orchestrates Claude, Codex, and Gemini CLIs in a self-improving dev loop.
+Tauri v2 desktop application that orchestrates Claude, Codex, and Gemini CLIs in a self-improving dev loop, plus a marketing website.
 
-- **Frontend**: React 19 + TypeScript 5.8 + Tailwind CSS v4
+- **Desktop App**: React 19 + TypeScript 5.8 + Tailwind CSS v4 (Tauri v2 frontend)
+- **Website**: React 19 + TypeScript 5.8 + Tailwind CSS v4 (Vite SPA)
 - **Backend**: Rust (Tauri v2) + SQLite (Diesel ORM 2.2)
 - **Database**: `~/.config/ea-code/ea-code.db`
 
@@ -14,20 +15,30 @@ Tauri v2 desktop application that orchestrates Claude, Codex, and Gemini CLIs in
 
 ### Rust Backend
 
-After **any** change to files under `src-tauri/`, run:
+After **any** change to files under `frontend/desktop/src-tauri/`, run:
 
 ```sh
-cd src-tauri && cargo check
+cd frontend/desktop/src-tauri && cargo check
 ```
 
 Do **not** deliver code that fails `cargo check`. If the check fails, fix every error before presenting the result.
 
-### TypeScript Frontend
+### Desktop TypeScript Frontend
 
-After **any** change to files under `src/`, run:
+After **any** change to files under `frontend/desktop/src/`, run:
 
 ```sh
-npx tsc --noEmit
+cd frontend/desktop && npx tsc --noEmit
+```
+
+Do **not** deliver code that fails `tsc --noEmit`. If the check fails, fix every error before presenting the result.
+
+### Website TypeScript Frontend
+
+After **any** change to files under `frontend/web/src/`, run:
+
+```sh
+cd frontend/web && npx tsc --noEmit
 ```
 
 Do **not** deliver code that fails `tsc --noEmit`. If the check fails, fix every error before presenting the result.
@@ -94,27 +105,40 @@ All files are currently within the 300-line limit after the v0.2.0 refactoring.
 ## Architecture Quick Reference
 
 ```
-src/                          # Frontend (React + TS)
-├── components/               # UI components (keep < 300 lines each)
-│   ├── shared/               # Reusable form inputs, constants
-│   └── AgentsView/           # Split component folder
-├── hooks/                    # Custom React hooks
-├── types/                    # Shared type definitions (split by domain)
-├── utils/                    # Pure helper functions
-├── App.tsx                   # Root layout and routing
-└── main.tsx                  # Entry point
-
-src-tauri/                    # Backend (Rust)
-├── src/
-│   ├── agents/               # CLI adapters (base trait + claude/codex/gemini)
-│   ├── bin/mcp_server/       # MCP server binary (split into submodules)
-│   ├── commands/             # Tauri IPC commands (split by domain)
-│   ├── db/                   # Diesel ORM layer (models, queries per table)
-│   ├── models/               # Shared Rust types (split by domain)
-│   ├── orchestrator/         # Pipeline engine (split into submodules)
-│   ├── schema.rs             # Diesel schema (auto-generated)
-│   └── lib.rs                # Tauri app builder
-└── migrations/               # Diesel SQL migrations
+frontend/
+├── desktop/                      # Tauri desktop app
+│   ├── src/                      # React frontend (TS)
+│   │   ├── components/           # UI components (keep < 300 lines each)
+│   │   │   ├── shared/           # Reusable form inputs, constants
+│   │   │   └── AgentsView/       # Split component folder
+│   │   ├── hooks/                # Custom React hooks
+│   │   ├── types/                # Shared type definitions (split by domain)
+│   │   ├── utils/                # Pure helper functions
+│   │   ├── App.tsx               # Root layout and routing
+│   │   └── main.tsx              # Entry point
+│   ├── src-tauri/                # Rust backend
+│   │   ├── src/
+│   │   │   ├── agents/           # CLI adapters (base trait + claude/codex/gemini)
+│   │   │   ├── bin/mcp_server/   # MCP server binary (split into submodules)
+│   │   │   ├── commands/         # Tauri IPC commands (split by domain)
+│   │   │   ├── db/               # Diesel ORM layer (models, queries per table)
+│   │   │   ├── models/           # Shared Rust types (split by domain)
+│   │   │   ├── orchestrator/     # Pipeline engine (split into submodules)
+│   │   │   ├── schema.rs         # Diesel schema (auto-generated)
+│   │   │   └── lib.rs            # Tauri app builder
+│   │   └── migrations/           # Diesel SQL migrations
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── tsconfig.json
+│
+└── web/                          # Marketing website (Vite + React + Tailwind)
+    ├── src/
+    │   ├── components/
+    │   ├── App.tsx
+    │   └── main.tsx
+    ├── package.json
+    ├── vite.config.ts
+    └── tsconfig.json
 ```
 
 ---
@@ -130,6 +154,7 @@ src-tauri/                    # Backend (Rust)
 
 When adding or updating dependencies:
 
-- **Rust**: Add to `src-tauri/Cargo.toml`, then run `cargo check`.
-- **JS**: Add via `npm install`, then run `npx tsc --noEmit`.
+- **Rust**: Add to `frontend/desktop/src-tauri/Cargo.toml`, then run `cargo check`.
+- **Desktop JS**: `cd frontend/desktop && npm install`, then run `npx tsc --noEmit`.
+- **Web JS**: `cd frontend/web && npm install`, then run `npx tsc --noEmit`.
 - Prefer well-maintained, widely-used crates/packages. Justify new dependencies.

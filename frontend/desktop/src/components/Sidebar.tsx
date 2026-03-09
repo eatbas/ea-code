@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import type { ProjectSummary, SessionSummary } from "../types";
 import { ProjectThreadsList } from "./ProjectThreadsList";
 
@@ -28,6 +30,7 @@ const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[
     iconPath: '<path d="M12 3L3 7.5L12 12L21 7.5L12 3z" /><path d="M3 12l9 4.5l9-4.5" /><path d="M3 16.5L12 21l9-4.5" />',
   },
 ];
+
 
 interface SidebarProps {
   collapsed: boolean;
@@ -72,6 +75,33 @@ export function Sidebar({
   onArchiveSession,
 }: SidebarProps): ReactNode {
   const isSettings = activeView === "agents" || activeView === "cli-setup" || activeView === "skills" || activeView === "mcp";
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const currentYear = new Date().getFullYear();
+
+  useEffect(() => {
+    let mounted = true;
+
+    void getVersion()
+      .then((version) => {
+        if (mounted) {
+          setAppVersion(version);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setAppVersion(null);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const appFooterLabel = useMemo(
+    () => `\u00A9 ${currentYear} ea-code${appVersion ? `\u00B7v${appVersion}` : ""}`,
+    [appVersion, currentYear],
+  );
 
   function handleSettingsClick(): void {
     onNavigate(isSettings ? "home" : "agents");
@@ -159,6 +189,12 @@ export function Sidebar({
         </div>
 
         <div className="flex-1" />
+
+        <div className="border-t border-[#2e2e48] px-3 py-3">
+          <p className="w-full text-center text-[10px] text-[#6b6b82]" title={appFooterLabel}>
+            {appFooterLabel}
+          </p>
+        </div>
       </aside>
     );
   }
@@ -255,6 +291,9 @@ export function Sidebar({
           </svg>
           Settings
         </button>
+        <p className="mt-2 w-full text-center text-[10px] text-[#6b6b82]" title={appFooterLabel}>
+          {appFooterLabel}
+        </p>
       </div>
     </aside>
   );
