@@ -1,16 +1,19 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
+import { formatDuration } from "../../utils/formatters";
 
 interface PromptCardProps {
   originalPrompt: string;
   enhancedPrompt: string;
+  /** Duration in milliseconds from the prompt_enhance stage. */
+  durationMs?: number;
 }
 
 type PromptTab = "input" | "output";
 
 /** Collapsible card with Input/Output tabs for original and enhanced prompts. */
-export function PromptCard({ originalPrompt, enhancedPrompt }: PromptCardProps): ReactNode {
-  const [open, setOpen] = useState(true);
+export function PromptCard({ originalPrompt, enhancedPrompt, durationMs }: PromptCardProps): ReactNode {
+  const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<PromptTab>("output");
 
   return (
@@ -34,6 +37,16 @@ export function PromptCard({ originalPrompt, enhancedPrompt }: PromptCardProps):
         >
           Enhanced Prompt
         </span>
+
+        {/* Right side: duration + completed tag */}
+        <div className="ml-auto flex items-center gap-2 text-[10px]">
+          {durationMs != null && durationMs > 0 && (
+            <span className="text-[#9898b0] opacity-80">{formatDuration(durationMs)}</span>
+          )}
+          <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#22c55e] bg-[#22c55e]/10">
+            Completed
+          </span>
+        </div>
       </button>
 
       {open && (

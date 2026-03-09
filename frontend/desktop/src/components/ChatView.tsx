@@ -1,16 +1,23 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import type { PipelineRun, RunOptions, CliHealth, AppSettings } from "../types";
+import { useToast } from "./shared/Toast";
 import { isActive, isTerminal, statusInfo } from "../utils/statusHelpers";
 import { StageCard } from "./shared/StageCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
 import { ResultCard } from "./shared/ResultCard";
 import { ArtifactCard } from "./shared/ArtifactCard";
 import { PromptCard } from "./shared/PromptCard";
+import { FinalPlanCard } from "./shared/FinalPlanCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
 
-/** Artefact kinds consumed by ResultCard — excluded from the generic list. */
-const RESULT_ARTIFACT_KINDS = new Set(["result", "executive_summary", "judge"]);
+/** Artefact kinds consumed by specialised cards — excluded from the generic list. */
+const EXCLUDED_ARTIFACT_KINDS = new Set([
+  "result", "executive_summary", "judge",
+  "workspace_context", "enhanced_prompt",
+  "plan", "plan_audit", "plan_final",
+]);
 
 interface ChatViewProps {
   run: PipelineRun;
@@ -20,9 +27,7 @@ interface ChatViewProps {
   settings: AppSettings | null;
   onMissingAgentSetup: () => void;
   onCancel: () => void;
-  onBackToHome: () => void;
   onContinue: (options: RunOptions) => void;
-  onViewSession: () => void;
 }
 
 /** Chat-style running view with stage timeline, result card, and follow-up input. */
@@ -34,11 +39,11 @@ export function ChatView({
   settings,
   onMissingAgentSetup,
   onCancel,
-  onBackToHome,
   onContinue,
-  onViewSession,
 }: ChatViewProps): ReactNode {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [promptOpen, setPromptOpen] = useState(false);
+  const toast = useToast();
 
   // Auto-scroll to bottom when new content arrives
   useEffect(() => {
@@ -53,10 +58,14 @@ export function ChatView({
   // Flatten all completed stages for timeline display
   const allStages = run.iterations.flatMap((iter) => iter.stages);
 
-  // Non-result artifacts for the generic list
+  // Specialised artifacts
   const enhancedPrompt = artifacts["enhanced_prompt"];
+  const planArtifact = artifacts["plan"];
+  const planAuditArtifact = artifacts["plan_audit"] ?? artifacts["plan_final"];
+
+  // Generic artifacts not consumed by specialised cards
   const otherArtifacts = Object.entries(artifacts).filter(
-    ([kind]) => !RESULT_ARTIFACT_KINDS.has(kind) && kind !== "workspace_context" && kind !== "enhanced_prompt",
+    ([kind]) => !EXCLUDED_ARTIFACT_KINDS.has(kind),
   );
 
   return (
@@ -72,29 +81,35 @@ export function ChatView({
           </div>
 
           {/* Prompt received — collapsible card matching stage card style */}
-          <article className="rounded-lg border border-[#2e2e48] bg-[#14141e] overflow-hidden">
-            <details>
-              <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[#1a1a2a] transition-colors">
-                <svg
-                  className="h-3 w-3 text-[#9898b0] transition-transform [details[open]>&]:rotate-90"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-                <span
-                  className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
-                  style={{ background: "rgba(34, 197, 94, 0.22)" }}
-                >
-                  Prompt Received
-                </span>
-              </summary>
+          <article
+            className="rounded-lg border border-[#2e2e48] bg-[#14141e] overflow-hidden cursor-pointer"
+            onClick={() => setPromptOpen((prev) => !prev)}
+          >
+            <div className="flex items-center gap-2 px-3 py-2 hover:bg-[#1a1a2a] transition-colors">
+              <svg
+                className={`h-3 w-3 text-[#9898b0] transition-transform ${promptOpen ? "rotate-90" : ""}`}
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              <span
+                className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
+                style={{ background: "rgba(34, 197, 94, 0.22)" }}
+              >
+                Prompt Received
+              </span>
+              <span className="ml-auto rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#22c55e] bg-[#22c55e]/10">
+                Completed
+              </span>
+            </div>
+            {promptOpen && (
               <div className="px-3 pb-3">
                 <div className="rounded bg-[#0f0f14] px-3 py-2 text-xs text-[#c8c8d8] whitespace-pre-wrap leading-relaxed">
                   {run.prompt}
                 </div>
               </div>
-            </details>
+            )}
           </article>
 
           {/* Stage timeline cards with inline prompt displays */}
@@ -116,7 +131,20 @@ export function ChatView({
 
               {/* After PROMPT stage when enhanced prompt is ready — show both */}
               {stage.stage === "prompt_enhance" && stage.status === "completed" && enhancedPrompt && (
-                <PromptCard originalPrompt={run.prompt} enhancedPrompt={enhancedPrompt} />
+                <PromptCard originalPrompt={run.prompt} enhancedPrompt={enhancedPrompt} durationMs={stage.durationMs} />
+              )}
+
+              {/* After plan_audit — show final plan (plan + audit combined) */}
+              {stage.stage === "plan_audit" && stage.status === "completed" && (planArtifact || planAuditArtifact) && (
+                <FinalPlanCard
+                  plannerPlan={planArtifact}
+                  auditedPlan={planAuditArtifact}
+                  durationMs={
+                    allStages
+                      .filter((s) => s.stage === "plan" || s.stage === "plan_audit")
+                      .reduce((sum, s) => sum + s.durationMs, 0)
+                  }
+                />
               )}
             </div>
           ))}
@@ -167,30 +195,37 @@ export function ChatView({
         )}
 
         {isTerminal(run.status) && (
-          <>
-            <PromptInputBar
-              placeholder="Continue this session..."
-              cliHealth={cliHealth}
-              settings={settings}
-              onMissingAgentSetup={onMissingAgentSetup}
-              onSubmit={onContinue}
-            />
-            <div className="flex items-center justify-between px-1 text-xs text-[#9898b0]">
-              <button
-                onClick={onViewSession}
-                className="hover:text-[#e4e4ed] transition-colors"
-              >
-                View session
-              </button>
-              <button
-                onClick={onBackToHome}
-                className="hover:text-[#e4e4ed] transition-colors"
-              >
-                New conversation
-              </button>
-            </div>
-          </>
+          <PromptInputBar
+            placeholder="Continue this session..."
+            cliHealth={cliHealth}
+            settings={settings}
+            onMissingAgentSetup={onMissingAgentSetup}
+            onSubmit={onContinue}
+          />
         )}
+
+        {/* Workspace path + Open in VS Code */}
+        <div className="flex w-full items-center justify-between px-1 text-xs text-[#9898b0]">
+          <span className="truncate" title={run.workspacePath}>
+            {run.workspacePath}
+          </span>
+          <button
+            onClick={() => {
+              void invoke("open_in_vscode", { path: run.workspacePath }).catch(() => {
+                toast.error("Failed to open VS Code.");
+              });
+            }}
+            className="ml-4 flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
+            title="Open in VS Code"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 3l5 3v12l-5 3L2 12l5-3" />
+              <path d="M16 3L7 12l9 9" />
+              <path d="M16 3v18" />
+            </svg>
+            Open in VS Code
+          </button>
+        </div>
       </div>
     </div>
   );

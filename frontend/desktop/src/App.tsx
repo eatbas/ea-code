@@ -123,11 +123,11 @@ function App(): ReactNode {
 
   /** Render the main content area based on active view. */
   function renderContent(): ReactNode {
-    // Actively running pipeline always takes priority (blocks navigation)
+    // Show pipeline chat only on the home root view so session/settings navigation remains available.
     const pipelineActive = isRunActive(run);
-    // Terminal pipeline shown only when on home view
     const pipelineTerminal = isRunTerminal(run);
-    const showChat = pipelineActive || (pipelineTerminal && activeView === "home" && !activeSessionId);
+    const isHomeRootView = activeView === "home" && !activeSessionId;
+    const showChat = isHomeRootView && (pipelineActive || pipelineTerminal);
 
     if (run && showChat) {
       return (
@@ -139,16 +139,9 @@ function App(): ReactNode {
           settings={settings}
           onMissingAgentSetup={handleMissingAgentSetup}
           onCancel={cancelPipeline}
-          onBackToHome={handleNewSession}
           onContinue={(options) => {
             if (run.sessionId) setActiveSessionId(run.sessionId);
             handleRun(options);
-          }}
-          onViewSession={() => {
-            if (run.sessionId) {
-              void handleSelectSession(run.sessionId);
-              resetRun();
-            }
           }}
         />
       );
