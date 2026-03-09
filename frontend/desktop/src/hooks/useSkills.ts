@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { CreateSkillPayload, Skill, UpdateSkillPayload } from "../types";
+import { useToast } from "../components/shared/Toast";
 
 interface UseSkillsReturn {
   skills: Skill[];
@@ -14,6 +15,7 @@ interface UseSkillsReturn {
 
 /** Hook for skills catalogue CRUD commands. */
 export function useSkills(): UseSkillsReturn {
+  const toast = useToast();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,10 +27,11 @@ export function useSkills(): UseSkillsReturn {
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      toast.error("Failed to load skills.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     void refreshSkills();
@@ -38,31 +41,37 @@ export function useSkills(): UseSkillsReturn {
     try {
       await invoke<Skill>("create_skill", { payload });
       await refreshSkills();
+      toast.success("Skill created.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      toast.error("Failed to create skill.");
       throw err;
     }
-  }, [refreshSkills]);
+  }, [refreshSkills, toast]);
 
   const updateSkill = useCallback(async (payload: UpdateSkillPayload): Promise<void> => {
     try {
       await invoke<Skill>("update_skill", { payload });
       await refreshSkills();
+      toast.success("Skill updated.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      toast.error("Failed to update skill.");
       throw err;
     }
-  }, [refreshSkills]);
+  }, [refreshSkills, toast]);
 
   const deleteSkill = useCallback(async (id: string): Promise<void> => {
     try {
       await invoke("delete_skill", { id });
       await refreshSkills();
+      toast.success("Skill deleted.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      toast.error("Failed to delete skill.");
       throw err;
     }
-  }, [refreshSkills]);
+  }, [refreshSkills, toast]);
 
   return {
     skills,

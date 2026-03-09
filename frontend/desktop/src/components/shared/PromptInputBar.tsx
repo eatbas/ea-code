@@ -8,11 +8,7 @@ import {
 } from "../../utils/agentSettings";
 import { BACKEND_OPTIONS } from "./constants";
 import { PopoverSelect } from "./PopoverSelect";
-
-interface PromptInputToast {
-  message: string;
-  showSettingsLink: boolean;
-}
+import { useToast } from "./Toast";
 
 interface PromptInputBarProps {
   placeholder?: string;
@@ -32,14 +28,13 @@ export function PromptInputBar({
   onMissingAgentSetup,
   onSubmit,
 }: PromptInputBarProps): ReactNode {
+  const toast = useToast();
   const [prompt, setPrompt] = useState<string>("");
   const [directTask, setDirectTask] = useState(false);
   const [noPlan, setNoPlan] = useState(false);
   const [directAgent, setDirectAgent] = useState<AgentBackend>("claude");
   const [directModel, setDirectModel] = useState<string>("sonnet");
-  const [toast, setToast] = useState<PromptInputToast | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const toastTimerRef = useRef<number | undefined>(undefined);
 
   const availableBackends = BACKEND_OPTIONS.filter(
     (opt) => cliHealth?.[opt.value]?.available,
@@ -75,31 +70,15 @@ export function PromptInputBar({
     if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 160)}px`; }
   }, [prompt]);
 
-  useEffect(() => (
-    () => {
-      if (toastTimerRef.current) {
-        window.clearTimeout(toastTimerRef.current);
-      }
-    }
-  ), []);
-
-  function showErrorToast(message: string, showSettingsLink: boolean): void {
-    setToast({ message, showSettingsLink });
-    if (toastTimerRef.current) {
-      window.clearTimeout(toastTimerRef.current);
-    }
-    toastTimerRef.current = window.setTimeout(() => {
-      setToast(null);
-    }, 3500);
-  }
-
   function showMissingSetupToast(): void {
     if (missingProject) {
-      showErrorToast("Please select a project.", false);
+      toast.error("Please select a project.");
       return;
     }
     if (missingMinimumAgents || missingMinimumAgentModels) {
-      showErrorToast("Please select the agents under Settings/Agents.", true);
+      toast.error("Please select the agents under Settings/Agents.", onMissingAgentSetup
+        ? { label: "Open Settings/Agents", onClick: onMissingAgentSetup }
+        : undefined);
     }
   }
 
@@ -214,27 +193,6 @@ export function PromptInputBar({
           </div>
         )}
       </div>
-      {toast && (
-        <div className="fixed right-6 top-6 z-[100] max-w-sm">
-          <div
-            role="alert"
-            className="rounded-lg border border-[#6f1d1d] bg-[#2a1518] px-4 py-3 text-sm text-[#ffd8d8] shadow-lg"
-          >
-            <p>{toast.message}</p>
-            {toast.showSettingsLink && onMissingAgentSetup && (
-              <button
-                onClick={() => {
-                  setToast(null);
-                  onMissingAgentSetup();
-                }}
-                className="mt-2 text-xs font-medium text-[#ffb4b4] underline hover:text-[#ffd8d8] transition-colors"
-              >
-                Open Settings/Agents
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

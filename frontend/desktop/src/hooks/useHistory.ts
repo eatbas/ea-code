@@ -5,6 +5,7 @@ import type {
   SessionSummary,
   SessionDetail,
 } from "../types";
+import { useToast } from "../components/shared/Toast";
 
 interface UseHistoryReturn {
   projects: ProjectSummary[];
@@ -18,6 +19,7 @@ interface UseHistoryReturn {
 
 /** Hook for querying project and session history from the database. */
 export function useHistory(): UseHistoryReturn {
+  const toast = useToast();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
 
@@ -25,19 +27,19 @@ export function useHistory(): UseHistoryReturn {
     try {
       const result = await invoke<ProjectSummary[]>("list_projects");
       setProjects(result);
-    } catch (err) {
-      console.error("Failed to load projects:", err);
+    } catch {
+      toast.error("Failed to load projects.");
     }
-  }, []);
+  }, [toast]);
 
   const loadSessions = useCallback(async (projectPath: string): Promise<void> => {
     try {
       const result = await invoke<SessionSummary[]>("list_sessions", { projectPath });
       setSessions(result);
-    } catch (err) {
-      console.error("Failed to load sessions:", err);
+    } catch {
+      toast.error("Failed to load sessions.");
     }
-  }, []);
+  }, [toast]);
 
   const loadSessionDetail = useCallback(async (sessionId: string): Promise<SessionDetail> => {
     return invoke<SessionDetail>("get_session_detail", { sessionId });

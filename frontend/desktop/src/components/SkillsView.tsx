@@ -5,7 +5,6 @@ import type { CreateSkillPayload, Skill, UpdateSkillPayload } from "../types";
 interface SkillsViewProps {
   skills: Skill[];
   loading: boolean;
-  error: string | null;
   onCreate: (payload: CreateSkillPayload) => Promise<void>;
   onUpdate: (payload: UpdateSkillPayload) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -33,14 +32,13 @@ const EMPTY_DRAFT: SkillDraft = {
 export function SkillsView({
   skills,
   loading,
-  error,
   onCreate,
   onUpdate,
   onDelete,
 }: SkillsViewProps): ReactNode {
   const [draft, setDraft] = useState<SkillDraft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState<boolean>(false);
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const selectedSkill = useMemo(
     () => (draft.id ? skills.find((skill) => skill.id === draft.id) ?? null : null),
@@ -66,7 +64,7 @@ export function SkillsView({
   }, [draft.id, skills]);
 
   function loadSkill(skill: Skill): void {
-    setLocalError(null);
+    setValidationError(null);
     setDraft({
       id: skill.id,
       name: skill.name,
@@ -78,19 +76,19 @@ export function SkillsView({
   }
 
   function startNewSkill(): void {
-    setLocalError(null);
+    setValidationError(null);
     setDraft(EMPTY_DRAFT);
   }
 
   async function handleSave(): Promise<void> {
     const name = draft.name.trim();
     if (!name) {
-      setLocalError("Skill name is required.");
+      setValidationError("Skill name is required.");
       return;
     }
 
     setSaving(true);
-    setLocalError(null);
+    setValidationError(null);
     try {
       if (draft.id) {
         await onUpdate({
@@ -110,8 +108,7 @@ export function SkillsView({
           isActive: draft.isActive,
         });
       }
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : String(err));
+    } catch {
     } finally {
       setSaving(false);
     }
@@ -122,12 +119,11 @@ export function SkillsView({
       return;
     }
     setSaving(true);
-    setLocalError(null);
+    setValidationError(null);
     try {
       await onDelete(draft.id);
       setDraft(EMPTY_DRAFT);
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : String(err));
+    } catch {
     } finally {
       setSaving(false);
     }
@@ -170,9 +166,9 @@ export function SkillsView({
       <main className="flex-1 overflow-y-auto px-8 py-8">
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
           <h1 className="text-xl font-bold text-[#e4e4ed]">Skill Editor</h1>
-          {(error || localError) && (
+          {validationError && (
             <div className="rounded border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2 text-sm text-[#ef4444]">
-              {error || localError}
+              {validationError}
             </div>
           )}
 

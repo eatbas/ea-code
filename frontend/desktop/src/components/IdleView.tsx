@@ -5,6 +5,7 @@ import { useClickOutside } from "../hooks/useClickOutside";
 import type { WorkspaceInfo, ProjectSummary, RunOptions, CliHealth, AppSettings } from "../types";
 import { folderName, projectDisplayName } from "../utils/formatters";
 import { PromptInputBar } from "./shared/PromptInputBar";
+import { useToast } from "./shared/Toast";
 
 interface IdleViewProps {
   workspace: WorkspaceInfo | null;
@@ -30,6 +31,7 @@ export function IdleView({
   onAddProject,
   onRun,
 }: IdleViewProps): ReactNode {
+  const toast = useToast();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
@@ -149,7 +151,9 @@ export function IdleView({
           {workspacePath && (
             <button
               onClick={() => {
-                void invoke("open_in_vscode", { path: workspacePath });
+                void invoke("open_in_vscode", { path: workspacePath }).catch(() => {
+                  toast.error("Failed to open VS Code.");
+                });
               }}
               className="ml-4 flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
               title="Open in VS Code"

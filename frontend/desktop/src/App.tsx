@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useState, useEffect, useCallback } from "react";
+import { useToast } from "./components/shared/Toast";
 import { useSettings } from "./hooks/useSettings";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { usePipeline } from "./hooks/usePipeline";
@@ -19,6 +20,7 @@ import { SkillsView } from "./components/SkillsView";
 import { McpView } from "./components/McpView";
 import { QuestionDialog } from "./components/QuestionDialog";
 import { UpdateInstallBanner } from "./components/shared/UpdateInstallBanner";
+import { ProjectLoadingOverlay } from "./components/shared/ProjectLoadingOverlay";
 import type { PipelineRequest, PipelineRun, RunOptions, SessionDetail } from "./types";
 
 /** Whether the pipeline is actively in progress (running or awaiting user input). */
@@ -32,13 +34,14 @@ function isRunTerminal(run: PipelineRun | null): boolean {
 }
 
 function App(): ReactNode {
-  const { workspace, openWorkspace, selectFolder } = useWorkspace();
+  const toast = useToast();
+  const { workspace, openingWorkspace, openWorkspace, selectFolder } = useWorkspace();
   const { settings, loading, saveSettings } = useSettings();
   const { run, stageLogs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
-  const { versions, loading: versionsLoading, updating: versionsUpdating, error: versionsError, fetchVersions, updateCli } = useCliVersions();
+  const { versions, loading: versionsLoading, updating: versionsUpdating, fetchVersions, updateCli } = useCliVersions();
   const { health: cliHealth, checking: cliHealthChecking, checkHealth } = useCliHealth();
   const { projects, sessions, loadSessions, loadProjects, loadSessionDetail, deleteSession } = useHistory();
-  const { skills, loading: skillsLoading, error: skillsError, createSkill, updateSkill, deleteSkill } = useSkills();
+  const { skills, loading: skillsLoading, createSkill, updateSkill, deleteSkill } = useSkills();
   const { installing: installingUpdate, updateVersion } = useUpdateCheck();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -105,13 +108,13 @@ function App(): ReactNode {
     try {
       const detail = await loadSessionDetail(_sessionId);
       setSessionDetail(detail);
-    } catch (err) {
-      console.error("Failed to load session detail:", err);
+    } catch {
+      toast.error("Failed to load session.");
       setSessionDetail(null);
     } finally {
       setSessionDetailLoading(false);
     }
-  }, [loadSessionDetail]);
+  }, [loadSessionDetail, toast]);
 
   const handleSelectProject = useCallback(async (projectPath: string): Promise<void> => {
     await openWorkspace(projectPath);
@@ -169,7 +172,6 @@ function App(): ReactNode {
           versions={versions}
           loading={versionsLoading}
           updating={versionsUpdating}
-          error={versionsError}
           onFetchVersions={fetchVersions}
           onUpdateCli={updateCli}
           onSave={saveSettings}
@@ -182,7 +184,6 @@ function App(): ReactNode {
         <SkillsView
           skills={skills}
           loading={skillsLoading}
-          error={skillsError}
           onCreate={createSkill}
           onUpdate={updateSkill}
           onDelete={deleteSkill}
@@ -232,48 +233,55 @@ function App(): ReactNode {
   }
 
   return (
-    <div className="flex h-full bg-[#0f0f14]">
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((prev) => !prev)}
-        onNewSession={handleNewSession}
-        activeView={activeView}
-        onNavigate={setActiveView}
-        projects={projects}
-        activeProjectPath={workspace?.path}
-        onSelectProject={handleSelectProject}
-        onAddProject={selectFolder}
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onSelectSession={handleSelectSession}
-        isRunning={isRunActive(run)}
-        hasTerminalRun={isRunTerminal(run)}
-        onGoToRun={() => {
-          setActiveSessionId(undefined);
-          setSessionDetail(null);
-          setActiveView("home");
-        }}
-        onArchiveSession={(sessionId) => {
-          void deleteSession(sessionId);
-          if (activeSessionId === sessionId) {
+    <div className="relative h-full">
+      <div className={`flex h-full bg-[#0f0f14] transition-[filter] duration-200 ${openingWorkspace ? "pointer-events-none blur-[2px]" : ""}`}>
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((prev) => !prev)}
+          onNewSession={handleNewSession}
+          activeView={activeView}
+          onNavigate={setActiveView}
+          projects={projects}
+          activeProjectPath={workspace?.path}
+          onSelectProject={handleSelectProject}
+          onAddProject={selectFolder}
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSelectSession={handleSelectSession}
+          isRunning={isRunActive(run)}
+          hasTerminalRun={isRunTerminal(run)}
+          onGoToRun={() => {
             setActiveSessionId(undefined);
             setSessionDetail(null);
-          }
-        }}
-      />
+            setActiveView("home");
+          }}
+          onArchiveSession={(sessionId) => {
+            void deleteSession(sessionId).then(
+              () => toast.success("Session archived."),
+              () => toast.error("Failed to archive session."),
+            );
+            if (activeSessionId === sessionId) {
+              setActiveSessionId(undefined);
+              setSessionDetail(null);
+            }
+          }}
+        />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {renderContent()}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {renderContent()}
+        </div>
+
+        {pendingQuestion && (
+          <QuestionDialog
+            question={pendingQuestion}
+            onAnswer={answerQuestion}
+          />
+        )}
+
+        {installingUpdate && <UpdateInstallBanner version={updateVersion} />}
       </div>
 
-      {pendingQuestion && (
-        <QuestionDialog
-          question={pendingQuestion}
-          onAnswer={answerQuestion}
-        />
-      )}
-
-      {installingUpdate && <UpdateInstallBanner version={updateVersion} />}
+      {openingWorkspace && <ProjectLoadingOverlay />}
     </div>
   );
 }

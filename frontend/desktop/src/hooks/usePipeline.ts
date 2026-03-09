@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useToast } from "../components/shared/Toast";
 import type {
   PipelineRun,
   PipelineRequest,
@@ -28,6 +29,7 @@ interface UsePipelineReturn {
 
 /** Hook managing the full pipeline lifecycle including Tauri event listeners. */
 export function usePipeline(): UsePipelineReturn {
+  const toast = useToast();
   const [run, setRun] = useState<PipelineRun | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [stageLogs, setStageLogs] = useState<Record<string, string[]>>({});
@@ -194,8 +196,9 @@ export function usePipeline(): UsePipelineReturn {
         if (!prev) return prev;
         return { ...prev, status: "failed", error: message, currentStage: undefined };
       });
+      toast.error("Failed to start pipeline.");
     }
-  }, []);
+  }, [toast]);
 
   const cancelPipeline = useCallback(async (): Promise<void> => {
     try {
@@ -210,11 +213,10 @@ export function usePipeline(): UsePipelineReturn {
           currentStage: undefined,
         };
       });
-    } catch (err) {
-      // Cancellation failure is non-critical — log and carry on
-      console.error("Failed to cancel pipeline:", err);
+    } catch {
+      toast.error("Failed to cancel pipeline.");
     }
-  }, []);
+  }, [toast]);
 
   const answerQuestion = useCallback(async (answer: PipelineAnswer): Promise<void> => {
     try {
@@ -224,11 +226,11 @@ export function usePipeline(): UsePipelineReturn {
         if (!prev) return prev;
         return { ...prev, status: "running" };
       });
-    } catch (err) {
+    } catch {
       // Don't clear the pending question so the user can retry
-      console.error("Failed to submit answer:", err);
+      toast.error("Failed to submit answer.");
     }
-  }, []);
+  }, [toast]);
 
   /** Clear all pipeline state and return to idle. */
   const resetRun = useCallback((): void => {

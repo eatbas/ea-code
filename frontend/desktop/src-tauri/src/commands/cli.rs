@@ -15,8 +15,6 @@ pub async fn check_cli_health(settings: AppSettings) -> Result<CliHealth, String
 }
 #[tauri::command]
 pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, String> {
-    let start = std::time::Instant::now();
-    eprintln!("[ea-code] get_cli_versions: starting all version checks...");
     let (claude, codex, gemini, kimi, opencode, git_bash) = tokio::join!(
         build_cli_version_info(&settings.claude_path, "Claude CLI", "claude", "@anthropic-ai/claude-code"),
         build_cli_version_info(&settings.codex_path, "Codex CLI", "codex", "@openai/codex",),
@@ -31,7 +29,6 @@ pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, S
             }
         },
     );
-    eprintln!("[ea-code] get_cli_versions: completed in {:.1?}", start.elapsed());
     Ok(AllCliVersions {
         claude,
         codex,
@@ -121,24 +118,26 @@ async fn update_kimi_cli() -> Result<String, String> {
     }
     update_with_npm("kimi-cli").await
 }
+/// Opens the Git for Windows download page so the user can update manually.
 async fn update_git_bash() -> Result<String, String> {
+    let url = "https://git-scm.com/download/win";
     #[cfg(target_os = "windows")]
     {
-        let output = git_bash::run_binary(
-            "winget",
-            &["upgrade", "--id", "Git.Git", "--exact", "--accept-source-agreements", "--disable-interactivity"],
-            120,
-        )
-        .await
-        .ok_or_else(|| "Failed to run winget via Git Bash".to_string())?;
-        if output.status.success() {
-            return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
-        }
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(format!("Update failed: {stderr}"));
+        tokio::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .output()
+            .await
+            .map_err(|e| format!("Failed to open browser: {e}"))?;
     }
     #[cfg(not(target_os = "windows"))]
-    Err("Git Bash update is only supported on Windows".to_string())
+    {
+        tokio::process::Command::new("xdg-open")
+            .arg(url)
+            .output()
+            .await
+            .map_err(|e| format!("Failed to open browser: {e}"))?;
+    }
+    Ok("Opened Git download page — install the latest version to update.".to_string())
 }
 async fn check_binary_exists(path: &str) -> bool {
     #[cfg(target_os = "windows")]
@@ -184,6 +183,38 @@ async fn get_installed_version(path: &str) -> Option<String> {
         None
     }
 }
+/// Reads the installed version from the npm package.json on disk (no process spawn).
+/// Fallback for CLIs whose `--version` hangs (e.g. gemini in non-TTY contexts).
+async fn get_npm_package_version(npm_package: &str) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        let appdata = std::env::var("APPDATA").ok()?;
+        let path = format!("{appdata}\\npm\\node_modules\\{npm_package}\\package.json");
+        let content = tokio::fs::read_to_string(&path).await.ok()?;
+        let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+        return json["version"].as_str().map(|s| s.to_string());
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let home = std::env::var("HOME").ok()?;
+        for prefix in [
+            "/usr/local/lib".to_string(),
+            "/usr/lib".to_string(),
+            format!("{home}/.local/lib"),
+        ] {
+            let path = format!("{prefix}/node_modules/{npm_package}/package.json");
+            if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(v) = json["version"].as_str() {
+                        return Some(v.to_string());
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
 /// Fetches the latest version via HTTP (no process spawns).
 async fn get_latest_version(cli_name: &str, npm_package: &str) -> Option<String> {
     if cli_name == "kimi" {
@@ -201,17 +232,16 @@ async fn build_cli_version_info(
     cli_name: &str,
     npm_package: &str,
 ) -> CliVersionInfo {
-    let start = std::time::Instant::now();
-    let (installed, latest, exists) = tokio::join!(
+    let (mut installed, latest, exists) = tokio::join!(
         get_installed_version(path),
         get_latest_version(cli_name, npm_package),
         check_binary_exists(path),
     );
+    // Fallback: if --version timed out but binary exists, read version from package.json
+    if installed.is_none() && exists && cli_name != "kimi" {
+        installed = get_npm_package_version(npm_package).await;
+    }
     let available = installed.is_some() || exists;
-    eprintln!(
-        "[ea-code] {cli_name}: installed={installed:?} latest={latest:?} exists={exists} available={available} ({:.1?})",
-        start.elapsed()
-    );
     let up_to_date = matches!((&installed, &latest), (Some(i), Some(l)) if i == l);
     let update_command = if cli_name == "kimi" {
         "uv tool upgrade kimi-cli --no-cache".to_string()
@@ -261,7 +291,7 @@ async fn build_git_bash_version_info() -> CliVersionInfo {
         installed_version: installed,
         latest_version: latest,
         up_to_date,
-        update_command: "winget upgrade --id Git.Git".to_string(),
+        update_command: "https://git-scm.com/download/win".to_string(),
         available,
         error,
     }

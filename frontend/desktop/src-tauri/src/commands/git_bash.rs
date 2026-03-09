@@ -81,9 +81,7 @@ fn find_git_bash_inner() -> Option<String> {
 #[cfg(target_os = "windows")]
 async fn run_git_bash(script: &str, args: &[&str], timeout_secs: u64) -> Option<Output> {
     let git_bash = find_git_bash()?;
-    eprintln!("[ea-code] git_bash::run: script={script:?} args={args:?} timeout={timeout_secs}s");
-    let start = std::time::Instant::now();
-    let result = timeout(
+    timeout(
         Duration::from_secs(timeout_secs),
         Command::new(git_bash)
             .arg("-lc")
@@ -92,21 +90,9 @@ async fn run_git_bash(script: &str, args: &[&str], timeout_secs: u64) -> Option<
             .stdin(Stdio::null())
             .output(),
     )
-    .await;
-    let elapsed = start.elapsed();
-    match &result {
-        Ok(Ok(output)) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            eprintln!(
-                "[ea-code] git_bash::run: completed in {elapsed:.1?} status={} stdout={:?} stderr={:?}",
-                output.status, stdout.trim(), stderr.trim()
-            );
-        }
-        Ok(Err(e)) => eprintln!("[ea-code] git_bash::run: failed in {elapsed:.1?} error={e}"),
-        Err(_) => eprintln!("[ea-code] git_bash::run: TIMED OUT after {elapsed:.1?}"),
-    }
-    result.ok()?.ok()
+    .await
+    .ok()?
+    .ok()
 }
 
 #[cfg(target_os = "windows")]

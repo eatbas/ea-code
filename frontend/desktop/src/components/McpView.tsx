@@ -13,9 +13,8 @@ function parseEnv(raw: string): Record<string, string> {
 
 /** MCP server catalogue and per-CLI binding management view. */
 export function McpView(): ReactNode {
-  const { servers, capableClis, loading, error, setEnabled, setBindings, setContext7ApiKey } = useMcpServers();
+  const { servers, capableClis, loading, setEnabled, setBindings, setContext7ApiKey } = useMcpServers();
   const [busy, setBusy] = useState<string | null>(null);
-  const [localError, setLocalError] = useState<string | null>(null);
   const [context7ApiKey, setContext7ApiKeyValue] = useState<string>("");
 
   const builtinOrder = ["ea-code-history", "context7", "playwright"];
@@ -42,11 +41,8 @@ export function McpView(): ReactNode {
       return;
     }
     setBusy(server.id);
-    setLocalError(null);
     try {
       await setEnabled(server.id, enabled);
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
     }
@@ -59,11 +55,8 @@ export function McpView(): ReactNode {
     const current = new Set(server.cliBindings);
     if (current.has(cliName)) current.delete(cliName); else current.add(cliName);
     setBusy(server.id);
-    setLocalError(null);
     try {
       await setBindings(server.id, Array.from(current));
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
     }
@@ -71,11 +64,8 @@ export function McpView(): ReactNode {
 
   async function saveContext7Key(): Promise<void> {
     setBusy("context7-key");
-    setLocalError(null);
     try {
       await setContext7ApiKey(context7ApiKey);
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
     }
@@ -87,11 +77,6 @@ export function McpView(): ReactNode {
         <div className="mx-auto flex max-w-4xl flex-col gap-6">
           <h1 className="text-xl font-bold text-[#e4e4ed]">MCP Servers</h1>
           <p className="text-sm text-[#9898b0]">Only curated servers are available: EA history, Context7, and Playwright.</p>
-          {(error || localError) && (
-            <div className="rounded border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2 text-sm text-[#ef4444]">
-              {error || localError}
-            </div>
-          )}
 
           {loading && <div className="text-sm text-[#9898b0]">Loading MCP servers...</div>}
 
