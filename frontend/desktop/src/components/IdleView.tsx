@@ -42,15 +42,10 @@ export function IdleView({
       {/* Centre content — logo, heading, workspace */}
       <div className="flex flex-1 flex-col items-center justify-center gap-4">
         {/* Logo icon */}
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[#2e2e48] bg-[#1a1a24]">
-          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e4e4ed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="16 18 22 12 16 6" />
-            <polyline points="8 6 2 12 8 18" />
-          </svg>
-        </div>
+        <img src="/logo.png" alt="EA Code logo" className="h-40 w-40" />
 
         {/* Heading */}
-        <h1 className="text-3xl font-bold text-[#e4e4ed]">Let's build</h1>
+        <h1 className="text-3xl font-bold text-[#e4e4ed]">ea-code</h1>
 
         {/* Workspace selector dropdown */}
         <div ref={dropdownRef} className="relative">

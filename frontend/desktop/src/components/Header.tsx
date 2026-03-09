@@ -25,7 +25,10 @@ export function Header({ workspace, onOpenSettings, onBackToHome, showBackButton
             </svg>
           </button>
         )}
-        <h1 className="text-lg font-bold text-[#e4e4ed]">EA Code</h1>
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="EA Code logo" className="h-12 w-12" />
+          <h1 className="text-lg font-bold text-[#e4e4ed]">EA Code</h1>
+        </div>
       </div>
 
       <span className="font-mono text-sm text-[#9898b0] truncate max-w-[50%] px-4">

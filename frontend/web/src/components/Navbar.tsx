@@ -15,10 +15,8 @@ export function Navbar() {
       <div className="flex items-center justify-between px-6 py-3">
         {/* Logo */}
         <a href="#" className="flex items-center gap-2 font-mono text-lg font-bold tracking-tight">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-surface font-bold text-sm">
-            EA
-          </span>
-          <span>Code</span>
+          <img src="/logo.png" alt="EA Code logo" className="h-14 w-14" />
+          <span>EA Code</span>
         </a>
 
         {/* Desktop links */}
