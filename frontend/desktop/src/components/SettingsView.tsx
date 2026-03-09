@@ -145,18 +145,6 @@ export function SettingsView({ settings, onSave, health, onCheckHealth }: Settin
               />
               <span className="text-[10px] text-[#6b6b82]">Per-agent timeout in milliseconds (0 = no timeout)</span>
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-[#9898b0]">Agent Max Turns</span>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={draft.agentMaxTurns}
-                onChange={(e) => update({ agentMaxTurns: Math.max(1, Math.min(100, Number(e.target.value))) })}
-                className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
-              />
-              <span className="text-[10px] text-[#6b6b82]">Used by Claude via --max-turns</span>
-            </label>
           </section>
 
           {/* Plan Gate section */}
