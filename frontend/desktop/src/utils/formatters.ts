@@ -24,14 +24,18 @@ export function formatTimestamp(iso: string): string {
   }
 }
 
-/** Formats milliseconds into human-readable duration (e.g., "1.3s", "2m 5s"). */
+/** Formats milliseconds into human-readable duration (e.g., "1.3s", "2m 5s", "1h 23m 5s"). */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
-  const secs = ms / 1000;
-  if (secs < 60) return `${secs.toFixed(1)}s`;
-  const mins = Math.floor(secs / 60);
-  const remainSecs = Math.round(secs % 60);
-  return `${mins}m ${remainSecs}s`;
+  const totalSecs = Math.floor(ms / 1000);
+  if (totalSecs < 60) return `${(ms / 1000).toFixed(1)}s`;
+  const hours = Math.floor(totalSecs / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+  if (hours > 0) {
+    return secs > 0 ? `${hours}h ${mins}m ${secs}s` : `${hours}h ${mins}m`;
+  }
+  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
 }
 
 /** Formats a token count into short notation (e.g., 13103 → "13.1k"). */

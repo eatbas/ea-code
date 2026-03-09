@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
 import type { RunDetail, StageEntry, PipelineStage } from "../types";
 import { formatDuration, formatTimestamp } from "../utils/formatters";
@@ -8,46 +9,109 @@ interface RunCardProps {
   run: RunDetail;
 }
 
-/** Collapsible stage row for a historical stage entry. */
+/** Clickable stage row for a historical stage entry. Whole card toggles content. */
 function HistoryStageCard({ entry }: { entry: StageEntry }): ReactNode {
+  const [open, setOpen] = useState(false);
+
   const label = STAGE_LABELS[entry.stage as PipelineStage] ?? entry.stage;
   const badgeBg = STAGE_COLOURS[entry.stage as PipelineStage] ?? "rgba(150,150,150,0.22)";
   const isFailed = entry.status === "failed";
+  const isCompleted = entry.status === "completed";
   const hasOutput = entry.output && entry.output.trim().length > 0;
 
   return (
-    <article className="rounded-lg border border-[#2e2e48] bg-[#14141e] px-3 py-2">
-      <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+    <article
+      className={`rounded-lg border border-[#2e2e48] bg-[#14141e] overflow-hidden ${hasOutput ? "cursor-pointer" : ""}`}
+      onClick={() => hasOutput && setOpen((prev) => !prev)}
+    >
+      <div className="flex items-center gap-1.5 px-3 py-2 text-[10px] hover:bg-[#1a1a2a] transition-colors">
+        {hasOutput && (
+          <svg
+            className={`h-3 w-3 text-[#9898b0] shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        )}
         <span
           className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
           style={{ background: badgeBg }}
         >
           {label}
         </span>
-        {entry.durationMs > 0 && (
-          <span className="text-[#9898b0] opacity-80">
-            {formatDuration(entry.durationMs)}
-          </span>
-        )}
-        {isFailed && (
-          <span className="font-medium text-[#ef4444]">Failed</span>
-        )}
-        {entry.status === "skipped" && (
-          <span className="font-medium text-[#9898b0]">Skipped</span>
-        )}
+        {isFailed && <span className="font-medium text-[#ef4444]">Failed</span>}
+        {entry.status === "skipped" && <span className="font-medium text-[#9898b0]">Skipped</span>}
+        <div className="ml-auto flex items-center gap-2">
+          {entry.durationMs > 0 && (
+            <span className="text-[#9898b0] opacity-80">{formatDuration(entry.durationMs)}</span>
+          )}
+          {isCompleted && (
+            <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#22c55e] bg-[#22c55e]/10">
+              Completed
+            </span>
+          )}
+        </div>
       </div>
-      {entry.error && (
-        <p className="mt-1.5 text-xs text-[#ef4444]">{entry.error}</p>
-      )}
-      {hasOutput && (
-        <details className="mt-1.5">
-          <summary className="cursor-pointer text-[10px] text-[#9898b0] opacity-70 hover:opacity-100 transition-opacity">
-            Details
-          </summary>
-          <pre className="mt-1.5 max-h-64 overflow-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
+      {entry.error && <p className="px-3 pb-2 text-xs text-[#ef4444]">{entry.error}</p>}
+      {open && hasOutput && (
+        <div className="px-3 pb-3">
+          <pre className="max-h-64 overflow-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
             {entry.output}
           </pre>
-        </details>
+        </div>
+      )}
+    </article>
+  );
+}
+
+/** Collapsible card showing combined plan + audited plan. */
+function FinalPlanCard({ plannerPlan, auditedPlan }: { plannerPlan?: string; auditedPlan?: string }): ReactNode {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <article
+      className="rounded-lg border border-[#2e2e48] bg-[#14141e] overflow-hidden cursor-pointer"
+      onClick={() => setOpen((prev) => !prev)}
+    >
+      <div className="flex items-center gap-2 px-3 py-2 hover:bg-[#1a1a2a] transition-colors">
+        <svg
+          className={`h-3 w-3 text-[#9898b0] shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path d="M8 5v14l11-7z" />
+        </svg>
+        <span
+          className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
+          style={{ background: "rgba(64, 196, 255, 0.24)" }}
+        >
+          Final Plan
+        </span>
+      </div>
+      {open && (
+        <div className="flex flex-col gap-3 px-3 pb-3">
+          {plannerPlan && (
+            <div>
+              <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
+                Plan
+              </span>
+              <pre className="rounded bg-[#0f0f14] px-3 py-2 text-xs text-[#c8c8d8] whitespace-pre-wrap leading-relaxed break-words">
+                {plannerPlan}
+              </pre>
+            </div>
+          )}
+          {auditedPlan && (
+            <div>
+              <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
+                Audited Plan
+              </span>
+              <pre className="rounded border border-[#3b82f6]/20 bg-[#3b82f6]/5 px-3 py-2 text-xs text-[#e4e4ed] whitespace-pre-wrap leading-relaxed break-words">
+                {auditedPlan}
+              </pre>
+            </div>
+          )}
+        </div>
       )}
     </article>
   );
@@ -115,32 +179,9 @@ export function RunCard({ run }: RunCardProps): ReactNode {
                 <PromptCard originalPrompt={run.prompt} enhancedPrompt={iter.enhancedPrompt} />
               )}
 
-              {/* After plan_audit — show final plan */}
-              {entry.stage === "plan_audit" && entry.status === "completed" && iter.auditedPlan && (
-                <article className="rounded-lg border border-[#2e2e48] bg-[#14141e] overflow-hidden">
-                  <details>
-                    <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[#1a1a2a] transition-colors">
-                      <svg
-                        className="h-3 w-3 text-[#9898b0] transition-transform [details[open]>&]:rotate-90"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                      >
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                      <span
-                        className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
-                        style={{ background: "rgba(64, 196, 255, 0.24)" }}
-                      >
-                        Final Plan
-                      </span>
-                    </summary>
-                    <div className="px-3 pb-3">
-                      <pre className="rounded bg-[#0f0f14] px-3 py-2 text-xs text-[#e4e4ed] whitespace-pre-wrap leading-relaxed break-words">
-                        {iter.auditedPlan}
-                      </pre>
-                    </div>
-                  </details>
-                </article>
+              {/* After plan_audit — show final plan (plan + audit combined) */}
+              {entry.stage === "plan_audit" && entry.status === "completed" && (iter.plannerPlan || iter.auditedPlan) && (
+                <FinalPlanCard plannerPlan={iter.plannerPlan} auditedPlan={iter.auditedPlan} />
               )}
             </div>
           ))}

@@ -6,9 +6,12 @@ interface PromptCardProps {
   enhancedPrompt: string;
 }
 
-/** Collapsible card showing the original and enhanced prompts side by side. */
+type PromptTab = "input" | "output";
+
+/** Collapsible card with Input/Output tabs for original and enhanced prompts. */
 export function PromptCard({ originalPrompt, enhancedPrompt }: PromptCardProps): ReactNode {
   const [open, setOpen] = useState(true);
+  const [tab, setTab] = useState<PromptTab>("output");
 
   return (
     <article className="rounded-lg border border-[#2e2e48] bg-[#14141e] overflow-hidden">
@@ -25,32 +28,53 @@ export function PromptCard({ originalPrompt, enhancedPrompt }: PromptCardProps):
         >
           <path d="M8 5v14l11-7z" />
         </svg>
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-[#4ade80]">
+        <span
+          className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
+          style={{ background: "rgba(34, 197, 94, 0.22)" }}
+        >
           Enhanced Prompt
         </span>
       </button>
 
       {open && (
-        <div className="flex flex-col gap-3 px-3 pb-3">
-          {/* Original prompt */}
-          <div>
-            <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
-              Original
-            </span>
+        <div className="px-3 pb-3">
+          {/* Tabs */}
+          <div className="flex gap-1 mb-2">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setTab("input"); }}
+              className={`rounded px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                tab === "input"
+                  ? "bg-[#9898b0]/20 text-[#e4e4ed]"
+                  : "text-[#9898b0] hover:text-[#c8c8d8] hover:bg-[#9898b0]/10"
+              }`}
+            >
+              Input
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setTab("output"); }}
+              className={`rounded px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                tab === "output"
+                  ? "bg-[#22c55e]/20 text-[#4ade80]"
+                  : "text-[#9898b0] hover:text-[#c8c8d8] hover:bg-[#9898b0]/10"
+              }`}
+            >
+              Output
+            </button>
+          </div>
+
+          {/* Tab content */}
+          {tab === "input" && (
             <div className="rounded bg-[#0f0f14] px-3 py-2 text-xs text-[#c8c8d8] whitespace-pre-wrap leading-relaxed">
               {originalPrompt}
             </div>
-          </div>
-
-          {/* Enhanced prompt */}
-          <div>
-            <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
-              Enhanced
-            </span>
+          )}
+          {tab === "output" && (
             <div className="rounded border border-[#22c55e]/20 bg-[#22c55e]/5 px-3 py-2 text-xs text-[#e4e4ed] whitespace-pre-wrap leading-relaxed">
               {enhancedPrompt}
             </div>
-          </div>
+          )}
         </div>
       )}
     </article>
