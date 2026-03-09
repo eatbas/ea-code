@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useState, useEffect } from "react";
 import type { AppSettings, AgentBackend, CliHealth } from "../../types";
+import { sanitiseAgentAssignmentsForEnabledModels } from "../../utils/agentSettings";
 import { CascadingSelect } from "./CascadingSelect";
 
 /** Configuration for a single pipeline stage row. */
@@ -28,8 +29,6 @@ const STAGES: StageConfig[] = [
 export interface AgentsViewProps {
   settings: AppSettings;
   onSave: (s: AppSettings) => void;
-  projectScoped?: boolean;
-  onResetProjectSettings?: () => Promise<void>;
   cliHealth?: CliHealth | null;
   cliHealthChecking?: boolean;
 }
@@ -38,15 +37,13 @@ export interface AgentsViewProps {
 export function AgentsView({
   settings,
   onSave,
-  projectScoped,
-  onResetProjectSettings,
   cliHealth,
   cliHealthChecking,
 }: AgentsViewProps): ReactNode {
   const [draft, setDraft] = useState<AppSettings>(settings);
 
   useEffect(() => {
-    setDraft(settings);
+    setDraft(sanitiseAgentAssignmentsForEnabledModels(settings));
   }, [settings]);
 
   function update(patch: Partial<AppSettings>): void {
@@ -55,6 +52,32 @@ export function AgentsView({
 
   function handleSave(): void {
     onSave(draft);
+  }
+
+  function handleFreshStart(): void {
+    const cleared: AppSettings = {
+      ...draft,
+      promptEnhancerAgent: null,
+      skillSelectorAgent: null,
+      plannerAgent: null,
+      planAuditorAgent: null,
+      generatorAgent: null,
+      reviewerAgent: null,
+      fixerAgent: null,
+      finalJudgeAgent: null,
+      executiveSummaryAgent: null,
+      promptEnhancerModel: "",
+      skillSelectorModel: null,
+      plannerModel: null,
+      planAuditorModel: null,
+      generatorModel: "",
+      reviewerModel: "",
+      fixerModel: "",
+      finalJudgeModel: "",
+      executiveSummaryModel: "",
+    };
+    setDraft(cleared);
+    onSave(cleared);
   }
 
   return (
@@ -68,19 +91,14 @@ export function AgentsView({
           <p className="text-xs text-[#6b6b82]">
             Roles marked as minimum must be set before prompts can be sent.
           </p>
-          {projectScoped && (
-            <div className="rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-xs text-[#9898b0]">
-              Project override mode: settings are saved for the active workspace.
-              {onResetProjectSettings && (
-                <button
-                  onClick={() => void onResetProjectSettings()}
-                  className="ml-3 rounded border border-[#2e2e48] bg-[#24243a] px-2 py-1 text-xs text-[#e4e4ed] hover:bg-[#2e2e48]"
-                >
-                  Reset Project Overrides
-                </button>
-              )}
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleFreshStart}
+              className="rounded border border-[#2e2e48] bg-[#24243a] px-3 py-1.5 text-xs text-[#9898b0] hover:bg-[#2e2e48] hover:text-[#e4e4ed]"
+            >
+              Fresh Start: Clear All Agent Selections
+            </button>
+          </div>
 
           {/* Agent cards — 2-column grid */}
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">

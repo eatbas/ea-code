@@ -17,7 +17,7 @@ pub async fn run_pipeline(
 ) -> Result<(), String> {
     use tauri::Emitter;
 
-    let loaded_settings = db::settings::get_merged_for_workspace(&state.db, &request.workspace_path)?;
+    let loaded_settings = db::settings::get(&state.db)?;
     if !request.direct_task {
         let missing = loaded_settings.missing_minimum_agents();
         if !missing.is_empty() {

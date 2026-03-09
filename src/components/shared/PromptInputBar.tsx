@@ -2,7 +2,10 @@ import type { ReactNode } from "react";
 import { useState, useRef, useEffect } from "react";
 import type { AgentBackend, RunOptions, CliHealth, AppSettings } from "../../types";
 import { CLI_MODEL_OPTIONS } from "../../types";
-import { hasMinimumAgentsConfigured } from "../../utils/agentSettings";
+import {
+  hasMinimumAgentsConfigured,
+  missingMinimumAgentModelLabels,
+} from "../../utils/agentSettings";
 import { BACKEND_OPTIONS } from "./constants";
 import { PopoverSelect } from "./PopoverSelect";
 
@@ -35,14 +38,18 @@ export function PromptInputBar({
 
   const hasPrompt = prompt.trim().length > 0;
   const missingMinimumAgents = !settings || !hasMinimumAgentsConfigured(settings);
-  const blockedByMinimumAgents = !directTask && missingMinimumAgents;
+  const missingMinimumAgentModels = settings
+    ? missingMinimumAgentModelLabels(settings).length > 0
+    : true;
+  const blockedByMinimumAgents = !directTask && (missingMinimumAgents || missingMinimumAgentModels);
   const canRun = hasPrompt && !blockedByMinimumAgents;
 
-  const disabledReason = blockedByMinimumAgents
-    ? "Go to Settings/Agents and set the minimum agent roles before sending."
-    : directTask
-      ? "Run direct task"
-      : "Run pipeline";
+  let disabledReason = directTask ? "Run direct task" : "Run pipeline";
+  if (blockedByMinimumAgents) {
+    disabledReason = missingMinimumAgentModels
+      ? "Go to Settings/CLI Setup and select models, then go to Settings/Agents and set the minimum roles."
+      : "Go to Settings/Agents and set the minimum agent roles before sending.";
+  }
 
   useEffect(() => {
     const el = textareaRef.current;

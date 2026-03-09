@@ -44,9 +44,6 @@ pub fn run() {
             // Settings commands
             commands::settings::get_settings,
             commands::settings::save_settings,
-            commands::settings::get_project_settings,
-            commands::settings::save_project_settings,
-            commands::settings::clear_project_settings,
             // Skills commands
             commands::skills::list_skills,
             commands::skills::get_skill,

@@ -31,7 +31,7 @@ function isRunTerminal(run: PipelineRun | null): boolean {
 
 function App(): ReactNode {
   const { workspace, openWorkspace, selectFolder } = useWorkspace();
-  const { settings, loading, saveSettings, clearProjectSettings } = useSettings(workspace?.path);
+  const { settings, loading, saveSettings } = useSettings();
   const { run, stageLogs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { versions, loading: versionsLoading, updating: versionsUpdating, error: versionsError, fetchVersions, updateCli } = useCliVersions();
   const { health: cliHealth, checking: cliHealthChecking, checkHealth } = useCliHealth();
@@ -57,9 +57,9 @@ function App(): ReactNode {
     }
   }, [workspace, loadProjects, loadSessions]);
 
-  // Reload sessions when a pipeline run completes
+  // Reload sessions when a pipeline run starts or completes
   useEffect(() => {
-    if (isRunTerminal(run) && workspace) {
+    if ((isRunActive(run) || isRunTerminal(run)) && workspace) {
       loadSessions(workspace.path);
     }
   }, [run?.status, workspace, loadSessions]);
@@ -153,8 +153,6 @@ function App(): ReactNode {
         <AgentsView
           settings={settings}
           onSave={saveSettings}
-          projectScoped={Boolean(workspace?.path)}
-          onResetProjectSettings={workspace?.path ? clearProjectSettings : undefined}
           cliHealth={cliHealth}
           cliHealthChecking={cliHealthChecking}
         />

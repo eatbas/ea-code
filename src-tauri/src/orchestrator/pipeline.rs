@@ -61,6 +61,7 @@ pub async fn run_pipeline(
     };
 
     db::runs::insert(&db, &run_id, &session_id, &request.prompt, settings.max_iterations as i32)?;
+    let _ = db::sessions::touch(&db, &session_id);
 
     let mut run = PipelineRun {
         id: run_id.clone(),

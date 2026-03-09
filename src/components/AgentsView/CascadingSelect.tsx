@@ -47,10 +47,11 @@ export function CascadingSelect({
   }, [triggerDisabled]);
 
   const isSkipped = !backend;
+  const clearLabel = optional ? "Skip" : "Not selected";
   const displayText = cliHealthChecking && !cliHealth
     ? "Checking installed CLIs..."
     : isSkipped
-      ? (optional ? "Skip" : "Not selected")
+      ? clearLabel
       : `${backendLabel(backend)} · ${modelLabel(backend, model)}`;
 
   return (
@@ -89,23 +90,21 @@ export function CascadingSelect({
         <div className="absolute left-0 z-50 mt-1 flex">
           {/* Backend list */}
           <div className="min-w-[140px] rounded-l border border-[#2e2e48] bg-[#1a1a2e] py-1 shadow-lg">
-            {optional && (
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(null, null);
-                  setOpen(false);
-                }}
-                onMouseEnter={() => setHoveredBackend(null)}
-                className={`flex w-full items-center px-3 py-1.5 text-sm transition-colors ${
-                  isSkipped
-                    ? "bg-[#24243a] text-[#e4e4ed]"
-                    : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
-                }`}
-              >
-                Skip
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                onChange(null, null);
+                setOpen(false);
+              }}
+              onMouseEnter={() => setHoveredBackend(null)}
+              className={`flex w-full items-center px-3 py-1.5 text-sm transition-colors ${
+                isSkipped
+                  ? "bg-[#24243a] text-[#e4e4ed]"
+                  : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+              }`}
+            >
+              {clearLabel}
+            </button>
             {backendOptions.map((opt) => {
               const isActive = opt.value === hoveredBackend;
               const isCurrent = opt.value === backend;

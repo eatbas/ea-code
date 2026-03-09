@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect } from "react";
 import type { AppSettings, CliVersionInfo, AllCliVersions } from "../../types";
 import { CLI_MODEL_OPTIONS } from "../../types";
+import { sanitiseAgentAssignmentsForEnabledModels } from "../../utils/agentSettings";
 import { CliCard } from "./CliCard";
 
 type ModelSettingsKey =
@@ -76,13 +77,12 @@ export function CliSetupView({
     if (cliInfo && !cliInfo.available) return;
     const current = parseEnabledModels(settings[key]);
     if (current.has(model)) {
-      if (current.size <= 1) return;
       current.delete(model);
     } else {
       current.add(model);
     }
     const updated = { ...settings, [key]: serialiseEnabledModels(current) };
-    onSave(updated);
+    onSave(sanitiseAgentAssignmentsForEnabledModels(updated));
   }
 
   return (

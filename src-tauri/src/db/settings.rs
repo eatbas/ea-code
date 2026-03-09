@@ -1,5 +1,4 @@
 use diesel::prelude::*;
-use serde_json::{Map, Value};
 
 use crate::db::DbPool;
 use crate::models::AppSettings;
@@ -146,9 +145,12 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
     }
 }
 
-fn normalise_kimi_model_csv(_csv: &str) -> String {
-    // Kimi now exposes a single supported model key in the UI and settings.
-    "kimi-code".to_string()
+fn normalise_kimi_model_csv(csv: &str) -> String {
+    csv.split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// Converts an `AgentBackend` to its database string representation.
@@ -169,94 +171,4 @@ fn backend_to_opt(b: Option<&crate::models::AgentBackend>) -> Option<String> {
 
 fn backend_to_db_str_or_empty(b: Option<&crate::models::AgentBackend>) -> String {
     b.map(backend_to_str).unwrap_or_default()
-}
-
-/// Loads merged settings for a workspace path (global + project overrides).
-pub fn get_merged_for_workspace(pool: &DbPool, workspace_path: &str) -> Result<AppSettings, String> {
-    let base = get(pool)?;
-    let maybe_project = super::projects::get_by_path(pool, workspace_path)?;
-    let Some(project) = maybe_project else {
-        return Ok(base);
-    };
-
-    let overrides = super::project_settings::get_map_for_project(pool, project.id)?;
-    merge_settings(base, &overrides)
-}
-
-/// Saves project-specific overrides for a workspace by diffing against global settings.
-pub fn save_project_overrides_for_workspace(
-    pool: &DbPool,
-    workspace_path: &str,
-    merged_settings: &AppSettings,
-) -> Result<(), String> {
-    let base = get(pool)?;
-    let project = ensure_project(pool, workspace_path)?;
-
-    let base_obj = app_settings_to_object(&base)?;
-    let merged_obj = app_settings_to_object(merged_settings)?;
-
-    let mut diff_entries = Vec::new();
-    for (key, merged_val) in merged_obj {
-        let base_val = base_obj.get(&key);
-        if base_val == Some(&merged_val) {
-            continue;
-        }
-        let stored = serde_json::to_string(&merged_val)
-            .map_err(|e| format!("Failed to serialise project setting value for {key}: {e}"))?;
-        diff_entries.push((key, stored));
-    }
-
-    super::project_settings::replace_for_project(pool, project.id, &diff_entries)
-}
-
-/// Clears project-specific overrides for a workspace.
-pub fn clear_project_overrides_for_workspace(pool: &DbPool, workspace_path: &str) -> Result<(), String> {
-    if let Some(project) = super::projects::get_by_path(pool, workspace_path)? {
-        super::project_settings::clear_for_project(pool, project.id)?;
-    }
-    Ok(())
-}
-
-fn ensure_project(pool: &DbPool, workspace_path: &str) -> Result<super::models::ProjectRow, String> {
-    if let Some(project) = super::projects::get_by_path(pool, workspace_path)? {
-        return Ok(project);
-    }
-
-    let workspace_name = std::path::Path::new(workspace_path)
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| workspace_path.to_string());
-    let ws_info = crate::git::workspace_info(workspace_path);
-    let project_id = super::projects::upsert(
-        pool,
-        workspace_path,
-        &workspace_name,
-        ws_info.is_git_repo,
-        ws_info.branch.as_deref(),
-    )?;
-
-    super::projects::get_by_path(pool, workspace_path)?
-        .filter(|p| p.id == project_id)
-        .ok_or_else(|| "Failed to load project after upsert".to_string())
-}
-
-fn app_settings_to_object(settings: &AppSettings) -> Result<Map<String, Value>, String> {
-    serde_json::to_value(settings)
-        .map_err(|e| format!("Failed to serialise settings: {e}"))?
-        .as_object()
-        .cloned()
-        .ok_or_else(|| "Settings value is not an object".to_string())
-}
-
-fn merge_settings(base: AppSettings, overrides: &std::collections::HashMap<String, String>) -> Result<AppSettings, String> {
-    let mut object = app_settings_to_object(&base)?;
-
-    for (key, value_raw) in overrides {
-        let value = serde_json::from_str::<Value>(value_raw)
-            .map_err(|e| format!("Invalid project override value for {key}: {e}"))?;
-        object.insert(key.clone(), value);
-    }
-
-    serde_json::from_value(Value::Object(object))
-        .map_err(|e| format!("Failed to deserialize merged settings: {e}"))
 }
