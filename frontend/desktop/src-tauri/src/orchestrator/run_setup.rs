@@ -57,8 +57,39 @@ impl IterationContext {
     }
 }
 
+/// Known CLI stderr noise patterns that should be stripped from agent output.
+const STDERR_NOISE_PATTERNS: &[&str] = &[
+    "YOLO mode",
+    "Loaded cached credentials",
+    "[ERROR] [IDEClient]",
+    "Failed to connect to IDE companion extension",
+    "/ide install",
+    "supports tool updates",
+    "Listening for changes",
+    "Server 'context7'",
+    "[stderr]",
+];
+
+/// Removes known CLI informational/noise lines from agent output.
+fn strip_cli_noise(output: &str) -> String {
+    output
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                return true;
+            }
+            !STDERR_NOISE_PATTERNS
+                .iter()
+                .any(|pattern| trimmed.contains(pattern))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub fn normalise_enhanced_prompt(enhanced_output: &str, fallback_prompt: &str) -> String {
-    let candidate = enhanced_output.trim();
+    let cleaned = strip_cli_noise(enhanced_output);
+    let candidate = cleaned.trim();
     if candidate.is_empty() {
         fallback_prompt.to_string()
     } else {
