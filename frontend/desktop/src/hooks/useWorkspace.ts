@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { WorkspaceInfo } from "../types";
+import type { ProjectSummary, WorkspaceInfo } from "../types";
 import { useToast } from "../components/shared/Toast";
 
 interface UseWorkspaceReturn {
@@ -47,6 +47,40 @@ export function useWorkspace(): UseWorkspaceReturn {
       toast.error("Failed to select project folder.");
     }
   }, [openWorkspace, toast]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    async function restoreLastWorkspace(): Promise<void> {
+      try {
+        const projects = await invoke<ProjectSummary[]>("list_projects");
+        const lastProjectPath = projects[0]?.path;
+        if (!lastProjectPath || disposed) {
+          return;
+        }
+
+        setOpeningWorkspace(true);
+        const info = await invoke<WorkspaceInfo>("select_workspace", { path: lastProjectPath });
+        if (disposed) {
+          return;
+        }
+
+        setWorkspace(info);
+        setError(null);
+      } catch {
+        // Ignore startup restore errors to keep initial load quiet.
+      } finally {
+        if (!disposed) {
+          setOpeningWorkspace(false);
+        }
+      }
+    }
+
+    void restoreLastWorkspace();
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   return { workspace, error, openingWorkspace, openWorkspace, selectFolder };
 }

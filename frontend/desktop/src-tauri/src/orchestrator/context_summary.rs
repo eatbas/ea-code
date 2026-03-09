@@ -19,9 +19,8 @@ pub async fn build_workspace_context_summary(workspace_path: &str) -> String {
     if let Some(section) = build_test_files_section(workspace_path) {
         sections.push(section);
     }
-    if let Some(section) = build_readme_section(workspace_path) {
-        sections.push(section);
-    }
+    // README excluded from workspace context — agents should read it
+    // themselves via tools if needed, rather than bloating every prompt.
 
     truncate_chars(&sections.join("\n\n"), CONTEXT_CHAR_CAP)
 }

@@ -96,16 +96,6 @@ pub async fn run_iteration(
         return Ok(true);
     }
     stages.push(pe_result);
-
-    // DEBUG BREAK: Stop after Prompt Enhancer for step-by-step testing.
-    // Remove this block to resume full pipeline.
-    {
-        run.iterations.push(Iteration { number: iter_num, stages, verdict: Some(JudgeVerdict::Complete), judge_reasoning: Some("DEBUG: Pipeline broken after Prompt Enhancer".to_string()) });
-        run.status = PipelineStatus::Completed;
-        run.final_verdict = Some(JudgeVerdict::Complete);
-        return Ok(true);
-    }
-
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
 
     // --- 2-3. Plan + Plan Audit ---
@@ -116,6 +106,15 @@ pub async fn run_iteration(
         run, &mut stages, &mut iter_ctx, workspace_context,
     ).await?;
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
+        return Ok(true);
+    }
+
+    // DEBUG BREAK: Stop after Planning for step-by-step testing.
+    // Remove this block to resume full pipeline.
+    {
+        run.iterations.push(Iteration { number: iter_num, stages, verdict: Some(JudgeVerdict::Complete), judge_reasoning: Some("DEBUG: Pipeline broken after Planning".to_string()) });
+        run.status = PipelineStatus::Completed;
+        run.final_verdict = Some(JudgeVerdict::Complete);
         return Ok(true);
     }
 
