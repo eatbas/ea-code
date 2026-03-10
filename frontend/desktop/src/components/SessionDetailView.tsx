@@ -93,7 +93,7 @@ export function SessionDetailView({
       </div>
 
       {/* Scrollable run history */}
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-28 [scrollbar-gutter:stable_both-edges]">
+      <div ref={scrollRef} className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-28 [scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto max-w-2xl flex flex-col gap-6">
           {sessionDetail.runs.length === 0 && (
             <div className="text-center text-sm text-[#9898b0] py-8">

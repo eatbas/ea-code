@@ -45,7 +45,7 @@ export function ProjectThreadsList({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable_both-edges]">
+    <div className="app-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable_both-edges]">
       <div className="px-2">
         <div className="mb-2 px-2 pt-1">
           <span className="text-xs font-medium uppercase tracking-wide text-[#6f7086]">Sessions</span>
