@@ -71,6 +71,14 @@ export function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
+/** Truncates text to the first N words and appends an ellipsis when truncated. */
+export function truncateWords(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  if (words.length <= maxWords) return words.join(" ");
+  return `${words.slice(0, maxWords).join(" ")}...`;
+}
+
 /** Safely attempts to parse a string as a JSON object. Returns null on failure. */
 export function tryParseJson(text: string): Record<string, unknown> | null {
   try {
