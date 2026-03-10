@@ -101,9 +101,9 @@ export function SettingsPanel({
             <AgentSelect label="Prompt Enhancer (minimum)" value={draft.promptEnhancerAgent} onChange={(v) => update({ promptEnhancerAgent: v })} />
             <OptionalAgentSelect label="Planner" value={draft.plannerAgent} onChange={(v) => update({ plannerAgent: v })} />
             <OptionalAgentSelect label="Plan Auditor" value={draft.planAuditorAgent} onChange={(v) => update({ planAuditorAgent: v })} />
-            <AgentSelect label="Coder (minimum)" value={draft.generatorAgent} onChange={(v) => update({ generatorAgent: v })} />
-            <AgentSelect label="Code Reviewer / Auditor (minimum)" value={draft.reviewerAgent} onChange={(v) => update({ reviewerAgent: v })} />
-            <AgentSelect label="Code Fixer (minimum)" value={draft.fixerAgent} onChange={(v) => update({ fixerAgent: v })} />
+            <AgentSelect label="Coder (minimum)" value={draft.coderAgent} onChange={(v) => update({ coderAgent: v })} />
+            <AgentSelect label="Code Reviewer / Auditor (minimum)" value={draft.codeReviewerAgent} onChange={(v) => update({ codeReviewerAgent: v })} />
+            <AgentSelect label="Code Fixer (minimum)" value={draft.codeFixerAgent} onChange={(v) => update({ codeFixerAgent: v })} />
             <AgentSelect label="Judge (minimum)" value={draft.finalJudgeAgent} onChange={(v) => update({ finalJudgeAgent: v })} />
           </fieldset>
 

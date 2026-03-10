@@ -124,6 +124,20 @@ export function extractPlanOnly(text: string): string {
   return cleaned.trim();
 }
 
+/** Resolves plan text for display, preferring parsed plan and falling back to raw output. */
+export function resolvePlanText(primary?: string, fallback?: string): string {
+  const parsedPrimary = extractPlanOnly(primary ?? "");
+  if (parsedPrimary) return parsedPrimary;
+
+  const parsedFallback = extractPlanOnly(fallback ?? "");
+  if (parsedFallback) return parsedFallback;
+
+  const rawPrimary = (primary ?? "").trim();
+  if (rawPrimary) return rawPrimary;
+
+  return (fallback ?? "").trim();
+}
+
 /** Safely attempts to parse a string as a JSON object. Returns null on failure. */
 export function tryParseJson(text: string): Record<string, unknown> | null {
   try {

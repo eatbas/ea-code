@@ -11,9 +11,9 @@ export interface AppSettings {
   skillSelectorAgent: AgentBackend | null;
   plannerAgent: AgentBackend | null;
   planAuditorAgent: AgentBackend | null;
-  generatorAgent: AgentBackend | null;
-  reviewerAgent: AgentBackend | null;
-  fixerAgent: AgentBackend | null;
+  coderAgent: AgentBackend | null;
+  codeReviewerAgent: AgentBackend | null;
+  codeFixerAgent: AgentBackend | null;
   finalJudgeAgent: AgentBackend | null;
   executiveSummaryAgent: AgentBackend | null;
   maxIterations: number;
@@ -47,9 +47,9 @@ export interface AppSettings {
   skillSelectorModel: string | null;
   plannerModel: string | null;
   planAuditorModel: string | null;
-  generatorModel: string;
-  reviewerModel: string;
-  fixerModel: string;
+  coderModel: string;
+  codeReviewerModel: string;
+  codeFixerModel: string;
   finalJudgeModel: string;
   executiveSummaryModel: string;
 }
@@ -65,9 +65,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   skillSelectorAgent: null,
   plannerAgent: null,
   planAuditorAgent: null,
-  generatorAgent: null,
-  reviewerAgent: null,
-  fixerAgent: null,
+  coderAgent: null,
+  codeReviewerAgent: null,
+  codeFixerAgent: null,
   finalJudgeAgent: null,
   executiveSummaryAgent: null,
   maxIterations: 3,
@@ -88,9 +88,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   skillSelectorModel: null,
   plannerModel: null,
   planAuditorModel: null,
-  generatorModel: "sonnet",
-  reviewerModel: "codex-5.3",
-  fixerModel: "sonnet",
+  coderModel: "sonnet",
+  codeReviewerModel: "codex-5.3",
+  codeFixerModel: "sonnet",
   finalJudgeModel: "codex-5.3",
   executiveSummaryModel: "codex-5.3",
 };

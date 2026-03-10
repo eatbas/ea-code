@@ -28,11 +28,11 @@ pub struct AppSettings {
     #[serde(default)]
     pub plan_auditor_agent: Option<AgentBackend>,
     #[serde(default)]
-    pub generator_agent: Option<AgentBackend>,
+    pub coder_agent: Option<AgentBackend>,
     #[serde(default)]
-    pub reviewer_agent: Option<AgentBackend>,
+    pub code_reviewer_agent: Option<AgentBackend>,
     #[serde(default)]
-    pub fixer_agent: Option<AgentBackend>,
+    pub code_fixer_agent: Option<AgentBackend>,
     #[serde(default)]
     pub final_judge_agent: Option<AgentBackend>,
     pub max_iterations: u32,
@@ -60,9 +60,9 @@ pub struct AppSettings {
     pub planner_model: Option<String>,
     #[serde(default)]
     pub plan_auditor_model: Option<String>,
-    pub generator_model: String,
-    pub reviewer_model: String,
-    pub fixer_model: String,
+    pub coder_model: String,
+    pub code_reviewer_model: String,
+    pub code_fixer_model: String,
     pub final_judge_model: String,
     #[serde(default)]
     pub executive_summary_agent: Option<AgentBackend>,
@@ -119,9 +119,9 @@ impl Default for AppSettings {
             prompt_enhancer_agent: None,
             planner_agent: None,
             plan_auditor_agent: None,
-            generator_agent: None,
-            reviewer_agent: None,
-            fixer_agent: None,
+            coder_agent: None,
+            code_reviewer_agent: None,
+            code_fixer_agent: None,
             final_judge_agent: None,
             max_iterations: 3,
             require_git: true,
@@ -135,9 +135,9 @@ impl Default for AppSettings {
             skill_selector_model: None,
             planner_model: None,
             plan_auditor_model: None,
-            generator_model: "sonnet".to_string(),
-            reviewer_model: "codex-5.3".to_string(),
-            fixer_model: "sonnet".to_string(),
+            coder_model: "sonnet".to_string(),
+            code_reviewer_model: "codex-5.3".to_string(),
+            code_fixer_model: "sonnet".to_string(),
             final_judge_model: "codex-5.3".to_string(),
             executive_summary_agent: None,
             executive_summary_model: "codex-5.3".to_string(),
@@ -160,13 +160,13 @@ impl AppSettings {
         if self.prompt_enhancer_agent.is_none() {
             missing.push("Prompt Enhancer");
         }
-        if self.generator_agent.is_none() {
+        if self.coder_agent.is_none() {
             missing.push("Coder");
         }
-        if self.reviewer_agent.is_none() {
+        if self.code_reviewer_agent.is_none() {
             missing.push("Code Reviewer");
         }
-        if self.fixer_agent.is_none() {
+        if self.code_fixer_agent.is_none() {
             missing.push("Code Fixer");
         }
         if self.final_judge_agent.is_none() {

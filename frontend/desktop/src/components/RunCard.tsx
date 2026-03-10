@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { AppSettings, RunDetail, PipelineStage, StageResult, StageStatus } from "../types";
-import { extractPlanOnly, parseUtcTimestamp } from "../utils/formatters";
+import { resolvePlanText, parseUtcTimestamp } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
 import { PromptReceivedCard } from "./shared/PromptReceivedCard";
 import { StageInputOutputCard } from "./shared/StageInputOutputCard";
@@ -47,10 +47,11 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
         <div key={iter.number} className="flex flex-col gap-2">
           {iter.stages.map((entry) => {
             const stageResult = toStageResult(entry.stage, entry.status, entry.output, entry.durationMs, entry.error);
-            const plannerPlan = extractPlanOnly(iter.plannerPlan ?? entry.output);
-            const auditedPlan = extractPlanOnly(iter.auditedPlan ?? entry.output);
-            const plannerInputForAudit = extractPlanOnly(iter.plannerPlan ?? "");
+            const plannerPlan = resolvePlanText(iter.plannerPlan, entry.output);
+            const auditedPlan = resolvePlanText(iter.auditedPlan, entry.output);
+            const plannerInputForAudit = resolvePlanText(iter.plannerPlan);
             const promptEnhanceOutput = (iter.enhancedPrompt ?? entry.output).trim();
+            const enhancedPromptInput = (iter.enhancedPrompt ?? run.prompt).trim();
             const showPromptEnhanceCard = entry.stage === "prompt_enhance" && entry.status === "completed";
             const showPlanningCard = entry.stage === "plan" && entry.status === "completed";
             const showAuditCard = entry.stage === "plan_audit" && entry.status === "completed";
@@ -75,6 +76,7 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
                     title="Planning"
                     inputSections={[
                       { label: "Original Prompt", content: run.prompt },
+                      { label: "Enhanced Prompt", content: enhancedPromptInput },
                     ]}
                     outputLabel="Plan"
                     outputContent={plannerPlan || "No valid plan output generated."}
@@ -87,6 +89,7 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
                     title="Auditing Plan"
                     inputSections={[
                       { label: "Original Prompt", content: run.prompt },
+                      { label: "Enhanced Prompt", content: enhancedPromptInput },
                       { label: "Plan", content: plannerInputForAudit },
                     ]}
                     outputLabel="Audited Plan"

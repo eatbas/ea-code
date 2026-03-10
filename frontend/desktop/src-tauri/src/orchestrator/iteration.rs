@@ -66,7 +66,7 @@ pub async fn run_iteration(
             "Prompt Enhancer is not set. Go to Settings/Agents and configure the minimum roles."
                 .to_string()
         })?;
-    let generator_agent = settings.generator_agent.as_ref().ok_or_else(|| {
+    let generator_agent = settings.coder_agent.as_ref().ok_or_else(|| {
         "Coder is not set. Go to Settings/Agents and configure the minimum roles.".to_string()
     })?;
 
@@ -112,15 +112,6 @@ pub async fn run_iteration(
         return Ok(true);
     }
 
-    // DEBUG BREAK: Stop after Planning for step-by-step testing.
-    // Remove this block to resume full pipeline.
-    {
-        run.iterations.push(Iteration { number: iter_num, stages, verdict: Some(JudgeVerdict::Complete), judge_reasoning: Some("DEBUG: Pipeline broken after Planning".to_string()) });
-        run.status = PipelineStatus::Completed;
-        run.final_verdict = Some(JudgeVerdict::Complete);
-        return Ok(true);
-    }
-
     // --- Plan gate: user approval if enabled ---
     if settings.require_plan_approval && iter_ctx.selected_plan().is_some() {
         let should_break = run_plan_gate(
@@ -160,9 +151,9 @@ pub async fn run_iteration(
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
 
     // --- 4. Generate ---
-    run.current_stage = Some(PipelineStage::Generate);
+    run.current_stage = Some(PipelineStage::Coder);
     let gen_r = execute_agent_stage(
-        app, run_id, iter_num, iteration_db_id, PipelineStage::Generate,
+        app, run_id, iter_num, iteration_db_id, PipelineStage::Coder,
         generator_agent,
         &AgentInput {
             prompt: prompts::build_generator_user(
@@ -195,15 +186,32 @@ pub async fn run_iteration(
     if let Some(question) = extract_question(&gen_out) {
         iter_ctx.generate_question = Some(question.clone());
         persist_iteration_context(db, run_id, iter_num, &iter_ctx);
-        let answer = ask_user_question(app, run_id, &PipelineStage::Generate, iter_num, question, gen_out.clone(), false, cancel_flag, answer_sender, db).await?;
+        let answer = ask_user_question(app, run_id, &PipelineStage::Coder, iter_num, question, gen_out.clone(), false, cancel_flag, answer_sender, db).await?;
         if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
         if let Some(ref a) = answer {
             if !a.skipped && !a.answer.is_empty() {
                 iter_ctx.generate_answer = Some(a.answer.clone());
                 persist_iteration_context(db, run_id, iter_num, &iter_ctx);
-                emit_stage(app, run_id, &PipelineStage::Generate, &StageStatus::Completed, iter_num, db);
+                emit_stage(app, run_id, &PipelineStage::Coder, &StageStatus::Completed, iter_num, db);
             }
         }
+    }
+
+    // Step-by-step mode: stop after generator stage.
+    // Default is enabled; set EA_STOP_AFTER_GENERATE=0 to continue full pipeline.
+    let stop_after_generate = std::env::var("EA_STOP_AFTER_GENERATE")
+        .map(|v| v != "0")
+        .unwrap_or(true);
+    if stop_after_generate {
+        run.iterations.push(Iteration {
+            number: iter_num,
+            stages,
+            verdict: Some(JudgeVerdict::Complete),
+            judge_reasoning: Some("Debug stop: pipeline ended after generator stage".to_string()),
+        });
+        run.status = PipelineStatus::Completed;
+        run.final_verdict = Some(JudgeVerdict::Complete);
+        return Ok(true);
     }
 
     // --- 5-8. Diff, Review, Fix, Diff ---

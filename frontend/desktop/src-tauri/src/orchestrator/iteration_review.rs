@@ -42,25 +42,25 @@ pub async fn run_review_fix_stages(
     iter_ctx: &mut IterationContext,
     workspace_context: &str,
 ) -> Result<(), String> {
-    let reviewer_agent = settings.reviewer_agent.as_ref().ok_or_else(|| {
+    let reviewer_agent = settings.code_reviewer_agent.as_ref().ok_or_else(|| {
         "Code Reviewer is not set. Go to Settings/Agents and configure the minimum roles."
             .to_string()
     })?;
-    let fixer_agent = settings.fixer_agent.as_ref().ok_or_else(|| {
+    let fixer_agent = settings.code_fixer_agent.as_ref().ok_or_else(|| {
         "Code Fixer is not set. Go to Settings/Agents and configure the minimum roles."
             .to_string()
     })?;
 
     if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
-    run.current_stage = Some(PipelineStage::DiffAfterGenerate);
-    stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterGenerate, &request.workspace_path, db).await);
+    run.current_stage = Some(PipelineStage::DiffAfterCoder);
+    stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterCoder, &request.workspace_path, db).await);
     if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
-    run.current_stage = Some(PipelineStage::Review);
+    run.current_stage = Some(PipelineStage::CodeReviewer);
     let rev_r = execute_agent_stage(
-        app, run_id, iter_num, iteration_db_id, PipelineStage::Review, reviewer_agent,
+        app, run_id, iter_num, iteration_db_id, PipelineStage::CodeReviewer, reviewer_agent,
         &AgentInput {
             prompt: prompts::build_reviewer_user(&request.prompt, enhanced, iter_ctx.selected_plan()),
             context: Some(compose_agent_context(
@@ -88,9 +88,9 @@ pub async fn run_review_fix_stages(
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
-    run.current_stage = Some(PipelineStage::Fix);
+    run.current_stage = Some(PipelineStage::CodeFixer);
     let fix_r = execute_agent_stage(
-        app, run_id, iter_num, iteration_db_id, PipelineStage::Fix, fixer_agent,
+        app, run_id, iter_num, iteration_db_id, PipelineStage::CodeFixer, fixer_agent,
         &AgentInput {
             prompt: prompts::build_fixer_user(
                 &request.prompt,
@@ -126,7 +126,7 @@ pub async fn run_review_fix_stages(
     if let Some(question) = extract_question(&fix_out) {
         iter_ctx.fix_question = Some(question.clone());
         persist_iteration_context(db, run_id, iter_num, iter_ctx);
-        let answer = ask_user_question(app, run_id, &PipelineStage::Fix, iter_num, question, fix_out.clone(), false, cancel_flag, answer_sender, db).await?;
+        let answer = ask_user_question(app, run_id, &PipelineStage::CodeFixer, iter_num, question, fix_out.clone(), false, cancel_flag, answer_sender, db).await?;
         if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
         if let Some(a) = answer {
             if !a.skipped && !a.answer.is_empty() {
@@ -137,8 +137,8 @@ pub async fn run_review_fix_stages(
     }
 
     if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
-    run.current_stage = Some(PipelineStage::DiffAfterFix);
-    stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterFix, &request.workspace_path, db).await);
+    run.current_stage = Some(PipelineStage::DiffAfterCodeFixer);
+    stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterCodeFixer, &request.workspace_path, db).await);
     if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 

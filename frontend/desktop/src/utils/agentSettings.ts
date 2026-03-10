@@ -2,18 +2,18 @@ import type { AgentBackend, AppSettings } from "../types";
 
 export const MINIMUM_AGENT_FIELDS = [
   "promptEnhancerAgent",
-  "generatorAgent",
-  "reviewerAgent",
-  "fixerAgent",
+  "coderAgent",
+  "codeReviewerAgent",
+  "codeFixerAgent",
   "finalJudgeAgent",
   "executiveSummaryAgent",
 ] as const;
 
 const MINIMUM_AGENT_LABELS: Record<(typeof MINIMUM_AGENT_FIELDS)[number], string> = {
   promptEnhancerAgent: "Prompt Enhancer",
-  generatorAgent: "Coder",
-  reviewerAgent: "Code Reviewer",
-  fixerAgent: "Code Fixer",
+  coderAgent: "Coder",
+  codeReviewerAgent: "Code Reviewer",
+  codeFixerAgent: "Code Fixer",
   finalJudgeAgent: "Judge",
   executiveSummaryAgent: "Executive Summary",
 };
@@ -35,9 +35,9 @@ type AgentStageBinding = {
     | "skillSelectorAgent"
     | "plannerAgent"
     | "planAuditorAgent"
-    | "generatorAgent"
-    | "reviewerAgent"
-    | "fixerAgent"
+    | "coderAgent"
+    | "codeReviewerAgent"
+    | "codeFixerAgent"
     | "finalJudgeAgent"
     | "executiveSummaryAgent"
   >;
@@ -47,9 +47,9 @@ type AgentStageBinding = {
     | "skillSelectorModel"
     | "plannerModel"
     | "planAuditorModel"
-    | "generatorModel"
-    | "reviewerModel"
-    | "fixerModel"
+    | "coderModel"
+    | "codeReviewerModel"
+    | "codeFixerModel"
     | "finalJudgeModel"
     | "executiveSummaryModel"
   >;
@@ -61,9 +61,9 @@ const AGENT_STAGE_BINDINGS: AgentStageBinding[] = [
   { backendKey: "skillSelectorAgent", modelKey: "skillSelectorModel", optional: true },
   { backendKey: "plannerAgent", modelKey: "plannerModel", optional: true },
   { backendKey: "planAuditorAgent", modelKey: "planAuditorModel", optional: true },
-  { backendKey: "generatorAgent", modelKey: "generatorModel", optional: false },
-  { backendKey: "reviewerAgent", modelKey: "reviewerModel", optional: false },
-  { backendKey: "fixerAgent", modelKey: "fixerModel", optional: false },
+  { backendKey: "coderAgent", modelKey: "coderModel", optional: false },
+  { backendKey: "codeReviewerAgent", modelKey: "codeReviewerModel", optional: false },
+  { backendKey: "codeFixerAgent", modelKey: "codeFixerModel", optional: false },
   { backendKey: "finalJudgeAgent", modelKey: "finalJudgeModel", optional: false },
   { backendKey: "executiveSummaryAgent", modelKey: "executiveSummaryModel", optional: false },
 ];

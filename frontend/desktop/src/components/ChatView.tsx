@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { PipelineRun, RunOptions, CliHealth, AppSettings } from "../types";
 import { useToast } from "./shared/Toast";
 import { isActive, isTerminal, statusInfo } from "../utils/statusHelpers";
-import { extractPlanOnly } from "../utils/formatters";
+import { resolvePlanText } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
 import { StageCard } from "./shared/StageCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
@@ -63,10 +63,10 @@ export function ChatView({
   const { label: statusLabel, colour: statusColour } = statusInfo(run.status);
   const allStages = run.iterations.flatMap((iter) => iter.stages);
   const enhancedPrompt = artifacts["enhanced_prompt"];
+  const enhancedPromptInput = (enhancedPrompt ?? run.prompt).trim();
   const planArtifact = artifacts["plan"];
   const planAuditArtifact = artifacts["plan_final"] ?? artifacts["plan_audit"];
-  const cleanedPlanArtifact = extractPlanOnly(planArtifact ?? "");
-  const cleanedPlanAuditArtifact = extractPlanOnly(planAuditArtifact ?? "");
+  const planInputForAudit = resolvePlanText(planArtifact);
   const latestCompletedPlanIndex = allStages.reduce(
     (latest, stage, idx) => (stage.stage === "plan" && stage.status === "completed" ? idx : latest),
     -1,
@@ -131,9 +131,10 @@ export function ChatView({
                   title="Planning"
                   inputSections={[
                     { label: "Original Prompt", content: run.prompt },
+                    { label: "Enhanced Prompt", content: enhancedPromptInput },
                   ]}
                   outputLabel="Plan"
-                  outputContent={cleanedPlanArtifact || extractPlanOnly(stage.output) || "No valid plan output generated."}
+                  outputContent={resolvePlanText(planArtifact, stage.output) || "No valid plan output generated."}
                   modelLabel={stageModelLabel("plan", settings)}
                   durationMs={stage.durationMs}
                   badgeClassName="bg-sky-400/25"
@@ -143,10 +144,11 @@ export function ChatView({
                   title="Auditing Plan"
                   inputSections={[
                     { label: "Original Prompt", content: run.prompt },
-                    { label: "Plan", content: cleanedPlanArtifact },
+                    { label: "Enhanced Prompt", content: enhancedPromptInput },
+                    { label: "Plan", content: planInputForAudit },
                   ]}
                   outputLabel="Audited Plan"
-                  outputContent={cleanedPlanAuditArtifact || extractPlanOnly(stage.output) || "No valid audited plan output generated."}
+                  outputContent={resolvePlanText(planAuditArtifact, stage.output) || "No valid audited plan output generated."}
                   modelLabel={stageModelLabel("plan_audit", settings)}
                   durationMs={stage.durationMs}
                   badgeClassName="bg-amber-400/25"

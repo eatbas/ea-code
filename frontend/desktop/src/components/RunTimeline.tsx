@@ -14,11 +14,11 @@ const STAGE_ORDER: PipelineStage[] = [
   "plan",
   "plan_audit",
   "skill_select",
-  "generate",
-  "diff_after_generate",
-  "review",
-  "fix",
-  "diff_after_fix",
+  "coder",
+  "diff_after_coder",
+  "code_reviewer",
+  "code_fixer",
+  "diff_after_code_fixer",
   "judge",
 ];
 

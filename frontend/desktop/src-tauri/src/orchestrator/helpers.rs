@@ -70,26 +70,73 @@ pub async fn dispatch_agent(
 /// Resolves the model to use for a given pipeline stage from per-stage settings.
 pub fn resolve_stage_model(stage: &PipelineStage, settings: &AppSettings) -> String {
     match stage {
-        PipelineStage::PromptEnhance => settings.prompt_enhancer_model.clone(),
-        PipelineStage::SkillSelect => settings
-            .skill_selector_model
-            .clone()
-            .unwrap_or_else(|| first_enabled_model_for_backend(settings.skill_selector_agent.as_ref(), settings)),
-        PipelineStage::Plan => settings
-            .planner_model
-            .clone()
-            .unwrap_or_else(|| first_enabled_model_for_backend(settings.planner_agent.as_ref(), settings)),
-        PipelineStage::PlanAudit => settings
-            .plan_auditor_model
-            .clone()
-            .unwrap_or_else(|| first_enabled_model_for_backend(settings.plan_auditor_agent.as_ref(), settings)),
-        PipelineStage::Generate => settings.generator_model.clone(),
-        PipelineStage::Review => settings.reviewer_model.clone(),
-        PipelineStage::Fix => settings.fixer_model.clone(),
-        PipelineStage::Judge => settings.final_judge_model.clone(),
-        PipelineStage::ExecutiveSummary => settings.executive_summary_model.clone(),
-        PipelineStage::DiffAfterGenerate | PipelineStage::DiffAfterFix | PipelineStage::DirectTask => String::new(),
+        PipelineStage::PromptEnhance => resolve_model_with_fallback(
+            Some(settings.prompt_enhancer_model.as_str()),
+            settings.prompt_enhancer_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::SkillSelect => resolve_model_with_fallback(
+            settings.skill_selector_model.as_deref(),
+            settings.skill_selector_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::Plan => resolve_model_with_fallback(
+            settings.planner_model.as_deref(),
+            settings.planner_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::PlanAudit => resolve_model_with_fallback(
+            settings.plan_auditor_model.as_deref(),
+            settings.plan_auditor_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::Coder => resolve_model_with_fallback(
+            Some(settings.coder_model.as_str()),
+            settings.coder_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::CodeReviewer => resolve_model_with_fallback(
+            Some(settings.code_reviewer_model.as_str()),
+            settings.code_reviewer_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::CodeFixer => resolve_model_with_fallback(
+            Some(settings.code_fixer_model.as_str()),
+            settings.code_fixer_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::Judge => resolve_model_with_fallback(
+            Some(settings.final_judge_model.as_str()),
+            settings.final_judge_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::ExecutiveSummary => resolve_model_with_fallback(
+            Some(settings.executive_summary_model.as_str()),
+            settings.executive_summary_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::DiffAfterCoder | PipelineStage::DiffAfterCodeFixer | PipelineStage::DirectTask => String::new(),
     }
+}
+
+fn resolve_model_with_fallback(
+    explicit: Option<&str>,
+    backend: Option<&AgentBackend>,
+    settings: &AppSettings,
+) -> String {
+    if let Some(value) = explicit {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    let enabled = first_enabled_model_for_backend(backend, settings);
+    if !enabled.is_empty() {
+        return enabled;
+    }
+
+    String::new()
 }
 
 fn first_enabled_model_for_backend(
