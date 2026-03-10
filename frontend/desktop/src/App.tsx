@@ -18,6 +18,7 @@ import { AgentsView } from "./components/AgentsView";
 import { CliSetupView } from "./components/CliSetupView";
 import { SkillsView } from "./components/SkillsView";
 import { McpView } from "./components/McpView";
+import { AppSettingsView } from "./components/AppSettingsView";
 import { QuestionDialog } from "./components/QuestionDialog";
 import { UpdateInstallBanner } from "./components/shared/UpdateInstallBanner";
 import { ProjectLoadingOverlay } from "./components/shared/ProjectLoadingOverlay";
@@ -206,6 +207,10 @@ function App(): ReactNode {
 
     if (activeView === "mcp") {
       return <McpView />;
+    }
+
+    if (activeView === "app-settings") {
+      return <AppSettingsView />;
     }
 
     if (activeSessionId) {

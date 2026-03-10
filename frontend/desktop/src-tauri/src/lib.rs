@@ -82,6 +82,11 @@ pub fn run() {
             commands::history::get_run_logs,
             commands::history::get_run_artifacts,
             commands::history::delete_session,
+            // App settings / DB browser commands
+            commands::app_settings::get_db_stats,
+            commands::app_settings::get_table_rows,
+            commands::app_settings::truncate_table,
+            commands::app_settings::restart_app,
         ])
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");

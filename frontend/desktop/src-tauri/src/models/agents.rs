@@ -27,7 +27,7 @@ pub enum AgentBackend {
 }
 
 pub(crate) fn default_executive_summary_model() -> String {
-    "codex-5.3".to_string()
+    "gpt-5.3-codex".to_string()
 }
 
 pub(crate) fn default_kimi_path() -> String {

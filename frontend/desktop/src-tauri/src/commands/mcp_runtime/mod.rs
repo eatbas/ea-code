@@ -218,7 +218,7 @@ fn default_model_for_cli(settings: &AppSettings, cli_name: &str) -> String {
     }
     match cli_name {
         "claude" => "sonnet".to_string(),
-        "codex" => "codex-5.3".to_string(),
+        "codex" => "gpt-5.3-codex".to_string(),
         "gemini" => "gemini-2.5-pro".to_string(),
         "kimi" => "kimi-code".to_string(),
         "opencode" => "opencode/glm-5".to_string(),

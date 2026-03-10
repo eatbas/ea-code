@@ -80,7 +80,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   agentTimeoutMs: 0,
   agentMaxTurns: 25,
   claudeModel: "sonnet",
-  codexModel: "codex-5.3",
+  codexModel: "gpt-5.3-codex",
   geminiModel: "gemini-2.5-pro",
   kimiModel: "kimi-code/kimi-for-coding",
   opencodeModel: "opencode/glm-5",
@@ -89,10 +89,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   plannerModel: null,
   planAuditorModel: null,
   coderModel: "sonnet",
-  codeReviewerModel: "codex-5.3",
+  codeReviewerModel: "gpt-5.3-codex",
   codeFixerModel: "sonnet",
-  finalJudgeModel: "codex-5.3",
-  executiveSummaryModel: "codex-5.3",
+  finalJudgeModel: "gpt-5.3-codex",
+  executiveSummaryModel: "gpt-5.3-codex",
 };
 
 /** Known model options per CLI, keyed by CLI name. */
@@ -103,7 +103,7 @@ export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[
     { value: "haiku", label: "Haiku" },
   ],
   codex: [
-    { value: "codex-5.3", label: "Codex 5.3" },
+    { value: "gpt-5.3-codex", label: "GPT-5.3 Codex" },
   ],
   gemini: [
     { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },

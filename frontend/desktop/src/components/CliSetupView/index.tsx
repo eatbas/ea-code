@@ -118,19 +118,26 @@ export function CliSetupView({
     [runtimeStatuses],
   );
 
-  const refreshVersions = useCallback(async (showSuccessToast: boolean): Promise<void> => {
-    const result = await onFetchVersions(settings);
+  const refreshVersions = useCallback(async (targetSettings: AppSettings, showSuccessToast: boolean): Promise<void> => {
+    const result = await onFetchVersions(targetSettings);
     if (!result.success) {
       return;
     }
     if (showSuccessToast) {
       toast.success("CLI versions refreshed.");
     }
-  }, [onFetchVersions, settings, toast]);
+  }, [onFetchVersions, toast]);
 
   useEffect(() => {
-    void refreshVersions(false);
-  }, [refreshVersions]);
+    void refreshVersions(settings, false);
+  }, [
+    refreshVersions,
+    settings.claudePath,
+    settings.codexPath,
+    settings.geminiPath,
+    settings.kimiPath,
+    settings.opencodePath,
+  ]);
 
   function getEnabledModels(cliName: string): Set<string> {
     const key = MODEL_KEY_MAP[cliName];
@@ -185,7 +192,7 @@ export function CliSetupView({
             </div>
             <button
               type="button"
-              onClick={() => void refreshVersions(true)}
+              onClick={() => void refreshVersions(settings, true)}
               disabled={actionsDisabled}
               className="rounded-md border border-[#2e2e48] bg-[#24243a] px-4 py-2 text-sm font-medium text-[#9898b0] transition-colors hover:bg-[#2e2e48] hover:text-[#e4e4ed] disabled:cursor-not-allowed disabled:opacity-50"
             >

@@ -60,6 +60,7 @@ impl IterationContext {
 /// Known CLI stderr noise patterns that should be stripped from agent output.
 const STDERR_NOISE_PATTERNS: &[&str] = &[
     "YOLO mode",
+    "Approval mode \"plan\" is only available when experimental.plan is enabled",
     "Loaded cached credentials",
     "[ERROR] [IDEClient]",
     "Failed to connect to IDE companion extension",
@@ -69,6 +70,19 @@ const STDERR_NOISE_PATTERNS: &[&str] = &[
     "Server 'context7'",
     "[stderr]",
 ];
+
+fn looks_like_enhancer_execution_log(output: &str) -> bool {
+    let lower = output.to_ascii_lowercase();
+    lower.starts_with("function.")
+        || lower.starts_with("i will now ")
+        || lower.starts_with("i'll now ")
+        || lower.starts_with("i have implemented")
+        || lower.starts_with("i've implemented")
+        || lower.contains("\ni will now ")
+        || lower.contains("\ni'll now ")
+        || lower.contains("\ni have implemented")
+        || lower.contains("\ni've implemented")
+}
 
 /// Removes known CLI informational/noise lines from agent output.
 fn strip_cli_noise(output: &str) -> String {
@@ -91,6 +105,8 @@ pub fn normalise_enhanced_prompt(enhanced_output: &str, fallback_prompt: &str) -
     let cleaned = strip_cli_noise(enhanced_output);
     let candidate = cleaned.trim();
     if candidate.is_empty() {
+        fallback_prompt.to_string()
+    } else if looks_like_enhancer_execution_log(candidate) {
         fallback_prompt.to_string()
     } else {
         candidate.to_string()

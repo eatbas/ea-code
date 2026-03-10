@@ -308,7 +308,7 @@ pub async fn run_cli_agent(
     }
 
     // Wait for process to exit before returning output.
-    let _status = child
+    let status = child
         .wait()
         .await
         .map_err(|e| format!("Failed to wait for {binary}: {e}"))?;
@@ -317,6 +317,22 @@ pub async fn run_cli_agent(
     #[cfg(target_os = "windows")]
     if let Some(ref pf) = prompt_file {
         remove_prompt_temp_file(pf);
+    }
+
+    if !status.success() {
+        let output = all_output.trim();
+        let details = if output.is_empty() {
+            "No output captured".to_string()
+        } else {
+            output.to_string()
+        };
+        return Err(format!(
+            "{binary} exited with status {}: {details}",
+            status
+                .code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "terminated by signal".to_string())
+        ));
     }
 
     Ok(AgentOutput {

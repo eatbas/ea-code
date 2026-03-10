@@ -16,15 +16,8 @@ pub fn build_prompt_enhancer_system(meta: &PromptMeta) -> String {
          - Keep it concise and practical for implementation.\n\
          - Include acceptance criteria when helpful.\n\
          - Do not add unrelated scope.\n\
-         \n\
-         # Context7 — Documentation Lookup\n\
-         - Before rewriting the prompt, use the Context7 MCP tool to look up \
-         the latest documentation for any libraries, frameworks, or APIs \
-         mentioned in the user request.\n\
-         - Always call `resolve-library-id` first to get the Context7-compatible \
-         library ID, then call `get-library-docs` to fetch the documentation.\n\
-         - Incorporate relevant API details, correct method signatures, and \
-         version-specific information into the enhanced prompt.\n\
+         - This stage is rewrite-only: do not run commands, do not call tools, \
+         do not edit files, and do not claim code was implemented.\n\
          \n\
          # Output Constraints\n\
          - Return only the enhanced prompt text.\n\

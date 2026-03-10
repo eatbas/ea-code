@@ -5,7 +5,7 @@ import type { ProjectSummary, SessionSummary } from "../types";
 import { ProjectThreadsList } from "./ProjectThreadsList";
 
 /** Which view the sidebar is navigating to. */
-export type ActiveView = "home" | "agents" | "cli-setup" | "skills" | "mcp";
+export type ActiveView = "home" | "agents" | "cli-setup" | "skills" | "mcp" | "app-settings";
 
 /** Data-driven settings navigation items. */
 const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[] = [
@@ -28,6 +28,11 @@ const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[
     view: "skills",
     label: "Skills",
     iconPath: '<path d="M12 3L3 7.5L12 12L21 7.5L12 3z" /><path d="M3 12l9 4.5l9-4.5" /><path d="M3 16.5L12 21l9-4.5" />',
+  },
+  {
+    view: "app-settings",
+    label: "App Settings",
+    iconPath: '<ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3" /><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5" />',
   },
 ];
 
@@ -68,7 +73,7 @@ export function Sidebar({
   runningSessionId,
   onArchiveSession,
 }: SidebarProps): ReactNode {
-  const isSettings = activeView === "agents" || activeView === "cli-setup" || activeView === "skills" || activeView === "mcp";
+  const isSettings = activeView === "agents" || activeView === "cli-setup" || activeView === "skills" || activeView === "mcp" || activeView === "app-settings";
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const currentYear = new Date().getFullYear();
 

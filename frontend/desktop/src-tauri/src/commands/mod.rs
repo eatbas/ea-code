@@ -1,3 +1,4 @@
+pub(crate) mod app_settings;
 pub(crate) mod cli;
 pub(crate) mod cli_http;
 pub(crate) mod cli_util;

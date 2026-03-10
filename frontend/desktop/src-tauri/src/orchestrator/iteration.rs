@@ -79,10 +79,8 @@ pub async fn run_iteration(
         prompt_enhancer_agent,
         &AgentInput {
             prompt: prompts::build_prompt_enhancer_user(&request.prompt),
-            context: Some(compose_agent_context(
-                prompts::build_prompt_enhancer_system(&meta),
-                workspace_context,
-            )),
+            // Keep prompt enhancement rewrite-only; avoid workspace execution context here.
+            context: Some(prompts::build_prompt_enhancer_system(&meta)),
             workspace_path: request.workspace_path.clone(),
         },
         settings, Some(session_id), db,

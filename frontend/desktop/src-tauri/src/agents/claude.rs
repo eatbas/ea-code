@@ -39,22 +39,19 @@ pub async fn run_claude(
         "--output-format".to_string(),
         "text".to_string(),
     ]);
-    // Pass the task as the print-mode prompt argument.
-    args.push(full_prompt);
-    let prompt_arg_index = args.len() - 1;
 
     let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
     run_cli_agent(
         claude_path,
         &args_refs,
-        Some(prompt_arg_index),
+        None, // prompt is piped via stdin
         &input.workspace_path,
         app,
         run_id,
         stage,
         db,
-        None,
+        Some(&full_prompt),
         &[],
     )
     .await
