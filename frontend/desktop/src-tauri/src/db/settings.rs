@@ -149,10 +149,22 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
 
 fn normalise_kimi_model_csv(csv: &str) -> String {
     csv.split(',')
-        .map(|s| s.trim())
+        .map(normalise_kimi_model_value)
         .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
+        .collect::<Vec<String>>()
         .join(",")
+}
+
+fn normalise_kimi_model_value(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    // Backward compatibility: expand legacy short aliases.
+    if trimmed == "kimi-for-coding" || trimmed == "kimi-code" {
+        return "kimi-code/kimi-for-coding".to_string();
+    }
+    trimmed.to_string()
 }
 
 /// Converts an `AgentBackend` to its database string representation.

@@ -5,11 +5,10 @@ use crate::models::PipelineStage;
 
 use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
 
-/// Runs the Claude CLI with the prompt piped through stdin.
-///
-/// Matches eaOrch reference: stdin + --dangerously-skip-permissions + text output.
+/// Runs Claude Code in non-interactive print mode.
 ///
 /// Flags per <https://code.claude.com/docs/en/cli-reference>:
+///   --print                        Non-interactive execution
 ///   --model                        Model alias or full name
 ///   --dangerously-skip-permissions Skip all permission prompts
 ///   --max-turns                    Agentic turn limit
@@ -28,6 +27,7 @@ pub async fn run_claude(
     let full_prompt = build_full_prompt(input);
 
     let mut args: Vec<String> = Vec::new();
+    args.push("--print".to_string());
     if !model.is_empty() {
         args.push("--model".to_string());
         args.push(model.to_string());
@@ -39,19 +39,22 @@ pub async fn run_claude(
         "--output-format".to_string(),
         "text".to_string(),
     ]);
+    // Pass the task as the print-mode prompt argument.
+    args.push(full_prompt);
+    let prompt_arg_index = args.len() - 1;
 
     let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
     run_cli_agent(
         claude_path,
         &args_refs,
-        None, // prompt is piped via stdin
+        Some(prompt_arg_index),
         &input.workspace_path,
         app,
         run_id,
         stage,
         db,
-        Some(&full_prompt),
+        None,
         &[],
     )
     .await
