@@ -5,12 +5,12 @@ use crate::models::PipelineStage;
 
 use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
 
-/// Runs Kimi CLI in non-interactive quiet mode.
+/// Runs Kimi CLI in non-interactive print mode with stream-JSON output.
 ///
 /// Flags per <https://moonshotai.github.io/kimi-cli/en/reference/kimi-command.html>:
-///   --quiet   Shortcut for --print --output-format text --final-message-only
+///   --print   Non-interactive run mode
+///   --output-format stream-json so live terminal can show incremental events
 ///   --model   Model override
-///   --prompt  Non-interactive prompt input
 ///
 /// `PYTHONIOENCODING=utf-8` is set to prevent `[Errno 22] Invalid argument`
 /// errors on Windows caused by Python's default encoding handling.
@@ -75,26 +75,62 @@ async fn run_kimi_once(
     stage: PipelineStage,
     db: &DbPool,
 ) -> Result<AgentOutput, String> {
-    let mut args = vec!["--quiet".to_string()];
+    let mut args = vec![
+        "--print".to_string(),
+        "--output-format".to_string(),
+        "stream-json".to_string(),
+    ];
     if !model.is_empty() {
         args.push("--model".to_string());
         args.push(model.to_string());
     }
-    args.push("--prompt".to_string());
-    args.push(full_prompt.to_string());
-    let prompt_arg_index = args.len() - 1;
     let args_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
-    run_cli_agent(
+    let output = run_cli_agent(
         kimi_path,
         &args_refs,
-        Some(prompt_arg_index),
+        None,
         &input.workspace_path,
         app,
         run_id,
         stage,
         db,
-        None,
+        Some(full_prompt),
         &[("PYTHONIOENCODING", "utf-8")],
     )
-    .await
+    .await?;
+
+    Ok(AgentOutput {
+        raw_text: extract_kimi_final_text(&output.raw_text),
+    })
+}
+
+fn extract_kimi_final_text(stream_json_output: &str) -> String {
+    let mut last_assistant_text: Option<String> = None;
+
+    for line in stream_json_output.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if value.get("role").and_then(serde_json::Value::as_str) != Some("assistant") {
+            continue;
+        }
+        let Some(content_parts) = value.get("content").and_then(serde_json::Value::as_array) else {
+            continue;
+        };
+
+        let text_parts = content_parts
+            .iter()
+            .filter(|part| part.get("type").and_then(serde_json::Value::as_str) == Some("text"))
+            .filter_map(|part| part.get("text").and_then(serde_json::Value::as_str))
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>();
+
+        if !text_parts.is_empty() {
+            last_assistant_text = Some(text_parts.join("\n\n"));
+        }
+    }
+
+    last_assistant_text.unwrap_or_else(|| stream_json_output.trim().to_string())
 }

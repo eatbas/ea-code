@@ -1,8 +1,6 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useRef, useState } from "react";
 import type { PipelineRun, RunOptions, CliHealth, AppSettings } from "../types";
-import { useToast } from "./shared/Toast";
 import { isActive, isTerminal, statusInfo } from "../utils/statusHelpers";
 import { formatDuration, parseUtcTimestamp, resolveAuditedPlanText, resolvePlanText } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
@@ -13,7 +11,10 @@ import { ArtifactCard } from "./shared/ArtifactCard";
 import { PromptReceivedCard } from "./shared/PromptReceivedCard";
 import { StageInputOutputCard } from "./shared/StageInputOutputCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
+import { RecentTerminalPanel } from "./shared/RecentTerminalPanel";
+import { WorkspaceFooter } from "./shared/WorkspaceFooter";
 const EXCLUDED_ARTIFACT_KINDS = new Set(["result", "executive_summary", "judge", "review", "workspace_context", "enhanced_prompt", "plan", "plan_audit", "plan_final"]);
+
 interface ChatViewProps {
   run: PipelineRun;
   stageLogs: Record<string, string[]>;
@@ -40,20 +41,13 @@ export function ChatView({
   onNewSession,
   onContinue,
 }: ChatViewProps): ReactNode {
-  const scrollRef = useRef<HTMLDivElement>(null);
   const recentTerminalRef = useRef<HTMLPreElement>(null);
   const [, setElapsedTick] = useState(0);
-  const toast = useToast();
-  const totalStageLogLines = useMemo(() => Object.values(stageLogs).reduce((sum, lines) => sum + lines.length, 0), [stageLogs]);
   useEffect(() => {
     if (run.status !== "running" && run.status !== "paused") return;
     const interval = window.setInterval(() => setElapsedTick((n) => n + 1), 1000);
     return () => window.clearInterval(interval);
   }, [run.status]);
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [run.iterations.length, Object.keys(artifacts).length, totalStageLogLines]);
   const { label: statusLabel, colour: statusColour } = statusInfo(run.status);
   const allStages = run.iterations.flatMap((iter) => iter.stages);
   const enhancedPrompt = artifacts["enhanced_prompt"];
@@ -99,7 +93,7 @@ export function ChatView({
           {statusLabel}
         </span>
       </div>
-      <div ref={scrollRef} className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-28 [scrollbar-gutter:stable_both-edges]">
+      <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-28 [scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto max-w-2xl flex flex-col gap-3">
           <div className="flex justify-end">
             <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#2a2a3e] px-4 py-3 text-sm text-[#e4e4ed] whitespace-pre-wrap">
@@ -207,16 +201,11 @@ export function ChatView({
       </div>
       <div className="flex w-full max-w-2xl mx-auto flex-col gap-2 px-6 pb-6 pt-2">
         {(isActive(run.status) || isPaused) && (
-          <details className="w-full rounded-xl border border-[#2e2e48] bg-[#14141e]">
-            <summary className="cursor-pointer select-none px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-[#9898b0] hover:text-[#e4e4ed] transition-colors">
-              Recent Terminal{recentTerminalLabel ? ` - ${recentTerminalLabel}` : ""}
-            </summary>
-            <div className="border-t border-[#2e2e48] p-3">
-              <pre ref={recentTerminalRef} className="max-h-56 overflow-auto rounded bg-[#0f0f14] p-2 text-[11px] leading-relaxed text-[#e4e4ed] whitespace-pre-wrap break-words">
-                {recentTerminalLines.length > 0 ? recentTerminalLines.join("\n") : "Waiting for terminal output..."}
-              </pre>
-            </div>
-          </details>
+          <RecentTerminalPanel
+            label={recentTerminalLabel}
+            lines={recentTerminalLines}
+            terminalRef={recentTerminalRef}
+          />
         )}
         {(isActive(run.status) || isPaused) && (
           <div className="flex w-full items-center gap-2 rounded-xl border border-[#2e2e48] bg-[#1a1a24] px-4 py-3">
@@ -275,25 +264,7 @@ export function ChatView({
             onSubmit={onContinue}
           />
         )}
-        <div className="flex w-full items-center justify-between px-1 text-xs text-[#9898b0]">
-          <span className="truncate" title={run.workspacePath}>{run.workspacePath}</span>
-          <button
-            onClick={() => {
-              void invoke("open_in_vscode", { path: run.workspacePath }).catch(() => {
-                toast.error("Failed to open VS Code.");
-              });
-            }}
-            className="ml-4 flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
-            title="Open in VS Code"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 3l5 3v12l-5 3L2 12l5-3" />
-              <path d="M16 3L7 12l9 9" />
-              <path d="M16 3v18" />
-            </svg>
-            Open in VS Code
-          </button>
-        </div>
+        <WorkspaceFooter path={run.workspacePath} />
       </div>
     </div>
   );
