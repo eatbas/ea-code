@@ -74,6 +74,17 @@ export function usePipeline(): UsePipelineReturn {
       listen<PipelineStageEvent>("pipeline:stage", (event) => {
         const { runId, stage, status, iteration, durationMs } = event.payload;
         if (!isCurrentRunEvent(runId)) return;
+        if (status === "running") {
+          const stageLabel = stage.replace(/_/g, " ");
+          const stageLine = `[system] Stage started: ${stageLabel} (iteration ${iteration})`;
+          setLogs((prev) => [...prev, stageLine]);
+          setStageLogs((prev) => {
+            const key = stage as string;
+            const existing = prev[key] ?? [];
+            if (existing[existing.length - 1] === stageLine) return prev;
+            return { ...prev, [key]: [...existing, stageLine] };
+          });
+        }
         setRun((prev) => {
           if (!prev) return prev;
           const updated = { ...prev, currentStage: stage, currentIteration: iteration, stageStartedAt: Date.now() };

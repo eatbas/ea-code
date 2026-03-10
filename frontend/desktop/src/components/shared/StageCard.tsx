@@ -30,9 +30,11 @@ export function StageCard({ stage, modelLabel, logs, startedAt }: StageCardProps
   }, [isRunning, startedAt]);
 
   const logLines = logs ?? [];
-  const hasContent = logLines.length > 0 || (stage.output && stage.output.length > 0);
-  const stageContent = logLines.length > 0 ? logLines.join("\n") : stage.output;
-  const displayContent = normaliseDisplayText(stageContent);
+  const hasLogs = logLines.length > 0;
+  const hasOutput = stage.output.length > 0;
+  const hasContent = hasLogs || hasOutput;
+  const logContent = normaliseDisplayText(logLines.join("\n"));
+  const outputContent = normaliseDisplayText(stage.output);
   const effectiveDurationMs = isRunning && startedAt != null
     ? Math.max(stage.durationMs, Date.now() - startedAt)
     : stage.durationMs;
@@ -86,10 +88,27 @@ export function StageCard({ stage, modelLabel, logs, startedAt }: StageCardProps
 
       {/* Expandable content */}
       {open && hasContent && (
-        <div className="px-3 pb-3">
-          <pre className="overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
-            {displayContent}
-          </pre>
+        <div className="flex flex-col gap-2 px-3 pb-3">
+          {hasLogs && (
+            <div>
+              <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
+                Terminal Output
+              </span>
+              <pre className="overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
+                {logContent}
+              </pre>
+            </div>
+          )}
+          {hasOutput && (
+            <div>
+              <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
+                Stage Output
+              </span>
+              <pre className="overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
+                {outputContent}
+              </pre>
+            </div>
+          )}
         </div>
       )}
     </article>

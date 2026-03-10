@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PipelineRun, RunOptions, CliHealth, AppSettings } from "../types";
 import { useToast } from "./shared/Toast";
@@ -14,18 +14,7 @@ import { PromptReceivedCard } from "./shared/PromptReceivedCard";
 import { StageInputOutputCard } from "./shared/StageInputOutputCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
 
-const EXCLUDED_ARTIFACT_KINDS = new Set([
-  "result",
-  "executive_summary",
-  "judge",
-  "review",
-  "workspace_context",
-  "enhanced_prompt",
-  "plan",
-  "plan_audit",
-  "plan_final",
-]);
-
+const EXCLUDED_ARTIFACT_KINDS = new Set(["result", "executive_summary", "judge", "review", "workspace_context", "enhanced_prompt", "plan", "plan_audit", "plan_final"]);
 interface ChatViewProps {
   run: PipelineRun;
   stageLogs: Record<string, string[]>;
@@ -54,12 +43,14 @@ export function ChatView({
   onContinue,
 }: ChatViewProps): ReactNode {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const recentTerminalRef = useRef<HTMLPreElement>(null);
   const toast = useToast();
+  const totalStageLogLines = useMemo(() => Object.values(stageLogs).reduce((sum, lines) => sum + lines.length, 0), [stageLogs]);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [run.iterations.length, Object.keys(artifacts).length, Object.keys(stageLogs).length]);
+  }, [run.iterations.length, Object.keys(artifacts).length, totalStageLogLines]);
 
   const { label: statusLabel, colour: statusColour } = statusInfo(run.status);
   const allStages = run.iterations.flatMap((iter) => iter.stages);
@@ -76,9 +67,17 @@ export function ChatView({
     (latest, stage, idx) => (stage.stage === "plan_audit" && stage.status === "completed" ? idx : latest),
     -1,
   );
-  const otherArtifacts = Object.entries(artifacts).filter(([kind]) => !EXCLUDED_ARTIFACT_KINDS.has(kind));
+  const otherArtifacts = Object.entries(artifacts).filter(([kind]) => !EXCLUDED_ARTIFACT_KINDS.has(kind) && kind !== "diff" && !kind.startsWith("diff_"));
   const headerTitle = run.prompt.length > 60 ? `${run.prompt.slice(0, 60)}...` : run.prompt;
   const isPaused = run.status === "paused";
+  const activeStage = run.currentStage;
+  const recentTerminalStage = activeStage ?? [...allStages].reverse().map((stage) => stage.stage).find((stage) => (stageLogs[stage]?.length ?? 0) > 0);
+  const recentTerminalLines = recentTerminalStage ? (stageLogs[recentTerminalStage] ?? []).slice(-160) : [];
+  const recentTerminalLabel = recentTerminalStage?.replace(/_/g, " ");
+  useEffect(() => {
+    const el = recentTerminalRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [recentTerminalStage, recentTerminalLines.length]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#0f0f14]">
@@ -112,7 +111,7 @@ export function ChatView({
 
           <PromptReceivedCard prompt={run.prompt} />
 
-          {allStages.map((stage, idx) => (
+          {allStages.filter((stage) => stage.stage !== "diff_after_coder" && stage.stage !== "diff_after_code_fixer").map((stage, idx) => (
             <div key={`${stage.stage}-${idx}`} className="flex flex-col gap-2">
               {stage.stage === "prompt_enhance" && stage.status === "completed" ? (
                 <StageInputOutputCard
@@ -126,6 +125,7 @@ export function ChatView({
                   durationMs={stage.durationMs}
                   badgeClassName="bg-emerald-400/25"
                   outputClassName="border border-emerald-400/20 bg-emerald-400/5 text-[#e4e4ed]"
+                  terminalLogs={stageLogs[stage.stage]}
                 />
               ) : stage.stage === "plan" && stage.status === "completed" && idx === latestCompletedPlanIndex ? (
                 <StageInputOutputCard
@@ -139,6 +139,7 @@ export function ChatView({
                   modelLabel={stageModelLabel("plan", settings)}
                   durationMs={stage.durationMs}
                   badgeClassName="bg-sky-400/25"
+                  terminalLogs={stageLogs[stage.stage]}
                 />
               ) : stage.stage === "plan_audit" && stage.status === "completed" && idx === latestCompletedPlanAuditIndex ? (
                 <StageInputOutputCard
@@ -154,6 +155,7 @@ export function ChatView({
                   durationMs={stage.durationMs}
                   badgeClassName="bg-amber-400/25"
                   outputClassName="border border-amber-400/20 bg-amber-400/5 text-[#e4e4ed]"
+                  terminalLogs={stageLogs[stage.stage]}
                 />
               ) : stage.stage === "code_reviewer" && stage.status === "completed" ? (
                 <StageInputOutputCard
@@ -168,6 +170,7 @@ export function ChatView({
                   durationMs={stage.durationMs}
                   badgeClassName="bg-orange-400/25"
                   outputClassName="border border-orange-400/20 bg-orange-400/5 text-[#e4e4ed]"
+                  terminalLogs={stageLogs[stage.stage]}
                 />
               ) : (
                 <StageCard
@@ -211,6 +214,19 @@ export function ChatView({
       </div>
 
       <div className="flex w-full max-w-2xl mx-auto flex-col gap-2 px-6 pb-6 pt-2">
+        {(isActive(run.status) || isPaused) && (
+          <details className="w-full rounded-xl border border-[#2e2e48] bg-[#14141e]">
+            <summary className="cursor-pointer select-none px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-[#9898b0] hover:text-[#e4e4ed] transition-colors">
+              Recent Terminal{recentTerminalLabel ? ` - ${recentTerminalLabel}` : ""}
+            </summary>
+            <div className="border-t border-[#2e2e48] p-3">
+              <pre ref={recentTerminalRef} className="max-h-56 overflow-auto rounded bg-[#0f0f14] p-2 text-[11px] leading-relaxed text-[#e4e4ed] whitespace-pre-wrap break-words">
+                {recentTerminalLines.length > 0 ? recentTerminalLines.join("\n") : "Waiting for terminal output..."}
+              </pre>
+            </div>
+          </details>
+        )}
+
         {(isActive(run.status) || isPaused) && (
           <div className="flex w-full items-center gap-2 rounded-xl border border-[#2e2e48] bg-[#1a1a24] px-4 py-3">
             <div className="flex items-center gap-2 flex-1">
