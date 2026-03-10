@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { PipelineRun, RunOptions, CliHealth, AppSettings } from "../types";
 import { useToast } from "./shared/Toast";
 import { isActive, isTerminal, statusInfo } from "../utils/statusHelpers";
-import { resolvePlanText } from "../utils/formatters";
+import { resolveAuditedPlanText, resolvePlanText } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
 import { StageCard } from "./shared/StageCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
@@ -148,19 +148,25 @@ export function ChatView({
                     { label: "Plan", content: planInputForAudit },
                   ]}
                   outputLabel="Audited Plan"
-                  outputContent={resolvePlanText(planAuditArtifact, stage.output) || "No valid audited plan output generated."}
+                  outputContent={resolveAuditedPlanText(planAuditArtifact, stage.output) || "No valid audited plan output generated."}
                   modelLabel={stageModelLabel("plan_audit", settings)}
                   durationMs={stage.durationMs}
                   badgeClassName="bg-amber-400/25"
                   outputClassName="border border-amber-400/20 bg-amber-400/5 text-[#e4e4ed]"
                 />
               ) : (
-                <StageCard stage={stage} logs={stageLogs[stage.stage]} />
+                <StageCard
+                  stage={stage}
+                  logs={stageLogs[stage.stage]}
+                  startedAt={run.status === "running" && run.currentStage === stage.stage && stage.status === "running"
+                    ? run.stageStartedAt
+                    : undefined}
+                />
               )}
             </div>
           ))}
 
-          {isActive(run.status) && run.currentStage && (
+          {isActive(run.status) && run.currentStage && run.currentStage !== "plan_audit" && (
             <ThinkingIndicator stage={run.currentStage} startedAt={run.stageStartedAt} />
           )}
 

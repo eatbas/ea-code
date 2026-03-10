@@ -9,8 +9,8 @@ use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
 ///
 /// Flags per <https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md>:
 ///   --model            Specify which Gemini model to use
-///   --approval-mode    Tool approval policy (`plan` for rewrite-only stages,
-///                      `yolo` for full agentic execution)
+///   --approval-mode    Tool approval policy (`yolo` auto-approves; system
+///                      prompts already constrain tool use per stage)
 ///   --prompt           Non-interactive prompt input
 pub async fn run_gemini(
     input: &AgentInput,
@@ -27,11 +27,7 @@ pub async fn run_gemini(
         args.push("--model".to_string());
         args.push(model.to_string());
     }
-    let approval_mode = if matches!(stage, PipelineStage::PromptEnhance) {
-        "plan"
-    } else {
-        "yolo"
-    };
+    let approval_mode = "yolo";
     args.push("--approval-mode".to_string());
     args.push(approval_mode.to_string());
     args.push("--prompt".to_string());

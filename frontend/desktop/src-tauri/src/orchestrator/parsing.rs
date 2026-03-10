@@ -68,46 +68,73 @@ pub struct PlanAuditParsed {
 /// Expected shape: line 1 = APPROVED or REJECTED, then optional
 /// reasoning and `--- Improved Plan ---` section.
 pub fn parse_plan_audit_output(output: &str, fallback_plan: &str) -> PlanAuditParsed {
-    let mut lines = output.lines();
-    let first_line = lines.next().unwrap_or("").trim();
-    let mut verdict = if first_line == "APPROVED" || first_line == "REJECTED" {
-        first_line.to_string()
-    } else {
-        "INVALID".to_string()
-    };
+    let normalised = output.replace("\r\n", "\n");
+    let lines: Vec<&str> = normalised.lines().collect();
 
-    let remainder = lines.collect::<Vec<_>>().join("\n");
+    let mut verdict = "INVALID".to_string();
+    let mut verdict_line_idx: Option<usize> = None;
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed == "APPROVED" || trimmed == "REJECTED" {
+            verdict = trimmed.to_string();
+            verdict_line_idx = Some(idx);
+        }
+    }
+
     let marker = "--- Improved Plan ---";
     let alt_marker = "--- Rewritten Plan ---";
-
-    let (reasoning_raw, plan_raw) = if let Some(idx) = remainder.find(marker) {
-        let (head, tail) = remainder.split_at(idx);
-        (
-            head.trim().to_string(),
-            tail[marker.len()..].trim().to_string(),
-        )
-    } else if let Some(idx) = remainder.find(alt_marker) {
-        let (head, tail) = remainder.split_at(idx);
-        (
-            head.trim().to_string(),
-            tail[alt_marker.len()..].trim().to_string(),
-        )
-    } else if verdict == "REJECTED" {
-        (remainder.trim().to_string(), String::new())
+    let after_verdict = if let Some(v_idx) = verdict_line_idx {
+        lines[v_idx + 1..].join("\n")
     } else {
-        (String::new(), remainder.trim().to_string())
+        normalised.clone()
+    };
+    let marker_pos = match (after_verdict.rfind(marker), after_verdict.rfind(alt_marker)) {
+        (Some(a), Some(b)) => {
+            if a >= b {
+                Some((a, marker.len()))
+            } else {
+                Some((b, alt_marker.len()))
+            }
+        }
+        (Some(a), None) => Some((a, marker.len())),
+        (None, Some(b)) => Some((b, alt_marker.len())),
+        (None, None) => None,
     };
 
-    let improved = if plan_raw.trim().is_empty() {
+    let reasoning_raw = if let Some((idx, _)) = marker_pos {
+        after_verdict[..idx].trim().to_string()
+    } else if verdict == "REJECTED" {
+        after_verdict.trim().to_string()
+    } else {
+        String::new()
+    };
+
+    let plan_candidate = if let Some((idx, marker_len)) = marker_pos {
+        after_verdict[idx + marker_len..].trim().to_string()
+    } else if verdict == "REJECTED" {
+        String::new()
+    } else if let Some(v_idx) = verdict_line_idx {
+        lines[v_idx + 1..].join("\n").trim().to_string()
+    } else {
+        normalised.trim().to_string()
+    };
+
+    let mut cleaned_plan = strip_plan_tail_noise(&plan_candidate);
+    if looks_like_template_noise(&cleaned_plan) {
+        cleaned_plan.clear();
+    }
+    let improved = if cleaned_plan.trim().is_empty() {
         if verdict == "REJECTED" {
             fallback_plan.to_string()
-        } else if !remainder.trim().is_empty() {
-            remainder.trim().to_string()
+        } else if verdict == "INVALID" {
+            fallback_plan.to_string()
+        } else if !plan_candidate.trim().is_empty() {
+            plan_candidate.trim().to_string()
         } else {
             fallback_plan.to_string()
         }
     } else {
-        plan_raw
+        cleaned_plan
     };
 
     if verdict == "INVALID" && improved.trim().is_empty() {
@@ -119,6 +146,51 @@ pub fn parse_plan_audit_output(output: &str, fallback_plan: &str) -> PlanAuditPa
         reasoning: reasoning_raw,
         improved_plan: improved,
     }
+}
+
+fn strip_plan_tail_noise(text: &str) -> String {
+    let mut kept: Vec<&str> = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        let lower = trimmed.to_ascii_lowercase();
+
+        let is_noise_boundary = lower.starts_with("tokens used")
+            || lower.starts_with("total tokens")
+            || lower.starts_with("total cost")
+            || lower.starts_with("total duration")
+            || lower == "exec"
+            || lower == "codex"
+            || lower.starts_with("<image>")
+            || (trimmed.starts_with('"')
+                && lower.contains("powershell")
+                && lower.contains(".exe"))
+            || lower.starts_with("succeeded in ");
+
+        if is_noise_boundary {
+            break;
+        }
+        kept.push(line);
+    }
+
+    kept.join("\n").trim().to_string()
+}
+
+fn looks_like_template_noise(text: &str) -> bool {
+    let preview = text.trim().to_ascii_lowercase();
+    let preview = preview.chars().take(400).collect::<String>();
+    if preview.is_empty() {
+        return false;
+    }
+    if preview.starts_with("# inputs") && preview.contains("# output constraints") {
+        return true;
+    }
+    if preview.starts_with("--- workspace context ---")
+        || preview.starts_with("workspace snapshot")
+        || preview.starts_with("worktree snapshot")
+    {
+        return true;
+    }
+    false
 }
 
 /// Extracts a `[QUESTION]...[/QUESTION]` block from agent output.
@@ -162,6 +234,64 @@ mod tests {
         let parsed = parse_plan_audit_output(raw, "fallback plan");
         assert_eq!(parsed.verdict, "REJECTED");
         assert_eq!(parsed.improved_plan, "fallback plan");
+    }
+
+    #[test]
+    fn parse_plan_audit_noisy_codex_output_extracts_plan_only() {
+        let raw = "codex\n\
+I am auditing now.\n\
+exec\n\
+\"C:\\\\WINDOWS\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command 'rg --files'\n\
+REJECTED\n\
+--- Improved Plan ---\n\
+1. Update parsing.\n\
+2. Add tests.\n\
+tokens used\n\
+27,719";
+        let parsed = parse_plan_audit_output(raw, "fallback");
+        assert_eq!(parsed.verdict, "REJECTED");
+        assert_eq!(parsed.improved_plan, "1. Update parsing.\n2. Add tests.");
+    }
+
+    #[test]
+    fn parse_plan_audit_verdict_not_first_line_is_detected() {
+        let raw = "codex\n\
+REJECTED\n\
+--- Improved Plan ---\n\
+1. Rewrite for clarity.";
+        let parsed = parse_plan_audit_output(raw, "fallback");
+        assert_eq!(parsed.verdict, "REJECTED");
+        assert_eq!(parsed.improved_plan, "1. Rewrite for clarity.");
+    }
+
+    #[test]
+    fn parse_plan_audit_template_echo_uses_fallback_plan() {
+        let raw = "REJECTED\n\
+--- Improved Plan ---\n\
+# Inputs\n\
+- You may receive original prompt, enhanced prompt, planner draft.\n\
+\n\
+# Output Constraints\n\
+- Return only the audited final plan text.\n\
+- No markdown fences.\n\
+\n\
+--- Workspace Context ---\n\
+WORKSPACE SNAPSHOT";
+        let parsed = parse_plan_audit_output(raw, "fallback plan");
+        assert_eq!(parsed.verdict, "REJECTED");
+        assert_eq!(parsed.improved_plan, "fallback plan");
+    }
+
+    #[test]
+    fn parse_plan_audit_marker_before_verdict_is_ignored() {
+        let raw = "--- Improved Plan ---\n\
+# Inputs\n\
+REJECTED\n\
+--- Improved Plan ---\n\
+1. Correct final plan.";
+        let parsed = parse_plan_audit_output(raw, "fallback plan");
+        assert_eq!(parsed.verdict, "REJECTED");
+        assert_eq!(parsed.improved_plan, "1. Correct final plan.");
     }
 
     #[test]

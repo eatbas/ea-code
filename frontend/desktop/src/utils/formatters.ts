@@ -89,13 +89,33 @@ export function extractPlanOnly(text: string): string {
 
   if (lower.includes("llm not set")) return "";
 
-  const improvedMarkers = ["--- Improved Plan ---", "--- Rewritten Plan ---"];
-  for (const marker of improvedMarkers) {
-    const idx = cleaned.indexOf(marker);
-    if (idx >= 0) {
-      const afterMarker = cleaned.slice(idx + marker.length).trim();
-      return afterMarker;
+  const lines = cleaned.split("\n");
+  let verdictLineIdx = -1;
+  let verdict = "";
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (line === "APPROVED" || line === "REJECTED") {
+      verdictLineIdx = i;
+      verdict = line;
     }
+  }
+
+  if (verdictLineIdx >= 0) {
+    const afterVerdict = lines.slice(verdictLineIdx + 1).join("\n").trim();
+    const auditedFromVerdict = extractAfterLastPlanMarker(afterVerdict);
+    if (auditedFromVerdict) return auditedFromVerdict;
+
+    if (verdict === "REJECTED") return "";
+
+    const strippedAfterVerdict = stripPlanTailNoise(afterVerdict);
+    if (strippedAfterVerdict && !isLikelyTemplateNoise(strippedAfterVerdict)) {
+      return strippedAfterVerdict;
+    }
+  }
+
+  const markedPlan = extractAfterLastPlanMarker(cleaned);
+  if (markedPlan) {
+    return markedPlan;
   }
 
   if (cleaned.startsWith("APPROVED\n") || cleaned.startsWith("REJECTED\n")) {
@@ -121,7 +141,65 @@ export function extractPlanOnly(text: string): string {
     return "";
   }
 
-  return cleaned.trim();
+  return stripPlanTailNoise(cleaned.trim());
+}
+
+/** Removes common CLI transcript tail noise from plan output. */
+function stripPlanTailNoise(text: string): string {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const kept: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const lower = trimmed.toLowerCase();
+
+    const isNoiseBoundary =
+      lower.startsWith("tokens used") ||
+      lower.startsWith("total tokens") ||
+      lower.startsWith("total cost") ||
+      lower.startsWith("total duration") ||
+      lower === "exec" ||
+      lower === "codex" ||
+      lower.startsWith("<image>") ||
+      /^!\[[^\]]*]\([^)]*\)$/.test(trimmed) ||
+      /^".*powershell(\.exe)?"/i.test(trimmed) ||
+      /^succeeded in \d+(?:\.\d+)?s:/i.test(trimmed);
+
+    if (isNoiseBoundary) break;
+    kept.push(line);
+  }
+
+  return kept.join("\n").trim();
+}
+
+function extractAfterLastPlanMarker(text: string): string {
+  const improvedMarkers = ["--- Improved Plan ---", "--- Rewritten Plan ---"];
+  let markerIndex = -1;
+  let markerLength = 0;
+  for (const marker of improvedMarkers) {
+    const idx = text.lastIndexOf(marker);
+    if (idx > markerIndex) {
+      markerIndex = idx;
+      markerLength = marker.length;
+    }
+  }
+
+  if (markerIndex < 0) return "";
+
+  const afterMarker = stripPlanTailNoise(text.slice(markerIndex + markerLength).trim());
+  if (!afterMarker) return "";
+  if (isLikelyTemplateNoise(afterMarker)) return "";
+  return afterMarker;
+}
+
+function isLikelyTemplateNoise(text: string): boolean {
+  const preview = text.trim().toLowerCase().slice(0, 400);
+  if (!preview) return false;
+  if (preview.startsWith("# inputs") && preview.includes("# output constraints")) return true;
+  if (preview.startsWith("--- workspace context ---")) return true;
+  if (preview.startsWith("workspace snapshot")) return true;
+  if (preview.startsWith("worktree snapshot")) return true;
+  return false;
 }
 
 /** Resolves plan text for display, preferring parsed plan and falling back to raw output. */
@@ -136,6 +214,17 @@ export function resolvePlanText(primary?: string, fallback?: string): string {
   if (rawPrimary) return rawPrimary;
 
   return (fallback ?? "").trim();
+}
+
+/** Resolves audited plan text and never falls back to raw noisy output. */
+export function resolveAuditedPlanText(primary?: string, fallback?: string): string {
+  const parsedPrimary = extractPlanOnly(primary ?? "");
+  if (parsedPrimary) return parsedPrimary;
+
+  const parsedFallback = extractPlanOnly(fallback ?? "");
+  if (parsedFallback) return parsedFallback;
+
+  return "";
 }
 
 /** Safely attempts to parse a string as a JSON object. Returns null on failure. */

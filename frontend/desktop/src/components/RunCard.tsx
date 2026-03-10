@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { AppSettings, RunDetail, PipelineStage, StageResult, StageStatus } from "../types";
-import { resolvePlanText, parseUtcTimestamp } from "../utils/formatters";
+import { parseUtcTimestamp, resolveAuditedPlanText, resolvePlanText } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
 import { PromptReceivedCard } from "./shared/PromptReceivedCard";
 import { StageInputOutputCard } from "./shared/StageInputOutputCard";
@@ -48,7 +48,7 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
           {iter.stages.map((entry) => {
             const stageResult = toStageResult(entry.stage, entry.status, entry.output, entry.durationMs, entry.error);
             const plannerPlan = resolvePlanText(iter.plannerPlan, entry.output);
-            const auditedPlan = resolvePlanText(iter.auditedPlan, entry.output);
+            const auditedPlan = resolveAuditedPlanText(iter.auditedPlan, entry.output);
             const plannerInputForAudit = resolvePlanText(iter.plannerPlan);
             const promptEnhanceOutput = (iter.enhancedPrompt ?? entry.output).trim();
             const enhancedPromptInput = (iter.enhancedPrompt ?? run.prompt).trim();
@@ -100,7 +100,14 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
                     outputClassName="border border-amber-400/20 bg-amber-400/5 text-[#e4e4ed]"
                   />
                 ) : (
-                  <StageCard stage={stageResult} />
+                  <StageCard
+                    stage={stageResult}
+                    startedAt={isActiveStatus && run.currentStage === entry.stage
+                      ? run.currentStageStartedAt
+                        ? parseUtcTimestamp(run.currentStageStartedAt).getTime()
+                        : parseUtcTimestamp(run.startedAt).getTime()
+                      : undefined}
+                  />
                 )}
               </div>
             );
@@ -111,8 +118,15 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
       {/* Currently running stage - stage badge plus animated timer */}
       {isActiveStatus && activeStage && (
         <>
-          <StageCard stage={toStageResult(activeStage, run.status === "waiting_for_input" ? "waiting_for_input" : "running", "", 0)} />
-          {run.status === "running" && (
+          <StageCard
+            stage={toStageResult(activeStage, run.status === "waiting_for_input" ? "waiting_for_input" : "running", "", 0)}
+            startedAt={run.status === "running"
+              ? (run.currentStageStartedAt
+                ? parseUtcTimestamp(run.currentStageStartedAt).getTime()
+                : parseUtcTimestamp(run.startedAt).getTime())
+              : undefined}
+          />
+          {run.status === "running" && activeStage !== "plan_audit" && (
             <ThinkingIndicator
               stage={activeStage as PipelineStage}
               startedAt={run.currentStageStartedAt

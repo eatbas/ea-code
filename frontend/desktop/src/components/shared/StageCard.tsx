@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { StageResult } from "../../types";
 import { formatDuration } from "../../utils/formatters";
@@ -7,20 +7,32 @@ import { STAGE_LABELS, STAGE_COLOURS } from "./constants";
 interface StageCardProps {
   stage: StageResult;
   logs?: string[];
+  startedAt?: number;
 }
 
 /** Timeline card for a single pipeline stage. Entire card is clickable to toggle content. */
-export function StageCard({ stage, logs }: StageCardProps): ReactNode {
+export function StageCard({ stage, logs, startedAt }: StageCardProps): ReactNode {
   const [open, setOpen] = useState(false);
+  const [, tick] = useState(0);
 
   const label = STAGE_LABELS[stage.stage] ?? stage.stage;
   const badgeBg = STAGE_COLOURS[stage.stage] ?? "rgba(150,150,150,0.22)";
   const isFailed = stage.status === "failed";
   const isCompleted = stage.status === "completed";
   const isSkipped = stage.status === "skipped";
+  const isRunning = stage.status === "running";
+
+  useEffect(() => {
+    if (!isRunning || startedAt == null) return;
+    const interval = window.setInterval(() => tick((n) => n + 1), 1000);
+    return () => window.clearInterval(interval);
+  }, [isRunning, startedAt]);
 
   const logLines = logs ?? [];
   const hasContent = logLines.length > 0 || (stage.output && stage.output.length > 0);
+  const effectiveDurationMs = isRunning && startedAt != null
+    ? Math.max(stage.durationMs, Date.now() - startedAt)
+    : stage.durationMs;
 
   return (
     <article
@@ -50,8 +62,8 @@ export function StageCard({ stage, logs }: StageCardProps): ReactNode {
 
         {/* Right side: time spent + status tag */}
         <div className="ml-auto flex items-center gap-2">
-          {stage.durationMs > 0 && (
-            <span className="text-[#9898b0] opacity-80">{formatDuration(stage.durationMs)}</span>
+          {effectiveDurationMs > 0 && (
+            <span className="text-[#9898b0] opacity-80">{formatDuration(effectiveDurationMs)}</span>
           )}
           {isCompleted && (
             <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#22c55e] bg-[#22c55e]/10">
