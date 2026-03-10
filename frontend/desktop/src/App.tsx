@@ -218,6 +218,8 @@ function App(): ReactNode {
         <SessionDetailView
           sessionDetail={sessionDetail}
           loading={sessionDetailLoading}
+          stageLogs={stageLogs}
+          activeRunId={run?.id}
           cliHealth={cliHealth}
           settings={settings}
           onMissingAgentSetup={handleMissingAgentSetup}

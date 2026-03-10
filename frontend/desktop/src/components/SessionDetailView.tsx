@@ -1,13 +1,17 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SessionDetail, RunOptions, CliHealth, AppSettings } from "../types";
 import { RunCard } from "./RunCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
+import { RecentTerminalPanel } from "./shared/RecentTerminalPanel";
 import { WorkspaceFooter } from "./shared/WorkspaceFooter";
+import { formatDuration, parseUtcTimestamp } from "../utils/formatters";
 
 interface SessionDetailViewProps {
   sessionDetail: SessionDetail | null;
   loading: boolean;
+  stageLogs: Record<string, string[]>;
+  activeRunId?: string;
   cliHealth: CliHealth | null;
   settings: AppSettings | null;
   onMissingAgentSetup: () => void;
@@ -22,6 +26,8 @@ interface SessionDetailViewProps {
 export function SessionDetailView({
   sessionDetail,
   loading,
+  stageLogs,
+  activeRunId,
   cliHealth,
   settings,
   onMissingAgentSetup,
@@ -32,12 +38,55 @@ export function SessionDetailView({
   onBackToHome,
 }: SessionDetailViewProps): ReactNode {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const recentTerminalRef = useRef<HTMLPreElement>(null);
+  const [, setElapsedTick] = useState(0);
 
   // Scroll to bottom only when switching session or when a new run is added.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) { el.scrollTop = el.scrollHeight; }
   }, [sessionDetail?.id, sessionDetail?.runs.length]);
+  const runs = sessionDetail?.runs ?? [];
+  const liveRun = [...runs].reverse().find(
+    (run) => run.status === "running" || run.status === "waiting_for_input" || run.status === "paused",
+  );
+  const liveStatusLabel =
+    liveRun?.status === "paused"
+      ? "Paused"
+      : liveRun?.status === "waiting_for_input"
+        ? "Awaiting input"
+        : "Running";
+  const liveStatusColour = liveRun?.status === "paused" ? "#60a5fa" : liveRun?.status === "waiting_for_input" ? "#f59e0b" : "#22c55e";
+  const showPause = liveRun?.status === "running" || liveRun?.status === "waiting_for_input";
+  const showResume = liveRun?.status === "paused";
+  const hasLiveTerminal = !!liveRun && liveRun.id === activeRunId;
+  const liveRunStages = liveRun ? liveRun.iterations.flatMap((iter) => iter.stages) : [];
+  const recentTerminalStage = liveRun?.currentStage
+    ?? [...liveRunStages]
+      .reverse()
+      .map((stage) => stage.stage)
+      .find((stage) => (stageLogs[stage]?.length ?? 0) > 0);
+  const recentTerminalLines = hasLiveTerminal && recentTerminalStage
+    ? (stageLogs[recentTerminalStage] ?? []).slice(-160)
+    : [];
+  const recentTerminalLabel = recentTerminalStage?.replace(/_/g, " ");
+  const iterationText = liveRun
+    ? `Iteration ${Math.max(1, liveRun.currentIteration)}/${Math.max(1, liveRun.maxIterations)}`
+    : "";
+  const startedAtMs = liveRun ? parseUtcTimestamp(liveRun.startedAt).getTime() : NaN;
+  const endedAtMs = liveRun?.completedAt ? parseUtcTimestamp(liveRun.completedAt).getTime() : Date.now();
+  const elapsedText = Number.isFinite(startedAtMs) ? formatDuration(Math.max(0, endedAtMs - startedAtMs)) : "0ms";
+
+  useEffect(() => {
+    if (!liveRun || (liveRun.status !== "running" && liveRun.status !== "paused")) return;
+    const interval = window.setInterval(() => setElapsedTick((n) => n + 1), 1000);
+    return () => window.clearInterval(interval);
+  }, [liveRun?.id, liveRun?.status]);
+
+  useEffect(() => {
+    const el = recentTerminalRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [recentTerminalStage, recentTerminalLines.length]);
 
   if (loading) {
     return (
@@ -54,19 +103,6 @@ export function SessionDetailView({
       </div>
     );
   }
-
-  const liveRun = [...sessionDetail.runs].reverse().find(
-    (run) => run.status === "running" || run.status === "waiting_for_input" || run.status === "paused",
-  );
-  const liveStatusLabel =
-    liveRun?.status === "paused"
-      ? "Paused"
-      : liveRun?.status === "waiting_for_input"
-        ? "Awaiting input"
-        : "Running";
-  const liveStatusColour = liveRun?.status === "paused" ? "#60a5fa" : liveRun?.status === "waiting_for_input" ? "#f59e0b" : "#22c55e";
-  const showPause = liveRun?.status === "running" || liveRun?.status === "waiting_for_input";
-  const showResume = liveRun?.status === "paused";
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#0f0f14]">
@@ -91,7 +127,7 @@ export function SessionDetailView({
       </div>
 
       {/* Scrollable run history */}
-      <div ref={scrollRef} className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-28 [scrollbar-gutter:stable_both-edges]">
+      <div ref={scrollRef} className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-6 [scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto max-w-2xl flex flex-col gap-6">
           {sessionDetail.runs.length === 0 && (
             <div className="text-center text-sm text-[#9898b0] py-8">
@@ -107,6 +143,13 @@ export function SessionDetailView({
 
       {/* Bottom input bar */}
       <div className="flex w-full max-w-2xl mx-auto flex-col gap-2 px-6 pb-6 pt-2">
+        {liveRun && (
+          <RecentTerminalPanel
+            label={recentTerminalLabel}
+            lines={recentTerminalLines}
+            terminalRef={recentTerminalRef}
+          />
+        )}
         {liveRun ? (
           <div className="flex w-full items-center gap-2 rounded-xl border border-[#2e2e48] bg-[#1a1a24] px-4 py-3">
             <div className="flex items-center gap-2 flex-1">
@@ -118,7 +161,7 @@ export function SessionDetailView({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              <span className="text-sm text-[#9898b0]">{liveStatusLabel}...</span>
+              <span className="text-sm text-[#9898b0]">{liveStatusLabel}... | {iterationText} | {elapsedText}</span>
             </div>
             {showPause && onPauseRun && (
               <button
