@@ -79,6 +79,14 @@ export function truncateWords(text: string, maxWords: number): string {
   return `${words.slice(0, maxWords).join(" ")}...`;
 }
 
+/** Normalises multiline output by trimming only blank leading/trailing lines. */
+export function normaliseDisplayText(text: string): string {
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/^[\n\r]+/, "")
+    .replace(/[\n\r]+$/, "");
+}
+
 /** Extracts plan-only text from noisy planner/auditor output. */
 export function extractPlanOnly(text: string): string {
   const trimmed = text.trim();

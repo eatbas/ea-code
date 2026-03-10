@@ -35,11 +35,11 @@ export function SessionDetailView({
   const scrollRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
 
-  // Scroll to bottom when session detail loads
+  // Scroll to bottom only when switching session or when a new run is added.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) { el.scrollTop = el.scrollHeight; }
-  }, [sessionDetail]);
+  }, [sessionDetail?.id, sessionDetail?.runs.length]);
 
   if (loading) {
     return (
@@ -71,7 +71,7 @@ export function SessionDetailView({
   const showResume = liveRun?.status === "paused";
 
   return (
-    <div className="flex h-full flex-col bg-[#0f0f14]">
+    <div className="flex h-full min-h-0 flex-col bg-[#0f0f14]">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-[#2e2e48] px-6 py-3">
         <button
@@ -93,7 +93,7 @@ export function SessionDetailView({
       </div>
 
       {/* Scrollable run history */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 pt-6 pb-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-28 [scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto max-w-2xl flex flex-col gap-6">
           {sessionDetail.runs.length === 0 && (
             <div className="text-center text-sm text-[#9898b0] py-8">

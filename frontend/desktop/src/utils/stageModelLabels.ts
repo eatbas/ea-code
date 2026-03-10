@@ -14,5 +14,8 @@ export function stageModelLabel(stage: PipelineStage, settings: AppSettings | nu
   if (stage === "prompt_enhance") return formatModelLabel(settings.promptEnhancerAgent, settings.promptEnhancerModel);
   if (stage === "plan") return formatModelLabel(settings.plannerAgent, settings.plannerModel);
   if (stage === "plan_audit") return formatModelLabel(settings.planAuditorAgent, settings.planAuditorModel);
+  if (stage === "coder") return formatModelLabel(settings.coderAgent, settings.coderModel);
+  if (stage === "code_reviewer") return formatModelLabel(settings.codeReviewerAgent, settings.codeReviewerModel);
+  if (stage === "code_fixer") return formatModelLabel(settings.codeFixerAgent, settings.codeFixerModel);
   return undefined;
 }

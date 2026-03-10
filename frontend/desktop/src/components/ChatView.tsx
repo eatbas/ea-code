@@ -18,6 +18,7 @@ const EXCLUDED_ARTIFACT_KINDS = new Set([
   "result",
   "executive_summary",
   "judge",
+  "review",
   "workspace_context",
   "enhanced_prompt",
   "plan",
@@ -80,7 +81,7 @@ export function ChatView({
   const isPaused = run.status === "paused";
 
   return (
-    <div className="flex h-full flex-col bg-[#0f0f14]">
+    <div className="flex h-full min-h-0 flex-col bg-[#0f0f14]">
       <div className="flex items-center gap-3 border-b border-[#2e2e48] px-6 py-3">
         <button
           onClick={onNewSession}
@@ -101,7 +102,7 @@ export function ChatView({
         </span>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 pt-6 pb-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-28 [scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto max-w-2xl flex flex-col gap-3">
           <div className="flex justify-end">
             <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#2a2a3e] px-4 py-3 text-sm text-[#e4e4ed] whitespace-pre-wrap">
@@ -154,9 +155,24 @@ export function ChatView({
                   badgeClassName="bg-amber-400/25"
                   outputClassName="border border-amber-400/20 bg-amber-400/5 text-[#e4e4ed]"
                 />
+              ) : stage.stage === "code_reviewer" && stage.status === "completed" ? (
+                <StageInputOutputCard
+                  title="Code Review"
+                  inputSections={[
+                    { label: "Original Prompt", content: run.prompt },
+                    { label: "Enhanced Prompt", content: enhancedPromptInput },
+                  ]}
+                  outputLabel="Review Findings"
+                  outputContent={artifacts["review"] ?? stage.output ?? "No review output generated."}
+                  modelLabel={stageModelLabel("code_reviewer", settings)}
+                  durationMs={stage.durationMs}
+                  badgeClassName="bg-orange-400/25"
+                  outputClassName="border border-orange-400/20 bg-orange-400/5 text-[#e4e4ed]"
+                />
               ) : (
                 <StageCard
                   stage={stage}
+                  modelLabel={stageModelLabel(stage.stage, settings)}
                   logs={stageLogs[stage.stage]}
                   startedAt={run.status === "running" && run.currentStage === stage.stage && stage.status === "running"
                     ? run.stageStartedAt

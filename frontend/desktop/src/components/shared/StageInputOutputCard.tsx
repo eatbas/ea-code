@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { formatDuration, truncateWords } from "../../utils/formatters";
+import { formatDuration, normaliseDisplayText, truncateWords } from "../../utils/formatters";
 
 interface InputSection {
   label: string;
@@ -127,7 +127,7 @@ export function StageInputOutputCard({
                 {outputLabel}
               </span>
               <pre className={`rounded px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed break-words ${outputClassName}`}>
-                {outputContent}
+                {normaliseDisplayText(outputContent)}
               </pre>
             </div>
           )}

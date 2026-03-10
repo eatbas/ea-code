@@ -45,7 +45,7 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
       {/* Iteration stages */}
       {run.iterations.map((iter) => (
         <div key={iter.number} className="flex flex-col gap-2">
-          {iter.stages.map((entry) => {
+          {iter.stages.filter((entry) => entry.stage !== "diff_after_coder" && entry.stage !== "diff_after_code_fixer").map((entry) => {
             const stageResult = toStageResult(entry.stage, entry.status, entry.output, entry.durationMs, entry.error);
             const plannerPlan = resolvePlanText(iter.plannerPlan, entry.output);
             const auditedPlan = resolveAuditedPlanText(iter.auditedPlan, entry.output);
@@ -99,9 +99,24 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
                     badgeClassName="bg-amber-400/25"
                     outputClassName="border border-amber-400/20 bg-amber-400/5 text-[#e4e4ed]"
                   />
+                ) : entry.stage === "code_reviewer" && entry.status === "completed" ? (
+                  <StageInputOutputCard
+                    title="Code Review"
+                    inputSections={[
+                      { label: "Original Prompt", content: run.prompt },
+                      { label: "Enhanced Prompt", content: enhancedPromptInput },
+                    ]}
+                    outputLabel="Review Findings"
+                    outputContent={iter.reviewOutput ?? entry.output ?? "No review output generated."}
+                    modelLabel={stageModelLabel("code_reviewer", settings)}
+                    durationMs={entry.durationMs}
+                    badgeClassName="bg-orange-400/25"
+                    outputClassName="border border-orange-400/20 bg-orange-400/5 text-[#e4e4ed]"
+                  />
                 ) : (
                   <StageCard
                     stage={stageResult}
+                    modelLabel={stageModelLabel(stageResult.stage, settings)}
                     startedAt={isActiveStatus && run.currentStage === entry.stage
                       ? run.currentStageStartedAt
                         ? parseUtcTimestamp(run.currentStageStartedAt).getTime()
@@ -120,6 +135,7 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
         <>
           <StageCard
             stage={toStageResult(activeStage, run.status === "waiting_for_input" ? "waiting_for_input" : "running", "", 0)}
+            modelLabel={stageModelLabel(activeStage as PipelineStage, settings)}
             startedAt={run.status === "running"
               ? (run.currentStageStartedAt
                 ? parseUtcTimestamp(run.currentStageStartedAt).getTime()

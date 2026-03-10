@@ -15,10 +15,8 @@ const STAGE_ORDER: PipelineStage[] = [
   "plan_audit",
   "skill_select",
   "coder",
-  "diff_after_coder",
   "code_reviewer",
   "code_fixer",
-  "diff_after_code_fixer",
   "judge",
 ];
 

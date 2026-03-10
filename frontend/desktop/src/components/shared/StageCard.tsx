@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { StageResult } from "../../types";
-import { formatDuration } from "../../utils/formatters";
+import { formatDuration, normaliseDisplayText } from "../../utils/formatters";
 import { STAGE_LABELS, STAGE_COLOURS } from "./constants";
 
 interface StageCardProps {
   stage: StageResult;
+  modelLabel?: string;
   logs?: string[];
   startedAt?: number;
 }
 
 /** Timeline card for a single pipeline stage. Entire card is clickable to toggle content. */
-export function StageCard({ stage, logs, startedAt }: StageCardProps): ReactNode {
+export function StageCard({ stage, modelLabel, logs, startedAt }: StageCardProps): ReactNode {
   const [open, setOpen] = useState(false);
   const [, tick] = useState(0);
 
@@ -30,6 +31,8 @@ export function StageCard({ stage, logs, startedAt }: StageCardProps): ReactNode
 
   const logLines = logs ?? [];
   const hasContent = logLines.length > 0 || (stage.output && stage.output.length > 0);
+  const stageContent = logLines.length > 0 ? logLines.join("\n") : stage.output;
+  const displayContent = normaliseDisplayText(stageContent);
   const effectiveDurationMs = isRunning && startedAt != null
     ? Math.max(stage.durationMs, Date.now() - startedAt)
     : stage.durationMs;
@@ -56,6 +59,11 @@ export function StageCard({ stage, logs, startedAt }: StageCardProps): ReactNode
         >
           {label}
         </span>
+        {modelLabel && (
+          <span className="rounded bg-[#2e2e48] px-1.5 py-0.5 text-[9px] font-medium text-[#c8c8d8]">
+            {modelLabel}
+          </span>
+        )}
 
         {isFailed && <span className="font-medium text-[#ef4444]">Failed</span>}
         {isSkipped && <span className="font-medium text-[#9898b0]">Skipped</span>}
@@ -79,8 +87,8 @@ export function StageCard({ stage, logs, startedAt }: StageCardProps): ReactNode
       {/* Expandable content */}
       {open && hasContent && (
         <div className="px-3 pb-3">
-          <pre className="max-h-64 overflow-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
-            {logLines.length > 0 ? logLines.join("\n") : stage.output}
+          <pre className="overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
+            {displayContent}
           </pre>
         </div>
       )}

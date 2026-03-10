@@ -108,7 +108,7 @@ export function Sidebar({
 
   if (collapsed) {
     return (
-      <aside className="flex w-12 shrink-0 flex-col items-center border-r border-[#2e2e48] bg-[#1a1a24] pt-8 pb-3 gap-3">
+      <aside className="flex h-full w-12 shrink-0 flex-col items-center border-r border-[#2e2e48] bg-[#1a1a24] pt-8 pb-3 gap-3">
         <button
           onClick={onToggle}
           className="rounded p-2 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
@@ -150,7 +150,7 @@ export function Sidebar({
   // Settings mode — full sidebar becomes settings navigation
   if (isSettings) {
     return (
-      <aside className="flex w-60 shrink-0 flex-col border-r border-[#2e2e48] bg-[#1a1a24]">
+      <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-[#2e2e48] bg-[#1a1a24]">
         {/* Back to app */}
         <div className="px-3 pt-8 pb-3">
           <button
@@ -200,7 +200,7 @@ export function Sidebar({
 
   // Default home sidebar
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-[#2e2e48] bg-[#1a1a24]">
+    <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-[#2e2e48] bg-[#1a1a24]">
       {/* Top bar — sidebar toggle + compose icon */}
       <div className="flex items-center px-3 pt-8 pb-3">
         <button

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { PipelineStage } from "../../types";
-import { formatDuration, formatTimestamp, formatTokens, parseCliResult, parseUtcTimestamp } from "../../utils/formatters";
+import { formatDuration, formatTimestamp, formatTokens, normaliseDisplayText, parseCliResult, parseUtcTimestamp } from "../../utils/formatters";
 import { STAGE_LABELS } from "./constants";
 
 interface ResultCardProps {
@@ -140,8 +140,8 @@ export function ResultCard({
           <summary className="cursor-pointer text-[10px] text-[#9898b0] opacity-70">
             Raw output
           </summary>
-          <pre className="mt-1.5 max-h-48 overflow-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
-            {artifacts["result"]}
+          <pre className="mt-1.5 overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
+            {normaliseDisplayText(artifacts["result"])}
           </pre>
         </details>
       )}
@@ -152,8 +152,8 @@ export function ResultCard({
           <summary className="cursor-pointer text-[10px] text-[#9898b0] opacity-70">
             Judge details
           </summary>
-          <pre className="mt-1.5 max-h-48 overflow-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
-            {artifacts["judge"]}
+          <pre className="mt-1.5 overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
+            {normaliseDisplayText(artifacts["judge"])}
           </pre>
         </details>
       )}
@@ -166,7 +166,7 @@ export function buildStageRows(
   stages: { stage: string; durationMs: number }[],
 ): { name: string; durationMs: number }[] {
   return stages
-    .filter((s) => s.durationMs > 0)
+    .filter((s) => s.durationMs > 0 && s.stage !== "diff_after_coder" && s.stage !== "diff_after_code_fixer")
     .map((s) => ({
       name: STAGE_LABELS[s.stage as PipelineStage] ?? s.stage,
       durationMs: s.durationMs,

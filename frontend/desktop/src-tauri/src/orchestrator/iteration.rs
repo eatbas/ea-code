@@ -195,23 +195,6 @@ pub async fn run_iteration(
         }
     }
 
-    // Step-by-step mode: stop after generator stage.
-    // Default is enabled; set EA_STOP_AFTER_GENERATE=0 to continue full pipeline.
-    let stop_after_generate = std::env::var("EA_STOP_AFTER_GENERATE")
-        .map(|v| v != "0")
-        .unwrap_or(true);
-    if stop_after_generate {
-        run.iterations.push(Iteration {
-            number: iter_num,
-            stages,
-            verdict: Some(JudgeVerdict::Complete),
-            judge_reasoning: Some("Debug stop: pipeline ended after generator stage".to_string()),
-        });
-        run.status = PipelineStatus::Completed;
-        run.final_verdict = Some(JudgeVerdict::Complete);
-        return Ok(true);
-    }
-
     // --- 5-8. Diff, Review, Fix, Diff ---
     run_review_fix_stages(
         app, request, settings, cancel_flag, pause_flag, answer_sender, db,
@@ -220,6 +203,23 @@ pub async fn run_iteration(
         run, &mut stages, &mut iter_ctx, workspace_context,
     ).await?;
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
+        return Ok(true);
+    }
+
+    // Stop after review/fix cycle; judge stage not yet enabled.
+    // Set EA_ENABLE_JUDGE=1 to continue to the judge stage.
+    let judge_enabled = std::env::var("EA_ENABLE_JUDGE")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+    if !judge_enabled {
+        run.iterations.push(Iteration {
+            number: iter_num,
+            stages,
+            verdict: Some(JudgeVerdict::Complete),
+            judge_reasoning: Some("Pipeline stopped after review/fix cycle".to_string()),
+        });
+        run.status = PipelineStatus::Completed;
+        run.final_verdict = Some(JudgeVerdict::Complete);
         return Ok(true);
     }
 
