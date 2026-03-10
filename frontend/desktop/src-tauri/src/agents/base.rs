@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Emitter};
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 #[cfg(target_os = "windows")]
 use crate::commands::git_bash::find_git_bash;
@@ -62,6 +62,7 @@ fn build_windows_git_bash_command(
     args: &[&str],
     prompt_file_path: Option<&str>,
     prompt_arg_index: Option<usize>,
+    extra_envs: &[(&str, &str)],
 ) -> Result<Command, String> {
     let git_bash = find_git_bash().ok_or_else(|| {
         format!(
@@ -69,6 +70,17 @@ fn build_windows_git_bash_command(
         )
     })?;
     let mut command = Command::new(git_bash);
+
+    // Build env export prefix for extra environment variables.
+    let env_prefix = if extra_envs.is_empty() {
+        String::new()
+    } else {
+        let exports: Vec<String> = extra_envs
+            .iter()
+            .map(|(k, v)| format!("export {}='{}'", k, bash_single_quote_escape(v)))
+            .collect();
+        format!("{}; ", exports.join("; "))
+    };
 
     match (prompt_file_path, prompt_arg_index) {
         (Some(pf), Some(idx)) => {
@@ -86,14 +98,22 @@ fn build_windows_git_bash_command(
                     parts.push(format!("'{}'", bash_single_quote_escape(arg)));
                 }
             }
-            command.arg("-lc").arg(parts.join(" "));
+            command.arg("-lc").arg(format!("{env_prefix}{}", parts.join(" ")));
         }
         _ => {
-            command
-                .arg("-lc")
-                .arg("exec \"$0\" \"$@\"")
-                .arg(binary)
-                .args(args);
+            if extra_envs.is_empty() {
+                command
+                    .arg("-lc")
+                    .arg("exec \"$0\" \"$@\"")
+                    .arg(binary)
+                    .args(args);
+            } else {
+                let mut parts = vec![format!("exec '{}'", bash_single_quote_escape(binary))];
+                for arg in args {
+                    parts.push(format!("'{}'", bash_single_quote_escape(arg)));
+                }
+                command.arg("-lc").arg(format!("{env_prefix}{}", parts.join(" ")));
+            }
         }
     }
 
@@ -132,6 +152,14 @@ pub fn build_full_prompt(input: &AgentInput) -> String {
 /// text. On Windows, that argument is written to a temp file and read back
 /// by bash via `$(cat ...)` to avoid `CreateProcess` mangling multi-line
 /// strings. On Unix this parameter is ignored.
+///
+/// `stdin_text`, when provided, is written to the child process's stdin and
+/// then stdin is closed. This is the preferred way to pass prompts to CLIs
+/// that support piped input (Codex, Gemini, Kimi, OpenCode). When using
+/// stdin, set `prompt_arg_index` to `None` since the prompt is not in args.
+///
+/// `extra_envs` are additional environment variables to set on the child
+/// process (e.g. `PYTHONIOENCODING=utf-8` for Kimi).
 pub async fn run_cli_agent(
     binary: &str,
     args: &[&str],
@@ -141,6 +169,8 @@ pub async fn run_cli_agent(
     run_id: &str,
     stage: PipelineStage,
     db: &DbPool,
+    stdin_text: Option<&str>,
+    extra_envs: &[(&str, &str)],
 ) -> Result<AgentOutput, String> {
     #[cfg(target_os = "windows")]
     let prompt_file: Option<String> = match _prompt_arg_index {
@@ -150,14 +180,22 @@ pub async fn run_cli_agent(
 
     #[cfg(target_os = "windows")]
     let mut command =
-        build_windows_git_bash_command(binary, args, prompt_file.as_deref(), _prompt_arg_index)?;
+        build_windows_git_bash_command(binary, args, prompt_file.as_deref(), _prompt_arg_index, extra_envs)?;
 
     #[cfg(not(target_os = "windows"))]
     let mut command = {
         let mut command = Command::new(binary);
         command.args(args);
+        for &(key, value) in extra_envs {
+            command.env(key, value);
+        }
         command
     };
+
+    // Pipe stdin when we need to write prompt text to the child.
+    if stdin_text.is_some() {
+        command.stdin(std::process::Stdio::piped());
+    }
 
     let mut child = command
         .current_dir(workspace_path)
@@ -165,6 +203,20 @@ pub async fn run_cli_agent(
         .stderr(std::process::Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to spawn {binary}: {e}"))?;
+
+    // Write prompt to stdin concurrently with reading stdout/stderr
+    // to avoid deadlocks when the child's output buffer fills up.
+    let stdin_handle = if let Some(text) = stdin_text {
+        let mut child_stdin = child.stdin.take()
+            .ok_or_else(|| format!("Failed to capture stdin for {binary}"))?;
+        let text = text.to_string();
+        Some(tokio::spawn(async move {
+            let _ = child_stdin.write_all(text.as_bytes()).await;
+            let _ = child_stdin.shutdown().await;
+        }))
+    } else {
+        None
+    };
 
     let stdout = child
         .stdout
@@ -234,6 +286,11 @@ pub async fn run_cli_agent(
         }
         lines
     });
+
+    // Wait for stdin writer to finish (if active).
+    if let Some(handle) = stdin_handle {
+        let _ = handle.await;
+    }
 
     let stdout_lines = stdout_handle
         .await

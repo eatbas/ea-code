@@ -82,7 +82,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   claudeModel: "sonnet",
   codexModel: "codex-5.3",
   geminiModel: "gemini-2.5-pro",
-  kimiModel: "kimi-code",
+  kimiModel: "kimi-code/kimi-for-coding",
   opencodeModel: "opencode/glm-5",
   promptEnhancerModel: "sonnet",
   skillSelectorModel: null,
@@ -110,7 +110,7 @@ export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[
     { value: "gemini-3-flash-preview", label: "Gemini 3.0 Flash" },
   ],
   kimi: [
-    { value: "kimi-code", label: "Kimi Code" },
+    { value: "kimi-code/kimi-for-coding", label: "Kimi Code" },
   ],
   opencode: [
     { value: "opencode/glm-5", label: "GLM 5" },

@@ -128,7 +128,7 @@ impl Default for AppSettings {
             claude_model: "sonnet".to_string(),
             codex_model: "codex-5.3".to_string(),
             gemini_model: "gemini-2.5-pro".to_string(),
-            kimi_model: "kimi-code".to_string(),
+            kimi_model: "kimi-code/kimi-for-coding".to_string(),
             copilot_model: "default".to_string(),
             opencode_model: "opencode/glm-5".to_string(),
             prompt_enhancer_model: "sonnet".to_string(),

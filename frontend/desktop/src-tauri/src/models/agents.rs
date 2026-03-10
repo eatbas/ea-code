@@ -43,7 +43,7 @@ pub(crate) fn default_copilot_path() -> String {
 }
 
 pub(crate) fn default_kimi_model() -> String {
-    "kimi-code".to_string()
+    "kimi-code/kimi-for-coding".to_string()
 }
 
 pub(crate) fn default_opencode_model() -> String {

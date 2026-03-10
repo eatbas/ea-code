@@ -44,6 +44,12 @@ pub async fn dispatch_agent(
     stage: PipelineStage,
     db: &DbPool,
 ) -> Result<AgentOutput, String> {
+    if model.is_empty() {
+        eprintln!(
+            "[warn] No model configured for stage {:?} with backend {:?}; the CLI will use its default.",
+            stage, backend,
+        );
+    }
     match backend {
         AgentBackend::Claude => {
             run_claude(
