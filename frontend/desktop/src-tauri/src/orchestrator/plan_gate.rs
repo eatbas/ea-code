@@ -25,6 +25,7 @@ pub async fn run_plan_gate(
     app: &AppHandle,
     settings: &AppSettings,
     cancel_flag: &Arc<AtomicBool>,
+    pause_flag: &Arc<AtomicBool>,
     answer_sender: &Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
     db: &DbPool,
     run_id: &str,
@@ -41,6 +42,10 @@ pub async fn run_plan_gate(
     let max_revisions = settings.max_plan_revisions;
 
     loop {
+        if wait_if_paused(pause_flag, cancel_flag).await {
+            push_cancel_iteration(run, iter_num, mem::take(stages));
+            return Ok(true);
+        }
         let plan_text = iter_ctx.selected_plan().unwrap_or_default().to_string();
         let question = format!(
             "The plan is ready for your review.\n\n\
@@ -108,6 +113,10 @@ pub async fn run_plan_gate(
             return Ok(false);
         }
 
+        if wait_if_paused(pause_flag, cancel_flag).await {
+            push_cancel_iteration(run, iter_num, mem::take(stages));
+            return Ok(true);
+        }
         // Re-plan with user feedback.
         let user_feedback = action.to_string();
         run.current_stage = Some(PipelineStage::Plan);

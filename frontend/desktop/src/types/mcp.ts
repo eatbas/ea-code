@@ -36,3 +36,40 @@ export interface UpdateMcpServerPayload {
   isEnabled?: boolean;
   cliBindings?: string[];
 }
+
+export type McpVerificationConfidence = "native" | "promptOnly" | "none";
+
+export type McpRuntimeStatus =
+  | "enabled"
+  | "disabled"
+  | "unknown"
+  | "notInstalled"
+  | "error";
+
+export interface McpCliServerRuntimeStatus {
+  serverId: string;
+  status: McpRuntimeStatus;
+  verificationConfidence: McpVerificationConfidence;
+  message?: string;
+}
+
+export interface McpCliRuntimeStatus {
+  cliName: string;
+  cliInstalled: boolean;
+  serverStatuses: McpCliServerRuntimeStatus[];
+}
+
+export interface RunCliMcpFixWithPromptRequest {
+  cliName: string;
+  serverId: string;
+}
+
+export interface McpCliFixResult {
+  cliName: string;
+  serverId: string;
+  success: boolean;
+  verificationStatus: McpRuntimeStatus;
+  verificationConfidence: McpVerificationConfidence;
+  message?: string;
+  outputSummary: string;
+}

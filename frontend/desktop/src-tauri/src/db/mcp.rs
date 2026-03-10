@@ -7,7 +7,7 @@ use super::models::{
     CliMcpBindingRow, McpServerChangeset, McpServerRow, NewCliMcpBinding, NewMcpServer,
 };
 
-pub const MCP_CAPABLE_CLIS: [&str; 2] = ["claude", "codex"];
+pub const MCP_CAPABLE_CLIS: [&str; 5] = ["claude", "codex", "gemini", "kimi", "opencode"];
 
 struct BuiltinMcpSpec {
     id: &'static str,
@@ -83,8 +83,6 @@ pub fn sync_builtin_catalog(pool: &DbPool) -> Result<(), String> {
                     mcp_servers::description.eq(excluded(mcp_servers::description)),
                     mcp_servers::command.eq(excluded(mcp_servers::command)),
                     mcp_servers::args.eq(excluded(mcp_servers::args)),
-                    mcp_servers::env.eq(excluded(mcp_servers::env)),
-                    mcp_servers::is_enabled.eq(true),
                     mcp_servers::is_builtin.eq(true),
                     mcp_servers::updated_at.eq(excluded(mcp_servers::updated_at)),
                 ))
@@ -98,11 +96,16 @@ pub fn sync_builtin_catalog(pool: &DbPool) -> Result<(), String> {
         )
         .execute(conn)?;
 
+        // Seed default CLI bindings only when a built-in server has no bindings yet.
+        // Existing bindings are user-managed and must remain stable across restarts.
         for spec in BUILTIN_MCP_SERVERS {
-            diesel::delete(
-                cli_mcp_bindings::table.filter(cli_mcp_bindings::mcp_server_id.eq(spec.id)),
-            )
-            .execute(conn)?;
+            let existing_count = cli_mcp_bindings::table
+                .filter(cli_mcp_bindings::mcp_server_id.eq(spec.id))
+                .count()
+                .get_result::<i64>(conn)?;
+            if existing_count > 0 {
+                continue;
+            }
 
             let rows = spec
                 .bindings
@@ -267,6 +270,22 @@ pub fn set_server_env_var(
         .execute(&mut conn)
         .map_err(|e| format!("Failed to update MCP env value: {e}"))?;
     Ok(())
+}
+
+pub fn get_server_env_var(
+    pool: &DbPool,
+    server_id: &str,
+    env_key: &str,
+) -> Result<Option<String>, String> {
+    let mut conn = super::get_conn(pool)?;
+    let row = super::find_or_not_found(
+        mcp_servers::table.find(server_id).first::<McpServerRow>(&mut conn).optional(),
+        "MCP server",
+    )?;
+
+    let env = serde_json::from_str::<HashMap<String, String>>(&row.env)
+        .map_err(|e| format!("Invalid env JSON for MCP server {}: {e}", row.id))?;
+    Ok(env.get(env_key).cloned())
 }
 
 pub fn get_active_servers_for_cli(pool: &DbPool, cli_name: &str) -> Result<Vec<ActiveMcpServer>, String> {

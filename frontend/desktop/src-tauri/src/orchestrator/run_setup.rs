@@ -240,6 +240,7 @@ pub fn persist_final_run(
         PipelineStatus::Completed => "completed",
         PipelineStatus::Failed => "failed",
         PipelineStatus::Cancelled => "cancelled",
+        PipelineStatus::Paused => "paused",
         _ => "completed",
     };
     let verdict_str = run.final_verdict.as_ref().map(|v| match v {

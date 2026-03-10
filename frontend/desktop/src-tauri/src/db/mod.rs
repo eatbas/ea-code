@@ -5,6 +5,7 @@ pub mod models;
 pub mod projects;
 pub mod questions;
 pub mod run_detail;
+pub mod run_status;
 pub mod runs;
 pub mod sessions;
 pub mod settings;

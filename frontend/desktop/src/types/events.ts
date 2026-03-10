@@ -63,6 +63,7 @@ export interface PipelineQuestionEvent {
 
 /** Answer payload sent back to the backend via the answer_pipeline_question command. */
 export interface PipelineAnswer {
+  runId: string;
   questionId: string;
   answer: string;
   skipped: boolean;

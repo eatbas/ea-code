@@ -14,6 +14,7 @@ export function QuestionDialog({ question, onAnswer }: QuestionDialogProps): Rea
 
   function handleSubmit(): void {
     onAnswer({
+      runId: question.runId,
       questionId: question.questionId,
       answer: response,
       skipped: false,
@@ -22,6 +23,7 @@ export function QuestionDialog({ question, onAnswer }: QuestionDialogProps): Rea
 
   function handleSkip(): void {
     onAnswer({
+      runId: question.runId,
       questionId: question.questionId,
       answer: "",
       skipped: true,

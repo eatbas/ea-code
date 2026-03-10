@@ -107,18 +107,20 @@ fn first_enabled_model_for_backend(
     csv.split(',').next().unwrap_or("").trim().to_string()
 }
 
-/// Emits a stage status transition event.
+/// Emits a stage status transition event and persists current stage to DB.
 pub fn emit_stage(
     app: &AppHandle,
     run_id: &str,
     stage: &PipelineStage,
     status: &StageStatus,
     iteration: u32,
+    db: &DbPool,
 ) {
-    emit_stage_with_duration(app, run_id, stage, status, iteration, None);
+    emit_stage_with_duration(app, run_id, stage, status, iteration, None, db);
 }
 
-/// Emits a stage status transition event with an optional duration.
+/// Emits a stage status transition event with an optional duration, and
+/// persists the current stage to the DB so polled views can show progress.
 pub fn emit_stage_with_duration(
     app: &AppHandle,
     run_id: &str,
@@ -126,6 +128,7 @@ pub fn emit_stage_with_duration(
     status: &StageStatus,
     iteration: u32,
     duration_ms: Option<u64>,
+    db: &DbPool,
 ) {
     let _ = app.emit(
         "pipeline:stage",
@@ -137,6 +140,16 @@ pub fn emit_stage_with_duration(
             duration_ms,
         },
     );
+
+    // Persist current stage to DB for polled session views
+    if matches!(status, StageStatus::Running) {
+        let _ = db::runs::update_current_stage(
+            db,
+            run_id,
+            Some(&stage_to_str(stage)),
+            iteration as i32,
+        );
+    }
 }
 
 /// Emits an artefact event and persists it to the database.
@@ -162,6 +175,19 @@ pub fn emit_artifact(
 
 pub fn is_cancelled(cancel_flag: &Arc<AtomicBool>) -> bool {
     cancel_flag.load(Ordering::SeqCst)
+}
+
+pub async fn wait_if_paused(
+    pause_flag: &Arc<AtomicBool>,
+    cancel_flag: &Arc<AtomicBool>,
+) -> bool {
+    while pause_flag.load(Ordering::SeqCst) {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return true;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+    false
 }
 
 pub async fn wait_for_cancel(cancel_flag: &Arc<AtomicBool>) {

@@ -35,6 +35,9 @@ pub struct RunDetail {
     pub max_iterations: i32,
     pub started_at: String,
     pub completed_at: Option<String>,
+    pub current_stage: Option<String>,
+    pub current_iteration: i32,
+    pub current_stage_started_at: Option<String>,
     pub iterations: Vec<IterationDetail>,
     pub questions: Vec<QuestionRow>,
 }

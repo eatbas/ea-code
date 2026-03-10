@@ -2,6 +2,44 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { McpServer } from "../types";
 import { useMcpServers } from "../hooks/useMcpServers";
+import { useMcpRuntime } from "../hooks/useMcpRuntime";
+import type { McpRuntimeStatus } from "../types";
+
+const AI_CLI_ORDER = ["claude", "codex", "gemini", "kimi", "opencode"] as const;
+
+function statusChipClass(status: McpRuntimeStatus): string {
+  switch (status) {
+    case "enabled":
+      return "bg-[#22c55e]/15 text-[#22c55e]";
+    case "disabled":
+      return "bg-[#f59e0b]/15 text-[#f59e0b]";
+    case "unknown":
+      return "bg-[#64748b]/15 text-[#94a3b8]";
+    case "notInstalled":
+      return "bg-[#ef4444]/15 text-[#ef4444]";
+    case "error":
+      return "bg-[#ef4444]/15 text-[#ef4444]";
+    default:
+      return "bg-[#64748b]/15 text-[#94a3b8]";
+  }
+}
+
+function statusLabel(status: McpRuntimeStatus): string {
+  switch (status) {
+    case "enabled":
+      return "Enabled";
+    case "disabled":
+      return "Disabled";
+    case "unknown":
+      return "Unknown";
+    case "notInstalled":
+      return "Not Installed";
+    case "error":
+      return "Error";
+    default:
+      return "Unknown";
+  }
+}
 
 function parseEnv(raw: string): Record<string, string> {
   try {
@@ -14,6 +52,14 @@ function parseEnv(raw: string): Record<string, string> {
 /** MCP server catalogue and per-CLI binding management view. */
 export function McpView(): ReactNode {
   const { servers, capableClis, loading, setEnabled, setBindings, setContext7ApiKey } = useMcpServers();
+  const {
+    runtimeStatuses,
+    runtimeLoading,
+    runtimeError,
+    fixingKey,
+    lastFixResultByKey,
+    runFixWithPrompt,
+  } = useMcpRuntime();
   const [busy, setBusy] = useState<string | null>(null);
   const [context7ApiKey, setContext7ApiKeyValue] = useState<string>("");
 
@@ -24,6 +70,10 @@ export function McpView(): ReactNode {
         .filter((server) => server.isBuiltin && builtinOrder.includes(server.id))
         .sort((a, b) => builtinOrder.indexOf(a.id) - builtinOrder.indexOf(b.id)),
     [servers],
+  );
+  const runtimeByCli = useMemo(
+    () => new Map(runtimeStatuses.map((row) => [row.cliName, row])),
+    [runtimeStatuses],
   );
 
   useEffect(() => {
@@ -65,14 +115,22 @@ export function McpView(): ReactNode {
     }
   }
 
+  async function runFix(serverId: string, cliName: string): Promise<void> {
+    await runFixWithPrompt({ cliName, serverId });
+  }
+
   return (
     <div className="flex h-full flex-col bg-[#0f0f14]">
       <div className="flex-1 overflow-y-auto px-8 py-8">
         <div className="mx-auto flex max-w-4xl flex-col gap-6">
           <h1 className="text-xl font-bold text-[#e4e4ed]">MCP Servers</h1>
-          <p className="text-sm text-[#9898b0]">Only curated servers are available: Context7 and Playwright.</p>
+          <p className="text-sm text-[#9898b0]">
+            Only curated servers are available: Context7 and Playwright.
+          </p>
 
           {loading && <div className="text-sm text-[#9898b0]">Loading MCP servers...</div>}
+          {runtimeLoading && <div className="text-sm text-[#9898b0]">Loading runtime status...</div>}
+          {runtimeError && <div className="text-sm text-[#ef4444]">{runtimeError}</div>}
 
           <div className="grid gap-4 md:grid-cols-2">
             {builtinServers.map((server) => {
@@ -96,17 +154,46 @@ export function McpView(): ReactNode {
                     Enabled
                   </label>
 
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {capableClis.map((cli) => {
-                      const bound = server.cliBindings.includes(cli);
+                  <div className="mt-3 flex flex-col gap-2">
+                    {AI_CLI_ORDER.map((cliName) => {
+                      const runtime = runtimeByCli.get(cliName);
+                      const status =
+                        runtime?.serverStatuses.find((row) => row.serverId === server.id)?.status ?? "unknown";
+                      const installed = runtime?.cliInstalled ?? capableClis.includes(cliName);
+                      const bound = server.cliBindings.includes(cliName);
+                      const actionKey = `${cliName}:${server.id}`;
+                      const fixResult = lastFixResultByKey[actionKey];
+
                       return (
-                        <button
-                          key={`${server.id}-${cli}`}
-                          onClick={() => void toggleBinding(server, cli)}
-                          className={`rounded px-2 py-1 text-xs ${bound ? "bg-[#6366f1]/20 text-[#e4e4ed]" : "bg-[#24243a] text-[#9898b0]"}`}
-                        >
-                          {cli}
-                        </button>
+                        <div key={`${server.id}-${cliName}`} className="rounded border border-[#2e2e48] bg-[#0f0f14] p-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-[#e4e4ed]">{cliName}</span>
+                              <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${statusChipClass(status)}`}>
+                                {statusLabel(status)}
+                              </span>
+                              <button
+                                onClick={() => void toggleBinding(server, cliName)}
+                                className={`rounded px-2 py-0.5 text-[10px] ${bound ? "bg-[#6366f1]/20 text-[#e4e4ed]" : "bg-[#24243a] text-[#9898b0]"}`}
+                              >
+                                {bound ? "Bound" : "Unbound"}
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void runFix(server.id, cliName)}
+                              disabled={!installed || fixingKey === actionKey}
+                              className="rounded bg-[#e4e4ed] px-2 py-1 text-[10px] font-medium text-[#0f0f14] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {fixingKey === actionKey ? "Running..." : "Install/Fix"}
+                            </button>
+                          </div>
+                          {fixResult && (
+                            <p className="mt-1 truncate text-[10px] text-[#9898b0]" title={fixResult.outputSummary}>
+                              {fixResult.outputSummary}
+                            </p>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

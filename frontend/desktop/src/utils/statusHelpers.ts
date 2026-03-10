@@ -14,7 +14,9 @@ export function isTerminal(status: PipelineStatus): boolean {
 export function statusInfo(status: PipelineStatus): { label: string; colour: string } {
   switch (status) {
     case "running":
-      return { label: "Running", colour: "#6366f1" };
+      return { label: "Running", colour: "#22c55e" };
+    case "paused":
+      return { label: "Paused", colour: "#60a5fa" };
     case "waiting_for_input":
       return { label: "Awaiting input", colour: "#f59e0b" };
     case "completed":

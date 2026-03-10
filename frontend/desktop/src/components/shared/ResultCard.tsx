@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { PipelineStage } from "../../types";
-import { formatDuration, formatTimestamp, formatTokens, parseCliResult } from "../../utils/formatters";
+import { formatDuration, formatTimestamp, formatTokens, parseCliResult, parseUtcTimestamp } from "../../utils/formatters";
 import { STAGE_LABELS } from "./constants";
 
 interface ResultCardProps {
@@ -34,6 +34,8 @@ export function ResultCard({
     ? "#22c55e"
     : status === "failed"
       ? "#ef4444"
+      : status === "paused"
+        ? "#60a5fa"
       : status === "cancelled"
         ? "#f59e0b"
         : "#9898b0";
@@ -171,11 +173,12 @@ export function buildStageRows(
     }));
 }
 
-/** Computes duration from startedAt/completedAt ISO strings. */
+/** Computes duration from startedAt/completedAt timestamp strings.
+ *  Uses parseUtcTimestamp to handle bare SQLite timestamps correctly. */
 export function computeDuration(startedAt?: string, completedAt?: string): number | undefined {
   if (!startedAt || !completedAt) return undefined;
-  const start = new Date(startedAt).getTime();
-  const end = new Date(completedAt).getTime();
+  const start = parseUtcTimestamp(startedAt).getTime();
+  const end = parseUtcTimestamp(completedAt).getTime();
   if (isNaN(start) || isNaN(end)) return undefined;
   return end - start;
 }

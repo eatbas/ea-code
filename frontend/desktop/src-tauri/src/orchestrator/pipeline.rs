@@ -27,13 +27,14 @@ pub use super::run_setup::IterationContext;
 /// Runs the full orchestration pipeline with v2.5.0 prompts.
 pub async fn run_pipeline(
     app: AppHandle,
+    run_id: String,
     request: PipelineRequest,
     settings: AppSettings,
     cancel_flag: Arc<AtomicBool>,
+    pause_flag: Arc<AtomicBool>,
     answer_sender: Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
     db: DbPool,
 ) -> Result<PipelineRun, String> {
-    let run_id = Uuid::new_v4().to_string();
     let pipeline_start = Instant::now();
 
     let workspace_name = std::path::Path::new(&request.workspace_path)
@@ -88,8 +89,36 @@ pub async fn run_pipeline(
         },
     );
 
+    // Prime current stage immediately so session-detail polling can show
+    // a live progress indicator before the first stage body starts.
+    let bootstrap_stage = if request.direct_task {
+        PipelineStage::DirectTask
+    } else {
+        PipelineStage::PromptEnhance
+    };
+    run.current_iteration = 1;
+    run.current_stage = Some(bootstrap_stage.clone());
+    emit_stage(
+        &app,
+        &run_id,
+        &bootstrap_stage,
+        &StageStatus::Running,
+        1,
+        &db,
+    );
+
     if request.direct_task {
-        run_direct_task(&app, &request, &settings, &cancel_flag, &db, &run_id, &mut run).await?;
+        run_direct_task(
+            &app,
+            &request,
+            &settings,
+            &cancel_flag,
+            &pause_flag,
+            &db,
+            &run_id,
+            &mut run,
+        )
+        .await?;
     } else {
         let workspace_context =
             super::context_summary::build_workspace_context_summary(&request.workspace_path).await;
@@ -99,13 +128,17 @@ pub async fn run_pipeline(
         let mut last_handoff: Option<prompts::IterationHandoff> = None;
 
         for iter_num in 1..=settings.max_iterations {
+            if wait_if_paused(&pause_flag, &cancel_flag).await {
+                run.status = PipelineStatus::Cancelled;
+                break;
+            }
             if is_cancelled(&cancel_flag) {
                 run.status = PipelineStatus::Cancelled;
                 break;
             }
 
             let should_break = run_iteration(
-                &app, &request, &settings, &cancel_flag, &answer_sender, &db,
+                &app, &request, &settings, &cancel_flag, &pause_flag, &answer_sender, &db,
                 &run_id, &session_id, iter_num, &mut run,
                 &mut previous_judge_output, &mut last_handoff, &workspace_context,
             )
@@ -142,6 +175,7 @@ async fn run_direct_task(
     request: &PipelineRequest,
     settings: &AppSettings,
     cancel_flag: &Arc<AtomicBool>,
+    pause_flag: &Arc<AtomicBool>,
     db: &DbPool,
     run_id: &str,
     run: &mut PipelineRun,
@@ -163,8 +197,12 @@ async fn run_direct_task(
     };
 
     let start = Instant::now();
-    emit_stage(app, run_id, &PipelineStage::DirectTask, &StageStatus::Running, 1);
+    emit_stage(app, run_id, &PipelineStage::DirectTask, &StageStatus::Running, 1, db);
 
+    if wait_if_paused(pause_flag, cancel_flag).await {
+        push_cancel_iteration(run, 1, Vec::new());
+        return Ok(());
+    }
     if is_cancelled(cancel_flag) {
         push_cancel_iteration(run, 1, Vec::new());
         return Ok(());
@@ -179,7 +217,7 @@ async fn run_direct_task(
 
     match result {
         Ok(out) => {
-            emit_stage_with_duration(app, run_id, &PipelineStage::DirectTask, &StageStatus::Completed, 1, Some(duration_ms));
+            emit_stage_with_duration(app, run_id, &PipelineStage::DirectTask, &StageStatus::Completed, 1, Some(duration_ms), db);
             // Emit the raw CLI output as a "result" artefact so the frontend can parse it
             emit_artifact(app, run_id, "result", &out.raw_text, 1, db);
             let _ = db::runs::insert_stage(
@@ -202,7 +240,7 @@ async fn run_direct_task(
             run.final_verdict = Some(JudgeVerdict::Complete);
         }
         Err(e) => {
-            emit_stage_with_duration(app, run_id, &PipelineStage::DirectTask, &StageStatus::Failed, 1, Some(duration_ms));
+            emit_stage_with_duration(app, run_id, &PipelineStage::DirectTask, &StageStatus::Failed, 1, Some(duration_ms), db);
             let _ = db::runs::insert_stage(
                 db, iteration_db_id, "direct_task", "failed",
                 "", duration_ms as i32, Some(&e),

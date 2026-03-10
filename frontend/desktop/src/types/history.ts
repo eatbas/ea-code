@@ -94,6 +94,9 @@ export interface RunDetail {
   maxIterations: number;
   startedAt: string;
   completedAt?: string;
+  currentStage?: string;
+  currentIteration: number;
+  currentStageStartedAt?: string;
   iterations: IterationDetail[];
   questions: QuestionEntry[];
 }

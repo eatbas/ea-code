@@ -116,6 +116,9 @@ diesel::table! {
         executive_summary_generated_at -> Nullable<Timestamp>,
         started_at -> Timestamp,
         completed_at -> Nullable<Timestamp>,
+        current_stage -> Nullable<Text>,
+        current_iteration -> Integer,
+        current_stage_started_at -> Nullable<Text>,
     }
 }
 

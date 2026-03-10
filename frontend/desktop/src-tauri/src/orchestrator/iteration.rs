@@ -29,6 +29,7 @@ pub async fn run_iteration(
     request: &PipelineRequest,
     settings: &AppSettings,
     cancel_flag: &Arc<AtomicBool>,
+    pause_flag: &Arc<AtomicBool>,
     answer_sender: &Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
     db: &DbPool,
     run_id: &str,
@@ -69,6 +70,8 @@ pub async fn run_iteration(
         "Coder is not set. Go to Settings/Agents and configure the minimum roles.".to_string()
     })?;
 
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
+
     // --- 1. Prompt enhance ---
     run.current_stage = Some(PipelineStage::PromptEnhance);
     let pe_result = execute_agent_stage(
@@ -100,7 +103,7 @@ pub async fn run_iteration(
 
     // --- 2-3. Plan + Plan Audit ---
     run_planning_stages(
-        app, request, settings, cancel_flag, db,
+        app, request, settings, cancel_flag, pause_flag, db,
         run_id, session_id, iter_num, iteration_db_id,
         &meta, &enhanced, judge_feedback.as_deref(),
         run, &mut stages, &mut iter_ctx, workspace_context,
@@ -121,7 +124,7 @@ pub async fn run_iteration(
     // --- Plan gate: user approval if enabled ---
     if settings.require_plan_approval && iter_ctx.selected_plan().is_some() {
         let should_break = run_plan_gate(
-            app, settings, cancel_flag, answer_sender, db,
+            app, settings, cancel_flag, pause_flag, answer_sender, db,
             run_id, iter_num, iteration_db_id,
             &meta, &enhanced, workspace_context,
             run, &mut stages, &mut iter_ctx,
@@ -153,6 +156,7 @@ pub async fn run_iteration(
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         return Ok(true);
     }
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
 
     // --- 4. Generate ---
@@ -197,14 +201,14 @@ pub async fn run_iteration(
             if !a.skipped && !a.answer.is_empty() {
                 iter_ctx.generate_answer = Some(a.answer.clone());
                 persist_iteration_context(db, run_id, iter_num, &iter_ctx);
-                emit_stage(app, run_id, &PipelineStage::Generate, &StageStatus::Completed, iter_num);
+                emit_stage(app, run_id, &PipelineStage::Generate, &StageStatus::Completed, iter_num, db);
             }
         }
     }
 
     // --- 5-8. Diff, Review, Fix, Diff ---
     run_review_fix_stages(
-        app, request, settings, cancel_flag, answer_sender, db,
+        app, request, settings, cancel_flag, pause_flag, answer_sender, db,
         run_id, session_id, iter_num, iteration_db_id,
         &meta, &enhanced, selected_skills_section.as_deref(), judge_feedback.as_deref(), handoff_json.as_deref(),
         run, &mut stages, &mut iter_ctx, workspace_context,

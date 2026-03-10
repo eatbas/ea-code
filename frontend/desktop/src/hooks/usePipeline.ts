@@ -22,7 +22,9 @@ interface UsePipelineReturn {
   artifacts: Record<string, string>;
   pendingQuestion: PipelineQuestionEvent | null;
   startPipeline: (request: PipelineRequest) => Promise<void>;
-  cancelPipeline: () => Promise<void>;
+  pausePipeline: (runId?: string) => Promise<void>;
+  resumePipeline: (runId?: string) => Promise<void>;
+  cancelPipeline: (runId?: string) => Promise<void>;
   answerQuestion: (answer: PipelineAnswer) => Promise<void>;
   resetRun: () => void;
 }
@@ -36,14 +38,15 @@ export function usePipeline(): UsePipelineReturn {
   const [artifacts, setArtifacts] = useState<Record<string, string>>({});
   const [pendingQuestion, setPendingQuestion] = useState<PipelineQuestionEvent | null>(null);
 
-  // Use ref to avoid stale closures in event handlers
   const runRef = useRef<PipelineRun | null>(null);
   runRef.current = run;
+  function isCurrentRunEvent(runId: string): boolean {
+    return runRef.current?.id === runId;
+  }
 
   useEffect(() => {
     const unlisteners: Promise<UnlistenFn>[] = [];
 
-    // Pipeline started
     unlisteners.push(
       listen<PipelineStartedEvent>("pipeline:started", (event) => {
         const payload = event.payload;
@@ -58,6 +61,7 @@ export function usePipeline(): UsePipelineReturn {
           maxIterations: 3,
           startedAt: new Date().toISOString(),
         };
+        runRef.current = newRun;
         setRun(newRun);
         setLogs([]);
         setStageLogs({});
@@ -66,20 +70,18 @@ export function usePipeline(): UsePipelineReturn {
       }),
     );
 
-    // Stage status update
     unlisteners.push(
       listen<PipelineStageEvent>("pipeline:stage", (event) => {
-        const { stage, status, iteration, durationMs } = event.payload;
+        const { runId, stage, status, iteration, durationMs } = event.payload;
+        if (!isCurrentRunEvent(runId)) return;
         setRun((prev) => {
           if (!prev) return prev;
-          const updated = { ...prev, currentStage: stage, currentIteration: iteration };
+          const updated = { ...prev, currentStage: stage, currentIteration: iteration, stageStartedAt: Date.now() };
 
-          // Update pipeline-level status for waiting_for_input
           if (status === "waiting_for_input") {
             updated.status = "waiting_for_input";
           }
 
-          // Ensure the iteration array is long enough
           const iterations = [...updated.iterations];
           while (iterations.length < iteration) {
             iterations.push({ number: iterations.length + 1, stages: [] });
@@ -111,10 +113,10 @@ export function usePipeline(): UsePipelineReturn {
       }),
     );
 
-    // Log line — add to both flat logs and per-stage logs
     unlisteners.push(
       listen<PipelineLogEvent>("pipeline:log", (event) => {
-        const { stage, line, stream } = event.payload;
+        const { runId, stage, line, stream } = event.payload;
+        if (!isCurrentRunEvent(runId)) return;
         const prefix = stream === "stderr" ? "[stderr] " : "";
         const formatted = `${prefix}${line}`;
         setLogs((prev) => [...prev, formatted]);
@@ -126,25 +128,25 @@ export function usePipeline(): UsePipelineReturn {
       }),
     );
 
-    // Artifact produced
     unlisteners.push(
       listen<PipelineArtifactEvent>("pipeline:artifact", (event) => {
-        const { kind, content } = event.payload;
+        const { runId, kind, content } = event.payload;
+        if (!isCurrentRunEvent(runId)) return;
         setArtifacts((prev) => ({ ...prev, [kind]: content }));
       }),
     );
 
-    // Pipeline question — pause for user input
     unlisteners.push(
       listen<PipelineQuestionEvent>("pipeline:question", (event) => {
+        if (!isCurrentRunEvent(event.payload.runId)) return;
         setPendingQuestion(event.payload);
       }),
     );
 
-    // Pipeline completed
     unlisteners.push(
       listen<PipelineCompletedEvent>("pipeline:completed", (event) => {
-        const { verdict, totalIterations, durationMs } = event.payload;
+        const { runId, verdict, totalIterations, durationMs } = event.payload;
+        if (!isCurrentRunEvent(runId)) return;
         setRun((prev) => {
           if (!prev) return prev;
           return {
@@ -155,31 +157,34 @@ export function usePipeline(): UsePipelineReturn {
             durationMs,
             completedAt: new Date().toISOString(),
             currentStage: undefined,
+            stageStartedAt: undefined,
           };
         });
         setPendingQuestion(null);
       }),
     );
 
-    // Pipeline error
     unlisteners.push(
       listen<PipelineErrorEvent>("pipeline:error", (event) => {
-        const { message } = event.payload;
+        const { runId, message } = event.payload;
+        if (!isCurrentRunEvent(runId)) return;
+        const lowerMessage = message.toLowerCase();
+        const nextStatus = lowerMessage.includes("cancel") ? "cancelled" : "failed";
         setRun((prev) => {
           if (!prev) return prev;
           return {
             ...prev,
-            status: "failed",
+            status: nextStatus,
             error: message,
             completedAt: new Date().toISOString(),
             currentStage: undefined,
+            stageStartedAt: undefined,
           };
         });
         setPendingQuestion(null);
       }),
     );
 
-    // Clean up all listeners on unmount
     return () => {
       unlisteners.forEach((promise) => {
         promise.then((unlisten) => unlisten());
@@ -200,21 +205,57 @@ export function usePipeline(): UsePipelineReturn {
     }
   }, [toast]);
 
-  const cancelPipeline = useCallback(async (): Promise<void> => {
+  const pausePipeline = useCallback(async (runId?: string): Promise<void> => {
+    const targetRunId = typeof runId === "string" && runId.length > 0 ? runId : runRef.current?.id;
+    if (!targetRunId) return;
     try {
-      await invoke("cancel_pipeline");
+      await invoke("pause_pipeline", { runId: targetRunId });
+      setRun((prev) => {
+        if (!prev || prev.id !== targetRunId) return prev;
+        return { ...prev, status: "paused", stageStartedAt: undefined };
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to pause pipeline: ${message}`);
+    }
+  }, [toast]);
+
+  const resumePipeline = useCallback(async (runId?: string): Promise<void> => {
+    const targetRunId = typeof runId === "string" && runId.length > 0 ? runId : runRef.current?.id;
+    if (!targetRunId) return;
+
+    try {
+      await invoke("resume_pipeline", { runId: targetRunId });
+      setRun((prev) => {
+        if (!prev || prev.id !== targetRunId) return prev;
+        return { ...prev, status: "running", stageStartedAt: Date.now() };
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to resume pipeline: ${message}`);
+    }
+  }, [toast]);
+
+  const cancelPipeline = useCallback(async (runId?: string): Promise<void> => {
+    const targetRunId = typeof runId === "string" && runId.length > 0 ? runId : runRef.current?.id;
+    if (!targetRunId) return;
+
+    try {
+      await invoke("cancel_pipeline", { runId: targetRunId });
       setPendingQuestion(null);
       setRun((prev) => {
-        if (!prev) return prev;
+        if (!prev || prev.id !== targetRunId) return prev;
         return {
           ...prev,
           status: "cancelled",
           completedAt: new Date().toISOString(),
           currentStage: undefined,
+          stageStartedAt: undefined,
         };
       });
-    } catch {
-      toast.error("Failed to cancel pipeline.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to cancel pipeline: ${message}`);
     }
   }, [toast]);
 
@@ -223,17 +264,18 @@ export function usePipeline(): UsePipelineReturn {
       await invoke("answer_pipeline_question", { answer });
       setPendingQuestion(null);
       setRun((prev) => {
-        if (!prev) return prev;
-        return { ...prev, status: "running" };
+        if (!prev || prev.id !== answer.runId) return prev;
+        const nextStatus = prev.status === "paused" ? "paused" : "running";
+        return { ...prev, status: nextStatus };
       });
     } catch {
-      // Don't clear the pending question so the user can retry
       toast.error("Failed to submit answer.");
     }
   }, [toast]);
 
   /** Clear all pipeline state and return to idle. */
   const resetRun = useCallback((): void => {
+    runRef.current = null;
     setRun(null);
     setLogs([]);
     setStageLogs({});
@@ -241,5 +283,17 @@ export function usePipeline(): UsePipelineReturn {
     setPendingQuestion(null);
   }, []);
 
-  return { run, logs, stageLogs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun };
+  return {
+    run,
+    logs,
+    stageLogs,
+    artifacts,
+    pendingQuestion,
+    startPipeline,
+    pausePipeline,
+    resumePipeline,
+    cancelPipeline,
+    answerQuestion,
+    resetRun,
+  };
 }

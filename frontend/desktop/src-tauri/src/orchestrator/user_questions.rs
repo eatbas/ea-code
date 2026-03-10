@@ -42,7 +42,7 @@ pub async fn ask_user_question(
     }
 
     emit_question_event(app, run_id, &question_id, stage, iteration, &question_text, &agent_output, optional);
-    emit_stage(app, run_id, stage, &StageStatus::WaitingForInput, iteration);
+    emit_stage(app, run_id, stage, &StageStatus::WaitingForInput, iteration, db);
 
     tokio::select! {
         answer = rx => {
@@ -86,7 +86,7 @@ pub async fn ask_user_question_with_timeout(
     }
 
     emit_question_event(app, run_id, &question_id, stage, iteration, &question_text, &agent_output, optional);
-    emit_stage(app, run_id, stage, &StageStatus::WaitingForInput, iteration);
+    emit_stage(app, run_id, stage, &StageStatus::WaitingForInput, iteration, db);
 
     let timeout_duration = std::time::Duration::from_secs(timeout_sec);
 

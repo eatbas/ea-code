@@ -45,6 +45,7 @@ pub enum JudgeVerdict {
 pub enum PipelineStatus {
     Idle,
     Running,
+    Paused,
     WaitingForInput,
     Completed,
     Failed,

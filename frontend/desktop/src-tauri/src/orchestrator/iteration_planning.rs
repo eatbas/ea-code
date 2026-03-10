@@ -23,6 +23,7 @@ pub async fn run_planning_stages(
     request: &PipelineRequest,
     settings: &AppSettings,
     cancel_flag: &Arc<AtomicBool>,
+    pause_flag: &Arc<AtomicBool>,
     db: &DbPool,
     run_id: &str,
     session_id: &str,
@@ -50,6 +51,7 @@ pub async fn run_planning_stages(
         return Ok(());
     }
 
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     let plan_r = execute_agent_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::Plan,
         settings.planner_agent.as_ref().unwrap_or(&crate::models::AgentBackend::Claude),
@@ -75,8 +77,10 @@ pub async fn run_planning_stages(
         return Ok(());
     }
     stages.push(plan_r);
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     let pa_r = execute_agent_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::PlanAudit,
         settings.plan_auditor_agent.as_ref().unwrap_or(&crate::models::AgentBackend::Claude),
@@ -101,6 +105,7 @@ pub async fn run_planning_stages(
         return Ok(());
     }
     stages.push(pa_r);
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     let parsed = parse_plan_audit_output(&pa_out, &plan_out);

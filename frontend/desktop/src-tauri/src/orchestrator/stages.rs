@@ -29,7 +29,7 @@ pub async fn execute_agent_stage(
 ) -> StageResult {
     let max_attempts = 1 + settings.agent_retry_count;
     let start = Instant::now();
-    emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num);
+    emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num, db);
 
     let stage_str = stage_to_str(&stage);
     let model = resolve_stage_model(&stage, settings);
@@ -66,7 +66,7 @@ pub async fn execute_agent_stage(
         {
             Ok(output) => {
                 let duration_ms = start.elapsed().as_millis() as u64;
-                emit_stage_with_duration(app, run_id, &stage, &StageStatus::Completed, iteration_num, Some(duration_ms));
+                emit_stage_with_duration(app, run_id, &stage, &StageStatus::Completed, iteration_num, Some(duration_ms), db);
                 let _ = db::runs::insert_stage(
                     db, iteration_db_id, &stage_str, "completed",
                     &output.raw_text, duration_ms as i32, None,
@@ -93,7 +93,7 @@ pub async fn execute_agent_stage(
 
     // All attempts exhausted — return the last error.
     let duration_ms = start.elapsed().as_millis() as u64;
-    emit_stage_with_duration(app, run_id, &stage, &StageStatus::Failed, iteration_num, Some(duration_ms));
+    emit_stage_with_duration(app, run_id, &stage, &StageStatus::Failed, iteration_num, Some(duration_ms), db);
     let _ = db::runs::insert_stage(
         db, iteration_db_id, &stage_str, "failed",
         "", duration_ms as i32, Some(&last_error),
@@ -120,7 +120,7 @@ pub async fn execute_run_level_agent_stage(
     db: &DbPool,
 ) -> StageResult {
     let start = Instant::now();
-    emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num);
+    emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num, db);
     let model = resolve_stage_model(&stage, settings);
 
     match dispatch_agent(
@@ -130,7 +130,7 @@ pub async fn execute_run_level_agent_stage(
     {
         Ok(output) => {
             let duration_ms = start.elapsed().as_millis() as u64;
-            emit_stage_with_duration(app, run_id, &stage, &StageStatus::Completed, iteration_num, Some(duration_ms));
+            emit_stage_with_duration(app, run_id, &stage, &StageStatus::Completed, iteration_num, Some(duration_ms), db);
             StageResult {
                 stage,
                 status: StageStatus::Completed,
@@ -141,7 +141,7 @@ pub async fn execute_run_level_agent_stage(
         }
         Err(e) => {
             let duration_ms = start.elapsed().as_millis() as u64;
-            emit_stage_with_duration(app, run_id, &stage, &StageStatus::Failed, iteration_num, Some(duration_ms));
+            emit_stage_with_duration(app, run_id, &stage, &StageStatus::Failed, iteration_num, Some(duration_ms), db);
             StageResult {
                 stage,
                 status: StageStatus::Failed,
@@ -163,7 +163,7 @@ pub fn execute_skipped_stage(
     reason: &str,
     db: &DbPool,
 ) -> StageResult {
-    emit_stage(app, run_id, &stage, &StageStatus::Skipped, iteration_num);
+    emit_stage(app, run_id, &stage, &StageStatus::Skipped, iteration_num, db);
     let stage_str = stage_to_str(&stage);
     let _ = db::runs::insert_stage(db, iteration_db_id, &stage_str, "skipped", reason, 0, None);
     StageResult {
@@ -186,12 +186,12 @@ pub async fn execute_diff_stage(
     db: &DbPool,
 ) -> StageResult {
     let start = Instant::now();
-    emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num);
+    emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num, db);
 
     let diff = crate::git::git_diff(workspace_path).await;
     let duration_ms = start.elapsed().as_millis() as u64;
 
-    emit_stage_with_duration(app, run_id, &stage, &StageStatus::Completed, iteration_num, Some(duration_ms));
+    emit_stage_with_duration(app, run_id, &stage, &StageStatus::Completed, iteration_num, Some(duration_ms), db);
     super::helpers::emit_artifact(app, run_id, "diff", &diff, iteration_num, db);
 
     let stage_str = stage_to_str(&stage);

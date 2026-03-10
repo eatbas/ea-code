@@ -23,6 +23,7 @@ export type JudgeVerdict = "COMPLETE" | "NOT COMPLETE";
 export type PipelineStatus =
   | "idle"
   | "running"
+  | "paused"
   | "waiting_for_input"
   | "completed"
   | "failed"
@@ -55,6 +56,8 @@ export interface PipelineRun {
   iterations: Iteration[];
   currentIteration: number;
   currentStage?: PipelineStage;
+  /** Absolute timestamp (Date.now()) when the current stage started — used for persistent timer. */
+  stageStartedAt?: number;
   maxIterations: number;
   startedAt?: string;
   completedAt?: string;

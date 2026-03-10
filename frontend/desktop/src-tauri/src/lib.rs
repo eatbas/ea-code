@@ -8,7 +8,9 @@ mod orchestrator;
 pub mod schema;
 
 use commands::AppState;
-use std::sync::{atomic::AtomicBool, Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tauri::Manager;
 use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -22,16 +24,18 @@ pub fn run() {
     if let Err(e) = db::import_legacy_settings(&pool) {
         eprintln!("Warning: failed to import legacy settings: {e}");
     }
+    let _ = db::run_status::pause_all_running(&pool);
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(AppState {
-            cancel_flag: Arc::new(AtomicBool::new(false)),
-            answer_sender: Arc::new(Mutex::new(None)),
+            cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            pause_flags: Arc::new(Mutex::new(HashMap::new())),
+            answer_senders: Arc::new(Mutex::new(HashMap::new())),
             db: pool,
         })
         .invoke_handler(tauri::generate_handler![
@@ -42,6 +46,8 @@ pub fn run() {
             // Pipeline commands
             commands::pipeline::run_pipeline,
             commands::pipeline::cancel_pipeline,
+            commands::pipeline::pause_pipeline,
+            commands::pipeline::resume_pipeline,
             commands::pipeline::answer_pipeline_question,
             // Settings commands
             commands::settings::get_settings,
@@ -61,6 +67,8 @@ pub fn run() {
             commands::mcp::update_mcp_server,
             commands::mcp::delete_mcp_server,
             commands::mcp::set_context7_api_key,
+            commands::mcp_runtime::get_mcp_cli_runtime_statuses,
+            commands::mcp_runtime::run_cli_mcp_fix_with_prompt,
             // CLI health & version commands
             commands::cli::check_cli_health,
             commands::cli::get_cli_versions,
@@ -75,6 +83,14 @@ pub fn run() {
             commands::history::get_run_artifacts,
             commands::history::delete_session,
         ])
-        .run(tauri::generate_context!())
-        .expect("error whilst running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error whilst building tauri application");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { .. } = event {
+            if let Some(state) = app_handle.try_state::<AppState>() {
+                let _ = db::run_status::pause_all_running(&state.db);
+            }
+        }
+    });
 }

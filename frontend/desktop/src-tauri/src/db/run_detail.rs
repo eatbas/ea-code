@@ -112,6 +112,9 @@ pub fn get_full(pool: &DbPool, run_id: &str) -> Result<RunDetail, String> {
         max_iterations: run.max_iterations,
         started_at: run.started_at,
         completed_at: run.completed_at,
+        current_stage: run.current_stage,
+        current_iteration: run.current_iteration,
+        current_stage_started_at: run.current_stage_started_at,
         iterations: iteration_details,
         questions: question_rows,
     })

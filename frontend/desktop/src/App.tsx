@@ -23,21 +23,17 @@ import { UpdateInstallBanner } from "./components/shared/UpdateInstallBanner";
 import { ProjectLoadingOverlay } from "./components/shared/ProjectLoadingOverlay";
 import type { PipelineRequest, PipelineRun, RunOptions, SessionDetail } from "./types";
 
-/** Whether the pipeline is actively in progress (running or awaiting user input). */
 function isRunActive(run: PipelineRun | null): boolean {
-  return !!run && (run.status === "running" || run.status === "waiting_for_input");
+  return !!run && (run.status === "running" || run.status === "waiting_for_input" || run.status === "paused");
 }
-
-/** Whether the pipeline has reached a terminal state (completed, failed, or cancelled). */
 function isRunTerminal(run: PipelineRun | null): boolean {
   return !!run && (run.status === "completed" || run.status === "failed" || run.status === "cancelled");
 }
-
 function App(): ReactNode {
   const toast = useToast();
   const { workspace, openingWorkspace, openWorkspace, selectFolder } = useWorkspace();
   const { settings, loading, saveSettings } = useSettings();
-  const { run, stageLogs, artifacts, pendingQuestion, startPipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
+  const { run, stageLogs, artifacts, pendingQuestion, startPipeline, pausePipeline, resumePipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { versions, loading: versionsLoading, updating: versionsUpdating, fetchVersions, updateCli } = useCliVersions();
   const { health: cliHealth, checking: cliHealthChecking, checkHealth } = useCliHealth();
   const { projects, sessions, loadSessions, loadProjects, loadSessionDetail, deleteSession } = useHistory();
@@ -50,10 +46,8 @@ function App(): ReactNode {
   const [sessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
   const [sessionDetailLoading, setSessionDetailLoading] = useState(false);
 
-  // Load projects on mount
   useEffect(() => { loadProjects(); }, [loadProjects]);
 
-  // Load sessions when workspace changes
   useEffect(() => {
     if (workspace) {
       loadProjects();
@@ -63,20 +57,36 @@ function App(): ReactNode {
     }
   }, [workspace, loadProjects, loadSessions]);
 
-  // Reload sessions when a pipeline run starts or completes
   useEffect(() => {
     if ((isRunActive(run) || isRunTerminal(run)) && workspace) {
       loadSessions(workspace.path);
     }
   }, [run?.status, workspace, loadSessions]);
 
-  // Refresh CLI availability whenever persisted settings change.
+  const hasRunningSession = sessions.some((s) => s.lastStatus === "running" || s.lastStatus === "waiting_for_input" || s.lastStatus === "paused");
+
+  useEffect(() => {
+    if (!hasRunningSession || !workspace) return;
+
+    const interval = setInterval(async () => {
+      try {
+        loadSessions(workspace.path);
+        if (activeSessionId) {
+          const detail = await loadSessionDetail(activeSessionId);
+          setSessionDetail(detail);
+        }
+      } catch { /* silent — will retry next interval */ }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [hasRunningSession, workspace, activeSessionId, loadSessions, loadSessionDetail]);
+
   useEffect(() => {
     if (!settings) return;
     void checkHealth(settings);
   }, [settings, checkHealth]);
 
-  function handleRun(options: RunOptions): void {
+  async function handleRun(options: RunOptions): Promise<void> {
     if (!workspace) return;
     const request: PipelineRequest = {
       prompt: options.prompt,
@@ -99,10 +109,10 @@ function App(): ReactNode {
     setActiveSessionId(undefined);
     setSessionDetail(null);
     setActiveView("home");
+    if (workspace) loadSessions(workspace.path);
   }
 
   const handleSelectSession = useCallback(async (_sessionId: string): Promise<void> => {
-    // If the selected session is the current pipeline run, navigate to the live ChatView.
     const isCurrentRun = run && (isRunActive(run) || isRunTerminal(run)) && run.sessionId === _sessionId;
     if (isCurrentRun) {
       setActiveSessionId(undefined);
@@ -130,9 +140,7 @@ function App(): ReactNode {
     setActiveView("home");
   }, [openWorkspace]);
 
-  /** Render the main content area based on active view. */
   function renderContent(): ReactNode {
-    // Show pipeline chat only on the home root view so session/settings navigation remains available.
     const pipelineActive = isRunActive(run);
     const pipelineTerminal = isRunTerminal(run);
     const isHomeRootView = activeView === "home" && !activeSessionId;
@@ -147,7 +155,10 @@ function App(): ReactNode {
           cliHealth={cliHealth}
           settings={settings}
           onMissingAgentSetup={handleMissingAgentSetup}
-          onCancel={cancelPipeline}
+          onPause={() => { void pausePipeline(); }}
+          onResume={() => { void resumePipeline(); }}
+          onCancel={() => { void cancelPipeline(); }}
+          onNewSession={handleNewSession}
           onContinue={(options) => {
             if (run.sessionId) setActiveSessionId(run.sessionId);
             handleRun(options);
@@ -206,6 +217,9 @@ function App(): ReactNode {
           settings={settings}
           onMissingAgentSetup={handleMissingAgentSetup}
           onRun={handleRun}
+          onPauseRun={(runId) => { void pausePipeline(runId); }}
+          onResumeRun={(runId) => { void resumePipeline(runId); }}
+          onCancelRun={(runId) => { void cancelPipeline(runId); }}
           onBackToHome={handleNewSession}
         />
       );
@@ -250,7 +264,7 @@ function App(): ReactNode {
           sessions={sessions}
           activeSessionId={activeSessionId}
           onSelectSession={handleSelectSession}
-          runningSessionId={isRunActive(run) ? run?.sessionId : undefined}
+          runningSessionId={run && (run.status === "running" || run.status === "waiting_for_input") ? run.sessionId : undefined}
           onArchiveSession={(sessionId) => {
             void deleteSession(sessionId).then(
               () => toast.success("Session archived."),

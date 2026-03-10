@@ -44,6 +44,7 @@ pub struct PipelineQuestion {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PipelineAnswer {
+    pub run_id: String,
     pub question_id: String,
     pub answer: String,
     /// If true, the user chose to skip without providing guidance.

@@ -82,7 +82,10 @@ export function ProjectThreadsList({
                     <div className="flex flex-col gap-0.5 py-1">
                       {sessions.map((session) => {
                         const isActiveSession = session.id === activeSessionId;
-                        const isRunningSession = session.id === runningSessionId;
+                        const isRunningSession =
+                          session.id === runningSessionId ||
+                          session.lastStatus === "running" ||
+                          session.lastStatus === "waiting_for_input";
                         const isConfirming = confirmingId === session.id;
 
                         if (isConfirming) {

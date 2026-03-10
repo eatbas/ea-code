@@ -1,0 +1,2 @@
+ALTER TABLE runs ADD COLUMN current_stage TEXT;
+ALTER TABLE runs ADD COLUMN current_iteration INTEGER NOT NULL DEFAULT 0;

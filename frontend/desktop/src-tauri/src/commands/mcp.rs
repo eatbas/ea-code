@@ -113,6 +113,9 @@ pub async fn list_mcp_capable_clis(state: State<'_, AppState>) -> Result<Vec<Str
         let path = match cli_name {
             "claude" => settings.claude_path.as_str(),
             "codex" => settings.codex_path.as_str(),
+            "gemini" => settings.gemini_path.as_str(),
+            "kimi" => settings.kimi_path.as_str(),
+            "opencode" => settings.opencode_path.as_str(),
             _ => continue,
         };
 

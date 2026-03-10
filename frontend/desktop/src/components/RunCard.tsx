@@ -1,70 +1,25 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import type { RunDetail, StageEntry, PipelineStage } from "../types";
-import { formatDuration } from "../utils/formatters";
-import { STAGE_LABELS, STAGE_COLOURS } from "./shared/constants";
+import type { RunDetail, PipelineStage, StageResult, StageStatus } from "../types";
+import { parseUtcTimestamp } from "../utils/formatters";
 import { PromptCard } from "./shared/PromptCard";
 import { FinalPlanCard } from "./shared/FinalPlanCard";
+import { ThinkingIndicator } from "./shared/ThinkingIndicator";
+import { StageCard } from "./shared/StageCard";
 import { ResultCard, buildStageRows, computeDuration } from "./shared/ResultCard";
 
 interface RunCardProps {
   run: RunDetail;
 }
 
-/** Clickable stage row for a historical stage entry. Whole card toggles content. */
-function HistoryStageCard({ entry }: { entry: StageEntry }): ReactNode {
-  const [open, setOpen] = useState(false);
-
-  const label = STAGE_LABELS[entry.stage as PipelineStage] ?? entry.stage;
-  const badgeBg = STAGE_COLOURS[entry.stage as PipelineStage] ?? "rgba(150,150,150,0.22)";
-  const isFailed = entry.status === "failed";
-  const isCompleted = entry.status === "completed";
-  const hasOutput = entry.output && entry.output.trim().length > 0;
-
-  return (
-    <article
-      className={`rounded-lg border border-[#2e2e48] bg-[#14141e] overflow-hidden ${hasOutput ? "cursor-pointer" : ""}`}
-      onClick={() => hasOutput && setOpen((prev) => !prev)}
-    >
-      <div className="flex items-center gap-1.5 px-3 py-2 text-[10px] hover:bg-[#1a1a2a] transition-colors">
-        {hasOutput && (
-          <svg
-            className={`h-3 w-3 text-[#9898b0] shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        )}
-        <span
-          className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
-          style={{ background: badgeBg }}
-        >
-          {label}
-        </span>
-        {isFailed && <span className="font-medium text-[#ef4444]">Failed</span>}
-        {entry.status === "skipped" && <span className="font-medium text-[#9898b0]">Skipped</span>}
-        <div className="ml-auto flex items-center gap-2">
-          {entry.durationMs > 0 && (
-            <span className="text-[#9898b0] opacity-80">{formatDuration(entry.durationMs)}</span>
-          )}
-          {isCompleted && (
-            <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#22c55e] bg-[#22c55e]/10">
-              Completed
-            </span>
-          )}
-        </div>
-      </div>
-      {entry.error && <p className="px-3 pb-2 text-xs text-[#ef4444]">{entry.error}</p>}
-      {open && hasOutput && (
-        <div className="px-3 pb-3">
-          <pre className="max-h-64 overflow-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
-            {entry.output}
-          </pre>
-        </div>
-      )}
-    </article>
-  );
+function toStageResult(stage: string, status: string, output: string, durationMs: number, error?: string): StageResult {
+  return {
+    stage: stage as PipelineStage,
+    status: status as StageStatus,
+    output,
+    durationMs,
+    error,
+  };
 }
 
 /** Collapsible Prompt Received card matching ChatView style. */
@@ -108,6 +63,9 @@ function PromptReceivedCard({ prompt }: { prompt: string }): ReactNode {
 /** Displays a single historical run with full step-by-step timeline. */
 export function RunCard({ run }: RunCardProps): ReactNode {
   const allStages = run.iterations.flatMap((iter) => iter.stages);
+  const isTerminalStatus = run.status === "completed" || run.status === "failed" || run.status === "cancelled";
+  const isActiveStatus = run.status === "running" || run.status === "waiting_for_input";
+  const activeStage = run.currentStage ?? (run.status === "running" ? "prompt_enhance" : undefined);
 
   return (
     <div className="flex flex-col gap-3">
@@ -126,7 +84,7 @@ export function RunCard({ run }: RunCardProps): ReactNode {
         <div key={iter.number} className="flex flex-col gap-2">
           {iter.stages.map((entry) => (
             <div key={entry.id} className="flex flex-col gap-2">
-              <HistoryStageCard entry={entry} />
+              <StageCard stage={toStageResult(entry.stage, entry.status, entry.output, entry.durationMs, entry.error)} />
 
               {/* After prompt_enhance — show enhanced prompt comparison */}
               {entry.stage === "prompt_enhance" && entry.status === "completed" && iter.enhancedPrompt && (
@@ -150,17 +108,34 @@ export function RunCard({ run }: RunCardProps): ReactNode {
         </div>
       ))}
 
-      {/* Result summary — shared component, identical to ChatView */}
-      <ResultCard
-        status={run.status}
-        finalVerdict={run.finalVerdict}
-        iterationCount={run.iterations.length}
-        totalDurationMs={computeDuration(run.startedAt, run.completedAt)}
-        completedAt={run.completedAt}
-        executiveSummary={run.executiveSummary}
-        error={run.error}
-        stageRows={buildStageRows(allStages)}
-      />
+      {/* Currently running stage — shows the stage name badge (matching ChatView) + animated timer */}
+      {isActiveStatus && activeStage && (
+        <>
+          <StageCard stage={toStageResult(activeStage, run.status === "waiting_for_input" ? "waiting_for_input" : "running", "", 0)} />
+          {run.status === "running" && (
+            <ThinkingIndicator
+              stage={activeStage as PipelineStage}
+              startedAt={run.currentStageStartedAt
+                ? parseUtcTimestamp(run.currentStageStartedAt).getTime()
+                : parseUtcTimestamp(run.startedAt).getTime()}
+            />
+          )}
+        </>
+      )}
+
+      {/* Result summary — only shown once the pipeline reaches a terminal state */}
+      {isTerminalStatus && (
+        <ResultCard
+          status={run.status}
+          finalVerdict={run.finalVerdict}
+          iterationCount={run.iterations.length}
+          totalDurationMs={computeDuration(run.startedAt, run.completedAt)}
+          completedAt={run.completedAt}
+          executiveSummary={run.executiveSummary}
+          error={run.error}
+          stageRows={buildStageRows(allStages)}
+        />
+      )}
     </div>
   );
 }

@@ -45,6 +45,7 @@ pub fn insert(
     max_iterations: i32,
 ) -> Result<(), String> {
     let mut conn = super::get_conn(pool)?;
+    let now = super::now_rfc3339();
 
     diesel::insert_into(runs::table)
         .values(&NewRun {
@@ -52,9 +53,33 @@ pub fn insert(
             session_id,
             prompt,
             max_iterations,
+            started_at: &now,
         })
         .execute(&mut conn)
         .map_err(|e| format!("Failed to insert run: {e}"))?;
+
+    Ok(())
+}
+
+/// Updates the currently executing stage and iteration on a run row.
+/// Also records when the stage started so the frontend can show an accurate timer.
+pub fn update_current_stage(
+    pool: &DbPool,
+    id: &str,
+    stage: Option<&str>,
+    iteration: i32,
+) -> Result<(), String> {
+    let mut conn = super::get_conn(pool)?;
+    let started_at: Option<String> = stage.map(|_| super::now_rfc3339());
+
+    diesel::update(runs::table.find(id))
+        .set((
+            runs::current_stage.eq(stage),
+            runs::current_iteration.eq(iteration),
+            runs::current_stage_started_at.eq(&started_at),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to update current stage: {e}"))?;
 
     Ok(())
 }
@@ -76,6 +101,8 @@ pub fn complete(
             runs::final_verdict.eq(verdict),
             runs::error.eq(error),
             runs::completed_at.eq(&now),
+            runs::current_stage.eq(None::<&str>),
+            runs::current_stage_started_at.eq(None::<&str>),
         ))
         .execute(&mut conn)
         .map_err(|e| format!("Failed to complete run: {e}"))?;

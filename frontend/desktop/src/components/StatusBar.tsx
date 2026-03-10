@@ -18,6 +18,8 @@ function statusBadgeClasses(status: PipelineStatus): string {
   switch (status) {
     case "running":
       return "bg-[#6366f1] text-white";
+    case "paused":
+      return "bg-[#3b82f6] text-white";
     case "completed":
       return "bg-[#22c55e] text-white";
     case "failed":

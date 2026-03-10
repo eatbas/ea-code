@@ -25,6 +25,7 @@ pub async fn run_review_fix_stages(
     request: &PipelineRequest,
     settings: &AppSettings,
     cancel_flag: &Arc<AtomicBool>,
+    pause_flag: &Arc<AtomicBool>,
     answer_sender: &Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
     db: &DbPool,
     run_id: &str,
@@ -50,10 +51,13 @@ pub async fn run_review_fix_stages(
             .to_string()
     })?;
 
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     run.current_stage = Some(PipelineStage::DiffAfterGenerate);
     stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterGenerate, &request.workspace_path, db).await);
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     run.current_stage = Some(PipelineStage::Review);
     let rev_r = execute_agent_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::Review, reviewer_agent,
@@ -80,8 +84,10 @@ pub async fn run_review_fix_stages(
         return Ok(());
     }
     stages.push(rev_r);
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     run.current_stage = Some(PipelineStage::Fix);
     let fix_r = execute_agent_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::Fix, fixer_agent,
@@ -114,6 +120,7 @@ pub async fn run_review_fix_stages(
         return Ok(());
     }
     stages.push(fix_r);
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     if let Some(question) = extract_question(&fix_out) {
@@ -129,8 +136,10 @@ pub async fn run_review_fix_stages(
         }
     }
 
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     run.current_stage = Some(PipelineStage::DiffAfterFix);
     stages.push(execute_diff_stage(app, run_id, iter_num, iteration_db_id, PipelineStage::DiffAfterFix, &request.workspace_path, db).await);
+    if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
 
     Ok(())

@@ -13,10 +13,29 @@ export function projectDisplayName(project: ProjectSummary): string {
   return project.name.trim().length > 0 ? project.name : folderName(project.path);
 }
 
+/**
+ * Parses a timestamp string as UTC.
+ *
+ * SQLite's CURRENT_TIMESTAMP produces bare strings like "2026-03-10 07:51:00"
+ * without timezone info. JavaScript's Date() treats these as *local* time,
+ * causing wrong durations when compared with RFC 3339 UTC strings. This helper
+ * appends a "Z" suffix when no timezone indicator is present so the value is
+ * always interpreted as UTC.
+ */
+export function parseUtcTimestamp(ts: string): Date {
+  const trimmed = ts.trim();
+  // Already has timezone info (+00:00, Z, -05:00, etc.)
+  if (/[Zz]$/.test(trimmed) || /[+-]\d{2}:\d{2}$/.test(trimmed)) {
+    return new Date(trimmed);
+  }
+  // Replace space separator with 'T' for ISO compliance and add UTC indicator
+  return new Date(trimmed.replace(" ", "T") + "Z");
+}
+
 /** Formats an ISO timestamp into a readable date/time string. */
 export function formatTimestamp(iso: string): string {
   try {
-    const d = new Date(iso);
+    const d = parseUtcTimestamp(iso);
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
       " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   } catch {

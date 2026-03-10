@@ -86,6 +86,9 @@ pub struct RunRow {
     pub executive_summary_generated_at: Option<String>,
     pub started_at: String,
     pub completed_at: Option<String>,
+    pub current_stage: Option<String>,
+    pub current_iteration: i32,
+    pub current_stage_started_at: Option<String>,
 }
 
 #[derive(Insertable)]
@@ -95,6 +98,7 @@ pub struct NewRun<'a> {
     pub session_id: &'a str,
     pub prompt: &'a str,
     pub max_iterations: i32,
+    pub started_at: &'a str,
 }
 
 /// Lightweight run summary for history lists.

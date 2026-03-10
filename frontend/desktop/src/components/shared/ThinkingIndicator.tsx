@@ -5,17 +5,30 @@ import { STAGE_LABELS } from "./constants";
 
 interface ThinkingIndicatorProps {
   stage: PipelineStage;
+  /** Absolute timestamp (Date.now()) when the stage started — survives remounts. */
+  startedAt?: number;
 }
 
 /** Animated sweep indicator shown for the currently running pipeline stage. */
-export function ThinkingIndicator({ stage }: ThinkingIndicatorProps): ReactNode {
-  const [elapsed, setElapsed] = useState(0);
+export function ThinkingIndicator({ stage, startedAt }: ThinkingIndicatorProps): ReactNode {
+  const [fallbackElapsed, setFallbackElapsed] = useState(0);
+  const [, tick] = useState(0);
 
   useEffect(() => {
-    setElapsed(0);
-    const interval = setInterval(() => setElapsed((prev) => prev + 1), 1000);
+    if (startedAt) {
+      // Force re-render every second so the computed elapsed updates
+      const interval = setInterval(() => tick((n) => n + 1), 1000);
+      return () => clearInterval(interval);
+    }
+    // Fallback: local counter (used when startedAt is unavailable)
+    setFallbackElapsed(0);
+    const interval = setInterval(() => setFallbackElapsed((prev) => prev + 1), 1000);
     return () => clearInterval(interval);
-  }, [stage]);
+  }, [stage, startedAt]);
+
+  const elapsed = startedAt
+    ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+    : fallbackElapsed;
 
   const mins = Math.floor(elapsed / 60);
   const secs = elapsed % 60;
