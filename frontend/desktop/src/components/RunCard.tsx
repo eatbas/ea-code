@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import type { RunDetail, PipelineStage, StageResult, StageStatus } from "../types";
-import { parseUtcTimestamp } from "../utils/formatters";
-import { PromptCard } from "./shared/PromptCard";
+import type { AppSettings, RunDetail, PipelineStage, StageResult, StageStatus } from "../types";
+import { extractPlanOnly, parseUtcTimestamp } from "../utils/formatters";
+import { stageModelLabel } from "../utils/stageModelLabels";
 import { PromptReceivedCard } from "./shared/PromptReceivedCard";
 import { StageInputOutputCard } from "./shared/StageInputOutputCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
@@ -10,6 +10,7 @@ import { ResultCard, buildStageRows, computeDuration } from "./shared/ResultCard
 
 interface RunCardProps {
   run: RunDetail;
+  settings: AppSettings | null;
 }
 
 function toStageResult(stage: string, status: string, output: string, durationMs: number, error?: string): StageResult {
@@ -23,7 +24,7 @@ function toStageResult(stage: string, status: string, output: string, durationMs
 }
 
 /** Displays a single historical run with full step-by-step timeline. */
-export function RunCard({ run }: RunCardProps): ReactNode {
+export function RunCard({ run, settings }: RunCardProps): ReactNode {
   const allStages = run.iterations.flatMap((iter) => iter.stages);
   const isTerminalStatus = run.status === "completed" || run.status === "failed" || run.status === "cancelled";
   const isActiveStatus = run.status === "running" || run.status === "waiting_for_input";
@@ -46,23 +47,38 @@ export function RunCard({ run }: RunCardProps): ReactNode {
         <div key={iter.number} className="flex flex-col gap-2">
           {iter.stages.map((entry) => {
             const stageResult = toStageResult(entry.stage, entry.status, entry.output, entry.durationMs, entry.error);
-            const enhancedPrompt = iter.enhancedPrompt ?? run.prompt;
-            const plannerPlan = iter.plannerPlan ?? entry.output;
-            const auditedPlan = iter.auditedPlan ?? entry.output;
-            const showPlanningCard = entry.stage === "plan" && entry.status === "completed" && plannerPlan.trim().length > 0;
-            const showAuditCard = entry.stage === "plan_audit" && entry.status === "completed" && auditedPlan.trim().length > 0;
+            const plannerPlan = extractPlanOnly(iter.plannerPlan ?? entry.output);
+            const auditedPlan = extractPlanOnly(iter.auditedPlan ?? entry.output);
+            const plannerInputForAudit = extractPlanOnly(iter.plannerPlan ?? "");
+            const promptEnhanceOutput = (iter.enhancedPrompt ?? entry.output).trim();
+            const showPromptEnhanceCard = entry.stage === "prompt_enhance" && entry.status === "completed";
+            const showPlanningCard = entry.stage === "plan" && entry.status === "completed";
+            const showAuditCard = entry.stage === "plan_audit" && entry.status === "completed";
 
             return (
               <div key={entry.id} className="flex flex-col gap-2">
-                {showPlanningCard ? (
+                {showPromptEnhanceCard ? (
+                  <StageInputOutputCard
+                    title="Enhancing Prompt"
+                    inputSections={[
+                      { label: "Original Prompt", content: run.prompt },
+                    ]}
+                    outputLabel="Result"
+                    outputContent={promptEnhanceOutput || "No valid enhanced prompt output generated."}
+                    modelLabel={stageModelLabel("prompt_enhance", settings)}
+                    durationMs={entry.durationMs}
+                    badgeClassName="bg-emerald-400/25"
+                    outputClassName="border border-emerald-400/20 bg-emerald-400/5 text-[#e4e4ed]"
+                  />
+                ) : showPlanningCard ? (
                   <StageInputOutputCard
                     title="Planning"
                     inputSections={[
                       { label: "Original Prompt", content: run.prompt },
-                      { label: "Enhanced Prompt", content: enhancedPrompt },
                     ]}
                     outputLabel="Plan"
-                    outputContent={plannerPlan}
+                    outputContent={plannerPlan || "No valid plan output generated."}
+                    modelLabel={stageModelLabel("plan", settings)}
                     durationMs={entry.durationMs}
                     badgeClassName="bg-sky-400/25"
                   />
@@ -71,21 +87,17 @@ export function RunCard({ run }: RunCardProps): ReactNode {
                     title="Auditing Plan"
                     inputSections={[
                       { label: "Original Prompt", content: run.prompt },
-                      { label: "Enhanced Prompt", content: enhancedPrompt },
-                      { label: "Plan", content: iter.plannerPlan ?? "" },
+                      { label: "Plan", content: plannerInputForAudit },
                     ]}
                     outputLabel="Audited Plan"
-                    outputContent={auditedPlan}
+                    outputContent={auditedPlan || "No valid audited plan output generated."}
+                    modelLabel={stageModelLabel("plan_audit", settings)}
                     durationMs={entry.durationMs}
                     badgeClassName="bg-amber-400/25"
                     outputClassName="border border-amber-400/20 bg-amber-400/5 text-[#e4e4ed]"
                   />
                 ) : (
                   <StageCard stage={stageResult} />
-                )}
-
-                {entry.stage === "prompt_enhance" && entry.status === "completed" && iter.enhancedPrompt && (
-                  <PromptCard originalPrompt={run.prompt} enhancedPrompt={iter.enhancedPrompt} durationMs={entry.durationMs} />
                 )}
               </div>
             );

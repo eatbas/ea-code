@@ -4,11 +4,12 @@ import { invoke } from "@tauri-apps/api/core";
 import type { PipelineRun, RunOptions, CliHealth, AppSettings } from "../types";
 import { useToast } from "./shared/Toast";
 import { isActive, isTerminal, statusInfo } from "../utils/statusHelpers";
+import { extractPlanOnly } from "../utils/formatters";
+import { stageModelLabel } from "../utils/stageModelLabels";
 import { StageCard } from "./shared/StageCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
 import { ResultCard, buildStageRows, computeDuration } from "./shared/ResultCard";
 import { ArtifactCard } from "./shared/ArtifactCard";
-import { PromptCard } from "./shared/PromptCard";
 import { PromptReceivedCard } from "./shared/PromptReceivedCard";
 import { StageInputOutputCard } from "./shared/StageInputOutputCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
@@ -64,6 +65,8 @@ export function ChatView({
   const enhancedPrompt = artifacts["enhanced_prompt"];
   const planArtifact = artifacts["plan"];
   const planAuditArtifact = artifacts["plan_final"] ?? artifacts["plan_audit"];
+  const cleanedPlanArtifact = extractPlanOnly(planArtifact ?? "");
+  const cleanedPlanAuditArtifact = extractPlanOnly(planAuditArtifact ?? "");
   const latestCompletedPlanIndex = allStages.reduce(
     (latest, stage, idx) => (stage.stage === "plan" && stage.status === "completed" ? idx : latest),
     -1,
@@ -110,49 +113,47 @@ export function ChatView({
 
           {allStages.map((stage, idx) => (
             <div key={`${stage.stage}-${idx}`} className="flex flex-col gap-2">
-              {stage.stage === "plan" && stage.status === "completed" && idx === latestCompletedPlanIndex && (planArtifact || stage.output) ? (
+              {stage.stage === "prompt_enhance" && stage.status === "completed" ? (
+                <StageInputOutputCard
+                  title="Enhancing Prompt"
+                  inputSections={[
+                    { label: "Original Prompt", content: run.prompt },
+                  ]}
+                  outputLabel="Result"
+                  outputContent={(enhancedPrompt ?? stage.output).trim() || "No valid enhanced prompt output generated."}
+                  modelLabel={stageModelLabel("prompt_enhance", settings)}
+                  durationMs={stage.durationMs}
+                  badgeClassName="bg-emerald-400/25"
+                  outputClassName="border border-emerald-400/20 bg-emerald-400/5 text-[#e4e4ed]"
+                />
+              ) : stage.stage === "plan" && stage.status === "completed" && idx === latestCompletedPlanIndex ? (
                 <StageInputOutputCard
                   title="Planning"
                   inputSections={[
                     { label: "Original Prompt", content: run.prompt },
-                    { label: "Enhanced Prompt", content: enhancedPrompt ?? run.prompt },
                   ]}
                   outputLabel="Plan"
-                  outputContent={planArtifact ?? stage.output}
+                  outputContent={cleanedPlanArtifact || extractPlanOnly(stage.output) || "No valid plan output generated."}
+                  modelLabel={stageModelLabel("plan", settings)}
                   durationMs={stage.durationMs}
                   badgeClassName="bg-sky-400/25"
                 />
-              ) : stage.stage === "plan_audit" && stage.status === "completed" && idx === latestCompletedPlanAuditIndex && (planAuditArtifact || stage.output) ? (
+              ) : stage.stage === "plan_audit" && stage.status === "completed" && idx === latestCompletedPlanAuditIndex ? (
                 <StageInputOutputCard
                   title="Auditing Plan"
                   inputSections={[
                     { label: "Original Prompt", content: run.prompt },
-                    { label: "Enhanced Prompt", content: enhancedPrompt ?? run.prompt },
-                    { label: "Plan", content: planArtifact ?? "" },
+                    { label: "Plan", content: cleanedPlanArtifact },
                   ]}
                   outputLabel="Audited Plan"
-                  outputContent={planAuditArtifact ?? stage.output}
+                  outputContent={cleanedPlanAuditArtifact || extractPlanOnly(stage.output) || "No valid audited plan output generated."}
+                  modelLabel={stageModelLabel("plan_audit", settings)}
                   durationMs={stage.durationMs}
                   badgeClassName="bg-amber-400/25"
                   outputClassName="border border-amber-400/20 bg-amber-400/5 text-[#e4e4ed]"
                 />
               ) : (
                 <StageCard stage={stage} logs={stageLogs[stage.stage]} />
-              )}
-
-              {stage.stage === "prompt_enhance" && stage.status === "completed" && !enhancedPrompt && (
-                <div className="rounded-lg border border-[#2e2e48] bg-[#14141e] px-3 py-2">
-                  <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
-                    Original Prompt
-                  </span>
-                  <div className="rounded bg-[#0f0f14] px-3 py-2 text-xs text-[#c8c8d8] whitespace-pre-wrap leading-relaxed">
-                    {run.prompt}
-                  </div>
-                </div>
-              )}
-
-              {stage.stage === "prompt_enhance" && stage.status === "completed" && enhancedPrompt && (
-                <PromptCard originalPrompt={run.prompt} enhancedPrompt={enhancedPrompt} durationMs={stage.durationMs} />
               )}
             </div>
           ))}

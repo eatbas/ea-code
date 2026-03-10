@@ -79,6 +79,51 @@ export function truncateWords(text: string, maxWords: number): string {
   return `${words.slice(0, maxWords).join(" ")}...`;
 }
 
+/** Extracts plan-only text from noisy planner/auditor output. */
+export function extractPlanOnly(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+
+  let cleaned = trimmed.replace(/\r\n/g, "\n");
+  const lower = cleaned.toLowerCase();
+
+  if (lower.includes("llm not set")) return "";
+
+  const improvedMarkers = ["--- Improved Plan ---", "--- Rewritten Plan ---"];
+  for (const marker of improvedMarkers) {
+    const idx = cleaned.indexOf(marker);
+    if (idx >= 0) {
+      const afterMarker = cleaned.slice(idx + marker.length).trim();
+      return afterMarker;
+    }
+  }
+
+  if (cleaned.startsWith("APPROVED\n") || cleaned.startsWith("REJECTED\n")) {
+    cleaned = cleaned.split("\n").slice(1).join("\n").trim();
+  }
+
+  const contextIdx = cleaned.indexOf("\n--- Context ---");
+  if (contextIdx >= 0) {
+    cleaned = cleaned.slice(0, contextIdx).trim();
+  }
+
+  const workspaceIdx = cleaned.indexOf("\n--- Workspace Context ---");
+  if (workspaceIdx >= 0) {
+    cleaned = cleaned.slice(0, workspaceIdx).trim();
+  }
+
+  const cleanedUpper = cleaned.toUpperCase();
+  if (cleanedUpper.startsWith("USER PROMPT (ORIGINAL):") || cleanedUpper.startsWith("ENHANCED EXECUTION PROMPT:")) {
+    return "";
+  }
+
+  if (cleaned.includes("Planner agent in a multi-agent coding pipeline") || cleaned.includes("Plan Auditor agent in a multi-agent coding pipeline")) {
+    return "";
+  }
+
+  return cleaned.trim();
+}
+
 /** Safely attempts to parse a string as a JSON object. Returns null on failure. */
 export function tryParseJson(text: string): Record<string, unknown> | null {
   try {

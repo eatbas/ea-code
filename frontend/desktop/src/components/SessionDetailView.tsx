@@ -102,7 +102,7 @@ export function SessionDetailView({
           )}
 
           {sessionDetail.runs.map((run) => (
-            <RunCard key={run.id} run={run} />
+            <RunCard key={run.id} run={run} settings={settings} />
           ))}
         </div>
       </div>

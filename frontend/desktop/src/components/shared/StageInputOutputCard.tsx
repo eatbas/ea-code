@@ -12,6 +12,7 @@ interface StageInputOutputCardProps {
   inputSections: InputSection[];
   outputLabel: string;
   outputContent: string;
+  modelLabel?: string;
   durationMs?: number;
   inputPreviewWords?: number;
   badgeClassName?: string;
@@ -26,6 +27,7 @@ export function StageInputOutputCard({
   inputSections,
   outputLabel,
   outputContent,
+  modelLabel,
   durationMs,
   inputPreviewWords = 20,
   badgeClassName = "bg-sky-400/25",
@@ -61,6 +63,11 @@ export function StageInputOutputCard({
         <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed] ${badgeClassName}`}>
           {title}
         </span>
+        {modelLabel && (
+          <span className="rounded bg-[#2e2e48] px-1.5 py-0.5 text-[9px] font-medium text-[#c8c8d8]">
+            {modelLabel}
+          </span>
+        )}
 
         <div className="ml-auto flex items-center gap-2 text-[10px]">
           {durationMs != null && durationMs > 0 && (
