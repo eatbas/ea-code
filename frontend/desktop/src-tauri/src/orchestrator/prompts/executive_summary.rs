@@ -1,5 +1,6 @@
 //! Prompt builder for the Executive Summary stage.
 
+#[allow(dead_code)]
 pub fn build_executive_summary_system() -> String {
     "# Role\n\
      You are a summariser agent. Your job is to generate an executive summary \

@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::db::DbPool;
 
 /// Builds a temporary MCP config file for a CLI from active DB-backed servers.
+#[allow(dead_code)]
 pub fn build_mcp_config_for_cli(
     db: &DbPool,
     cli_name: &str,

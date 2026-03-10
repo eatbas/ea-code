@@ -7,12 +7,11 @@ import { STAGE_LABELS, STAGE_COLOURS } from "./constants";
 interface StageCardProps {
   stage: StageResult;
   modelLabel?: string;
-  logs?: string[];
   startedAt?: number;
 }
 
 /** Timeline card for a single pipeline stage. Entire card is clickable to toggle content. */
-export function StageCard({ stage, modelLabel, logs, startedAt }: StageCardProps): ReactNode {
+export function StageCard({ stage, modelLabel, startedAt }: StageCardProps): ReactNode {
   const [open, setOpen] = useState(false);
   const [, tick] = useState(0);
 
@@ -29,11 +28,7 @@ export function StageCard({ stage, modelLabel, logs, startedAt }: StageCardProps
     return () => window.clearInterval(interval);
   }, [isRunning, startedAt]);
 
-  const logLines = logs ?? [];
-  const hasLogs = logLines.length > 0;
-  const hasOutput = stage.output.length > 0;
-  const hasContent = hasLogs || hasOutput;
-  const logContent = normaliseDisplayText(logLines.join("\n"));
+  const hasContent = stage.output.length > 0;
   const outputContent = normaliseDisplayText(stage.output);
   const effectiveDurationMs = isRunning && startedAt != null
     ? Math.max(stage.durationMs, Date.now() - startedAt)
@@ -88,27 +83,10 @@ export function StageCard({ stage, modelLabel, logs, startedAt }: StageCardProps
 
       {/* Expandable content */}
       {open && hasContent && (
-        <div className="flex flex-col gap-2 px-3 pb-3">
-          {hasLogs && (
-            <div>
-              <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
-                Terminal Output
-              </span>
-              <pre className="overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
-                {logContent}
-              </pre>
-            </div>
-          )}
-          {hasOutput && (
-            <div>
-              <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
-                Stage Output
-              </span>
-              <pre className="overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
-                {outputContent}
-              </pre>
-            </div>
-          )}
+        <div className="px-3 pb-3">
+          <pre className="overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
+            {outputContent}
+          </pre>
         </div>
       )}
     </article>

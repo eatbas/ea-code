@@ -69,6 +69,7 @@ pub fn build_reviewer_user(
     original_prompt: &str,
     enhanced_prompt: &str,
     plan: Option<&str>,
+    judge_feedback: Option<&str>,
 ) -> String {
     let mut parts = vec![
         format!("--- Original Prompt ---\n{original_prompt}"),
@@ -76,6 +77,11 @@ pub fn build_reviewer_user(
     ];
     if let Some(p) = plan {
         parts.push(format!("--- Approved Plan ---\n{p}"));
+    }
+    if let Some(feedback) = judge_feedback {
+        parts.push(format!(
+            "--- Judge Feedback From Previous Iteration ---\n{feedback}"
+        ));
     }
     parts.push(
         "Inspect the repository state yourself using tools \

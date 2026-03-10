@@ -262,6 +262,7 @@ pub fn push_cancel_iteration(run: &mut PipelineRun, iter_num: u32, stages: Vec<S
     run.status = PipelineStatus::Cancelled;
 }
 
+#[allow(dead_code)]
 pub fn backend_to_db_str(backend: &AgentBackend) -> &'static str {
     match backend {
         AgentBackend::Claude => "claude",

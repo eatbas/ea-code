@@ -159,6 +159,7 @@ fn build_test_files_section(workspace_path: &str) -> Option<String> {
     Some(format!("DISCOVERED TEST FILES\n{}", hits.join("\n")))
 }
 
+#[allow(dead_code)]
 fn build_readme_section(workspace_path: &str) -> Option<String> {
     let candidates = [PathBuf::from("README.md"), PathBuf::from("readme.md")];
     for candidate in candidates {

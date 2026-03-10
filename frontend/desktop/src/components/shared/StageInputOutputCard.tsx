@@ -12,7 +12,6 @@ interface StageInputOutputCardProps {
   inputSections: InputSection[];
   outputLabel: string;
   outputContent: string;
-  terminalLogs?: string[];
   modelLabel?: string;
   durationMs?: number;
   inputPreviewWords?: number;
@@ -20,7 +19,7 @@ interface StageInputOutputCardProps {
   outputClassName?: string;
 }
 
-type StageTab = "input" | "output" | "terminal";
+type StageTab = "input" | "output";
 
 /** Collapsible stage card with Input/Output tabs for planning and auditing stages. */
 export function StageInputOutputCard({
@@ -28,7 +27,6 @@ export function StageInputOutputCard({
   inputSections,
   outputLabel,
   outputContent,
-  terminalLogs,
   modelLabel,
   durationMs,
   inputPreviewWords = 20,
@@ -37,7 +35,6 @@ export function StageInputOutputCard({
 }: StageInputOutputCardProps): ReactNode {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<StageTab>("output");
-  const hasTerminalLogs = (terminalLogs?.length ?? 0) > 0;
 
   const truncatedInputs = useMemo(
     () => inputSections
@@ -107,19 +104,6 @@ export function StageInputOutputCard({
             >
               Output
             </button>
-            {hasTerminalLogs && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setTab("terminal"); }}
-                className={`rounded px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider transition-colors ${
-                  tab === "terminal"
-                    ? "bg-[#f59e0b]/20 text-[#fbbf24]"
-                    : "text-[#9898b0] hover:text-[#c8c8d8] hover:bg-[#9898b0]/10"
-                }`}
-              >
-                Terminal
-              </button>
-            )}
           </div>
 
           {tab === "input" && (
@@ -144,17 +128,6 @@ export function StageInputOutputCard({
               </span>
               <pre className={`rounded px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed break-words ${outputClassName}`}>
                 {normaliseDisplayText(outputContent)}
-              </pre>
-            </div>
-          )}
-
-          {tab === "terminal" && hasTerminalLogs && (
-            <div>
-              <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
-                Terminal Output
-              </span>
-              <pre className="overflow-x-auto rounded bg-[#0f0f14] px-3 py-2 text-xs text-[#e4e4ed] whitespace-pre-wrap leading-relaxed break-words">
-                {normaliseDisplayText(terminalLogs?.join("\n") ?? "")}
               </pre>
             </div>
           )}

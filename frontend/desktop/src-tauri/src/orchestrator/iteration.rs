@@ -59,13 +59,6 @@ pub async fn run_iteration(
     let handoff_json = last_handoff
         .as_ref()
         .and_then(|h| serde_json::to_string_pretty(h).ok());
-    let prompt_enhancer_agent = settings
-        .prompt_enhancer_agent
-        .as_ref()
-        .ok_or_else(|| {
-            "Prompt Enhancer is not set. Go to Settings/Agents and configure the minimum roles."
-                .to_string()
-        })?;
     let generator_agent = settings.coder_agent.as_ref().ok_or_else(|| {
         "Coder is not set. Go to Settings/Agents and configure the minimum roles.".to_string()
     })?;
@@ -73,30 +66,51 @@ pub async fn run_iteration(
     if wait_if_paused(pause_flag, cancel_flag).await { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
 
     // --- 1. Prompt enhance ---
-    run.current_stage = Some(PipelineStage::PromptEnhance);
-    let pe_result = execute_agent_stage(
-        app, run_id, iter_num, iteration_db_id, PipelineStage::PromptEnhance,
-        prompt_enhancer_agent,
-        &AgentInput {
-            prompt: prompts::build_prompt_enhancer_user(&request.prompt),
-            // Keep prompt enhancement rewrite-only; avoid workspace execution context here.
-            context: Some(prompts::build_prompt_enhancer_system(&meta)),
-            workspace_path: request.workspace_path.clone(),
-        },
-        settings, Some(session_id), db,
-    ).await;
-    let enhanced = normalise_enhanced_prompt(&pe_result.output, &request.prompt);
+    let enhanced = if iter_num == 1 {
+        let prompt_enhancer_agent = settings
+            .prompt_enhancer_agent
+            .as_ref()
+            .ok_or_else(|| {
+                "Prompt Enhancer is not set. Go to Settings/Agents and configure the minimum roles."
+                    .to_string()
+            })?;
+        run.current_stage = Some(PipelineStage::PromptEnhance);
+        let pe_result = execute_agent_stage(
+            app, run_id, iter_num, iteration_db_id, PipelineStage::PromptEnhance,
+            prompt_enhancer_agent,
+            &AgentInput {
+                prompt: prompts::build_prompt_enhancer_user(&request.prompt),
+                // Keep prompt enhancement rewrite-only; avoid workspace execution context here.
+                context: Some(prompts::build_prompt_enhancer_system(&meta)),
+                workspace_path: request.workspace_path.clone(),
+            },
+            settings, Some(session_id), db,
+        ).await;
+        let enhanced = normalise_enhanced_prompt(&pe_result.output, &request.prompt);
+        if pe_result.status == StageStatus::Failed {
+            stages.push(pe_result);
+            run.iterations.push(Iteration { number: iter_num, stages, verdict: None, judge_reasoning: None });
+            run.status = PipelineStatus::Failed;
+            run.error = Some("Prompt Enhancer stage failed".to_string());
+            return Ok(true);
+        }
+        stages.push(pe_result);
+        enhanced
+    } else {
+        stages.push(execute_skipped_stage(
+            app,
+            run_id,
+            iter_num,
+            iteration_db_id,
+            PipelineStage::PromptEnhance,
+            "Prompt enhancement skipped for iteration > 1; using original prompt.",
+            db,
+        ));
+        request.prompt.clone()
+    };
     iter_ctx.enhanced_prompt = enhanced.clone();
     persist_iteration_context(db, run_id, iter_num, &iter_ctx);
     emit_artifact(app, run_id, "enhanced_prompt", &enhanced, iter_num, db);
-    if pe_result.status == StageStatus::Failed {
-        stages.push(pe_result);
-        run.iterations.push(Iteration { number: iter_num, stages, verdict: None, judge_reasoning: None });
-        run.status = PipelineStatus::Failed;
-        run.error = Some("Prompt Enhancer stage failed".to_string());
-        return Ok(true);
-    }
-    stages.push(pe_result);
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
 
     // --- 2-3. Plan + Plan Audit ---

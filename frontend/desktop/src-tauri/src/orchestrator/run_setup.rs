@@ -122,6 +122,7 @@ pub fn compose_agent_context(system_prompt: String, workspace_context: &str) -> 
     format!("{system_prompt}\n\n--- Workspace Context ---\n{trimmed}")
 }
 
+#[allow(dead_code)]
 pub fn build_executive_summary_context(run: &PipelineRun) -> String {
     let mut lines = vec![
         format!("Run ID: {}", run.id),
@@ -152,6 +153,7 @@ pub fn build_executive_summary_context(run: &PipelineRun) -> String {
 }
 
 /// Runs the executive summary stage and persists results.
+#[allow(dead_code)]
 pub async fn run_executive_summary(
     app: &AppHandle,
     run_id: &str,

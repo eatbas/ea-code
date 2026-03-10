@@ -62,7 +62,12 @@ pub async fn run_review_fix_stages(
     let rev_r = execute_agent_stage(
         app, run_id, iter_num, iteration_db_id, PipelineStage::CodeReviewer, reviewer_agent,
         &AgentInput {
-            prompt: prompts::build_reviewer_user(&request.prompt, enhanced, iter_ctx.selected_plan()),
+            prompt: prompts::build_reviewer_user(
+                &request.prompt,
+                enhanced,
+                iter_ctx.selected_plan(),
+                judge_feedback,
+            ),
             context: Some(compose_agent_context(
                 prompts::build_reviewer_system(meta),
                 workspace_context,

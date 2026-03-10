@@ -39,6 +39,7 @@ pub fn build_plan_auditor_user(
     plan_draft: &str,
     previous_plan: Option<&str>,
     user_feedback: Option<&str>,
+    judge_feedback: Option<&str>,
 ) -> String {
     let mut parts = vec![
         format!("--- Original Prompt ---\n{original_prompt}"),
@@ -50,6 +51,11 @@ pub fn build_plan_auditor_user(
     }
     if let Some(fb) = user_feedback {
         parts.push(format!("--- Latest User Feedback ---\n{fb}"));
+    }
+    if let Some(feedback) = judge_feedback {
+        parts.push(format!(
+            "--- Judge Feedback From Previous Iteration ---\n{feedback}"
+        ));
     }
     parts.join("\n\n")
 }

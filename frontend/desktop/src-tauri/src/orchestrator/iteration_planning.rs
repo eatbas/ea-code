@@ -85,7 +85,14 @@ pub async fn run_planning_stages(
         app, run_id, iter_num, iteration_db_id, PipelineStage::PlanAudit,
         settings.plan_auditor_agent.as_ref().unwrap_or(&crate::models::AgentBackend::Claude),
         &AgentInput {
-            prompt: prompts::build_plan_auditor_user(&request.prompt, enhanced, &plan_out, None, None),
+            prompt: prompts::build_plan_auditor_user(
+                &request.prompt,
+                enhanced,
+                &plan_out,
+                None,
+                None,
+                judge_feedback,
+            ),
             context: Some(compose_agent_context(
                 prompts::build_plan_auditor_system(meta),
                 workspace_context,

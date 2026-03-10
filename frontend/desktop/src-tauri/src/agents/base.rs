@@ -299,13 +299,8 @@ pub async fn run_cli_agent(
         .await
         .map_err(|e| format!("stderr reader task failed: {e}"))?;
 
-    let mut all_output = stdout_lines.join("\n");
-    if !stderr_lines.is_empty() {
-        if !all_output.is_empty() {
-            all_output.push('\n');
-        }
-        all_output.push_str(&stderr_lines.join("\n"));
-    }
+    let stdout_output = stdout_lines.join("\n");
+    let stderr_output = stderr_lines.join("\n");
 
     // Wait for process to exit before returning output.
     let status = child
@@ -320,7 +315,11 @@ pub async fn run_cli_agent(
     }
 
     if !status.success() {
-        let output = all_output.trim();
+        let output = if stdout_output.trim().is_empty() {
+            stderr_output.trim()
+        } else {
+            stdout_output.trim()
+        };
         let details = if output.is_empty() {
             "No output captured".to_string()
         } else {
@@ -336,6 +335,7 @@ pub async fn run_cli_agent(
     }
 
     Ok(AgentOutput {
-        raw_text: all_output,
+        // Keep stage output clean: terminal stderr remains in live logs only.
+        raw_text: stdout_output,
     })
 }

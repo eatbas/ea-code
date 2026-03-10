@@ -108,6 +108,7 @@ pub async fn execute_agent_stage(
 }
 
 /// Runs an agent stage that is not tied to an iteration row.
+#[allow(dead_code)]
 pub async fn execute_run_level_agent_stage(
     app: &AppHandle,
     run_id: &str,
