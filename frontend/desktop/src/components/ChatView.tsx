@@ -50,13 +50,14 @@ export function ChatView({
   }, [run.status]);
   const { label: statusLabel, colour: statusColour } = statusInfo(run.status);
   const allStages = run.iterations.flatMap((iter) => iter.stages);
+  const visibleStages = allStages.filter((stage) => stage.stage !== "diff_after_coder" && stage.stage !== "diff_after_code_fixer");
   const enhancedPrompt = artifacts["enhanced_prompt"];
   const enhancedPromptInput = (enhancedPrompt ?? run.prompt).trim();
   const planArtifact = artifacts["plan"];
   const planAuditArtifact = artifacts["plan_final"] ?? artifacts["plan_audit"];
   const planInputForAudit = resolvePlanText(planArtifact);
-  const latestCompletedPlanIndex = allStages.reduce((latest, stage, idx) => (stage.stage === "plan" && stage.status === "completed" ? idx : latest), -1);
-  const latestCompletedPlanAuditIndex = allStages.reduce((latest, stage, idx) => (stage.stage === "plan_audit" && stage.status === "completed" ? idx : latest), -1);
+  const latestCompletedPlanIndex = visibleStages.reduce((latest, stage, idx) => (stage.stage === "plan" && stage.status === "completed" ? idx : latest), -1);
+  const latestCompletedPlanAuditIndex = visibleStages.reduce((latest, stage, idx) => (stage.stage === "plan_audit" && stage.status === "completed" ? idx : latest), -1);
   const otherArtifacts = Object.entries(artifacts).filter(([kind]) => !EXCLUDED_ARTIFACT_KINDS.has(kind) && kind !== "diff" && !kind.startsWith("diff_"));
   const headerTitle = run.prompt.length > 60 ? `${run.prompt.slice(0, 60)}...` : run.prompt;
   const isPaused = run.status === "paused";
@@ -101,9 +102,9 @@ export function ChatView({
             </div>
           </div>
           <PromptReceivedCard prompt={run.prompt} />
-          {allStages.map((stage, idx) => (
+          {visibleStages.map((stage, idx) => (
             <div key={`${stage.stage}-${idx}`} className="flex flex-col gap-2">
-              {stage.stage === "diff_after_coder" || stage.stage === "diff_after_code_fixer" ? null : stage.stage === "prompt_enhance" && stage.status === "completed" ? (
+              {stage.stage === "prompt_enhance" && stage.status === "completed" ? (
                 <StageInputOutputCard
                   title="Enhancing Prompt"
                   inputSections={[{ label: "Original Prompt", content: run.prompt }]}
@@ -153,8 +154,8 @@ export function ChatView({
                     { label: "Original Prompt", content: run.prompt },
                     { label: "Enhanced Prompt", content: enhancedPromptInput },
                     { label: "Plan", content: resolveAuditedPlanText(planAuditArtifact, planArtifact) },
-                    { label: "Review Findings", content: [...allStages.slice(0, idx)].reverse().find((entry) => entry.stage === "code_reviewer")?.output ?? artifacts["review"] ?? "" },
-                    { label: "Fixer Output", content: [...allStages.slice(0, idx)].reverse().find((entry) => entry.stage === "code_fixer")?.output ?? "" },
+                    { label: "Review Findings", content: [...visibleStages.slice(0, idx)].reverse().find((entry) => entry.stage === "code_reviewer")?.output ?? artifacts["review"] ?? "" },
+                    { label: "Fixer Output", content: [...visibleStages.slice(0, idx)].reverse().find((entry) => entry.stage === "code_fixer")?.output ?? "" },
                   ]}
                   outputLabel="Decision"
                   outputContent={artifacts["judge"] ?? stage.output ?? "No judge output generated."}
