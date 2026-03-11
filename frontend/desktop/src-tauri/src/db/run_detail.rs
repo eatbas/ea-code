@@ -33,6 +33,46 @@ pub fn list_for_session(pool: &DbPool, session_id: &str) -> Result<Vec<RunSummar
         .collect())
 }
 
+/// Returns recent run summaries for a session, newest first then re-ordered
+/// to oldest-first for chronological prompt context.
+pub fn list_recent_for_session(
+    pool: &DbPool,
+    session_id: &str,
+    limit: i64,
+    exclude_run_id: Option<&str>,
+) -> Result<Vec<RunSummary>, String> {
+    let mut conn = super::get_conn(pool)?;
+
+    let mut query = runs::table
+        .filter(runs::session_id.eq(session_id))
+        .into_boxed();
+    if let Some(run_id) = exclude_run_id {
+        query = query.filter(runs::id.ne(run_id));
+    }
+
+    let rows: Vec<RunRow> = query
+        .order(runs::started_at.desc())
+        .limit(limit)
+        .load(&mut conn)
+        .map_err(|e| format!("Failed to list recent runs: {e}"))?;
+
+    let mut summaries = rows
+        .into_iter()
+        .map(|r| RunSummary {
+            id: r.id,
+            prompt: r.prompt,
+            status: r.status,
+            final_verdict: r.final_verdict,
+            executive_summary: r.executive_summary,
+            started_at: r.started_at,
+            completed_at: r.completed_at,
+        })
+        .collect::<Vec<_>>();
+
+    summaries.reverse();
+    Ok(summaries)
+}
+
 /// Returns full run detail including nested iterations, stages, and questions.
 pub fn get_full(pool: &DbPool, run_id: &str) -> Result<RunDetail, String> {
     let mut conn = super::get_conn(pool)?;

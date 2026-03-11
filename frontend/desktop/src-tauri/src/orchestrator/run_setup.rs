@@ -113,13 +113,13 @@ pub fn normalise_enhanced_prompt(enhanced_output: &str, fallback_prompt: &str) -
     }
 }
 
-/// Appends workspace snapshot context to a stage system prompt.
-pub fn compose_agent_context(system_prompt: String, workspace_context: &str) -> String {
-    let trimmed = workspace_context.trim();
+/// Appends shared run context to a stage system prompt.
+pub fn compose_agent_context(system_prompt: String, shared_context: &str) -> String {
+    let trimmed = shared_context.trim();
     if trimmed.is_empty() {
         return system_prompt;
     }
-    format!("{system_prompt}\n\n--- Workspace Context ---\n{trimmed}")
+    format!("{system_prompt}\n\n--- Context ---\n{trimmed}")
 }
 
 #[allow(dead_code)]

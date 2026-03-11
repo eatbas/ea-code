@@ -18,6 +18,7 @@ pub mod plan_gate;
 pub mod pipeline;
 pub mod prompts;
 pub mod run_setup;
+pub mod session_memory;
 pub mod skill_selection;
 pub mod skill_stage;
 pub mod stages;

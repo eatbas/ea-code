@@ -23,7 +23,6 @@ import { QuestionDialog } from "./components/QuestionDialog";
 import { UpdateInstallBanner } from "./components/shared/UpdateInstallBanner";
 import { ProjectLoadingOverlay } from "./components/shared/ProjectLoadingOverlay";
 import type { PipelineRequest, PipelineRun, RunOptions, SessionDetail } from "./types";
-
 function isRunActive(run: PipelineRun | null): boolean {
   return !!run && (run.status === "running" || run.status === "waiting_for_input" || run.status === "paused");
 }
@@ -40,15 +39,12 @@ function App(): ReactNode {
   const { projects, sessions, loadSessions, loadProjects, loadSessionDetail, deleteSession } = useHistory();
   const { skills, loading: skillsLoading, createSkill, updateSkill, deleteSkill } = useSkills();
   const { installing: installingUpdate, updateVersion } = useUpdateCheck();
-
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ActiveView>("home");
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
   const [sessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
   const [sessionDetailLoading, setSessionDetailLoading] = useState(false);
-
   useEffect(() => { loadProjects(); }, [loadProjects]);
-
   useEffect(() => {
     if (workspace) {
       loadProjects();
@@ -57,18 +53,14 @@ function App(): ReactNode {
       setSessionDetail(null);
     }
   }, [workspace, loadProjects, loadSessions]);
-
   useEffect(() => {
     if ((isRunActive(run) || isRunTerminal(run)) && workspace) {
       loadSessions(workspace.path);
     }
   }, [run?.status, workspace, loadSessions]);
-
   const hasRunningSession = sessions.some((s) => s.lastStatus === "running" || s.lastStatus === "waiting_for_input" || s.lastStatus === "paused");
-
   useEffect(() => {
     if (!hasRunningSession || !workspace) return;
-
     const interval = setInterval(async () => {
       try {
         loadSessions(workspace.path);
@@ -76,23 +68,20 @@ function App(): ReactNode {
           const detail = await loadSessionDetail(activeSessionId);
           setSessionDetail(detail);
         }
-      } catch { /* silent — will retry next interval */ }
+      } catch { /* silent - will retry next interval */ }
     }, 3000);
-
     return () => clearInterval(interval);
   }, [hasRunningSession, workspace, activeSessionId, loadSessions, loadSessionDetail]);
-
   useEffect(() => {
     if (!settings) return;
     void checkHealth(settings);
   }, [settings, checkHealth]);
-
-  async function handleRun(options: RunOptions): Promise<void> {
+  async function handleRun(options: RunOptions, sessionIdOverride?: string): Promise<void> {
     if (!workspace) return;
     const request: PipelineRequest = {
       prompt: options.prompt,
       workspacePath: workspace.path,
-      sessionId: activeSessionId,
+      sessionId: sessionIdOverride ?? activeSessionId,
       directTask: options.directTask || undefined,
       directTaskAgent: options.directTaskAgent,
       directTaskModel: options.directTaskModel,
@@ -100,11 +89,9 @@ function App(): ReactNode {
     };
     startPipeline(request);
   }
-
   function handleMissingAgentSetup(): void {
     setActiveView("agents");
   }
-
   function handleNewSession(): void {
     resetRun();
     setActiveSessionId(undefined);
@@ -112,7 +99,6 @@ function App(): ReactNode {
     setActiveView("home");
     if (workspace) loadSessions(workspace.path);
   }
-
   const handleSelectSession = useCallback(async (_sessionId: string): Promise<void> => {
     const isCurrentRun = run && (isRunActive(run) || isRunTerminal(run)) && run.sessionId === _sessionId;
     if (isCurrentRun) {
@@ -121,7 +107,6 @@ function App(): ReactNode {
       setActiveView("home");
       return;
     }
-
     setActiveSessionId(_sessionId);
     setActiveView("home");
     setSessionDetailLoading(true);
@@ -135,18 +120,15 @@ function App(): ReactNode {
       setSessionDetailLoading(false);
     }
   }, [loadSessionDetail, toast, run]);
-
   const handleSelectProject = useCallback(async (projectPath: string): Promise<void> => {
     await openWorkspace(projectPath);
     setActiveView("home");
   }, [openWorkspace]);
-
   function renderContent(): ReactNode {
     const pipelineActive = isRunActive(run);
     const pipelineTerminal = isRunTerminal(run);
     const isHomeRootView = activeView === "home" && !activeSessionId;
     const showChat = isHomeRootView && (pipelineActive || pipelineTerminal);
-
     if (run && showChat) {
       return (
         <ChatView
@@ -162,12 +144,11 @@ function App(): ReactNode {
           onNewSession={handleNewSession}
           onContinue={(options) => {
             if (run.sessionId) setActiveSessionId(run.sessionId);
-            handleRun(options);
+            handleRun(options, run.sessionId);
           }}
         />
       );
     }
-
     if (activeView === "agents" && settings) {
       return (
         <AgentsView
@@ -178,7 +159,6 @@ function App(): ReactNode {
         />
       );
     }
-
     if (activeView === "cli-setup" && settings) {
       return (
         <CliSetupView
@@ -192,7 +172,6 @@ function App(): ReactNode {
         />
       );
     }
-
     if (activeView === "skills") {
       return (
         <SkillsView
@@ -204,15 +183,12 @@ function App(): ReactNode {
         />
       );
     }
-
     if (activeView === "mcp") {
       return <McpView />;
     }
-
     if (activeView === "app-settings") {
       return <AppSettingsView />;
     }
-
     if (activeSessionId) {
       return (
         <SessionDetailView
@@ -231,7 +207,6 @@ function App(): ReactNode {
         />
       );
     }
-
     return (
       <IdleView
         workspace={workspace}
@@ -246,7 +221,6 @@ function App(): ReactNode {
       />
     );
   }
-
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-[#0f0f14]">
@@ -254,7 +228,6 @@ function App(): ReactNode {
       </div>
     );
   }
-
   return (
     <div className="relative h-full">
       <div className={`flex h-full bg-[#0f0f14] transition-[filter] duration-200 ${openingWorkspace ? "pointer-events-none blur-[2px]" : ""}`}>
@@ -283,24 +256,19 @@ function App(): ReactNode {
             }
           }}
         />
-
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {renderContent()}
         </div>
-
         {pendingQuestion && (
           <QuestionDialog
             question={pendingQuestion}
             onAnswer={answerQuestion}
           />
         )}
-
         {installingUpdate && <UpdateInstallBanner version={updateVersion} />}
       </div>
-
       {openingWorkspace && <ProjectLoadingOverlay />}
     </div>
   );
 }
-
 export default App;

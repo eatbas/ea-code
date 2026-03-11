@@ -20,6 +20,7 @@ use super::helpers::*;
 use super::iteration::run_iteration;
 use super::prompts;
 use super::run_setup::*;
+use super::session_memory::{build_session_memory_context, merge_shared_context};
 
 // Re-export for helpers.rs which references IterationContext.
 pub use super::run_setup::IterationContext;
@@ -89,6 +90,15 @@ pub async fn run_pipeline(
         },
     );
 
+    let workspace_context =
+        super::context_summary::build_workspace_context_summary(&request.workspace_path).await;
+    let session_memory = build_session_memory_context(&db, &session_id, Some(&run_id));
+    let shared_context = merge_shared_context(&workspace_context, &session_memory);
+    emit_artifact(&app, &run_id, "workspace_context", &workspace_context, 0, &db);
+    if !session_memory.trim().is_empty() {
+        emit_artifact(&app, &run_id, "session_memory", &session_memory, 0, &db);
+    }
+
     // Prime current stage immediately so session-detail polling can show
     // a live progress indicator before the first stage body starts.
     let bootstrap_stage = if request.direct_task {
@@ -116,14 +126,12 @@ pub async fn run_pipeline(
             &pause_flag,
             &db,
             &run_id,
+            &session_id,
+            &shared_context,
             &mut run,
         )
         .await?;
     } else {
-        let workspace_context =
-            super::context_summary::build_workspace_context_summary(&request.workspace_path).await;
-        emit_artifact(&app, &run_id, "workspace_context", &workspace_context, 0, &db);
-
         let mut previous_judge_output: Option<String> = None;
         let mut last_handoff: Option<prompts::IterationHandoff> = None;
 
@@ -140,7 +148,7 @@ pub async fn run_pipeline(
             let should_break = run_iteration(
                 &app, &request, &settings, &cancel_flag, &pause_flag, &answer_sender, &db,
                 &run_id, &session_id, iter_num, &mut run,
-                &mut previous_judge_output, &mut last_handoff, &workspace_context,
+                &mut previous_judge_output, &mut last_handoff, &shared_context,
             )
             .await?;
 
@@ -152,11 +160,12 @@ pub async fn run_pipeline(
         if is_cancelled(&cancel_flag) {
             run.status = PipelineStatus::Cancelled;
         }
+    }
 
-        // DEBUG: Skip executive summary while pipeline is broken for step-by-step testing.
-        // Uncomment to restore:
-        // run.current_stage = Some(PipelineStage::ExecutiveSummary);
-        // run_executive_summary(&app, &run_id, &run, &settings, &session_id, &db).await;
+    // Keep run-level continuity data up to date for future runs.
+    if !matches!(run.status, PipelineStatus::Cancelled) {
+        run.current_stage = Some(PipelineStage::ExecutiveSummary);
+        run_executive_summary(&app, &run_id, &run, &settings, &session_id, &db).await;
     }
 
     let total_duration_ms = pipeline_start.elapsed().as_millis() as u64;
@@ -178,6 +187,8 @@ async fn run_direct_task(
     pause_flag: &Arc<AtomicBool>,
     db: &DbPool,
     run_id: &str,
+    session_id: &str,
+    shared_context: &str,
     run: &mut PipelineRun,
 ) -> Result<(), String> {
     let backend = request
@@ -192,7 +203,11 @@ async fn run_direct_task(
 
     let input = AgentInput {
         prompt: request.prompt.clone(),
-        context: None,
+        context: if shared_context.trim().is_empty() {
+            None
+        } else {
+            Some(shared_context.to_string())
+        },
         workspace_path: request.workspace_path.clone(),
     };
 
@@ -209,7 +224,15 @@ async fn run_direct_task(
     }
 
     let result = dispatch_agent(
-        backend, model, &input, settings, None, app, run_id, PipelineStage::DirectTask, db,
+        backend,
+        model,
+        &input,
+        settings,
+        Some(session_id),
+        app,
+        run_id,
+        PipelineStage::DirectTask,
+        db,
     )
     .await;
 

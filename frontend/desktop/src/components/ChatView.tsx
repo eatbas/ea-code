@@ -13,7 +13,7 @@ import { StageInputOutputCard } from "./shared/StageInputOutputCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
 import { RecentTerminalPanel } from "./shared/RecentTerminalPanel";
 import { WorkspaceFooter } from "./shared/WorkspaceFooter";
-const EXCLUDED_ARTIFACT_KINDS = new Set(["result", "executive_summary", "judge", "review", "workspace_context", "enhanced_prompt", "plan", "plan_audit", "plan_final"]);
+const EXCLUDED_ARTIFACT_KINDS = new Set(["result", "executive_summary", "judge", "review", "workspace_context", "session_memory", "enhanced_prompt", "plan", "plan_audit", "plan_final"]);
 
 interface ChatViewProps {
   run: PipelineRun;
