@@ -27,23 +27,21 @@ pub async fn run_gemini(
         args.push("--model".to_string());
         args.push(model.to_string());
     }
-    let approval_mode = "yolo";
     args.push("--approval-mode".to_string());
-    args.push(approval_mode.to_string());
+    args.push("yolo".to_string());
     args.push("--prompt".to_string());
-    args.push(full_prompt);
-    let prompt_arg_index = args.len() - 1;
+    args.push("-".to_string());
     let args_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
     run_cli_agent(
         gemini_path,
         &args_refs,
-        Some(prompt_arg_index),
+        None,
         &input.workspace_path,
         app,
         run_id,
         stage,
         db,
-        None,
+        Some(&full_prompt),
         &[],
     )
     .await
