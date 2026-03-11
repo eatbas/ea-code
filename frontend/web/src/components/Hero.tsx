@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { ArrowDown, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { useReleaseInfo } from "../hooks/useReleaseInfo";
 
 const SCREENSHOTS = ["/ss1.png", "/ss2.png"];
 
 export function Hero() {
+  const release = useReleaseInfo();
   const [current, setCurrent] = useState(0);
   const [lightbox, setLightbox] = useState(false);
 
@@ -24,7 +26,7 @@ export function Hero() {
           {/* Copy */}
           <div className="fade-in-up text-center lg:text-left">
             <p className="mb-4 inline-block rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 font-mono text-xs font-medium text-accent">
-              v0.2.0 — Now with 5 AI agents
+              {release ? `v${release.version}` : ""} — Now with 5 AI agents
             </p>
             <h1 className="font-mono text-4xl leading-tight font-bold tracking-tight md:text-5xl lg:text-6xl">
               One App.
