@@ -1,19 +1,20 @@
-import { ArrowDown } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { ArrowDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 
-const TERMINAL_LINES = [
-  { prefix: "$", text: "ea-code run --prompt 'Add dark mode support'" },
-  { prefix: "1", text: "Prompt Enhance .......... done", dim: false },
-  { prefix: "2", text: "Skill Select ............ matched 2 skills", dim: false },
-  { prefix: "3", text: "Plan .................... 4 steps generated", dim: false },
-  { prefix: "4", text: "Plan Audit .............. approved", dim: false },
-  { prefix: "5", text: "Generate ................ 3 files modified", dim: false },
-  { prefix: "6", text: "Review .................. 1 suggestion", dim: false },
-  { prefix: "7", text: "Fix ..................... applied", dim: false },
-  { prefix: "8", text: "Judge ................... COMPLETE", dim: false },
-  { prefix: "9", text: "Executive Summary ....... ready", dim: false },
-];
+const SCREENSHOTS = ["/ss1.png", "/ss2.png"];
 
 export function Hero() {
+  const [current, setCurrent] = useState(0);
+  const [lightbox, setLightbox] = useState(false);
+
+  const next = useCallback(() => setCurrent((i) => (i + 1) % SCREENSHOTS.length), []);
+  const prev = useCallback(() => setCurrent((i) => (i - 1 + SCREENSHOTS.length) % SCREENSHOTS.length), []);
+
+  useEffect(() => {
+    const id = setInterval(next, 5000);
+    return () => clearInterval(id);
+  }, [next]);
+
   return (
     <section className="relative overflow-hidden pt-32 pb-20 md:pt-40 md:pb-28">
       <div className="hero-glow" />
@@ -54,38 +55,80 @@ export function Hero() {
             </div>
           </div>
 
-          {/* Terminal mock */}
-          <div className="fade-in-up mx-auto w-full max-w-lg lg:mx-0" style={{ animationDelay: "0.2s" }}>
+          {/* Screenshot carousel */}
+          <div className="fade-in-up relative mx-auto w-full max-w-lg lg:mx-0" style={{ animationDelay: "0.2s" }}>
             <div className="overflow-hidden rounded-2xl border border-border bg-surface-elevated shadow-2xl shadow-black/40">
-              {/* Title bar */}
-              <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-                <span className="h-3 w-3 rounded-full bg-red-500/80" />
-                <span className="h-3 w-3 rounded-full bg-yellow-500/80" />
-                <span className="h-3 w-3 rounded-full bg-green-500/80" />
-                <span className="ml-3 font-mono text-xs text-muted">ea-code — pipeline</span>
-              </div>
-
-              {/* Terminal body */}
-              <div className="stagger p-4 font-mono text-[13px] leading-relaxed">
-                {TERMINAL_LINES.map((line, i) => (
-                  <div key={i} className="flex gap-2">
-                    <span className={line.prefix === "$" ? "text-accent" : "text-surface-hover"}>
-                      {line.prefix === "$" ? "$" : `[${line.prefix}]`}
-                    </span>
-                    <span className={i === 0 ? "text-white" : line.text.includes("COMPLETE") ? "text-accent font-bold" : "text-muted"}>
-                      {line.text}
-                    </span>
-                  </div>
+              <div
+                className="relative aspect-[16/10] w-full cursor-pointer"
+                onClick={() => setLightbox(true)}
+              >
+                {SCREENSHOTS.map((src, i) => (
+                  <img
+                    key={src}
+                    src={src}
+                    alt={`ea-code screenshot ${i + 1}`}
+                    className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
+                      i === current ? "opacity-100" : "opacity-0"
+                    }`}
+                  />
                 ))}
-                <div className="mt-1 flex gap-2">
-                  <span className="text-accent">$</span>
-                  <span className="terminal-cursor" />
-                </div>
               </div>
+            </div>
+
+            {/* Controls */}
+            <button
+              onClick={prev}
+              aria-label="Previous screenshot"
+              className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full border border-border bg-surface/80 p-1.5 text-muted backdrop-blur-sm transition-colors hover:text-white"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={next}
+              aria-label="Next screenshot"
+              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full border border-border bg-surface/80 p-1.5 text-muted backdrop-blur-sm transition-colors hover:text-white"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+
+            {/* Dots */}
+            <div className="mt-4 flex justify-center gap-2">
+              {SCREENSHOTS.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrent(i)}
+                  aria-label={`Go to screenshot ${i + 1}`}
+                  className={`h-2 w-2 rounded-full transition-colors ${
+                    i === current ? "bg-accent" : "bg-border"
+                  }`}
+                />
+              ))}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setLightbox(false)}
+        >
+          <button
+            onClick={() => setLightbox(false)}
+            aria-label="Close lightbox"
+            className="absolute top-6 right-6 rounded-full border border-white/20 bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <img
+            src={SCREENSHOTS[current]}
+            alt={`ea-code screenshot ${current + 1}`}
+            className="max-h-[90vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </section>
   );
 }

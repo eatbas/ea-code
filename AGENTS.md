@@ -167,6 +167,36 @@ frontend/desktop/src/components/Sidebar/
 
 ---
 
+## Type Synchronisation (Critical)
+
+Rust enums and TypeScript types **must stay in sync** when adding or renaming pipeline stages, agent types, or any shared enum.
+
+- Rust: `#[serde(rename_all = "snake_case")]` on enums → `PipelineStage::PromptEnhance` serialises as `"prompt_enhance"`.
+- TypeScript: Matching string literal types → `"prompt_enhance"`.
+- A mismatch silently breaks IPC at runtime. Always update both sides together.
+
+**Two model layers in Rust:**
+- `src/db/models/` — Diesel derives (`Queryable`, `Selectable`, `Insertable`). These map directly to DB rows.
+- `src/models/` — Serde derives (`Serialize`, `Deserialize`). These are the Tauri command payloads sent to the frontend.
+
+---
+
+## Timestamp & Event Conventions
+
+- **Timestamps** are stored as RFC 3339 strings (e.g., `"2026-03-11T14:30:00Z"`), not integers. Use the `now_rfc3339()` helper.
+- **Event names** must be identical snake_case strings in both Rust (`app_handle.emit("pipeline_progress", ...)`) and TypeScript (`listen("pipeline_progress", ...)`).
+- **Migrations** are embedded in the binary via `embed_migrations!()` — no runtime SQL files needed.
+
+---
+
+## Development Environment
+
+- Vite dev server: port **1420** (fixed in `tauri.conf.json`), HMR on port **1421**.
+- No `.env` loading — database and config paths are hardcoded to `~/.config/ea-code/`.
+- Prompt temp files written to `~/.config/ea-code/prompts/` (Windows Git Bash workaround for multi-line args).
+
+---
+
 ## What NOT to Do
 
 - **Do not commit** unless the user explicitly requests it.
