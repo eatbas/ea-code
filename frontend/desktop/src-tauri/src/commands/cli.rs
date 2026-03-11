@@ -1,3 +1,4 @@
+use tauri::AppHandle;
 use crate::models::*;
 use super::cli_util::{extract_version_from_output, run_npm};
 #[cfg(target_os = "windows")]
@@ -39,14 +40,14 @@ pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, S
     })
 }
 #[tauri::command]
-pub async fn update_cli(cli_name: String) -> Result<String, String> {
+pub async fn update_cli(app: AppHandle, cli_name: String) -> Result<String, String> {
     match cli_name.as_str() {
         "claude" => update_with_npm("@anthropic-ai/claude-code").await,
         "codex" => update_with_npm("@openai/codex").await,
         "gemini" => update_with_npm("@google/gemini-cli").await,
         "opencode" => update_with_npm("opencode-ai").await,
         "kimi" => update_kimi_cli().await,
-        "gitBash" => update_git_bash().await,
+        "gitBash" => update_git_bash(&app),
         _ => Err(format!("Unknown CLI: {cli_name}")),
     }
 }
@@ -119,24 +120,12 @@ async fn update_kimi_cli() -> Result<String, String> {
     update_with_npm("kimi-cli").await
 }
 /// Opens the Git for Windows download page so the user can update manually.
-async fn update_git_bash() -> Result<String, String> {
+fn update_git_bash(app: &AppHandle) -> Result<String, String> {
+    use tauri_plugin_opener::OpenerExt;
     let url = "https://git-scm.com/download/win";
-    #[cfg(target_os = "windows")]
-    {
-        tokio::process::Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .output()
-            .await
-            .map_err(|e| format!("Failed to open browser: {e}"))?;
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        tokio::process::Command::new("xdg-open")
-            .arg(url)
-            .output()
-            .await
-            .map_err(|e| format!("Failed to open browser: {e}"))?;
-    }
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| format!("Failed to open browser: {e}"))?;
     Ok("Opened Git download page — install the latest version to update.".to_string())
 }
 async fn check_binary_exists(path: &str) -> bool {

@@ -5,9 +5,13 @@ use std::process::{Output, Stdio};
 #[cfg(target_os = "windows")]
 use std::sync::OnceLock;
 #[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
 use tokio::process::Command;
 #[cfg(target_os = "windows")]
 use tokio::time::{timeout, Duration};
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[cfg(target_os = "windows")]
 static GIT_BASH_PATH: OnceLock<Option<String>> = OnceLock::new();
@@ -60,6 +64,7 @@ fn find_git_bash_inner() -> Option<String> {
 
     let output = std::process::Command::new("cmd")
         .args(["/C", "where bash.exe"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok()?;
     if !output.status.success() {
@@ -88,6 +93,7 @@ async fn run_git_bash(script: &str, args: &[&str], timeout_secs: u64) -> Option<
             .arg(script)
             .args(args)
             .stdin(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW)
             .output(),
     )
     .await

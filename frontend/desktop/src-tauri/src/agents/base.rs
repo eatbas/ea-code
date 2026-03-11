@@ -3,6 +3,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 #[cfg(target_os = "windows")]
 use crate::commands::git_bash::find_git_bash;
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 use crate::db::DbPool;
 use crate::events::PipelineLogPayload;
 use crate::models::PipelineStage;
@@ -70,6 +72,7 @@ fn build_windows_git_bash_command(
         )
     })?;
     let mut command = Command::new(git_bash);
+    command.creation_flags(CREATE_NO_WINDOW);
 
     // Build env export prefix for extra environment variables.
     let env_prefix = if extra_envs.is_empty() {
