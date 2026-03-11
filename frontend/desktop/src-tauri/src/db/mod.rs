@@ -103,9 +103,80 @@ pub fn init_db() -> Result<DbPool, String> {
     conn.run_pending_migrations(MIGRATIONS)
         .map_err(|e| format!("Migration failed: {e}"))?;
 
+    // Backfill columns/indexes for users with older databases whose migration
+    // history predates the consolidated initial schema.
+    ensure_schema_compatibility(&pool)?;
+
     mcp::sync_builtin_catalog(&pool)?;
 
     Ok(pool)
+}
+
+#[derive(diesel::QueryableByName)]
+struct TableInfoRow {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    name: String,
+}
+
+fn ensure_schema_compatibility(pool: &DbPool) -> Result<(), String> {
+    let mut conn = get_conn(pool)?;
+
+    ensure_column(
+        &mut conn,
+        "settings",
+        "retention_days",
+        "ALTER TABLE settings ADD COLUMN retention_days INTEGER NOT NULL DEFAULT 90;",
+    )?;
+    ensure_column(
+        &mut conn,
+        "runs",
+        "current_stage",
+        "ALTER TABLE runs ADD COLUMN current_stage TEXT;",
+    )?;
+    ensure_column(
+        &mut conn,
+        "runs",
+        "current_iteration",
+        "ALTER TABLE runs ADD COLUMN current_iteration INTEGER NOT NULL DEFAULT 0;",
+    )?;
+    ensure_column(
+        &mut conn,
+        "runs",
+        "current_stage_started_at",
+        "ALTER TABLE runs ADD COLUMN current_stage_started_at TEXT;",
+    )?;
+
+    diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_runs_status_completed ON runs(status, completed_at);")
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to ensure idx_runs_status_completed: {e}"))?;
+
+    // Logs are no longer used and can dominate DB size on older installs.
+    diesel::sql_query("DROP TABLE IF EXISTS logs;")
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to drop legacy logs table: {e}"))?;
+
+    Ok(())
+}
+
+fn ensure_column(
+    conn: &mut SqliteConnection,
+    table: &str,
+    column: &str,
+    alter_sql: &str,
+) -> Result<(), String> {
+    let pragma_sql = format!("PRAGMA table_info({table})");
+    let columns: Vec<TableInfoRow> = diesel::sql_query(pragma_sql)
+        .load(conn)
+        .map_err(|e| format!("Failed to inspect {table} columns: {e}"))?;
+
+    if columns.iter().any(|c| c.name == column) {
+        return Ok(());
+    }
+
+    diesel::sql_query(alter_sql)
+        .execute(conn)
+        .map_err(|e| format!("Failed to add missing column {table}.{column}: {e}"))?;
+    Ok(())
 }
 
 /// Attempts to import settings from the legacy JSON file into the database.

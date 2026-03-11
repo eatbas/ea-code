@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
 import type { PipelineRun, RunOptions, CliHealth, AppSettings } from "../types";
 import { isActive, isTerminal, statusInfo } from "../utils/statusHelpers";
-import { formatDuration, parseUtcTimestamp, resolveAuditedPlanText, resolvePlanText } from "../utils/formatters";
+import { resolveAuditedPlanText, resolvePlanText } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
+import { useElapsedTimer } from "../hooks/useElapsedTimer";
+import { useRecentTerminal } from "../hooks/useRecentTerminal";
 import { StageCard } from "./shared/StageCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
 import { ResultCard, buildStageRows, computeDuration } from "./shared/ResultCard";
@@ -13,6 +14,8 @@ import { StageInputOutputCard } from "./shared/StageInputOutputCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
 import { RecentTerminalPanel } from "./shared/RecentTerminalPanel";
 import { WorkspaceFooter } from "./shared/WorkspaceFooter";
+import { PipelineControlBar } from "./shared/PipelineControlBar";
+
 const EXCLUDED_ARTIFACT_KINDS = new Set(["result", "executive_summary", "judge", "review", "workspace_context", "session_memory", "enhanced_prompt", "plan", "plan_audit", "plan_final"]);
 
 interface ChatViewProps {
@@ -28,6 +31,7 @@ interface ChatViewProps {
   onNewSession: () => void;
   onContinue: (options: RunOptions) => void;
 }
+
 export function ChatView({
   run,
   stageLogs,
@@ -41,16 +45,12 @@ export function ChatView({
   onNewSession,
   onContinue,
 }: ChatViewProps): ReactNode {
-  const recentTerminalRef = useRef<HTMLPreElement>(null);
-  const [, setElapsedTick] = useState(0);
-  useEffect(() => {
-    if (run.status !== "running" && run.status !== "paused") return;
-    const interval = window.setInterval(() => setElapsedTick((n) => n + 1), 1000);
-    return () => window.clearInterval(interval);
-  }, [run.status]);
+  const elapsedText = useElapsedTimer(run.status, run.startedAt, run.completedAt);
   const { label: statusLabel, colour: statusColour } = statusInfo(run.status);
   const allStages = run.iterations.flatMap((iter) => iter.stages);
   const visibleStages = allStages.filter((stage) => stage.stage !== "diff_after_coder" && stage.stage !== "diff_after_code_fixer");
+  const terminal = useRecentTerminal(stageLogs, run.currentStage, allStages);
+
   const enhancedPrompt = artifacts["enhanced_prompt"];
   const enhancedPromptInput = (enhancedPrompt ?? run.prompt).trim();
   const planArtifact = artifacts["plan"];
@@ -61,18 +61,8 @@ export function ChatView({
   const otherArtifacts = Object.entries(artifacts).filter(([kind]) => !EXCLUDED_ARTIFACT_KINDS.has(kind) && kind !== "diff" && !kind.startsWith("diff_"));
   const headerTitle = run.prompt.length > 60 ? `${run.prompt.slice(0, 60)}...` : run.prompt;
   const isPaused = run.status === "paused";
-  const activeStage = run.currentStage;
-  const recentTerminalStage = activeStage ?? [...allStages].reverse().map((stage) => stage.stage).find((stage) => (stageLogs[stage]?.length ?? 0) > 0);
-  const recentTerminalLines = recentTerminalStage ? (stageLogs[recentTerminalStage] ?? []).slice(-160) : [];
-  const recentTerminalLabel = recentTerminalStage?.replace(/_/g, " ");
   const iterationText = `Iteration ${Math.max(1, run.currentIteration)}/${Math.max(1, run.maxIterations)}`;
-  const startedAtMs = run.startedAt ? parseUtcTimestamp(run.startedAt).getTime() : NaN;
-  const endedAtMs = run.completedAt ? parseUtcTimestamp(run.completedAt).getTime() : Date.now();
-  const elapsedText = Number.isFinite(startedAtMs) ? formatDuration(Math.max(0, endedAtMs - startedAtMs)) : "0ms";
-  useEffect(() => {
-    const el = recentTerminalRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [recentTerminalStage, recentTerminalLines.length]);
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#0f0f14]">
       <div className="flex items-center gap-3 border-b border-[#2e2e48] px-6 py-3">
@@ -203,58 +193,24 @@ export function ChatView({
       <div className="flex w-full max-w-2xl mx-auto flex-col gap-2 px-6 pb-6 pt-2">
         {(isActive(run.status) || isPaused) && (
           <RecentTerminalPanel
-            label={recentTerminalLabel}
-            lines={recentTerminalLines}
-            terminalRef={recentTerminalRef}
+            label={terminal.label}
+            lines={terminal.lines}
+            terminalRef={terminal.terminalRef}
           />
         )}
         {(isActive(run.status) || isPaused) && (
-          <div className="flex w-full items-center gap-2 rounded-xl border border-[#2e2e48] bg-[#1a1a24] px-4 py-3">
-            <div className="flex items-center gap-2 flex-1">
-              {isPaused ? (
-                <div className="h-3.5 w-3.5 rounded-full border-2 border-[#3b82f6]" />
-              ) : (
-                <svg className="animate-spin h-3.5 w-3.5" style={{ color: statusColour }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              )}
-              <span className="text-sm text-[#9898b0]">{statusLabel}... | {iterationText} | {elapsedText}</span>
-            </div>
-            {isActive(run.status) && (
-              <button
-                onClick={() => onPause()}
-                className="shrink-0 rounded-lg bg-[#2563eb] p-2 text-white hover:bg-[#3b82f6] transition-colors"
-                title="Pause pipeline"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <rect x="6" y="5" width="4" height="14" rx="1" />
-                  <rect x="14" y="5" width="4" height="14" rx="1" />
-                </svg>
-              </button>
-            )}
-            {isPaused && (
-              <button
-                onClick={() => onResume()}
-                className="shrink-0 rounded-lg bg-[#22c55e] p-2 text-white hover:bg-[#16a34a] transition-colors"
-                title="Resume pipeline"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </button>
-            )}
-            <button
-              onClick={() => onCancel()}
-              className="shrink-0 rounded-lg bg-[#ef4444] p-2 text-white hover:bg-red-400 transition-colors"
-              title="Cancel pipeline"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
+          <PipelineControlBar
+            statusLabel={statusLabel}
+            statusColour={statusColour}
+            iterationText={iterationText}
+            elapsedText={elapsedText}
+            isPaused={isPaused}
+            showPause={isActive(run.status)}
+            showResume={isPaused}
+            onPause={onPause}
+            onResume={onResume}
+            onCancel={onCancel}
+          />
         )}
         {isTerminal(run.status) && (
           <PromptInputBar

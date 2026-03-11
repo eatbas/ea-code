@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import type { ProjectSummary, SessionSummary } from "../types";
+import type { ActiveView, ProjectSummary, SessionSummary } from "../types";
 import { ProjectThreadsList } from "./ProjectThreadsList";
 
-/** Which view the sidebar is navigating to. */
-export type ActiveView = "home" | "agents" | "cli-setup" | "skills" | "mcp" | "app-settings";
+// Re-export so existing consumers that import from Sidebar keep working.
+export type { ActiveView } from "../types";
 
 /** Data-driven settings navigation items. */
 const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[] = [

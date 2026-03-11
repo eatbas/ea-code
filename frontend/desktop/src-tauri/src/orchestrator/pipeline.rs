@@ -21,8 +21,6 @@ use super::iteration::run_iteration;
 use super::prompts;
 use super::run_setup::*;
 use super::session_memory::{build_session_memory_context, merge_shared_context};
-
-
 /// Runs the full orchestration pipeline with v2.5.0 prompts.
 pub async fn run_pipeline(
     app: AppHandle,
@@ -172,6 +170,7 @@ pub async fn run_pipeline(
 
     persist_final_run(&db, &run, &session_id);
     emit_final_status(&app, &run, total_duration_ms);
+    run_retention_cleanup(&db, settings.retention_days);
 
     Ok(run)
 }
@@ -284,4 +283,17 @@ async fn run_direct_task(
     }
 
     Ok(())
+}
+fn run_retention_cleanup(db: &DbPool, retention_days: u32) {
+    if retention_days == 0 {
+        return;
+    }
+
+    match db::cleanup::cleanup_old_runs(db, retention_days as i32) {
+        Ok(deleted) if deleted > 0 => {
+            let _ = db::cleanup::pragma_optimize(db);
+        }
+        Err(err) => eprintln!("Warning: post-run retention cleanup failed: {err}"),
+        _ => {}
+    }
 }

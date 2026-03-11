@@ -10,6 +10,8 @@ use crate::models::*;
 
 use super::helpers::{dispatch_agent, emit_stage, emit_stage_with_duration, resolve_stage_model, stage_to_str};
 
+const DIFF_STAGE_DB_MARKER: &str = "[diff stored in artifacts]";
+
 /// Runs an agent stage with retry-on-failure support.
 ///
 /// On failure, if `settings.agent_retry_count > 0`, the stage is re-run
@@ -198,7 +200,7 @@ pub async fn execute_diff_stage(
     let stage_str = stage_to_str(&stage);
     let _ = db::runs::insert_stage(
         db, iteration_db_id, &stage_str, "completed",
-        &diff, duration_ms as i32, None,
+        DIFF_STAGE_DB_MARKER, duration_ms as i32, None,
     );
 
     StageResult {

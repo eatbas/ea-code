@@ -10,7 +10,7 @@ import { useHistory } from "./hooks/useHistory";
 import { useSkills } from "./hooks/useSkills";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { Sidebar } from "./components/Sidebar";
-import type { ActiveView } from "./components/Sidebar";
+import type { ActiveView } from "./types";
 import { IdleView } from "./components/IdleView";
 import { ChatView } from "./components/ChatView";
 import { SessionDetailView } from "./components/SessionDetailView";
