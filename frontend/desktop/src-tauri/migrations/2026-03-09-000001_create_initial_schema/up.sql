@@ -1,6 +1,6 @@
 -- Consolidated initial schema for EA Code.
--- Settings, projects, sessions, runs, iterations, stages, logs, artefacts, questions,
--- skills, MCP servers, CLI-MCP bindings, project settings.
+-- Settings, projects, sessions, runs, iterations, stages, artefacts, questions,
+-- skills, MCP servers, CLI-MCP bindings.
 
 PRAGMA foreign_keys = ON;
 
@@ -46,7 +46,8 @@ CREATE TABLE settings (
     token_optimized_prompts         BOOLEAN NOT NULL DEFAULT 0,
     agent_retry_count               INTEGER NOT NULL DEFAULT 1,
     agent_timeout_ms                INTEGER NOT NULL DEFAULT 0,
-    agent_max_turns                 INTEGER NOT NULL DEFAULT 25
+    agent_max_turns                 INTEGER NOT NULL DEFAULT 25,
+    retention_days                  INTEGER NOT NULL DEFAULT 90
 );
 
 INSERT INTO settings (id) VALUES (1);
@@ -91,33 +92,24 @@ CREATE TABLE runs (
     executive_summary_model         TEXT,
     executive_summary_generated_at  TIMESTAMP,
     started_at                      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    completed_at                    TIMESTAMP
+    completed_at                    TIMESTAMP,
+    current_stage                   TEXT,
+    current_iteration               INTEGER   NOT NULL DEFAULT 0,
+    current_stage_started_at        TEXT
 );
 
 CREATE INDEX idx_runs_session ON runs(session_id, started_at ASC);
+CREATE INDEX idx_runs_status_completed ON runs(status, completed_at);
 
 -- Iterations: each loop of the self-improving pipeline.
 CREATE TABLE iterations (
-    id                      INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    run_id                  TEXT    NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    number                  INTEGER NOT NULL,
-    verdict                 TEXT,
-    judge_reasoning         TEXT,
-    enhanced_prompt         TEXT,
-    planner_plan            TEXT,
-    audit_verdict           TEXT,
-    audit_reasoning         TEXT,
-    audited_plan            TEXT,
-    review_output           TEXT,
-    review_user_guidance    TEXT,
-    fix_output              TEXT,
-    judge_output            TEXT,
-    generate_question       TEXT,
-    generate_answer         TEXT,
-    fix_question            TEXT,
-    fix_answer              TEXT,
-    plan_approval           TEXT,
-    plan_revision_count     INTEGER NOT NULL DEFAULT 0,
+    id                  INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    run_id              TEXT    NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    number              INTEGER NOT NULL,
+    verdict             TEXT,
+    judge_reasoning     TEXT,
+    plan_approval       TEXT,
+    plan_revision_count INTEGER NOT NULL DEFAULT 0,
     UNIQUE(run_id, number)
 );
 
@@ -134,18 +126,6 @@ CREATE TABLE stages (
 );
 
 CREATE INDEX idx_stages_iteration ON stages(iteration_id);
-
--- Logs: streaming CLI output lines.
-CREATE TABLE logs (
-    id          INTEGER   NOT NULL PRIMARY KEY AUTOINCREMENT,
-    run_id      TEXT      NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    stage       TEXT      NOT NULL,
-    line        TEXT      NOT NULL,
-    stream      TEXT      NOT NULL DEFAULT 'stdout',
-    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_logs_run ON logs(run_id, created_at);
 
 -- Artefacts: diffs, reviews, validation output, judge reasoning.
 CREATE TABLE artifacts (

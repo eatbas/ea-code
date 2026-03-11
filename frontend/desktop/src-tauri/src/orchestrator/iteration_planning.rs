@@ -67,7 +67,7 @@ pub async fn run_planning_stages(
     ).await;
     let plan_out = plan_r.output.clone();
     iter_ctx.planner_plan = Some(plan_out.clone());
-    persist_iteration_context(db, run_id, iter_num, iter_ctx);
+
     emit_artifact(app, run_id, "plan", &plan_out, iter_num, db);
     if plan_r.status == StageStatus::Failed {
         stages.push(plan_r);
@@ -119,7 +119,7 @@ pub async fn run_planning_stages(
     iter_ctx.audit_verdict = Some(parsed.verdict);
     iter_ctx.audit_reasoning = if parsed.reasoning.trim().is_empty() { None } else { Some(parsed.reasoning) };
     iter_ctx.audited_plan = Some(parsed.improved_plan);
-    persist_iteration_context(db, run_id, iter_num, iter_ctx);
+
     if let Some(plan) = iter_ctx.audited_plan.as_ref() {
         emit_artifact(app, run_id, "plan_final", plan, iter_num, db);
     }

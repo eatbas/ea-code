@@ -9,7 +9,6 @@ const ALLOWED_TABLES: &[&str] = &[
     "artifacts",
     "cli_mcp_bindings",
     "iterations",
-    "logs",
     "mcp_servers",
     "projects",
     "questions",

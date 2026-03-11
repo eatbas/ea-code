@@ -71,6 +71,7 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         agent_retry_count: s.agent_retry_count as i32,
         agent_timeout_ms: s.agent_timeout_ms as i32,
         agent_max_turns: FIXED_AGENT_MAX_TURNS as i32,
+        retention_days: s.retention_days as i32,
     };
 
     diesel::update(settings::table.find(1))
@@ -156,6 +157,7 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         agent_retry_count: row.agent_retry_count as u32,
         agent_timeout_ms: row.agent_timeout_ms as u64,
         agent_max_turns: FIXED_AGENT_MAX_TURNS,
+        retention_days: row.retention_days as u32,
     }
 }
 

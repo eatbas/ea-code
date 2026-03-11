@@ -97,7 +97,7 @@ pub async fn run_plan_gate(
         if action_lower == "skip" {
             iter_ctx.audited_plan = None;
             iter_ctx.planner_plan = None;
-            persist_iteration_context(db, run_id, iter_num, iter_ctx);
+
             let _ = db::runs::update_iteration_plan_approval(
                 db, run_id, iter_num as i32, "skipped", revisions as i32,
             );
@@ -148,7 +148,6 @@ pub async fn run_plan_gate(
 
         iter_ctx.planner_plan = Some(revised_plan.clone());
         iter_ctx.audited_plan = Some(revised_plan.clone());
-        persist_iteration_context(db, run_id, iter_num, iter_ctx);
         emit_artifact(app, run_id, "plan_revised", &revised_plan, iter_num, db);
     }
 }

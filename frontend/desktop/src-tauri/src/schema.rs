@@ -27,32 +27,8 @@ diesel::table! {
         number -> Integer,
         verdict -> Nullable<Text>,
         judge_reasoning -> Nullable<Text>,
-        enhanced_prompt -> Nullable<Text>,
-        planner_plan -> Nullable<Text>,
-        audit_verdict -> Nullable<Text>,
-        audit_reasoning -> Nullable<Text>,
-        audited_plan -> Nullable<Text>,
-        review_output -> Nullable<Text>,
-        review_user_guidance -> Nullable<Text>,
-        fix_output -> Nullable<Text>,
-        judge_output -> Nullable<Text>,
-        generate_question -> Nullable<Text>,
-        generate_answer -> Nullable<Text>,
-        fix_question -> Nullable<Text>,
-        fix_answer -> Nullable<Text>,
         plan_approval -> Nullable<Text>,
         plan_revision_count -> Integer,
-    }
-}
-
-diesel::table! {
-    logs (id) {
-        id -> Integer,
-        run_id -> Text,
-        stage -> Text,
-        line -> Text,
-        stream -> Text,
-        created_at -> Timestamp,
     }
 }
 
@@ -175,6 +151,7 @@ diesel::table! {
         agent_retry_count -> Integer,
         agent_timeout_ms -> Integer,
         agent_max_turns -> Integer,
+        retention_days -> Integer,
     }
 }
 
@@ -207,7 +184,6 @@ diesel::table! {
 diesel::joinable!(artifacts -> runs (run_id));
 diesel::joinable!(cli_mcp_bindings -> mcp_servers (mcp_server_id));
 diesel::joinable!(iterations -> runs (run_id));
-diesel::joinable!(logs -> runs (run_id));
 diesel::joinable!(questions -> runs (run_id));
 diesel::joinable!(runs -> sessions (session_id));
 diesel::joinable!(sessions -> projects (project_id));
@@ -217,7 +193,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     artifacts,
     cli_mcp_bindings,
     iterations,
-    logs,
     mcp_servers,
     projects,
     questions,

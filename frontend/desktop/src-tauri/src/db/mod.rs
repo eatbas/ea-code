@@ -1,5 +1,5 @@
 pub mod artifacts;
-pub mod logs;
+pub mod cleanup;
 pub mod mcp;
 pub mod models;
 pub mod projects;
@@ -40,6 +40,21 @@ pub fn find_or_not_found<T>(
     result
         .map_err(|e| format!("Failed to load {entity}: {e}"))?
         .ok_or_else(|| format!("{entity} not found"))
+}
+
+/// Maximum number of characters stored in a single TEXT field (stage output,
+/// artefact content). Anything longer is truncated before insertion.
+pub const MAX_STORED_TEXT: usize = 50_000;
+
+/// Truncates `text` to at most [`MAX_STORED_TEXT`] characters, appending an
+/// ellipsis marker when clipped.
+pub fn truncate_for_storage(text: &str) -> String {
+    if text.len() <= MAX_STORED_TEXT {
+        return text.to_string();
+    }
+    let mut truncated: String = text.chars().take(MAX_STORED_TEXT).collect();
+    truncated.push_str("\n... [truncated]");
+    truncated
 }
 
 /// Embedded migrations compiled into the binary.

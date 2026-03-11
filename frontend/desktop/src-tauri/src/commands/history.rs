@@ -23,22 +23,30 @@ pub async fn list_sessions(
     db::sessions::list_for_project(&state.db, project.id, 50)
 }
 
-/// Returns full session detail with all runs for the ChatView.
+/// Returns paginated session detail with batch-loaded runs for the ChatView.
+///
+/// Loads the most recent `limit` runs (default 20), offset from the newest.
+/// Returns them in chronological order (oldest first) along with `total_runs`
+/// so the frontend can show a "Load earlier runs" button.
 #[tauri::command]
 pub async fn get_session_detail(
     state: State<'_, AppState>,
     session_id: String,
+    limit: Option<i64>,
+    offset: Option<i64>,
 ) -> Result<db::models::SessionDetail, String> {
     let session = db::sessions::get_by_id(&state.db, &session_id)?
         .ok_or_else(|| "Session not found".to_string())?;
 
     let project_path = db::sessions::get_project_path(&state.db, &session_id)?;
 
-    let run_summaries = db::run_detail::list_for_session(&state.db, &session_id)?;
-    let mut run_details = Vec::with_capacity(run_summaries.len());
-    for rs in &run_summaries {
-        run_details.push(db::run_detail::get_full(&state.db, &rs.id)?);
-    }
+    let total_runs = db::run_detail::count_for_session(&state.db, &session_id)?;
+    let run_details = db::run_detail::list_full_for_session(
+        &state.db,
+        &session_id,
+        limit.unwrap_or(20),
+        offset.unwrap_or(0),
+    )?;
 
     Ok(db::models::SessionDetail {
         id: session.id,
@@ -47,6 +55,7 @@ pub async fn get_session_detail(
         created_at: session.created_at,
         updated_at: session.updated_at,
         runs: run_details,
+        total_runs,
     })
 }
 
@@ -72,22 +81,6 @@ pub async fn get_run_detail(
     run_id: String,
 ) -> Result<db::models::RunDetail, String> {
     db::run_detail::get_full(&state.db, &run_id)
-}
-
-/// Returns paginated logs for a run.
-#[tauri::command]
-pub async fn get_run_logs(
-    state: State<'_, AppState>,
-    run_id: String,
-    offset: Option<i64>,
-    limit: Option<i64>,
-) -> Result<Vec<db::models::LogRow>, String> {
-    db::logs::get_for_run(
-        &state.db,
-        &run_id,
-        offset.unwrap_or(0),
-        limit.unwrap_or(500),
-    )
 }
 
 /// Returns artefacts for a run.

@@ -22,8 +22,6 @@ use super::prompts;
 use super::run_setup::*;
 use super::session_memory::{build_session_memory_context, merge_shared_context};
 
-// Re-export for helpers.rs which references IterationContext.
-pub use super::run_setup::IterationContext;
 
 /// Runs the full orchestration pipeline with v2.5.0 prompts.
 pub async fn run_pipeline(

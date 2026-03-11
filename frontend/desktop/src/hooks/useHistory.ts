@@ -7,12 +7,18 @@ import type {
 } from "../types";
 import { useToast } from "../components/shared/Toast";
 
+interface LoadSessionDetailOptions {
+  limit?: number;
+  offset?: number;
+}
+
 interface UseHistoryReturn {
   projects: ProjectSummary[];
   sessions: SessionSummary[];
   loadProjects: () => Promise<void>;
   loadSessions: (projectPath: string) => Promise<void>;
-  loadSessionDetail: (sessionId: string) => Promise<SessionDetail>;
+  loadSessionDetail: (sessionId: string, options?: LoadSessionDetailOptions) => Promise<SessionDetail>;
+  loadMoreRuns: (sessionId: string, currentCount: number) => Promise<SessionDetail>;
   createSession: (projectPath: string) => Promise<string>;
   deleteSession: (sessionId: string) => Promise<void>;
 }
@@ -41,8 +47,21 @@ export function useHistory(): UseHistoryReturn {
     }
   }, [toast]);
 
-  const loadSessionDetail = useCallback(async (sessionId: string): Promise<SessionDetail> => {
-    return invoke<SessionDetail>("get_session_detail", { sessionId });
+  const loadSessionDetail = useCallback(async (sessionId: string, options?: LoadSessionDetailOptions): Promise<SessionDetail> => {
+    return invoke<SessionDetail>("get_session_detail", {
+      sessionId,
+      limit: options?.limit ?? 20,
+      offset: options?.offset ?? 0,
+    });
+  }, []);
+
+  /** Loads earlier runs and prepends them to the current session detail. */
+  const loadMoreRuns = useCallback(async (sessionId: string, currentCount: number): Promise<SessionDetail> => {
+    return invoke<SessionDetail>("get_session_detail", {
+      sessionId,
+      limit: 20,
+      offset: currentCount,
+    });
   }, []);
 
   const createSession = useCallback(async (projectPath: string): Promise<string> => {
@@ -54,5 +73,5 @@ export function useHistory(): UseHistoryReturn {
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
   }, []);
 
-  return { projects, sessions, loadProjects, loadSessions, loadSessionDetail, createSession, deleteSession };
+  return { projects, sessions, loadProjects, loadSessions, loadSessionDetail, loadMoreRuns, createSession, deleteSession };
 }

@@ -79,7 +79,7 @@ pub async fn run_review_fix_stages(
     let rev_out = rev_r.output.clone();
     iter_ctx.review_output = Some(rev_out.clone());
     iter_ctx.review_user_guidance = None;
-    persist_iteration_context(db, run_id, iter_num, iter_ctx);
+
     emit_artifact(app, run_id, "review", &rev_out, iter_num, db);
     if rev_r.status == StageStatus::Failed {
         stages.push(rev_r);
@@ -116,7 +116,7 @@ pub async fn run_review_fix_stages(
     ).await;
     let fix_out = fix_r.output.clone();
     iter_ctx.fix_output = Some(fix_out.clone());
-    persist_iteration_context(db, run_id, iter_num, iter_ctx);
+
     if fix_r.status == StageStatus::Failed {
         stages.push(fix_r);
         run.iterations.push(Iteration { number: iter_num, stages: mem::take(stages), verdict: None, judge_reasoning: None });
@@ -130,13 +130,13 @@ pub async fn run_review_fix_stages(
 
     if let Some(question) = extract_question(&fix_out) {
         iter_ctx.fix_question = Some(question.clone());
-        persist_iteration_context(db, run_id, iter_num, iter_ctx);
+    
         let answer = ask_user_question(app, run_id, &PipelineStage::CodeFixer, iter_num, question, fix_out.clone(), false, cancel_flag, answer_sender, db).await?;
         if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, mem::take(stages)); return Ok(()); }
         if let Some(a) = answer {
             if !a.skipped && !a.answer.is_empty() {
                 iter_ctx.fix_answer = Some(a.answer);
-                persist_iteration_context(db, run_id, iter_num, iter_ctx);
+            
             }
         }
     }
@@ -191,7 +191,7 @@ pub async fn run_judge_stage(
     ).await;
     let judge_out = judge_r.output.clone();
     iter_ctx.judge_output = Some(judge_out.clone());
-    persist_iteration_context(db, run_id, iter_num, iter_ctx);
+
     emit_artifact(app, run_id, "judge", &judge_out, iter_num, db);
     if judge_r.status == StageStatus::Failed {
         stages.push(judge_r);

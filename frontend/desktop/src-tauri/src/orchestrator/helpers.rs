@@ -205,7 +205,25 @@ pub fn emit_stage_with_duration(
     }
 }
 
+/// Transient artefact kinds that are either rebuilt every run or already stored
+/// canonically in `stages.output`. These are emitted via Tauri events for
+/// real-time display but skipped when writing to the `artifacts` table.
+const TRANSIENT_ARTIFACT_KINDS: &[&str] = &[
+    // Rebuilt fresh every run — zero historical value
+    "workspace_context",
+    "session_memory",
+    // Already stored in stages.output (canonical) — no need to duplicate
+    "result",
+    "plan",
+    "plan_audit",
+    "review",
+    "judge",
+    "diff",
+];
+
 /// Emits an artefact event and persists it to the database.
+/// Transient kinds (workspace_context, session_memory) are emitted for real-time
+/// display but not written to the database.
 pub fn emit_artifact(
     app: &AppHandle,
     run_id: &str,
@@ -223,7 +241,9 @@ pub fn emit_artifact(
             iteration,
         },
     );
-    let _ = db::artifacts::insert(db, run_id, iteration as i32, kind, content);
+    if !TRANSIENT_ARTIFACT_KINDS.contains(&kind) {
+        let _ = db::artifacts::insert(db, run_id, iteration as i32, kind, content);
+    }
 }
 
 pub fn is_cancelled(cancel_flag: &Arc<AtomicBool>) -> bool {
@@ -273,27 +293,3 @@ pub fn backend_to_db_str(backend: &AgentBackend) -> &'static str {
     }
 }
 
-/// Persists iteration context to the database.
-pub fn persist_iteration_context(
-    db: &DbPool,
-    run_id: &str,
-    iteration: u32,
-    context: &super::pipeline::IterationContext,
-) {
-    let patch = db::runs::IterationContextPatch {
-        enhanced_prompt: Some(context.enhanced_prompt.as_str()),
-        planner_plan: context.planner_plan.as_deref(),
-        audit_verdict: context.audit_verdict.as_deref(),
-        audit_reasoning: context.audit_reasoning.as_deref(),
-        audited_plan: context.audited_plan.as_deref(),
-        review_output: context.review_output.as_deref(),
-        review_user_guidance: context.review_user_guidance.as_deref(),
-        fix_output: context.fix_output.as_deref(),
-        judge_output: context.judge_output.as_deref(),
-        generate_question: context.generate_question.as_deref(),
-        generate_answer: context.generate_answer.as_deref(),
-        fix_question: context.fix_question.as_deref(),
-        fix_answer: context.fix_answer.as_deref(),
-    };
-    let _ = db::runs::update_iteration_context(db, run_id, iteration as i32, &patch);
-}

@@ -36,7 +36,7 @@ function App(): ReactNode {
   const { run, stageLogs, artifacts, pendingQuestion, startPipeline, pausePipeline, resumePipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { versions, loading: versionsLoading, updating: versionsUpdating, fetchVersions, updateCli } = useCliVersions();
   const { health: cliHealth, checking: cliHealthChecking, checkHealth } = useCliHealth();
-  const { projects, sessions, loadSessions, loadProjects, loadSessionDetail, deleteSession } = useHistory();
+  const { projects, sessions, loadSessions, loadProjects, loadSessionDetail, loadMoreRuns, deleteSession } = useHistory();
   const { skills, loading: skillsLoading, createSkill, updateSkill, deleteSkill } = useSkills();
   const { installing: installingUpdate, updateVersion } = useUpdateCheck();
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -44,6 +44,7 @@ function App(): ReactNode {
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
   const [sessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
   const [sessionDetailLoading, setSessionDetailLoading] = useState(false);
+  const [sessionLoadingMore, setSessionLoadingMore] = useState(false);
   useEffect(() => { loadProjects(); }, [loadProjects]);
   useEffect(() => {
     if (workspace) {
@@ -120,6 +121,22 @@ function App(): ReactNode {
       setSessionDetailLoading(false);
     }
   }, [loadSessionDetail, toast, run]);
+  const handleLoadMoreRuns = useCallback(async (): Promise<void> => {
+    if (!activeSessionId || !sessionDetail) return;
+    setSessionLoadingMore(true);
+    try {
+      const older = await loadMoreRuns(activeSessionId, sessionDetail.runs.length);
+      setSessionDetail((prev) => {
+        if (!prev) return prev;
+        return { ...prev, runs: [...older.runs, ...prev.runs], totalRuns: older.totalRuns };
+      });
+    } catch {
+      toast.error("Failed to load earlier runs.");
+    } finally {
+      setSessionLoadingMore(false);
+    }
+  }, [activeSessionId, sessionDetail, loadMoreRuns, toast]);
+
   const handleSelectProject = useCallback(async (projectPath: string): Promise<void> => {
     await openWorkspace(projectPath);
     setActiveView("home");
@@ -203,6 +220,8 @@ function App(): ReactNode {
           onPauseRun={(runId) => { void pausePipeline(runId); }}
           onResumeRun={(runId) => { void resumePipeline(runId); }}
           onCancelRun={(runId) => { void cancelPipeline(runId); }}
+          onLoadMore={handleLoadMoreRuns}
+          loadingMore={sessionLoadingMore}
           onBackToHome={handleNewSession}
         />
       );

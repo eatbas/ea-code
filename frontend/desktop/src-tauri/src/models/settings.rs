@@ -89,6 +89,9 @@ pub struct AppSettings {
     /// Maximum agentic turns per invocation for CLIs that support it.
     #[serde(default = "default_agent_max_turns")]
     pub agent_max_turns: u32,
+    /// Completed runs older than this many days are deleted on startup (0 = disabled).
+    #[serde(default = "default_retention_days")]
+    pub retention_days: u32,
 }
 
 fn default_plan_timeout() -> u32 {
@@ -105,6 +108,10 @@ fn default_agent_retry_count() -> u32 {
 
 fn default_agent_max_turns() -> u32 {
     25
+}
+
+fn default_retention_days() -> u32 {
+    90
 }
 
 impl Default for AppSettings {
@@ -148,6 +155,7 @@ impl Default for AppSettings {
             agent_retry_count: 1,
             agent_timeout_ms: 0,
             agent_max_turns: 25,
+            retention_days: 90,
             skill_selector_agent: None,
         }
     }

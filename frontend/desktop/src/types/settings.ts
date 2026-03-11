@@ -32,6 +32,8 @@ export interface AppSettings {
   agentTimeoutMs: number;
   /** Maximum agentic turns per invocation for CLIs that support it. */
   agentMaxTurns: number;
+  /** Completed runs older than this many days are deleted on startup (0 = disabled). */
+  retentionDays: number;
   /** Comma-separated list of enabled Claude models. */
   claudeModel: string;
   /** Comma-separated list of enabled Codex models. */
@@ -79,6 +81,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   agentRetryCount: 1,
   agentTimeoutMs: 0,
   agentMaxTurns: 25,
+  retentionDays: 90,
   claudeModel: "sonnet",
   codexModel: "gpt-5.3-codex",
   geminiModel: "gemini-2.5-pro",

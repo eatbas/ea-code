@@ -51,6 +51,10 @@ pub async fn run_pipeline(
     let pause_flags_registry = state.pause_flags.clone();
     let answer_senders_registry = state.answer_senders.clone();
 
+    // Clone pool + retention setting so we can run cleanup after the pipeline finishes
+    let cleanup_db = db.clone();
+    let retention_days = loaded_settings.retention_days;
+
     // Spawn the pipeline as a background task so the command returns promptly
     let app_clone = app.clone();
     tokio::spawn(async move {
@@ -65,6 +69,11 @@ pub async fn run_pipeline(
             db,
         )
         .await;
+
+        // Best-effort retention cleanup after each run (skip VACUUM — too heavy)
+        if retention_days > 0 {
+            let _ = db::cleanup::cleanup_old_runs(&cleanup_db, retention_days as i32);
+        }
 
         if let Err(e) = result {
             let _ = app_clone.emit(

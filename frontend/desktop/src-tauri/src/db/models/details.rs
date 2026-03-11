@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::records::{QuestionRow, StageRow};
 
-/// Full session detail with all runs for the ChatView.
+/// Full session detail with paginated runs for the ChatView.
 #[derive(Serialize, Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionDetail {
@@ -15,6 +15,8 @@ pub struct SessionDetail {
     pub created_at: String,
     pub updated_at: String,
     pub runs: Vec<RunDetail>,
+    /// Total number of runs in this session (for pagination).
+    pub total_runs: i64,
 }
 
 /// Full run detail with iterations, stages, and questions.
@@ -49,18 +51,5 @@ pub struct IterationDetail {
     pub number: i32,
     pub verdict: Option<String>,
     pub judge_reasoning: Option<String>,
-    pub enhanced_prompt: Option<String>,
-    pub planner_plan: Option<String>,
-    pub audit_verdict: Option<String>,
-    pub audit_reasoning: Option<String>,
-    pub audited_plan: Option<String>,
-    pub review_output: Option<String>,
-    pub review_user_guidance: Option<String>,
-    pub fix_output: Option<String>,
-    pub judge_output: Option<String>,
-    pub generate_question: Option<String>,
-    pub generate_answer: Option<String>,
-    pub fix_question: Option<String>,
-    pub fix_answer: Option<String>,
     pub stages: Vec<StageRow>,
 }

@@ -19,6 +19,8 @@ interface SessionDetailViewProps {
   onPauseRun?: (runId: string) => void;
   onResumeRun?: (runId: string) => void;
   onCancelRun?: (runId: string) => void;
+  onLoadMore?: () => void;
+  loadingMore?: boolean;
   onBackToHome: () => void;
 }
 
@@ -35,6 +37,8 @@ export function SessionDetailView({
   onPauseRun,
   onResumeRun,
   onCancelRun,
+  onLoadMore,
+  loadingMore,
   onBackToHome,
 }: SessionDetailViewProps): ReactNode {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -122,13 +126,25 @@ export function SessionDetailView({
           {sessionDetail.title || "Session"}
         </h2>
         <span className="text-xs text-[#6f7086]">
-          {sessionDetail.runs.length} {sessionDetail.runs.length === 1 ? "run" : "runs"}
+          {sessionDetail.totalRuns} {sessionDetail.totalRuns === 1 ? "run" : "runs"}
         </span>
       </div>
 
       {/* Scrollable run history */}
       <div ref={scrollRef} className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-6 [scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto max-w-2xl flex flex-col gap-6">
+          {sessionDetail.runs.length < sessionDetail.totalRuns && onLoadMore && (
+            <div className="flex justify-center">
+              <button
+                onClick={onLoadMore}
+                disabled={loadingMore}
+                className="rounded-lg border border-[#2e2e48] bg-[#1a1a24] px-4 py-2 text-xs text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors disabled:opacity-50"
+              >
+                {loadingMore ? "Loading..." : `Load earlier runs (${sessionDetail.totalRuns - sessionDetail.runs.length} more)`}
+              </button>
+            </div>
+          )}
+
           {sessionDetail.runs.length === 0 && (
             <div className="text-center text-sm text-[#9898b0] py-8">
               No runs in this session yet. Send a prompt to get started.

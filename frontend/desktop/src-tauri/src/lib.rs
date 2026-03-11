@@ -26,6 +26,23 @@ pub fn run() {
     }
     let _ = db::run_status::pause_all_running(&pool);
 
+    // Retention cleanup: delete completed runs older than configured threshold
+    if let Ok(settings) = db::settings::get(&pool) {
+        if settings.retention_days > 0 {
+            match db::cleanup::cleanup_old_runs(&pool, settings.retention_days as i32) {
+                Ok(deleted) if deleted > 0 => {
+                    eprintln!("[startup] Cleaned up {deleted} old runs");
+                }
+                Err(e) => eprintln!("Warning: retention cleanup failed: {e}"),
+                _ => {}
+            }
+        }
+    }
+
+    // Lightweight maintenance — let SQLite optimise its query planner stats.
+    // Avoids full VACUUM which rewrites the entire file and blocks on large DBs.
+    let _ = db::cleanup::pragma_optimize(&pool);
+
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -79,7 +96,6 @@ pub fn run() {
             commands::history::get_session_detail,
             commands::history::create_session,
             commands::history::get_run_detail,
-            commands::history::get_run_logs,
             commands::history::get_run_artifacts,
             commands::history::delete_session,
             // App settings / DB browser commands

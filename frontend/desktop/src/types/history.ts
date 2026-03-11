@@ -57,7 +57,7 @@ export interface SessionSummary {
   updatedAt: string;
 }
 
-/** Full session detail with all runs. */
+/** Full session detail with paginated runs. */
 export interface SessionDetail {
   id: string;
   title: string;
@@ -65,6 +65,8 @@ export interface SessionDetail {
   createdAt: string;
   updatedAt: string;
   runs: RunDetail[];
+  /** Total number of runs in this session (for pagination). */
+  totalRuns: number;
 }
 
 /** Lightweight run summary for history lists. */
@@ -106,19 +108,6 @@ export interface IterationDetail {
   number: number;
   verdict?: string;
   judgeReasoning?: string;
-  enhancedPrompt?: string;
-  plannerPlan?: string;
-  auditVerdict?: string;
-  auditReasoning?: string;
-  auditedPlan?: string;
-  reviewOutput?: string;
-  reviewUserGuidance?: string;
-  fixOutput?: string;
-  judgeOutput?: string;
-  generateQuestion?: string;
-  generateAnswer?: string;
-  fixQuestion?: string;
-  fixAnswer?: string;
   stages: StageEntry[];
 }
 
@@ -131,16 +120,6 @@ export interface StageEntry {
   output: string;
   durationMs: number;
   error?: string;
-  createdAt: string;
-}
-
-/** Stored log entry from the database. */
-export interface LogEntry {
-  id: number;
-  runId: string;
-  stage: string;
-  line: string;
-  stream: string;
   createdAt: string;
 }
 

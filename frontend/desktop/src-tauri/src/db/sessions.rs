@@ -23,6 +23,8 @@ pub fn create(pool: &DbPool, id: &str, project_id: i32, title: &str) -> Result<(
 
 /// Returns sessions for a given project, ordered by last update (most recent first).
 /// Each summary includes run count and last prompt/status.
+///
+/// Uses a single batch query for runs instead of N+1 per-session queries.
 pub fn list_for_project(
     pool: &DbPool,
     project_id: i32,
@@ -37,34 +39,48 @@ pub fn list_for_project(
         .load(&mut conn)
         .map_err(|e| format!("Failed to list sessions: {e}"))?;
 
-    let mut summaries = Vec::with_capacity(session_rows.len());
-    for s in session_rows {
-        // Count runs in this session
-        let run_count: i64 = runs::table
-            .filter(runs::session_id.eq(&s.id))
-            .count()
-            .get_result(&mut conn)
-            .map_err(|e| format!("Failed to count runs: {e}"))?;
-
-        // Get the most recent run for preview
-        let last_run: Option<RunRow> = runs::table
-            .filter(runs::session_id.eq(&s.id))
-            .order(runs::started_at.desc())
-            .first(&mut conn)
-            .optional()
-            .map_err(|e| format!("Failed to get last run: {e}"))?;
-
-        summaries.push(SessionSummary {
-            id: s.id,
-            title: s.title,
-            project_id: s.project_id,
-            run_count,
-            last_prompt: last_run.as_ref().map(|r| truncate(&r.prompt, 80)),
-            last_status: last_run.map(|r| r.status),
-            created_at: s.created_at,
-            updated_at: s.updated_at,
-        });
+    if session_rows.is_empty() {
+        return Ok(Vec::new());
     }
+
+    let session_ids: Vec<&str> = session_rows.iter().map(|s| s.id.as_str()).collect();
+
+    // Batch-load all runs for the fetched sessions in one query
+    let all_runs: Vec<RunRow> = runs::table
+        .filter(runs::session_id.eq_any(&session_ids))
+        .order(runs::started_at.desc())
+        .load(&mut conn)
+        .map_err(|e| format!("Failed to batch-load runs: {e}"))?;
+
+    // Group runs by session_id
+    let mut runs_by_session: std::collections::HashMap<&str, Vec<&RunRow>> =
+        std::collections::HashMap::new();
+    for run in &all_runs {
+        runs_by_session
+            .entry(run.session_id.as_str())
+            .or_default()
+            .push(run);
+    }
+
+    let summaries = session_rows
+        .into_iter()
+        .map(|s| {
+            let session_runs = runs_by_session.get(s.id.as_str());
+            let run_count = session_runs.map_or(0, |r| r.len()) as i64;
+            let last_run = session_runs.and_then(|r| r.first());
+
+            SessionSummary {
+                id: s.id,
+                title: s.title,
+                project_id: s.project_id,
+                run_count,
+                last_prompt: last_run.map(|r| truncate(&r.prompt, 80)),
+                last_status: last_run.map(|r| r.status.clone()),
+                created_at: s.created_at,
+                updated_at: s.updated_at,
+            }
+        })
+        .collect();
 
     Ok(summaries)
 }

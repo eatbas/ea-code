@@ -5,25 +5,6 @@ use crate::schema::{iterations, runs, stages};
 
 use super::models::{NewIteration, NewRun, NewStage};
 
-/// Patch object for updating typed iteration context fields.
-#[derive(AsChangeset, Default)]
-#[diesel(table_name = iterations)]
-pub struct IterationContextPatch<'a> {
-    pub enhanced_prompt: Option<&'a str>,
-    pub planner_plan: Option<&'a str>,
-    pub audit_verdict: Option<&'a str>,
-    pub audit_reasoning: Option<&'a str>,
-    pub audited_plan: Option<&'a str>,
-    pub review_output: Option<&'a str>,
-    pub review_user_guidance: Option<&'a str>,
-    pub fix_output: Option<&'a str>,
-    pub judge_output: Option<&'a str>,
-    pub generate_question: Option<&'a str>,
-    pub generate_answer: Option<&'a str>,
-    pub fix_question: Option<&'a str>,
-    pub fix_answer: Option<&'a str>,
-}
-
 /// Patch object for storing run-level executive summary information.
 #[derive(AsChangeset, Default)]
 #[diesel(table_name = runs)]
@@ -153,28 +134,7 @@ pub fn update_iteration_verdict(
     Ok(())
 }
 
-/// Updates typed context fields for a specific iteration.
-pub fn update_iteration_context(
-    pool: &DbPool,
-    run_id: &str,
-    number: i32,
-    patch: &IterationContextPatch<'_>,
-) -> Result<(), String> {
-    let mut conn = super::get_conn(pool)?;
-
-    diesel::update(
-        iterations::table
-            .filter(iterations::run_id.eq(run_id))
-            .filter(iterations::number.eq(number)),
-    )
-    .set(patch)
-    .execute(&mut conn)
-    .map_err(|e| format!("Failed to update iteration context: {e}"))?;
-
-    Ok(())
-}
-
-/// Inserts a stage result record.
+/// Inserts a stage result record, truncating oversized output.
 pub fn insert_stage(
     pool: &DbPool,
     iteration_id: i32,
@@ -185,13 +145,14 @@ pub fn insert_stage(
     error: Option<&str>,
 ) -> Result<(), String> {
     let mut conn = super::get_conn(pool)?;
+    let capped = super::truncate_for_storage(output);
 
     diesel::insert_into(stages::table)
         .values(&NewStage {
             iteration_id,
             stage,
             status,
-            output,
+            output: &capped,
             duration_ms,
             error,
         })

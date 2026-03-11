@@ -50,6 +50,7 @@ pub struct SettingsRow {
     pub agent_retry_count: i32,
     pub agent_timeout_ms: i32,
     pub agent_max_turns: i32,
+    pub retention_days: i32,
 }
 
 #[derive(AsChangeset)]
@@ -96,4 +97,5 @@ pub struct SettingsChangeset {
     pub agent_retry_count: i32,
     pub agent_timeout_ms: i32,
     pub agent_max_turns: i32,
+    pub retention_days: i32,
 }

@@ -23,6 +23,12 @@ function toStageResult(stage: string, status: string, output: string, durationMs
   };
 }
 
+/** Finds the output of a completed stage by name within the iteration's stages. */
+function findStageOutput(stages: RunDetail["iterations"][0]["stages"], stageName: string): string | undefined {
+  const found = stages.find((s) => s.stage === stageName && s.status === "completed");
+  return found?.output;
+}
+
 /** Displays a single historical run with full step-by-step timeline. */
 export function RunCard({ run, settings }: RunCardProps): ReactNode {
   const allStages = run.iterations.flatMap((iter) => iter.stages);
@@ -47,11 +53,15 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
         <div key={iter.number} className="flex flex-col gap-2">
           {iter.stages.filter((entry) => entry.stage !== "diff_after_coder" && entry.stage !== "diff_after_code_fixer").map((entry) => {
             const stageResult = toStageResult(entry.stage, entry.status, entry.output, entry.durationMs, entry.error);
-            const plannerPlan = resolvePlanText(iter.plannerPlan, entry.output);
-            const auditedPlan = resolveAuditedPlanText(iter.auditedPlan, entry.output);
-            const plannerInputForAudit = resolvePlanText(iter.plannerPlan);
-            const promptEnhanceOutput = (iter.enhancedPrompt ?? entry.output).trim();
-            const enhancedPromptInput = (iter.enhancedPrompt ?? run.prompt).trim();
+            const enhancedPromptText = findStageOutput(iter.stages, "prompt_enhance");
+            const planText = findStageOutput(iter.stages, "plan");
+            const auditText = findStageOutput(iter.stages, "plan_audit");
+            const reviewText = findStageOutput(iter.stages, "code_reviewer");
+            const plannerPlan = resolvePlanText(planText, entry.output);
+            const auditedPlan = resolveAuditedPlanText(auditText, entry.output);
+            const plannerInputForAudit = resolvePlanText(planText);
+            const promptEnhanceOutput = (enhancedPromptText ?? entry.output).trim();
+            const enhancedPromptInput = (enhancedPromptText ?? run.prompt).trim();
             const showPromptEnhanceCard = entry.stage === "prompt_enhance" && entry.status === "completed";
             const showPlanningCard = entry.stage === "plan" && entry.status === "completed";
             const showAuditCard = entry.stage === "plan_audit" && entry.status === "completed";
@@ -107,7 +117,7 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
                       { label: "Enhanced Prompt", content: enhancedPromptInput },
                     ]}
                     outputLabel="Review Findings"
-                    outputContent={iter.reviewOutput ?? entry.output ?? "No review output generated."}
+                    outputContent={reviewText ?? entry.output ?? "No review output generated."}
                     modelLabel={stageModelLabel("code_reviewer", settings)}
                     durationMs={entry.durationMs}
                     badgeClassName="bg-orange-400/25"

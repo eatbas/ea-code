@@ -109,7 +109,7 @@ pub async fn run_iteration(
         request.prompt.clone()
     };
     iter_ctx.enhanced_prompt = enhanced.clone();
-    persist_iteration_context(db, run_id, iter_num, &iter_ctx);
+
     emit_artifact(app, run_id, "enhanced_prompt", &enhanced, iter_num, db);
     if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
 
@@ -197,13 +197,13 @@ pub async fn run_iteration(
 
     if let Some(question) = extract_question(&gen_out) {
         iter_ctx.generate_question = Some(question.clone());
-        persist_iteration_context(db, run_id, iter_num, &iter_ctx);
+    
         let answer = ask_user_question(app, run_id, &PipelineStage::Coder, iter_num, question, gen_out.clone(), false, cancel_flag, answer_sender, db).await?;
         if is_cancelled(cancel_flag) { push_cancel_iteration(run, iter_num, stages); return Ok(true); }
         if let Some(ref a) = answer {
             if !a.skipped && !a.answer.is_empty() {
                 iter_ctx.generate_answer = Some(a.answer.clone());
-                persist_iteration_context(db, run_id, iter_num, &iter_ctx);
+            
                 emit_stage(app, run_id, &PipelineStage::Coder, &StageStatus::Completed, iter_num, db);
             }
         }

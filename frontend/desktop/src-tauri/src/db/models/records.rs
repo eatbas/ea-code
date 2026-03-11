@@ -1,5 +1,5 @@
 /// Database row and insertable types for core tables: projects, sessions,
-/// runs, iterations, stages, logs, artefacts, and questions.
+/// runs, iterations, stages, artefacts, and questions.
 
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -125,19 +125,6 @@ pub struct IterationRow {
     pub number: i32,
     pub verdict: Option<String>,
     pub judge_reasoning: Option<String>,
-    pub enhanced_prompt: Option<String>,
-    pub planner_plan: Option<String>,
-    pub audit_verdict: Option<String>,
-    pub audit_reasoning: Option<String>,
-    pub audited_plan: Option<String>,
-    pub review_output: Option<String>,
-    pub review_user_guidance: Option<String>,
-    pub fix_output: Option<String>,
-    pub judge_output: Option<String>,
-    pub generate_question: Option<String>,
-    pub generate_answer: Option<String>,
-    pub fix_question: Option<String>,
-    pub fix_answer: Option<String>,
     pub plan_approval: Option<String>,
     pub plan_revision_count: i32,
 }
@@ -174,29 +161,6 @@ pub struct NewStage<'a> {
     pub output: &'a str,
     pub duration_ms: i32,
     pub error: Option<&'a str>,
-}
-
-// ── Logs ────────────────────────────────────────────────────────────────
-
-#[derive(Queryable, Selectable, Serialize, Clone, Debug)]
-#[diesel(table_name = logs)]
-#[serde(rename_all = "camelCase")]
-pub struct LogRow {
-    pub id: i32,
-    pub run_id: String,
-    pub stage: String,
-    pub line: String,
-    pub stream: String,
-    pub created_at: String,
-}
-
-#[derive(Insertable)]
-#[diesel(table_name = logs)]
-pub struct NewLog<'a> {
-    pub run_id: &'a str,
-    pub stage: &'a str,
-    pub line: &'a str,
-    pub stream: &'a str,
 }
 
 // ── Artefacts ───────────────────────────────────────────────────────────
