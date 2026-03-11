@@ -202,10 +202,11 @@ async def get_release_info(request: Request):
     Public endpoint returning the latest release version, download URLs,
     and release history for the website download page.
     """
+    releases = await _fetch_releases(count=5)
+
     if _releases_cache.get("release_info"):
         return _releases_cache["release_info"]
 
-    releases = await _fetch_releases(count=5)
     if not releases:
         return Response(status_code=204)
 
