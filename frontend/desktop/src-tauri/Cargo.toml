@@ -1,6 +1,6 @@
 [package]
 name = "ea-code"
-version = "0.2.3"
+version = "0.5.1"
 description = "Multi-CLI AI Orchestrator — orchestrates Claude, Codex, and Gemini CLIs"
 authors = ["eatbas"]
 edition = "2021"
