@@ -109,7 +109,7 @@ pub async fn ask_user_question_with_timeout(
     }
 }
 
-/// Emits the `pipeline:question` event to the frontend.
+/// Emits the pipeline question event to the frontend.
 fn emit_question_event(
     app: &AppHandle,
     run_id: &str,
@@ -123,7 +123,7 @@ fn emit_question_event(
     use tauri::Emitter;
 
     let _ = app.emit(
-        "pipeline:question",
+        EVENT_PIPELINE_QUESTION,
         PipelineQuestionPayload {
             run_id: run_id.to_string(),
             question_id: question_id.to_string(),

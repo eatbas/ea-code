@@ -25,20 +25,20 @@ export const STAGE_LABELS: Record<PipelineStage, string> = {
   direct_task: "Direct Task",
 };
 
-/** Stage badge background colours (rgba strings). */
-export const STAGE_COLOURS: Record<PipelineStage, string> = {
-  prompt_enhance: "rgba(100, 200, 255, 0.22)",
-  skill_select: "rgba(70, 205, 125, 0.24)",
-  plan: "rgba(64, 196, 255, 0.24)",
-  plan_audit: "rgba(255, 196, 64, 0.24)",
-  coder: "rgba(90, 140, 255, 0.25)",
-  diff_after_coder: "rgba(150, 150, 150, 0.22)",
-  code_reviewer: "rgba(255, 180, 50, 0.22)",
-  code_fixer: "rgba(180, 100, 255, 0.22)",
-  diff_after_code_fixer: "rgba(150, 150, 150, 0.22)",
-  judge: "rgba(255, 100, 100, 0.22)",
-  executive_summary: "rgba(0, 200, 80, 0.3)",
-  direct_task: "rgba(90, 140, 255, 0.25)",
+/** Stage badge background classes. */
+export const STAGE_BADGE_CLASSES: Record<PipelineStage, string> = {
+  prompt_enhance: "bg-[#64c8ff]/20",
+  skill_select: "bg-[#46cd7d]/25",
+  plan: "bg-[#40c4ff]/25",
+  plan_audit: "bg-[#ffc440]/25",
+  coder: "bg-[#5a8cff]/25",
+  diff_after_coder: "bg-[#969696]/20",
+  code_reviewer: "bg-[#ffb432]/20",
+  code_fixer: "bg-[#b464ff]/20",
+  diff_after_code_fixer: "bg-[#969696]/20",
+  judge: "bg-[#ff6464]/20",
+  executive_summary: "bg-[#00c850]/30",
+  direct_task: "bg-[#5a8cff]/25",
 };
 
 /** Display labels for artefact kinds. */

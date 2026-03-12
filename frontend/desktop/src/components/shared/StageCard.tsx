@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { StageResult } from "../../types";
 import { formatDuration, normaliseDisplayText } from "../../utils/formatters";
-import { STAGE_LABELS, STAGE_COLOURS } from "./constants";
+import { STAGE_BADGE_CLASSES, STAGE_LABELS } from "./constants";
 
 interface StageCardProps {
   stage: StageResult;
@@ -16,7 +16,7 @@ export function StageCard({ stage, modelLabel, startedAt }: StageCardProps): Rea
   const [, tick] = useState(0);
 
   const label = STAGE_LABELS[stage.stage] ?? stage.stage;
-  const badgeBg = STAGE_COLOURS[stage.stage] ?? "rgba(150,150,150,0.22)";
+  const badgeClass = STAGE_BADGE_CLASSES[stage.stage] ?? "bg-[#969696]/20";
   const isFailed = stage.status === "failed";
   const isCompleted = stage.status === "completed";
   const isSkipped = stage.status === "skipped";
@@ -51,8 +51,7 @@ export function StageCard({ stage, modelLabel, startedAt }: StageCardProps): Rea
           </svg>
         )}
         <span
-          className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
-          style={{ background: badgeBg }}
+          className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed] ${badgeClass}`}
         >
           {label}
         </span>

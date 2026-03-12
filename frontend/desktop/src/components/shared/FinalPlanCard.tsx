@@ -27,8 +27,7 @@ export function FinalPlanCard({ plannerPlan, auditedPlan, durationMs }: FinalPla
           <path d="M8 5v14l11-7z" />
         </svg>
         <span
-          className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
-          style={{ background: "rgba(64, 196, 255, 0.24)" }}
+          className="rounded bg-[#40c4ff]/25 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
         >
           Final Plan
         </span>

@@ -32,8 +32,7 @@ export function PromptCard({ originalPrompt, enhancedPrompt, durationMs }: Promp
           <path d="M8 5v14l11-7z" />
         </svg>
         <span
-          className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
-          style={{ background: "rgba(34, 197, 94, 0.22)" }}
+          className="rounded bg-[#22c55e]/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-[#e4e4ed]"
         >
           Enhanced Prompt
         </span>

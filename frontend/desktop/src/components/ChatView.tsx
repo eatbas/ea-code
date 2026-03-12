@@ -1,16 +1,16 @@
 import type { ReactNode } from "react";
 import type { PipelineRun, RunOptions, CliHealth, AppSettings } from "../types";
-import { isActive, isTerminal, statusInfo } from "../utils/statusHelpers";
+import { isActive, isTerminal, statusInfo, statusToneClasses } from "../utils/statusHelpers";
 import { resolveAuditedPlanText, resolvePlanText } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
 import { useElapsedTimer } from "../hooks/useElapsedTimer";
 import { useRecentTerminal } from "../hooks/useRecentTerminal";
-import { StageCard } from "./shared/StageCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
 import { ResultCard, buildStageRows, computeDuration } from "./shared/ResultCard";
 import { ArtifactCard } from "./shared/ArtifactCard";
 import { PromptReceivedCard } from "./shared/PromptReceivedCard";
 import { StageInputOutputCard } from "./shared/StageInputOutputCard";
+import { RichStageCard } from "./shared/RichStageCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
 import { RecentTerminalPanel } from "./shared/RecentTerminalPanel";
 import { WorkspaceFooter } from "./shared/WorkspaceFooter";
@@ -46,7 +46,8 @@ export function ChatView({
   onContinue,
 }: ChatViewProps): ReactNode {
   const elapsedText = useElapsedTimer(run.status, run.startedAt, run.completedAt);
-  const { label: statusLabel, colour: statusColour } = statusInfo(run.status);
+  const { label: statusLabel } = statusInfo(run.status);
+  const statusClasses = statusToneClasses(run.status);
   const allStages = run.iterations.flatMap((iter) => iter.stages);
   const visibleStages = allStages.filter((stage) => stage.stage !== "diff_after_coder" && stage.stage !== "diff_after_code_fixer");
   const terminal = useRecentTerminal(stageLogs, run.currentStage, allStages);
@@ -78,8 +79,7 @@ export function ChatView({
         </button>
         <h2 className="text-sm font-medium text-[#e4e4ed] truncate">{headerTitle}</h2>
         <span
-          className="ml-auto rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
-          style={{ color: statusColour, background: `${statusColour}1a` }}
+          className={`ml-auto rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${statusClasses.badge}`}
         >
           {statusLabel}
         </span>
@@ -94,50 +94,7 @@ export function ChatView({
           <PromptReceivedCard prompt={run.prompt} />
           {visibleStages.map((stage, idx) => (
             <div key={`${stage.stage}-${idx}`} className="flex flex-col gap-2">
-              {stage.stage === "prompt_enhance" && stage.status === "completed" ? (
-                <StageInputOutputCard
-                  title="Enhancing Prompt"
-                  inputSections={[{ label: "Original Prompt", content: run.prompt }]}
-                  outputLabel="Result"
-                  outputContent={(enhancedPrompt ?? stage.output).trim() || "No valid enhanced prompt output generated."}
-                  modelLabel={stageModelLabel("prompt_enhance", settings)}
-                  durationMs={stage.durationMs}
-                  badgeClassName="bg-emerald-400/25"
-                  outputClassName="border border-emerald-400/20 bg-emerald-400/5 text-[#e4e4ed]"
-                />
-              ) : stage.stage === "plan" && stage.status === "completed" && idx === latestCompletedPlanIndex ? (
-                <StageInputOutputCard
-                  title="Planning"
-                  inputSections={[{ label: "Original Prompt", content: run.prompt }, { label: "Enhanced Prompt", content: enhancedPromptInput }]}
-                  outputLabel="Plan"
-                  outputContent={resolvePlanText(planArtifact, stage.output) || "No valid plan output generated."}
-                  modelLabel={stageModelLabel("plan", settings)}
-                  durationMs={stage.durationMs}
-                  badgeClassName="bg-sky-400/25"
-                />
-              ) : stage.stage === "plan_audit" && stage.status === "completed" && idx === latestCompletedPlanAuditIndex ? (
-                <StageInputOutputCard
-                  title="Auditing Plan"
-                  inputSections={[{ label: "Original Prompt", content: run.prompt }, { label: "Enhanced Prompt", content: enhancedPromptInput }, { label: "Plan", content: planInputForAudit }]}
-                  outputLabel="Audited Plan"
-                  outputContent={resolveAuditedPlanText(planAuditArtifact, stage.output) || "No valid audited plan output generated."}
-                  modelLabel={stageModelLabel("plan_audit", settings)}
-                  durationMs={stage.durationMs}
-                  badgeClassName="bg-amber-400/25"
-                  outputClassName="border border-amber-400/20 bg-amber-400/5 text-[#e4e4ed]"
-                />
-              ) : stage.stage === "code_reviewer" && stage.status === "completed" ? (
-                <StageInputOutputCard
-                  title="Code Review"
-                  inputSections={[{ label: "Original Prompt", content: run.prompt }, { label: "Enhanced Prompt", content: enhancedPromptInput }]}
-                  outputLabel="Review Findings"
-                  outputContent={artifacts["review"] ?? stage.output ?? "No review output generated."}
-                  modelLabel={stageModelLabel("code_reviewer", settings)}
-                  durationMs={stage.durationMs}
-                  badgeClassName="bg-orange-400/25"
-                  outputClassName="border border-orange-400/20 bg-orange-400/5 text-[#e4e4ed]"
-                />
-              ) : stage.stage === "judge" && stage.status === "completed" ? (
+              {stage.stage === "judge" && stage.status === "completed" ? (
                 <StageInputOutputCard
                   title="Judge"
                   inputSections={[
@@ -155,12 +112,23 @@ export function ChatView({
                   outputClassName="border border-rose-400/20 bg-rose-400/5 text-[#e4e4ed]"
                 />
               ) : (
-                <StageCard
+                <RichStageCard
                   stage={stage}
-                  modelLabel={stageModelLabel(stage.stage, settings)}
-                  startedAt={run.status === "running" && run.currentStage === stage.stage && stage.status === "running"
-                    ? run.stageStartedAt
-                    : undefined}
+                  runPrompt={run.prompt}
+                  enhancedPromptInput={enhancedPromptInput}
+                  promptEnhanceOutput={(enhancedPrompt ?? stage.output).trim()}
+                  planOutput={resolvePlanText(planArtifact, stage.output)}
+                  planInputForAudit={planInputForAudit}
+                  auditedPlanOutput={resolveAuditedPlanText(planAuditArtifact, stage.output)}
+                  reviewOutput={artifacts["review"] ?? stage.output ?? ""}
+                  settings={settings}
+                  startedAt={
+                    run.status === "running" && run.currentStage === stage.stage && stage.status === "running"
+                      ? run.stageStartedAt
+                      : undefined
+                  }
+                  showPlanCard={idx === latestCompletedPlanIndex}
+                  showPlanAuditCard={idx === latestCompletedPlanAuditIndex}
                 />
               )}
             </div>
@@ -201,7 +169,7 @@ export function ChatView({
         {(isActive(run.status) || isPaused) && (
           <PipelineControlBar
             statusLabel={statusLabel}
-            statusColour={statusColour}
+            statusClassName={statusClasses.text}
             iterationText={iterationText}
             elapsedText={elapsedText}
             isPaused={isPaused}

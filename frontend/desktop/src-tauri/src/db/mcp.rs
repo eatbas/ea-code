@@ -2,12 +2,13 @@ use std::collections::{BTreeSet, HashMap};
 use diesel::prelude::*;
 use diesel::upsert::excluded;
 use crate::db::DbPool;
+use crate::models::AI_CLI_NAMES;
 use crate::schema::{cli_mcp_bindings, mcp_servers};
 use super::models::{
     CliMcpBindingRow, McpServerChangeset, McpServerRow, NewCliMcpBinding, NewMcpServer,
 };
 
-pub const MCP_CAPABLE_CLIS: [&str; 5] = ["claude", "codex", "gemini", "kimi", "opencode"];
+pub const MCP_CAPABLE_CLIS: [&str; 5] = AI_CLI_NAMES;
 
 struct BuiltinMcpSpec {
     id: &'static str,

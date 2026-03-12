@@ -2,10 +2,11 @@ import type { ReactNode } from "react";
 import type { AppSettings, RunDetail, PipelineStage, StageResult, StageStatus } from "../types";
 import { parseUtcTimestamp, resolveAuditedPlanText, resolvePlanText } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
+import { isActiveStatusValue, isTerminalStatusValue } from "../utils/statusHelpers";
 import { PromptReceivedCard } from "./shared/PromptReceivedCard";
-import { StageInputOutputCard } from "./shared/StageInputOutputCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
 import { StageCard } from "./shared/StageCard";
+import { RichStageCard } from "./shared/RichStageCard";
 import { ResultCard, buildStageRows, computeDuration } from "./shared/ResultCard";
 
 interface RunCardProps {
@@ -32,8 +33,8 @@ function findStageOutput(stages: RunDetail["iterations"][0]["stages"], stageName
 /** Displays a single historical run with full step-by-step timeline. */
 export function RunCard({ run, settings }: RunCardProps): ReactNode {
   const allStages = run.iterations.flatMap((iter) => iter.stages);
-  const isTerminalStatus = run.status === "completed" || run.status === "failed" || run.status === "cancelled";
-  const isActiveStatus = run.status === "running" || run.status === "waiting_for_input";
+  const isTerminalStatus = isTerminalStatusValue(run.status);
+  const isActiveStatus = isActiveStatusValue(run.status);
   const activeStage = run.currentStage ?? (run.status === "running" ? "prompt_enhance" : undefined);
 
   return (
@@ -62,78 +63,27 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
             const plannerInputForAudit = resolvePlanText(planText);
             const promptEnhanceOutput = (enhancedPromptText ?? entry.output).trim();
             const enhancedPromptInput = (enhancedPromptText ?? run.prompt).trim();
-            const showPromptEnhanceCard = entry.stage === "prompt_enhance" && entry.status === "completed";
-            const showPlanningCard = entry.stage === "plan" && entry.status === "completed";
-            const showAuditCard = entry.stage === "plan_audit" && entry.status === "completed";
 
             return (
               <div key={entry.id} className="flex flex-col gap-2">
-                {showPromptEnhanceCard ? (
-                  <StageInputOutputCard
-                    title="Enhancing Prompt"
-                    inputSections={[
-                      { label: "Original Prompt", content: run.prompt },
-                    ]}
-                    outputLabel="Result"
-                    outputContent={promptEnhanceOutput || "No valid enhanced prompt output generated."}
-                    modelLabel={stageModelLabel("prompt_enhance", settings)}
-                    durationMs={entry.durationMs}
-                    badgeClassName="bg-emerald-400/25"
-                    outputClassName="border border-emerald-400/20 bg-emerald-400/5 text-[#e4e4ed]"
-                  />
-                ) : showPlanningCard ? (
-                  <StageInputOutputCard
-                    title="Planning"
-                    inputSections={[
-                      { label: "Original Prompt", content: run.prompt },
-                      { label: "Enhanced Prompt", content: enhancedPromptInput },
-                    ]}
-                    outputLabel="Plan"
-                    outputContent={plannerPlan || "No valid plan output generated."}
-                    modelLabel={stageModelLabel("plan", settings)}
-                    durationMs={entry.durationMs}
-                    badgeClassName="bg-sky-400/25"
-                  />
-                ) : showAuditCard ? (
-                  <StageInputOutputCard
-                    title="Auditing Plan"
-                    inputSections={[
-                      { label: "Original Prompt", content: run.prompt },
-                      { label: "Enhanced Prompt", content: enhancedPromptInput },
-                      { label: "Plan", content: plannerInputForAudit },
-                    ]}
-                    outputLabel="Audited Plan"
-                    outputContent={auditedPlan || "No valid audited plan output generated."}
-                    modelLabel={stageModelLabel("plan_audit", settings)}
-                    durationMs={entry.durationMs}
-                    badgeClassName="bg-amber-400/25"
-                    outputClassName="border border-amber-400/20 bg-amber-400/5 text-[#e4e4ed]"
-                  />
-                ) : entry.stage === "code_reviewer" && entry.status === "completed" ? (
-                  <StageInputOutputCard
-                    title="Code Review"
-                    inputSections={[
-                      { label: "Original Prompt", content: run.prompt },
-                      { label: "Enhanced Prompt", content: enhancedPromptInput },
-                    ]}
-                    outputLabel="Review Findings"
-                    outputContent={reviewText ?? entry.output ?? "No review output generated."}
-                    modelLabel={stageModelLabel("code_reviewer", settings)}
-                    durationMs={entry.durationMs}
-                    badgeClassName="bg-orange-400/25"
-                    outputClassName="border border-orange-400/20 bg-orange-400/5 text-[#e4e4ed]"
-                  />
-                ) : (
-                  <StageCard
-                    stage={stageResult}
-                    modelLabel={stageModelLabel(stageResult.stage, settings)}
-                    startedAt={isActiveStatus && run.currentStage === entry.stage
+                <RichStageCard
+                  stage={stageResult}
+                  runPrompt={run.prompt}
+                  enhancedPromptInput={enhancedPromptInput}
+                  promptEnhanceOutput={promptEnhanceOutput}
+                  planOutput={plannerPlan}
+                  planInputForAudit={plannerInputForAudit}
+                  auditedPlanOutput={auditedPlan}
+                  reviewOutput={reviewText ?? entry.output ?? ""}
+                  settings={settings}
+                  startedAt={
+                    isActiveStatus && run.currentStage === entry.stage
                       ? run.currentStageStartedAt
                         ? parseUtcTimestamp(run.currentStageStartedAt).getTime()
                         : parseUtcTimestamp(run.startedAt).getTime()
-                      : undefined}
-                  />
-                )}
+                      : undefined
+                  }
+                />
               </div>
             );
           })}

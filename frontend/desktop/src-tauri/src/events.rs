@@ -2,6 +2,14 @@ use serde::Serialize;
 
 use crate::models::{JudgeVerdict, PipelineStage, StageStatus};
 
+pub const EVENT_PIPELINE_STARTED: &str = "pipeline:started";
+pub const EVENT_PIPELINE_STAGE: &str = "pipeline:stage";
+pub const EVENT_PIPELINE_LOG: &str = "pipeline:log";
+pub const EVENT_PIPELINE_ARTIFACT: &str = "pipeline:artifact";
+pub const EVENT_PIPELINE_COMPLETED: &str = "pipeline:completed";
+pub const EVENT_PIPELINE_ERROR: &str = "pipeline:error";
+pub const EVENT_PIPELINE_QUESTION: &str = "pipeline:question";
+
 /// Emitted when the pipeline begins execution.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

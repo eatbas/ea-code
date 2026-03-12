@@ -118,8 +118,7 @@ export function PromptInputBar({
           onKeyDown={handleKeyDown}
           placeholder={placeholder ?? "What would you like to build?"}
           rows={1}
-          className="flex-1 resize-none bg-transparent text-sm text-[#e4e4ed] placeholder-[#9898b0] focus:outline-none"
-          style={{ maxHeight: "160px" }}
+          className="max-h-40 flex-1 resize-none bg-transparent text-sm text-[#e4e4ed] placeholder-[#9898b0] focus:outline-none"
         />
         <span
           className="shrink-0"

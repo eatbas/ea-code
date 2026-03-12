@@ -1,5 +1,16 @@
 import type { PipelineStage, StageStatus, JudgeVerdict } from "./pipeline";
 
+/** Shared Tauri event names for pipeline runtime updates. */
+export const PIPELINE_EVENTS = {
+  started: "pipeline:started",
+  stage: "pipeline:stage",
+  log: "pipeline:log",
+  artifact: "pipeline:artifact",
+  question: "pipeline:question",
+  completed: "pipeline:completed",
+  error: "pipeline:error",
+} as const;
+
 // ---- Backend event payloads ----
 
 /** Emitted when a new pipeline run begins. */

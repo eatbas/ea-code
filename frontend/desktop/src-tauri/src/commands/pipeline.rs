@@ -5,7 +5,7 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use crate::db;
-use crate::events::PipelineErrorPayload;
+use crate::events::{PipelineErrorPayload, EVENT_PIPELINE_ERROR};
 use crate::models::*;
 
 use super::AppState;
@@ -77,7 +77,7 @@ pub async fn run_pipeline(
 
         if let Err(e) = result {
             let _ = app_clone.emit(
-                "pipeline:error",
+                EVENT_PIPELINE_ERROR,
                 PipelineErrorPayload {
                     run_id: run_id.clone(),
                     stage: None,

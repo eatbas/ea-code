@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import type { ProjectSummary, SessionSummary } from "../types";
 import { projectDisplayName } from "../utils/formatters";
+import { isActiveStatusValue } from "../utils/statusHelpers";
 
 interface ProjectThreadsListProps {
   projects: ProjectSummary[];
@@ -85,8 +86,7 @@ export function ProjectThreadsList({
                           const isActiveSession = session.id === activeSessionId;
                           const isRunningSession =
                             session.id === runningSessionId ||
-                            session.lastStatus === "running" ||
-                            session.lastStatus === "waiting_for_input";
+                            isActiveStatusValue(session.lastStatus);
                           const isConfirming = confirmingId === session.id;
 
                           if (isConfirming) {

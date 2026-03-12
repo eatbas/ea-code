@@ -23,11 +23,13 @@ export function ArtifactCard({ kind, content, defaultOpen }: ArtifactCardProps):
         {isDiff ? (
           <pre className="overflow-x-auto text-[11px] leading-relaxed whitespace-pre-wrap break-words font-mono">
             {displayContent.split("\n").map((line, i) => {
-              const colour = line.startsWith("+") ? "#22c55e"
-                : line.startsWith("-") ? "#ef4444"
-                : "#e4e4ed";
+              const lineClass = line.startsWith("+")
+                ? "text-[#22c55e]"
+                : line.startsWith("-")
+                  ? "text-[#ef4444]"
+                  : "text-[#e4e4ed]";
               return (
-                <div key={i} style={{ color: colour }}>{line}</div>
+                <div key={i} className={lineClass}>{line}</div>
               );
             })}
           </pre>

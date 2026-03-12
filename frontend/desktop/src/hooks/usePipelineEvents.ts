@@ -1,6 +1,7 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { useEffect } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { PIPELINE_EVENTS } from "../types";
 import type {
   PipelineRun,
   PipelineStartedEvent,
@@ -38,7 +39,7 @@ export function usePipelineEvents({
     const unlisteners: Promise<UnlistenFn>[] = [];
 
     unlisteners.push(
-      listen<PipelineStartedEvent>("pipeline:started", (event) => {
+      listen<PipelineStartedEvent>(PIPELINE_EVENTS.started, (event) => {
         const payload = event.payload;
         const newRun: PipelineRun = {
           id: payload.runId,
@@ -61,7 +62,7 @@ export function usePipelineEvents({
     );
 
     unlisteners.push(
-      listen<PipelineStageEvent>("pipeline:stage", (event) => {
+      listen<PipelineStageEvent>(PIPELINE_EVENTS.stage, (event) => {
         const { runId, stage, status, iteration, durationMs } = event.payload;
         if (!isCurrentRunEvent(runId)) return;
         if (status === "running") {
@@ -115,7 +116,7 @@ export function usePipelineEvents({
     );
 
     unlisteners.push(
-      listen<PipelineLogEvent>("pipeline:log", (event) => {
+      listen<PipelineLogEvent>(PIPELINE_EVENTS.log, (event) => {
         const { runId, stage, line, stream } = event.payload;
         if (!isCurrentRunEvent(runId)) return;
         const prefix = stream === "stderr" ? "[stderr] " : "";
@@ -130,7 +131,7 @@ export function usePipelineEvents({
     );
 
     unlisteners.push(
-      listen<PipelineArtifactEvent>("pipeline:artifact", (event) => {
+      listen<PipelineArtifactEvent>(PIPELINE_EVENTS.artifact, (event) => {
         const { runId, kind, content } = event.payload;
         if (!isCurrentRunEvent(runId)) return;
         setArtifacts((prev) => ({ ...prev, [kind]: content }));
@@ -138,14 +139,14 @@ export function usePipelineEvents({
     );
 
     unlisteners.push(
-      listen<PipelineQuestionEvent>("pipeline:question", (event) => {
+      listen<PipelineQuestionEvent>(PIPELINE_EVENTS.question, (event) => {
         if (!isCurrentRunEvent(event.payload.runId)) return;
         setPendingQuestion(event.payload);
       }),
     );
 
     unlisteners.push(
-      listen<PipelineCompletedEvent>("pipeline:completed", (event) => {
+      listen<PipelineCompletedEvent>(PIPELINE_EVENTS.completed, (event) => {
         const { runId, verdict, totalIterations, durationMs } = event.payload;
         if (!isCurrentRunEvent(runId)) return;
         setRun((prev) => {
@@ -166,7 +167,7 @@ export function usePipelineEvents({
     );
 
     unlisteners.push(
-      listen<PipelineErrorEvent>("pipeline:error", (event) => {
+      listen<PipelineErrorEvent>(PIPELINE_EVENTS.error, (event) => {
         const { runId, message } = event.payload;
         if (!isCurrentRunEvent(runId)) return;
         const lowerMessage = message.toLowerCase();

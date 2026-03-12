@@ -2,8 +2,8 @@ use tauri::State;
 
 use crate::db;
 use crate::models::{
-    AppSettings, McpCliFixResult, McpCliRuntimeStatus, McpCliServerRuntimeStatus, McpRuntimeStatus,
-    McpVerificationConfidence,
+    AppSettings, McpCliFixResult, McpCliRuntimeStatus, McpCliServerRuntimeStatus,
+    McpRuntimeStatus, McpVerificationConfidence, AI_CLI_NAMES,
 };
 
 use super::AppState;
@@ -11,7 +11,6 @@ use super::AppState;
 mod native;
 mod parse;
 
-const AI_MCP_CLIS: [&str; 5] = ["claude", "codex", "gemini", "kimi", "opencode"];
 pub(super) const BUILTIN_SERVER_IDS: [&str; 2] = ["context7", "playwright"];
 
 #[derive(Debug, serde::Deserialize)]
@@ -26,10 +25,12 @@ pub async fn get_mcp_cli_runtime_statuses(
     state: State<'_, AppState>,
 ) -> Result<Vec<McpCliRuntimeStatus>, String> {
     let settings = db::settings::get(&state.db)?;
-    let mut rows = Vec::with_capacity(AI_MCP_CLIS.len());
+    let mut rows = Vec::with_capacity(AI_CLI_NAMES.len());
 
-    for cli_name in AI_MCP_CLIS {
-        let path = cli_path_for_name(&settings, cli_name);
+    for cli_name in AI_CLI_NAMES {
+        let Some(path) = settings.path_for_cli(cli_name) else {
+            continue;
+        };
         let cli_installed = super::cli::is_cli_available(path).await;
         let server_statuses = build_runtime_statuses(path, cli_name, cli_installed).await;
         rows.push(McpCliRuntimeStatus {
@@ -50,7 +51,7 @@ pub async fn run_cli_mcp_fix_with_prompt(
     let cli_name = request.cli_name.trim().to_lowercase();
     let server_id = request.server_id.trim().to_lowercase();
 
-    if !AI_MCP_CLIS.contains(&cli_name.as_str()) {
+    if !AppSettings::is_supported_cli(&cli_name) {
         return Err(format!("Unsupported CLI for MCP fix: {}", request.cli_name));
     }
     if !BUILTIN_SERVER_IDS.contains(&server_id.as_str()) {
@@ -58,7 +59,9 @@ pub async fn run_cli_mcp_fix_with_prompt(
     }
 
     let settings = db::settings::get(&state.db)?;
-    let cli_path = cli_path_for_name(&settings, &cli_name);
+    let cli_path = settings
+        .path_for_cli(&cli_name)
+        .ok_or_else(|| format!("Unsupported CLI for MCP fix: {}", request.cli_name))?;
     let cli_installed = super::cli::is_cli_available(cli_path).await;
     if !cli_installed {
         return Ok(McpCliFixResult {
@@ -78,7 +81,10 @@ pub async fn run_cli_mcp_fix_with_prompt(
         None
     };
 
-    let model = default_model_for_cli(&settings, &cli_name);
+    let model = settings
+        .primary_model_for_cli(&cli_name)
+        .or_else(|| AppSettings::default_model_for_cli(&cli_name).map(str::to_string))
+        .unwrap_or_default();
     let prompt = build_fix_prompt(&cli_name, &server_id, context7_api_key.as_deref());
     let args = build_fix_args(&cli_name, &model, &prompt);
     let arg_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
@@ -189,40 +195,6 @@ async fn verify_single_server_runtime(
             McpVerificationConfidence::Native,
         ),
         Err(_) => (McpRuntimeStatus::Error, McpVerificationConfidence::Native),
-    }
-}
-
-fn cli_path_for_name<'a>(settings: &'a AppSettings, cli_name: &str) -> &'a str {
-    match cli_name {
-        "claude" => settings.claude_path.as_str(),
-        "codex" => settings.codex_path.as_str(),
-        "gemini" => settings.gemini_path.as_str(),
-        "kimi" => settings.kimi_path.as_str(),
-        "opencode" => settings.opencode_path.as_str(),
-        _ => "",
-    }
-}
-
-fn default_model_for_cli(settings: &AppSettings, cli_name: &str) -> String {
-    let csv = match cli_name {
-        "claude" => settings.claude_model.as_str(),
-        "codex" => settings.codex_model.as_str(),
-        "gemini" => settings.gemini_model.as_str(),
-        "kimi" => settings.kimi_model.as_str(),
-        "opencode" => settings.opencode_model.as_str(),
-        _ => "",
-    };
-    let first = csv.split(',').next().unwrap_or("").trim();
-    if !first.is_empty() {
-        return first.to_string();
-    }
-    match cli_name {
-        "claude" => "sonnet".to_string(),
-        "codex" => "gpt-5.3-codex".to_string(),
-        "gemini" => "gemini-2.5-pro".to_string(),
-        "kimi" => "kimi-code".to_string(),
-        "opencode" => "opencode/glm-5".to_string(),
-        _ => String::new(),
     }
 }
 

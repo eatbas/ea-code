@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import type { PipelineStage } from "../../types";
 import { formatDuration, formatTimestamp, formatTokens, normaliseDisplayText, parseCliResult, parseUtcTimestamp } from "../../utils/formatters";
+import { statusToneClasses } from "../../utils/statusHelpers";
 import { STAGE_LABELS } from "./constants";
 
 interface ResultCardProps {
-  /** Run status — "completed", "failed", "cancelled", etc. */
+  /** Run status - "completed", "failed", "cancelled", etc. */
   status: string;
   finalVerdict?: string;
   iterationCount: number;
@@ -14,7 +15,7 @@ interface ResultCardProps {
   error?: string;
   /** Stage timing rows for collapsible breakdown. */
   stageRows?: { name: string; durationMs: number }[];
-  /** Raw artifact map — used for tokens, raw output, and judge detail sections. */
+  /** Raw artifact map - used for tokens, raw output, and judge detail sections. */
   artifacts?: Record<string, string>;
 }
 
@@ -30,19 +31,7 @@ export function ResultCard({
   stageRows,
   artifacts,
 }: ResultCardProps): ReactNode {
-  const statusColour = status === "completed"
-    ? "#22c55e"
-    : status === "failed"
-      ? "#ef4444"
-      : status === "paused"
-        ? "#60a5fa"
-      : status === "cancelled"
-        ? "#f59e0b"
-        : "#9898b0";
-
-  const isOk = status === "completed";
-  const bgTint = isOk ? "rgba(40,180,95,0.10)" : status === "failed" ? "rgba(230,75,75,0.10)" : "#1a1a24";
-  const borderTint = isOk ? "rgba(40,180,95,0.30)" : status === "failed" ? "rgba(230,75,75,0.30)" : "#2e2e48";
+  const statusClasses = statusToneClasses(status);
 
   // Extract token info from CLI result artifact if available
   const cliResult = artifacts?.["result"] ? parseCliResult(artifacts["result"]) : null;
@@ -56,21 +45,15 @@ export function ResultCard({
   const resultText = cliResult?.result ?? executiveSummary;
 
   return (
-    <div
-      className="rounded-lg border px-3 py-2"
-      style={{ background: bgTint, borderColor: borderTint }}
-    >
+    <div className={`rounded-lg border px-3 py-2 ${statusClasses.cardBg} ${statusClasses.cardBorder}`}>
       {/* Status row */}
       <div className="flex items-center gap-2">
-        <div className="h-2 w-2 rounded-full" style={{ backgroundColor: statusColour }} />
-        <span className="text-xs font-medium capitalize" style={{ color: statusColour }}>
+        <div className={`h-2 w-2 rounded-full ${statusClasses.dot}`} />
+        <span className={`text-xs font-medium capitalize ${statusClasses.text}`}>
           {status}
         </span>
         {finalVerdict && (
-          <span
-            className="text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold"
-            style={{ color: statusColour, backgroundColor: `${statusColour}15` }}
-          >
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${statusClasses.badge}`}>
             {finalVerdict}
           </span>
         )}
@@ -89,7 +72,7 @@ export function ResultCard({
 
       {/* Result / executive summary text */}
       {resultText && (
-        <p className="mt-2 text-xs text-[#c4c4d4] whitespace-pre-wrap leading-relaxed">
+        <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[#c4c4d4]">
           {resultText}
         </p>
       )}
@@ -101,10 +84,10 @@ export function ResultCard({
       {hasTokens && (
         <div className="mt-1.5 flex items-center gap-3 text-[10px]">
           {totalInputDisplay > 0 && (
-            <span className="text-blue-400">↑~{formatTokens(totalInputDisplay)}</span>
+            <span className="text-blue-400">↑ ~{formatTokens(totalInputDisplay)}</span>
           )}
           {outputTokens !== undefined && outputTokens > 0 && (
-            <span className="text-green-400">↓~{formatTokens(outputTokens)}</span>
+            <span className="text-green-400">↓ ~{formatTokens(outputTokens)}</span>
           )}
         </div>
       )}

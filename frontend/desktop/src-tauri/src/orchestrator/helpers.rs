@@ -184,7 +184,7 @@ pub fn emit_stage_with_duration(
     db: &DbPool,
 ) {
     let _ = app.emit(
-        "pipeline:stage",
+        EVENT_PIPELINE_STAGE,
         PipelineStagePayload {
             run_id: run_id.to_string(),
             stage: stage.clone(),
@@ -233,7 +233,7 @@ pub fn emit_artifact(
     db: &DbPool,
 ) {
     let _ = app.emit(
-        "pipeline:artifact",
+        EVENT_PIPELINE_ARTIFACT,
         PipelineArtifactPayload {
             run_id: run_id.to_string(),
             kind: kind.to_string(),

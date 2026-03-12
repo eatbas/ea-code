@@ -62,3 +62,15 @@ button {
   from { transform: translateX(-120%); }
   to { transform: translateX(120%); }
 }
+
+.thinking-sweep-overlay {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(34, 197, 94, 0.08) 35%,
+    rgba(34, 197, 94, 0.34) 50%,
+    rgba(34, 197, 94, 0.08) 65%,
+    transparent 100%
+  );
+  animation: thinking-sweep 1.6s linear infinite;
+}

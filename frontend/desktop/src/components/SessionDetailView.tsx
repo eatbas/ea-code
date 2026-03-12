@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import type { SessionDetail, RunOptions, CliHealth, AppSettings } from "../types";
 import { useElapsedTimer } from "../hooks/useElapsedTimer";
 import { useRecentTerminal } from "../hooks/useRecentTerminal";
+import { isActiveStatusValue, isLiveSessionStatus, statusToneClasses } from "../utils/statusHelpers";
 import { RunCard } from "./RunCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
 import { RecentTerminalPanel } from "./shared/RecentTerminalPanel";
@@ -51,9 +52,7 @@ export function SessionDetailView({
   }, [sessionDetail?.id, sessionDetail?.runs.length]);
 
   const runs = sessionDetail?.runs ?? [];
-  const liveRun = [...runs].reverse().find(
-    (run) => run.status === "running" || run.status === "waiting_for_input" || run.status === "paused",
-  );
+  const liveRun = [...runs].reverse().find((run) => isLiveSessionStatus(run.status));
 
   const liveStatusLabel =
     liveRun?.status === "paused"
@@ -61,8 +60,8 @@ export function SessionDetailView({
       : liveRun?.status === "waiting_for_input"
         ? "Awaiting input"
         : "Running";
-  const liveStatusColour = liveRun?.status === "paused" ? "#60a5fa" : liveRun?.status === "waiting_for_input" ? "#f59e0b" : "#22c55e";
-  const showPause = liveRun?.status === "running" || liveRun?.status === "waiting_for_input";
+  const liveStatusClasses = statusToneClasses(liveRun?.status);
+  const showPause = isActiveStatusValue(liveRun?.status);
   const showResume = liveRun?.status === "paused";
   const hasLiveTerminal = !!liveRun && liveRun.id === activeRunId;
 
@@ -152,7 +151,7 @@ export function SessionDetailView({
         {liveRun ? (
           <PipelineControlBar
             statusLabel={liveStatusLabel}
-            statusColour={liveStatusColour}
+            statusClassName={liveStatusClasses.text}
             iterationText={iterationText}
             elapsedText={elapsedText}
             isPaused={!!showResume}

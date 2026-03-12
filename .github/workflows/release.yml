@@ -60,46 +60,46 @@ jobs:
           updaterJsonPreferNsis: true
           includeUpdaterJson: true
 
-  build-macos:
-    runs-on: macos-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: "lts/*"
-          cache: "npm"
-          cache-dependency-path: frontend/desktop/package-lock.json
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
-
-      - name: Cache Rust dependencies
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: frontend/desktop/src-tauri -> target
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Build Tauri app (macOS universal DMG)
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          projectPath: frontend/desktop
-          args: --target universal-apple-darwin --bundles dmg
-          tagName: v__VERSION__
-          releaseName: "EA Code v__VERSION__"
-          releaseBody: "See the assets below to download the installer for your platform."
-          releaseDraft: false
-          prerelease: false
-          includeUpdaterJson: true
+  # build-macos:
+  #   runs-on: macos-latest
+  #   permissions:
+  #     contents: write
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v5
+  #
+  #     - name: Setup Node.js
+  #       uses: actions/setup-node@v5
+  #       with:
+  #         node-version: "lts/*"
+  #         cache: "npm"
+  #         cache-dependency-path: frontend/desktop/package-lock.json
+  #
+  #     - name: Install Rust stable
+  #       uses: dtolnay/rust-toolchain@stable
+  #       with:
+  #         targets: aarch64-apple-darwin,x86_64-apple-darwin
+  #
+  #     - name: Cache Rust dependencies
+  #       uses: swatinem/rust-cache@v2
+  #       with:
+  #         workspaces: frontend/desktop/src-tauri -> target
+  #
+  #     - name: Install frontend dependencies
+  #       run: npm ci
+  #
+  #     - name: Build Tauri app (macOS universal DMG)
+  #       uses: tauri-apps/tauri-action@v0
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #         TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+  #         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+  #       with:
+  #         projectPath: frontend/desktop
+  #         args: --target universal-apple-darwin --bundles dmg
+  #         tagName: v__VERSION__
+  #         releaseName: "EA Code v__VERSION__"
+  #         releaseBody: "See the assets below to download the installer for your platform."
+  #         releaseDraft: false
+  #         prerelease: false
+  #         includeUpdaterJson: true

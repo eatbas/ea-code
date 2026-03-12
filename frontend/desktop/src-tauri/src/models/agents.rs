@@ -38,18 +38,10 @@ pub(crate) fn default_opencode_path() -> String {
     "opencode".to_string()
 }
 
-pub(crate) fn default_copilot_path() -> String {
-    "gh".to_string()
-}
-
 pub(crate) fn default_kimi_model() -> String {
     "kimi-code/kimi-for-coding".to_string()
 }
 
 pub(crate) fn default_opencode_model() -> String {
     "opencode/glm-5".to_string()
-}
-
-pub(crate) fn default_copilot_model() -> String {
-    "default".to_string()
 }

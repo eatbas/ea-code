@@ -77,7 +77,7 @@ pub async fn run_pipeline(
     };
 
     let _ = app.emit(
-        "pipeline:started",
+        EVENT_PIPELINE_STARTED,
         PipelineStartedPayload {
             run_id: run_id.clone(),
             session_id: session_id.clone(),

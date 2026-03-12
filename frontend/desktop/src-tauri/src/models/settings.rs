@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use super::agents::{
-    default_copilot_model, default_copilot_path, default_executive_summary_model,
-    default_kimi_model, default_kimi_path, default_opencode_model, default_opencode_path,
-    AgentBackend,
+    default_executive_summary_model, default_kimi_model, default_kimi_path,
+    default_opencode_model, default_opencode_path, AgentBackend,
 };
+
+pub const AI_CLI_NAMES: [&str; 5] = ["claude", "codex", "gemini", "kimi", "opencode"];
 
 /// Application settings persisted locally.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -15,8 +16,6 @@ pub struct AppSettings {
     pub gemini_path: String,
     #[serde(default = "default_kimi_path")]
     pub kimi_path: String,
-    #[serde(default = "default_copilot_path")]
-    pub copilot_path: String,
     #[serde(default = "default_opencode_path")]
     pub opencode_path: String,
     #[serde(default)]
@@ -46,9 +45,6 @@ pub struct AppSettings {
     /// Comma-separated list of enabled Kimi models.
     #[serde(default = "default_kimi_model")]
     pub kimi_model: String,
-    /// Comma-separated list of enabled Copilot models.
-    #[serde(default = "default_copilot_model")]
-    pub copilot_model: String,
     /// Comma-separated list of enabled OpenCode models.
     #[serde(default = "default_opencode_model")]
     pub opencode_model: String,
@@ -121,7 +117,6 @@ impl Default for AppSettings {
             codex_path: "codex".to_string(),
             gemini_path: "gemini".to_string(),
             kimi_path: "kimi".to_string(),
-            copilot_path: "gh".to_string(),
             opencode_path: "opencode".to_string(),
             prompt_enhancer_agent: None,
             planner_agent: None,
@@ -136,7 +131,6 @@ impl Default for AppSettings {
             codex_model: "gpt-5.3-codex".to_string(),
             gemini_model: "gemini-2.5-pro".to_string(),
             kimi_model: "kimi-code/kimi-for-coding".to_string(),
-            copilot_model: "default".to_string(),
             opencode_model: "opencode/glm-5".to_string(),
             prompt_enhancer_model: "sonnet".to_string(),
             skill_selector_model: None,
@@ -162,6 +156,53 @@ impl Default for AppSettings {
 }
 
 impl AppSettings {
+    pub fn is_supported_cli(cli_name: &str) -> bool {
+        AI_CLI_NAMES.contains(&cli_name)
+    }
+
+    pub fn path_for_cli(&self, cli_name: &str) -> Option<&str> {
+        match cli_name {
+            "claude" => Some(self.claude_path.as_str()),
+            "codex" => Some(self.codex_path.as_str()),
+            "gemini" => Some(self.gemini_path.as_str()),
+            "kimi" => Some(self.kimi_path.as_str()),
+            "opencode" => Some(self.opencode_path.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn model_csv_for_cli(&self, cli_name: &str) -> Option<&str> {
+        match cli_name {
+            "claude" => Some(self.claude_model.as_str()),
+            "codex" => Some(self.codex_model.as_str()),
+            "gemini" => Some(self.gemini_model.as_str()),
+            "kimi" => Some(self.kimi_model.as_str()),
+            "opencode" => Some(self.opencode_model.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn primary_model_for_cli(&self, cli_name: &str) -> Option<String> {
+        let csv = self.model_csv_for_cli(cli_name)?;
+        let first = csv.split(',').next().unwrap_or("").trim();
+        if first.is_empty() {
+            None
+        } else {
+            Some(first.to_string())
+        }
+    }
+
+    pub fn default_model_for_cli(cli_name: &str) -> Option<&'static str> {
+        match cli_name {
+            "claude" => Some("sonnet"),
+            "codex" => Some("gpt-5.3-codex"),
+            "gemini" => Some("gemini-2.5-pro"),
+            "kimi" => Some("kimi-code"),
+            "opencode" => Some("opencode/glm-5"),
+            _ => None,
+        }
+    }
+
     pub fn missing_minimum_agents(&self) -> Vec<&'static str> {
         let mut missing = Vec::new();
 

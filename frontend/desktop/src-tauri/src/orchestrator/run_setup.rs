@@ -215,7 +215,7 @@ pub fn emit_final_status(
     match &run.status {
         PipelineStatus::Completed => {
             let _ = app.emit(
-                "pipeline:completed",
+                EVENT_PIPELINE_COMPLETED,
                 PipelineCompletedPayload {
                     run_id: run.id.clone(),
                     verdict: run.final_verdict.clone().unwrap_or(JudgeVerdict::NotComplete),
@@ -226,7 +226,7 @@ pub fn emit_final_status(
         }
         PipelineStatus::Failed => {
             let _ = app.emit(
-                "pipeline:error",
+                EVENT_PIPELINE_ERROR,
                 PipelineErrorPayload {
                     run_id: run.id.clone(),
                     stage: None,
@@ -236,7 +236,7 @@ pub fn emit_final_status(
         }
         PipelineStatus::Cancelled => {
             let _ = app.emit(
-                "pipeline:error",
+                EVENT_PIPELINE_ERROR,
                 PipelineErrorPayload {
                     run_id: run.id.clone(),
                     stage: None,
