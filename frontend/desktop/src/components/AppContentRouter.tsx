@@ -164,7 +164,7 @@ export function AppContentRouter({
     );
   }
 
-  if (activeView === "mcp") return <McpView />;
+  if (activeView === "mcp") return <McpView cliHealth={cliHealth} />;
   if (activeView === "app-settings") return <AppSettingsView />;
 
   if (activeSessionId) {

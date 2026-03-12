@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
-import type { McpServer } from "../types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import type { CliHealth, McpServer, McpRuntimeStatus } from "../types";
 import { useMcpServers } from "../hooks/useMcpServers";
 import { useMcpRuntime } from "../hooks/useMcpRuntime";
-import type { McpRuntimeStatus } from "../types";
+import { useToast } from "./shared/Toast";
 
 const AI_CLI_ORDER = ["claude", "codex", "gemini", "kimi", "opencode"] as const;
 
@@ -49,18 +50,25 @@ function parseEnv(raw: string): Record<string, string> {
   }
 }
 
+interface McpViewProps {
+  cliHealth: CliHealth | null;
+}
+
 /** MCP server catalogue and per-CLI binding management view. */
-export function McpView(): ReactNode {
-  const { servers, capableClis, loading, setEnabled, setBindings, setContext7ApiKey } = useMcpServers();
+export function McpView({ cliHealth }: McpViewProps): ReactNode {
+  const toast = useToast();
+  const { servers, loading, setEnabled, setBindings, setContext7ApiKey } = useMcpServers();
   const {
     runtimeStatuses,
     runtimeLoading,
     runtimeError,
     fixingKey,
     lastFixResultByKey,
+    refreshRuntimeStatuses,
     runFixWithPrompt,
   } = useMcpRuntime();
   const [busy, setBusy] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [context7ApiKey, setContext7ApiKeyValue] = useState<string>("");
 
   const builtinOrder = ["context7", "playwright"];
@@ -76,6 +84,15 @@ export function McpView(): ReactNode {
     [runtimeStatuses],
   );
 
+  /** Derive CLI availability from the app-level health check (no extra backend call). */
+  function isCliInstalled(cliName: string): boolean {
+    const runtime = runtimeByCli.get(cliName);
+    if (runtime !== undefined) return runtime.cliInstalled;
+    if (!cliHealth) return false;
+    const entry = cliHealth[cliName as keyof CliHealth];
+    return entry?.available ?? false;
+  }
+
   useEffect(() => {
     const context7 = builtinServers.find((server) => server.id === "context7");
     if (!context7) {
@@ -85,6 +102,17 @@ export function McpView(): ReactNode {
     const env = parseEnv(context7.env);
     setContext7ApiKeyValue(env.CONTEXT7_API_KEY ?? "");
   }, [builtinServers]);
+
+  const handleRefresh = useCallback(async (): Promise<void> => {
+    setRefreshing(true);
+    try {
+      await invoke("invalidate_cli_cache");
+      await refreshRuntimeStatuses();
+      toast.success("MCP runtime status refreshed.");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshRuntimeStatuses, toast]);
 
   async function toggleEnabled(server: McpServer, enabled: boolean): Promise<void> {
     setBusy(server.id);
@@ -119,17 +147,30 @@ export function McpView(): ReactNode {
     await runFixWithPrompt({ cliName, serverId });
   }
 
+  const actionsDisabled = loading || runtimeLoading || refreshing;
+
   return (
     <div className="flex h-full flex-col bg-[#0f0f14]">
       <div className="flex-1 overflow-y-auto px-8 py-8">
         <div className="mx-auto flex max-w-4xl flex-col gap-6">
-          <h1 className="text-xl font-bold text-[#e4e4ed]">MCP Servers</h1>
-          <p className="text-sm text-[#9898b0]">
-            Only curated servers are available: Context7 and Playwright.
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-[#e4e4ed]">MCP Servers</h1>
+              <p className="mt-1 text-sm text-[#9898b0]">
+                Only curated servers are available: Context7 and Playwright.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleRefresh()}
+              disabled={actionsDisabled}
+              className="rounded-md border border-[#2e2e48] bg-[#24243a] px-4 py-2 text-sm font-medium text-[#9898b0] transition-colors hover:bg-[#2e2e48] hover:text-[#e4e4ed] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {refreshing || runtimeLoading ? "Checking..." : "Refresh"}
+            </button>
+          </div>
 
           {loading && <div className="text-sm text-[#9898b0]">Loading MCP servers...</div>}
-          {runtimeLoading && <div className="text-sm text-[#9898b0]">Loading runtime status...</div>}
           {runtimeError && <div className="text-sm text-[#ef4444]">{runtimeError}</div>}
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -159,7 +200,7 @@ export function McpView(): ReactNode {
                       const runtime = runtimeByCli.get(cliName);
                       const status =
                         runtime?.serverStatuses.find((row) => row.serverId === server.id)?.status ?? "unknown";
-                      const installed = runtime?.cliInstalled ?? capableClis.includes(cliName);
+                      const installed = isCliInstalled(cliName);
                       const bound = server.cliBindings.includes(cliName);
                       const actionKey = `${cliName}:${server.id}`;
                       const fixResult = lastFixResultByKey[actionKey];

@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration as StdDuration, Instant};
+
 use tauri::AppHandle;
 use crate::models::*;
 use super::cli_util::{extract_version_from_output, run_npm};
@@ -8,6 +12,37 @@ use tokio::time::{timeout, Duration};
 #[cfg(not(target_os = "windows"))]
 fn path_probe_command() -> &'static str {
     "which"
+}
+
+// ---------------------------------------------------------------------------
+// CLI availability cache — populated by check_cli_health, reused everywhere.
+// ---------------------------------------------------------------------------
+
+static CLI_CACHE: OnceLock<Mutex<HashMap<String, (bool, Instant)>>> = OnceLock::new();
+const CLI_CACHE_TTL_SECS: u64 = 7200; // 2 hours
+
+fn cli_cache() -> &'static Mutex<HashMap<String, (bool, Instant)>> {
+    CLI_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn cached_availability(key: &str) -> Option<bool> {
+    let guard = cli_cache().lock().ok()?;
+    let (available, ts) = guard.get(key)?;
+    (ts.elapsed() < StdDuration::from_secs(CLI_CACHE_TTL_SECS)).then_some(*available)
+}
+
+fn store_availability(key: &str, available: bool) {
+    if let Ok(mut guard) = cli_cache().lock() {
+        guard.insert(key.to_string(), (available, Instant::now()));
+    }
+}
+
+#[tauri::command]
+pub async fn invalidate_cli_cache() -> Result<(), String> {
+    if let Ok(mut guard) = cli_cache().lock() {
+        guard.clear();
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -52,22 +87,11 @@ pub async fn update_cli(app: AppHandle, cli_name: String) -> Result<String, Stri
     }
 }
 async fn check_single_cli(path: &str) -> CliStatus {
-    #[cfg(target_os = "windows")]
-    {
-        let available = git_bash::command_exists(path).await;
-        return if available {
-            CliStatus { available: true, path: path.to_string(), error: None }
-        } else {
-            CliStatus { available: false, path: path.to_string(), error: Some(format!("{path} not found in Git Bash PATH")) }
-        };
-    }
-    #[cfg(not(target_os = "windows"))]
-    let probe = path_probe_command();
-    #[cfg(not(target_os = "windows"))]
-    match tokio::process::Command::new(probe).arg(path).output().await {
-        Ok(output) if output.status.success() => CliStatus { available: true, path: path.to_string(), error: None },
-        Ok(_) => CliStatus { available: false, path: path.to_string(), error: Some(format!("{path} not found in PATH")) },
-        Err(e) => CliStatus { available: false, path: path.to_string(), error: Some(format!("Failed to check {path} with {probe}: {e}")) },
+    let available = check_binary_exists(path).await;
+    CliStatus {
+        available,
+        path: path.to_string(),
+        error: if available { None } else { Some(format!("{path} not found in PATH")) },
     }
 }
 pub(crate) async fn check_cli_health_inner(settings: &AppSettings) -> Result<CliHealth, String> {
@@ -129,20 +153,27 @@ fn update_git_bash(app: &AppHandle) -> Result<String, String> {
     Ok("Opened Git download page — install the latest version to update.".to_string())
 }
 async fn check_binary_exists(path: &str) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        return git_bash::command_exists(path).await;
+    if let Some(cached) = cached_availability(path) {
+        return cached;
     }
+
+    #[cfg(target_os = "windows")]
+    let result = git_bash::command_exists(path).await;
+
     #[cfg(not(target_os = "windows"))]
-    let probe = path_probe_command();
-    #[cfg(not(target_os = "windows"))]
-    matches!(
-        tokio::process::Command::new(probe)
-            .arg(path)
-            .output()
-            .await,
-        Ok(output) if output.status.success()
-    )
+    let result = {
+        let probe = path_probe_command();
+        matches!(
+            tokio::process::Command::new(probe)
+                .arg(path)
+                .output()
+                .await,
+            Ok(output) if output.status.success()
+        )
+    };
+
+    store_availability(path, result);
+    result
 }
 
 pub(crate) async fn is_cli_available(path: &str) -> bool {
@@ -221,6 +252,28 @@ async fn build_cli_version_info(
     cli_name: &str,
     npm_package: &str,
 ) -> CliVersionInfo {
+    let update_command = if cli_name == "kimi" {
+        "uv tool upgrade kimi-cli --no-cache".to_string()
+    } else {
+        format!("npm install -g {npm_package}@latest")
+    };
+
+    // Quick availability check (cache hit after check_cli_health populates it).
+    let exists = check_binary_exists(path).await;
+    if !exists {
+        // CLI not installed — skip all version queries entirely.
+        return CliVersionInfo {
+            name: display_name.to_string(),
+            cli_name: cli_name.to_string(),
+            installed_version: None,
+            latest_version: None,
+            up_to_date: false,
+            update_command,
+            available: false,
+            error: Some(format!("{path} not found in PATH")),
+        };
+    }
+
     // Phase 1: Try reading version from package.json on disk (no process spawn).
     let pkg_version = if cli_name != "kimi" {
         get_npm_package_version(npm_package).await
@@ -228,10 +281,10 @@ async fn build_cli_version_info(
         None
     };
 
-    // Phase 2: Parallel — HTTP latest + binary existence + maybe --version.
+    // Phase 2: Parallel — HTTP latest + maybe --version.
     // Skip the costly --version spawn when we already have a file-based version.
     let need_cli_version = pkg_version.is_none();
-    let (cli_version, latest, exists) = tokio::join!(
+    let (cli_version, latest) = tokio::join!(
         async {
             if need_cli_version {
                 get_installed_version(path).await
@@ -240,22 +293,14 @@ async fn build_cli_version_info(
             }
         },
         get_latest_version(cli_name, npm_package),
-        check_binary_exists(path),
     );
     let installed = pkg_version.or(cli_version);
-    let available = installed.is_some() || exists;
     let up_to_date = matches!((&installed, &latest), (Some(i), Some(l)) if i == l);
-    let update_command = if cli_name == "kimi" {
-        "uv tool upgrade kimi-cli --no-cache".to_string()
-    } else {
-        format!("npm install -g {npm_package}@latest")
-    };
-    let error = match (available, &installed, &latest) {
-        (false, _, _) => Some(format!("{path} not found in PATH")),
-        (true, None, None) => Some(format!("Failed to read version info for {path}")),
-        (true, None, Some(_)) => Some(format!("Failed to read installed version from {path} --version")),
-        (true, Some(_), None) => Some(format!("Failed to fetch latest version for {npm_package}")),
-        (true, Some(_), Some(_)) => None,
+    let error = match (&installed, &latest) {
+        (None, None) => Some(format!("Failed to read version info for {path}")),
+        (None, Some(_)) => Some(format!("Failed to read installed version from {path} --version")),
+        (Some(_), None) => Some(format!("Failed to fetch latest version for {npm_package}")),
+        (Some(_), Some(_)) => None,
     };
     CliVersionInfo {
         name: display_name.to_string(),
@@ -264,28 +309,35 @@ async fn build_cli_version_info(
         latest_version: latest,
         up_to_date,
         update_command,
-        available,
+        available: true,
         error,
     }
 }
 async fn build_git_bash_version_info() -> CliVersionInfo {
-    let (installed, latest, exists) = tokio::join!(
+    let exists = check_binary_exists("bash").await;
+    if !exists {
+        return CliVersionInfo {
+            name: "Git Bash CLI".to_string(),
+            cli_name: "gitBash".to_string(),
+            installed_version: None,
+            latest_version: None,
+            up_to_date: false,
+            update_command: "https://git-scm.com/download/win".to_string(),
+            available: false,
+            error: Some("Git Bash is required on Windows to run agents".to_string()),
+        };
+    }
+
+    let (installed, latest) = tokio::join!(
         get_installed_version("git"),
         super::cli_http::get_latest_git_version_http(),
-        check_binary_exists("bash"),
     );
-    let available = installed.is_some() || exists;
     let up_to_date = matches!((&installed, &latest), (Some(i), Some(l)) if i == l || i.starts_with(l));
-    let error = match (available, &installed, &latest) {
-        (false, _, _) => Some("Git Bash is required on Windows to run agents".to_string()),
-        (true, None, None) => {
-            Some("Failed to read installed and latest version for Git Bash".to_string())
-        }
-        (true, None, Some(_)) => {
-            Some("Failed to read installed version from git --version".to_string())
-        }
-        (true, Some(_), None) => Some("Failed to fetch latest version for Git Bash".to_string()),
-        (true, Some(_), Some(_)) => None,
+    let error = match (&installed, &latest) {
+        (None, None) => Some("Failed to read installed and latest version for Git Bash".to_string()),
+        (None, Some(_)) => Some("Failed to read installed version from git --version".to_string()),
+        (Some(_), None) => Some("Failed to fetch latest version for Git Bash".to_string()),
+        (Some(_), Some(_)) => None,
     };
     CliVersionInfo {
         name: "Git Bash CLI".to_string(),
@@ -294,7 +346,7 @@ async fn build_git_bash_version_info() -> CliVersionInfo {
         latest_version: latest,
         up_to_date,
         update_command: "https://git-scm.com/download/win".to_string(),
-        available,
+        available: true,
         error,
     }
 }

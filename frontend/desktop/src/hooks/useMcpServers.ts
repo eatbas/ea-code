@@ -5,7 +5,6 @@ import { useToast } from "../components/shared/Toast";
 
 interface UseMcpServersReturn {
   servers: McpServer[];
-  capableClis: string[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<boolean>;
@@ -21,18 +20,13 @@ interface UseMcpServersReturn {
 export function useMcpServers(): UseMcpServersReturn {
   const toast = useToast();
   const [servers, setServers] = useState<McpServer[]>([]);
-  const [capableClis, setCapableClis] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async (): Promise<boolean> => {
     try {
-      const [loadedServers, loadedClis] = await Promise.all([
-        invoke<McpServer[]>("list_mcp_servers"),
-        invoke<string[]>("list_mcp_capable_clis"),
-      ]);
+      const loadedServers = await invoke<McpServer[]>("list_mcp_servers");
       setServers(loadedServers);
-      setCapableClis(loadedClis);
       setError(null);
       return true;
     } catch (err) {
@@ -128,7 +122,6 @@ export function useMcpServers(): UseMcpServersReturn {
 
   return {
     servers,
-    capableClis,
     loading,
     error,
     refresh,

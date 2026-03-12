@@ -25,21 +25,37 @@ pub async fn get_mcp_cli_runtime_statuses(
     state: State<'_, AppState>,
 ) -> Result<Vec<McpCliRuntimeStatus>, String> {
     let settings = db::settings::get(&state.db)?;
-    let mut rows = Vec::with_capacity(AI_CLI_NAMES.len());
 
-    for cli_name in AI_CLI_NAMES {
-        let Some(path) = settings.path_for_cli(cli_name) else {
-            continue;
-        };
-        let cli_installed = super::cli::is_cli_available(path).await;
-        let server_statuses = build_runtime_statuses(path, cli_name, cli_installed).await;
-        rows.push(McpCliRuntimeStatus {
-            cli_name: cli_name.to_string(),
-            cli_installed,
-            server_statuses,
-        });
+    // Collect CLI name/path pairs, then check all in parallel.
+    let pairs: Vec<(&str, &str)> = AI_CLI_NAMES
+        .iter()
+        .filter_map(|cli_name| {
+            settings.path_for_cli(cli_name).map(|path| (*cli_name, path))
+        })
+        .collect();
+
+    let mut handles = Vec::with_capacity(pairs.len());
+    for (cli_name, path) in pairs {
+        let path = path.to_string();
+        let cli_name = cli_name.to_string();
+        handles.push(tokio::spawn(async move {
+            let cli_installed = crate::commands::cli::is_cli_available(&path).await;
+            let server_statuses = build_runtime_statuses(&path, &cli_name, cli_installed).await;
+            McpCliRuntimeStatus {
+                cli_name,
+                cli_installed,
+                server_statuses,
+            }
+        }));
     }
 
+    let mut rows = Vec::with_capacity(handles.len());
+    for handle in handles {
+        match handle.await {
+            Ok(row) => rows.push(row),
+            Err(e) => return Err(format!("Runtime status task failed: {e}")),
+        }
+    }
     Ok(rows)
 }
 

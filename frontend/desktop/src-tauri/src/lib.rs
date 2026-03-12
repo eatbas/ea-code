@@ -90,6 +90,7 @@ pub fn run() {
             commands::cli::check_cli_health,
             commands::cli::get_cli_versions,
             commands::cli::update_cli,
+            commands::cli::invalidate_cli_cache,
             // History / session commands
             commands::history::list_projects,
             commands::history::list_sessions,
