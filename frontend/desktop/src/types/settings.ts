@@ -84,7 +84,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   retentionDays: 90,
   claudeModel: "sonnet",
   codexModel: "gpt-5.3-codex",
-  geminiModel: "gemini-2.5-pro",
+  geminiModel: "gemini-3-flash-preview",
   kimiModel: "kimi-code/kimi-for-coding",
   opencodeModel: "opencode/glm-5",
   promptEnhancerModel: "sonnet",
@@ -110,8 +110,8 @@ export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[
     { value: "gpt-5.4", label: "GPT-5.4" },
   ],
   gemini: [
-    { value: "gemini-3.0-flash-preview", label: "Gemini 3.0 Flash" },
-    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
+    { value: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
+    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview" },
   ],
   kimi: [
     { value: "kimi-code/kimi-for-coding", label: "Kimi Code" },

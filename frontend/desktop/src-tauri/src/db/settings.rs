@@ -43,24 +43,24 @@ pub fn update(pool: &DbPool, s: &AppSettings) -> Result<(), String> {
         updated_at: super::now_rfc3339(),
         claude_model: s.claude_model.clone(),
         codex_model: normalise_codex_model_csv(&s.codex_model),
-        gemini_model: s.gemini_model.clone(),
+        gemini_model: normalise_gemini_model_csv(&s.gemini_model),
         kimi_model: normalise_kimi_model_csv(&s.kimi_model),
         opencode_model: s.opencode_model.clone(),
-        prompt_enhancer_model: normalise_codex_model_value(&s.prompt_enhancer_model),
+        prompt_enhancer_model: normalise_stage_model_value(&s.prompt_enhancer_model),
         skill_selector_model: s
             .skill_selector_model
             .as_deref()
-            .map(normalise_codex_model_value),
-        planner_model: s.planner_model.as_deref().map(normalise_codex_model_value),
+            .map(normalise_stage_model_value),
+        planner_model: s.planner_model.as_deref().map(normalise_stage_model_value),
         plan_auditor_model: s
             .plan_auditor_model
             .as_deref()
-            .map(normalise_codex_model_value),
-        generator_model: normalise_codex_model_value(&s.coder_model),
-        reviewer_model: normalise_codex_model_value(&s.code_reviewer_model),
-        fixer_model: normalise_codex_model_value(&s.code_fixer_model),
-        final_judge_model: normalise_codex_model_value(&s.final_judge_model),
-        executive_summary_model: normalise_codex_model_value(&s.executive_summary_model),
+            .map(normalise_stage_model_value),
+        generator_model: normalise_stage_model_value(&s.coder_model),
+        reviewer_model: normalise_stage_model_value(&s.code_reviewer_model),
+        fixer_model: normalise_stage_model_value(&s.code_fixer_model),
+        final_judge_model: normalise_stage_model_value(&s.final_judge_model),
+        executive_summary_model: normalise_stage_model_value(&s.executive_summary_model),
         require_plan_approval: s.require_plan_approval,
         plan_auto_approve_timeout_sec: s.plan_auto_approve_timeout_sec as i32,
         max_plan_revisions: s.max_plan_revisions as i32,
@@ -127,24 +127,24 @@ fn row_to_app_settings(row: &SettingsRow) -> AppSettings {
         require_git: row.require_git,
         claude_model: row.claude_model.clone(),
         codex_model: normalise_codex_model_csv(&row.codex_model),
-        gemini_model: row.gemini_model.clone(),
+        gemini_model: normalise_gemini_model_csv(&row.gemini_model),
         kimi_model: normalise_kimi_model_csv(&row.kimi_model),
         opencode_model: row.opencode_model.clone(),
-        prompt_enhancer_model: normalise_codex_model_value(&row.prompt_enhancer_model),
+        prompt_enhancer_model: normalise_stage_model_value(&row.prompt_enhancer_model),
         skill_selector_model: row
             .skill_selector_model
             .as_deref()
-            .map(normalise_codex_model_value),
-        planner_model: row.planner_model.as_deref().map(normalise_codex_model_value),
+            .map(normalise_stage_model_value),
+        planner_model: row.planner_model.as_deref().map(normalise_stage_model_value),
         plan_auditor_model: row
             .plan_auditor_model
             .as_deref()
-            .map(normalise_codex_model_value),
-        coder_model: normalise_codex_model_value(&row.generator_model),
-        code_reviewer_model: normalise_codex_model_value(&row.reviewer_model),
-        code_fixer_model: normalise_codex_model_value(&row.fixer_model),
-        final_judge_model: normalise_codex_model_value(&row.final_judge_model),
-        executive_summary_model: normalise_codex_model_value(&row.executive_summary_model),
+            .map(normalise_stage_model_value),
+        coder_model: normalise_stage_model_value(&row.generator_model),
+        code_reviewer_model: normalise_stage_model_value(&row.reviewer_model),
+        code_fixer_model: normalise_stage_model_value(&row.fixer_model),
+        final_judge_model: normalise_stage_model_value(&row.final_judge_model),
+        executive_summary_model: normalise_stage_model_value(&row.executive_summary_model),
         require_plan_approval: row.require_plan_approval,
         plan_auto_approve_timeout_sec: row.plan_auto_approve_timeout_sec as u32,
         max_plan_revisions: row.max_plan_revisions as u32,
@@ -186,12 +186,34 @@ fn normalise_codex_model_csv(csv: &str) -> String {
         .join(",")
 }
 
+fn normalise_gemini_model_csv(csv: &str) -> String {
+    csv.split(',')
+        .map(normalise_gemini_model_value)
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<String>>()
+        .join(",")
+}
+
 fn normalise_codex_model_value(value: &str) -> String {
     let trimmed = value.trim();
     if trimmed == "codex-5.3" {
         return "gpt-5.3-codex".to_string();
     }
     trimmed.to_string()
+}
+
+fn normalise_gemini_model_value(value: &str) -> String {
+    let trimmed = value.trim();
+    match trimmed {
+        // Backward compatibility: old preview names no longer accepted by Gemini CLI.
+        "gemini-3.0-flash-preview" => "gemini-3-flash-preview".to_string(),
+        "gemini-3.0-flash" => "gemini-3-flash-preview".to_string(),
+        _ => trimmed.to_string(),
+    }
+}
+
+fn normalise_stage_model_value(value: &str) -> String {
+    normalise_gemini_model_value(&normalise_codex_model_value(value))
 }
 
 fn normalise_kimi_model_value(value: &str) -> String {
