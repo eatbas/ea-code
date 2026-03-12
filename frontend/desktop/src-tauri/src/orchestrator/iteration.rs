@@ -84,7 +84,7 @@ pub async fn run_iteration(
                 context: Some(prompts::build_prompt_enhancer_system(&meta)),
                 workspace_path: request.workspace_path.clone(),
             },
-            settings, Some(session_id), db,
+            settings, cancel_flag, Some(session_id), db,
         ).await;
         let enhanced = normalise_enhanced_prompt(&pe_result.output, &request.prompt);
         if pe_result.status == StageStatus::Failed {
@@ -142,6 +142,7 @@ pub async fn run_iteration(
         app,
         request,
         settings,
+        cancel_flag,
         db,
         run_id,
         session_id,
@@ -182,7 +183,7 @@ pub async fn run_iteration(
             )),
             workspace_path: request.workspace_path.clone(),
         },
-        settings, Some(session_id), db,
+        settings, cancel_flag, Some(session_id), db,
     ).await;
     let gen_out = gen_r.output.clone();
     if gen_r.status == StageStatus::Failed {
@@ -222,7 +223,7 @@ pub async fn run_iteration(
 
     // --- 9. Judge ---
     run_judge_stage(
-        app, request, settings, db,
+        app, request, settings, cancel_flag, db,
         run_id, session_id, iter_num, iteration_db_id,
         &meta, &enhanced,
         run, &mut stages, &mut iter_ctx,

@@ -1,4 +1,6 @@
-use tauri::State;
+use std::collections::HashMap;
+
+use tauri::{AppHandle, Emitter, State};
 
 use crate::db;
 use crate::models::{
@@ -8,6 +10,7 @@ use crate::models::{
 
 use super::AppState;
 
+mod install;
 mod native;
 mod parse;
 
@@ -20,43 +23,59 @@ pub struct RunCliMcpFixWithPromptRequest {
     pub server_id: String,
 }
 
+// ---------------------------------------------------------------------------
+// Tauri commands
+// ---------------------------------------------------------------------------
+
+/// Fire-and-forget: spawns a parallel check per CLI and returns immediately.
+/// Each CLI emits `mcp_cli_runtime_status` as soon as it finishes.
+/// When every CLI is done, emits `mcp_runtime_check_complete`.
+/// No joining — the frontend never blocks on the slowest CLI.
 #[tauri::command]
 pub async fn get_mcp_cli_runtime_statuses(
+    app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<McpCliRuntimeStatus>, String> {
+) -> Result<(), String> {
     let settings = db::settings::get(&state.db)?;
 
-    // Collect CLI name/path pairs, then check all in parallel.
-    let pairs: Vec<(&str, &str)> = AI_CLI_NAMES
+    let pairs: Vec<(String, String)> = AI_CLI_NAMES
         .iter()
         .filter_map(|cli_name| {
-            settings.path_for_cli(cli_name).map(|path| (*cli_name, path))
+            settings
+                .path_for_cli(cli_name)
+                .map(|path| (cli_name.to_string(), path.to_string()))
         })
         .collect();
 
-    let mut handles = Vec::with_capacity(pairs.len());
-    for (cli_name, path) in pairs {
-        let path = path.to_string();
-        let cli_name = cli_name.to_string();
-        handles.push(tokio::spawn(async move {
-            let cli_installed = crate::commands::cli::is_cli_available(&path).await;
-            let server_statuses = build_runtime_statuses(&path, &cli_name, cli_installed).await;
-            McpCliRuntimeStatus {
-                cli_name,
-                cli_installed,
-                server_statuses,
-            }
-        }));
-    }
+    let total = pairs.len();
+    let app_final = app.clone();
 
-    let mut rows = Vec::with_capacity(handles.len());
-    for handle in handles {
-        match handle.await {
-            Ok(row) => rows.push(row),
-            Err(e) => return Err(format!("Runtime status task failed: {e}")),
+    // Single detached task that fans out per-CLI checks.
+    tokio::spawn(async move {
+        let mut handles = Vec::with_capacity(total);
+
+        for (cli_name, path) in pairs {
+            let app_handle = app_final.clone();
+            handles.push(tokio::spawn(async move {
+                let cli_installed = crate::commands::cli::is_cli_available(&path).await;
+                let server_statuses = build_runtime_statuses(&path, cli_installed).await;
+                let row = McpCliRuntimeStatus {
+                    cli_name,
+                    cli_installed,
+                    server_statuses,
+                };
+                let _ = app_handle.emit("mcp_cli_runtime_status", &row);
+            }));
         }
-    }
-    Ok(rows)
+
+        // Wait for all to finish (detached — the command already returned).
+        for handle in handles {
+            let _ = handle.await;
+        }
+        let _ = app_final.emit("mcp_runtime_check_complete", ());
+    });
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -87,42 +106,63 @@ pub async fn run_cli_mcp_fix_with_prompt(
             verification_status: McpRuntimeStatus::NotInstalled,
             verification_confidence: McpVerificationConfidence::None,
             message: Some("CLI is not installed or not reachable in PATH.".to_string()),
-            output_summary: "CLI unavailable; no prompt run attempted.".to_string(),
+            output_summary: "CLI unavailable; no install attempted.".to_string(),
         });
     }
 
-    let context7_api_key = if server_id == "context7" {
-        db::mcp::get_server_env_var(&state.db, "context7", "CONTEXT7_API_KEY")?
+    // Build the server spec from the built-in definition + database env vars.
+    let spec = build_server_spec(&state.db, &server_id)?;
+
+    let (output, used_fallback) = if install::supports_direct_add(&cli_name) {
+        // --- Tier 1: deterministic `mcp add` (30 s) ---
+        // Works for claude, codex, gemini, kimi.
+        let add_result = install::run_mcp_add(cli_path, &cli_name, &spec).await;
+        match &add_result {
+            Ok(out) if out.status.success() => {
+                // Kimi: patch env vars into the config file (mcp add doesn't support -e).
+                if cli_name == "kimi" && !spec.env.is_empty() {
+                    let _ = install::patch_kimi_env(&spec.server_id, &spec.env);
+                }
+                (add_result, false)
+            }
+            _ => (add_result, false),
+        }
     } else {
-        None
+        // --- Tier 2: prompt-based fallback (opencode — interactive-only `mcp add`) ---
+        let context7_key = spec.env.get("CONTEXT7_API_KEY").map(String::as_str);
+        let model = settings
+            .primary_model_for_cli(&cli_name)
+            .or_else(|| AppSettings::default_model_for_cli(&cli_name).map(str::to_string))
+            .unwrap_or_default();
+        let prompt = install::build_fix_prompt(&cli_name, &server_id, context7_key);
+        let args = install::build_fix_args(&cli_name, &model, &prompt);
+        let arg_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
+        (native::run_cli(cli_path, &arg_refs, 120).await, true)
     };
 
-    let model = settings
-        .primary_model_for_cli(&cli_name)
-        .or_else(|| AppSettings::default_model_for_cli(&cli_name).map(str::to_string))
-        .unwrap_or_default();
-    let prompt = build_fix_prompt(&cli_name, &server_id, context7_api_key.as_deref());
-    let args = build_fix_args(&cli_name, &model, &prompt);
-    let arg_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
-    let output = native::run_cli(cli_path, &arg_refs, 240).await?;
-
+    // --- Verify ---
     let (verification_status, verification_confidence) =
-        verify_single_server_runtime(cli_path, &cli_name, &server_id, true).await;
-    let command_ok = output.status.success();
-    let success = if matches!(verification_confidence, McpVerificationConfidence::Native) {
-        command_ok && verification_status == McpRuntimeStatus::Enabled
-    } else {
-        command_ok
-    };
+        verify_single_server_runtime(cli_path, &server_id, true).await;
+
+    let command_ok = output.as_ref().is_ok_and(|o| o.status.success());
+    let success = command_ok && verification_status == McpRuntimeStatus::Enabled;
 
     let message = if success {
         None
     } else if !command_ok {
-        Some("CLI prompt execution failed.".to_string())
-    } else if verification_status != McpRuntimeStatus::Enabled {
-        Some("CLI completed, but native MCP verification is not enabled yet.".to_string())
+        let hint = if used_fallback {
+            "Prompt-based fallback also failed."
+        } else {
+            "`mcp add` command failed."
+        };
+        Some(hint.to_string())
     } else {
-        Some("MCP fix did not complete successfully.".to_string())
+        Some("Install completed but MCP server is not yet enabled.".to_string())
+    };
+
+    let output_summary = match &output {
+        Ok(out) => native::summarise_output(out),
+        Err(err) => err.clone(),
     };
 
     Ok(McpCliFixResult {
@@ -132,13 +172,18 @@ pub async fn run_cli_mcp_fix_with_prompt(
         verification_status,
         verification_confidence,
         message,
-        output_summary: native::summarise_output(&output),
+        output_summary,
     })
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Runs `<cli> mcp list` to determine the status of each built-in server.
+/// All 5 CLIs support `mcp list`; the parser handles JSON and plaintext output.
 async fn build_runtime_statuses(
     cli_path: &str,
-    cli_name: &str,
     cli_installed: bool,
 ) -> Vec<McpCliServerRuntimeStatus> {
     if !cli_installed {
@@ -153,56 +198,40 @@ async fn build_runtime_statuses(
             .collect();
     }
 
-    if matches!(cli_name, "claude" | "codex") {
-        return match native::fetch_native_runtime_map(cli_path).await {
-            Ok(native_statuses) => BUILTIN_SERVER_IDS
-                .iter()
-                .map(|server_id| McpCliServerRuntimeStatus {
-                    server_id: (*server_id).to_string(),
-                    status: native_statuses
-                        .get(*server_id)
-                        .cloned()
-                        .unwrap_or(McpRuntimeStatus::Disabled),
-                    verification_confidence: McpVerificationConfidence::Native,
-                    message: None,
-                })
-                .collect(),
-            Err(err) => BUILTIN_SERVER_IDS
-                .iter()
-                .map(|server_id| McpCliServerRuntimeStatus {
-                    server_id: (*server_id).to_string(),
-                    status: McpRuntimeStatus::Error,
-                    verification_confidence: McpVerificationConfidence::Native,
-                    message: Some(err.clone()),
-                })
-                .collect(),
-        };
+    match native::fetch_native_runtime_map(cli_path).await {
+        Ok(native_statuses) => BUILTIN_SERVER_IDS
+            .iter()
+            .map(|server_id| McpCliServerRuntimeStatus {
+                server_id: (*server_id).to_string(),
+                status: native_statuses
+                    .get(*server_id)
+                    .cloned()
+                    .unwrap_or(McpRuntimeStatus::Disabled),
+                verification_confidence: McpVerificationConfidence::Native,
+                message: None,
+            })
+            .collect(),
+        Err(err) => BUILTIN_SERVER_IDS
+            .iter()
+            .map(|server_id| McpCliServerRuntimeStatus {
+                server_id: (*server_id).to_string(),
+                status: McpRuntimeStatus::Error,
+                verification_confidence: McpVerificationConfidence::Native,
+                message: Some(err.clone()),
+            })
+            .collect(),
     }
-
-    BUILTIN_SERVER_IDS
-        .iter()
-        .map(|server_id| McpCliServerRuntimeStatus {
-            server_id: (*server_id).to_string(),
-            status: McpRuntimeStatus::Unknown,
-            verification_confidence: McpVerificationConfidence::PromptOnly,
-            message: Some("Runtime MCP introspection is unavailable for this CLI.".to_string()),
-        })
-        .collect()
 }
 
+/// Verifies a single server's runtime status after an install attempt.
 async fn verify_single_server_runtime(
     cli_path: &str,
-    cli_name: &str,
     server_id: &str,
     cli_installed: bool,
 ) -> (McpRuntimeStatus, McpVerificationConfidence) {
     if !cli_installed {
         return (McpRuntimeStatus::NotInstalled, McpVerificationConfidence::None);
     }
-    if !matches!(cli_name, "claude" | "codex") {
-        return (McpRuntimeStatus::Unknown, McpVerificationConfidence::PromptOnly);
-    }
-
     match native::fetch_native_runtime_map(cli_path).await {
         Ok(map) => (
             map.get(server_id)
@@ -214,73 +243,35 @@ async fn verify_single_server_runtime(
     }
 }
 
-fn build_fix_prompt(cli_name: &str, server_id: &str, context7_api_key: Option<&str>) -> String {
-    let mut lines = vec![
-        "Install or fix exactly one MCP server in this CLI.".to_string(),
-        format!("Target CLI: {cli_name}"),
-        format!("Target MCP server: {server_id}"),
-        "Requirements:".to_string(),
-        "1) Use global/user-level MCP configuration only.".to_string(),
-        "2) Do not use project/workspace-local MCP config files.".to_string(),
-        "3) Do not remove, disable, or replace any existing MCP entries.".to_string(),
-        "4) Ensure the target MCP server ends enabled.".to_string(),
-        "5) Print a short summary of what you changed.".to_string(),
-    ];
+/// Constructs an `McpServerSpec` from the built-in definitions plus database env vars.
+fn build_server_spec(
+    pool: &db::DbPool,
+    server_id: &str,
+) -> Result<install::McpServerSpec, String> {
+    let (command, args_json) = match server_id {
+        "context7" => ("npx", r#"["-y","@upstash/context7-mcp"]"#),
+        "playwright" => ("npx", r#"["-y","@playwright/mcp"]"#),
+        _ => return Err(format!("Unknown server ID for install: {server_id}")),
+    };
 
+    let args: Vec<String> = serde_json::from_str(args_json)
+        .map_err(|e| format!("Bad args JSON for {server_id}: {e}"))?;
+
+    let mut env = HashMap::new();
     if server_id == "context7" {
-        let key_line = context7_api_key
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(|key| format!("Use CONTEXT7_API_KEY={key} when configuring context7."))
-            .unwrap_or_else(|| {
-                "CONTEXT7_API_KEY is currently missing; do not invent a key and keep existing values if present.".to_string()
-            });
-        lines.push(key_line);
+        if let Ok(Some(key)) = db::mcp::get_server_env_var(pool, "context7", "CONTEXT7_API_KEY") {
+            let key = key.trim().to_string();
+            if !key.is_empty() {
+                env.insert("CONTEXT7_API_KEY".to_string(), key);
+            }
+        }
     }
 
-    lines.join("\n")
+    Ok(install::McpServerSpec {
+        server_id: server_id.to_string(),
+        command: command.to_string(),
+        args,
+        env,
+    })
 }
 
-fn build_fix_args(cli_name: &str, model: &str, prompt: &str) -> Vec<String> {
-    match cli_name {
-        "claude" => vec![
-            "-p".to_string(),
-            prompt.to_string(),
-            "--model".to_string(),
-            model.to_string(),
-            "--output-format".to_string(),
-            "json".to_string(),
-            "--max-turns".to_string(),
-            "25".to_string(),
-            "--allowedTools".to_string(),
-            "Bash,Read,Write,Edit,Glob,Grep".to_string(),
-        ],
-        "codex" => vec![
-            "--full-auto".to_string(),
-            "-m".to_string(),
-            model.to_string(),
-            prompt.to_string(),
-        ],
-        "gemini" => vec![
-            "-p".to_string(),
-            prompt.to_string(),
-            "-m".to_string(),
-            model.to_string(),
-            "--yolo".to_string(),
-        ],
-        "kimi" => vec![
-            "--print".to_string(),
-            "-p".to_string(),
-            prompt.to_string(),
-            "--model".to_string(),
-            model.to_string(),
-        ],
-        "opencode" => vec![
-            "run".to_string(),
-            "--model".to_string(),
-            model.to_string(),
-            prompt.to_string(),
-        ],
-        _ => vec![prompt.to_string()],
-    }
-}

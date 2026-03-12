@@ -74,7 +74,7 @@ pub async fn run_review_fix_stages(
             )),
             workspace_path: request.workspace_path.clone(),
         },
-        settings, Some(session_id), db,
+        settings, cancel_flag, Some(session_id), db,
     ).await;
     let rev_out = rev_r.output.clone();
     iter_ctx.review_output = Some(rev_out.clone());
@@ -112,7 +112,7 @@ pub async fn run_review_fix_stages(
             )),
             workspace_path: request.workspace_path.clone(),
         },
-        settings, Some(session_id), db,
+        settings, cancel_flag, Some(session_id), db,
     ).await;
     let fix_out = fix_r.output.clone();
     iter_ctx.fix_output = Some(fix_out.clone());
@@ -156,6 +156,7 @@ pub async fn run_judge_stage(
     app: &AppHandle,
     request: &PipelineRequest,
     settings: &AppSettings,
+    cancel_flag: &Arc<AtomicBool>,
     db: &DbPool,
     run_id: &str,
     session_id: &str,
@@ -187,7 +188,7 @@ pub async fn run_judge_stage(
             )),
             workspace_path: request.workspace_path.clone(),
         },
-        settings, Some(session_id), db,
+        settings, cancel_flag, Some(session_id), db,
     ).await;
     let judge_out = judge_r.output.clone();
     iter_ctx.judge_output = Some(judge_out.clone());

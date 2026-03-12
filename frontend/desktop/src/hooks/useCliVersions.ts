@@ -1,23 +1,22 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { AppSettings, AllCliVersions } from "../types";
+import { listen } from "@tauri-apps/api/event";
+import type { AppSettings, AllCliVersions, CliVersionInfo } from "../types";
 import { useToast } from "../components/shared/Toast";
-
-interface CliActionResult {
-  success: boolean;
-  message?: string;
-}
 
 interface UseCliVersionsReturn {
   versions: AllCliVersions | null;
   loading: boolean;
   updating: string | null;
   error: string | null;
-  fetchVersions: (settings: AppSettings) => Promise<CliActionResult>;
-  updateCli: (cliName: string, settings: AppSettings) => Promise<CliActionResult>;
+  fetchVersions: (settings: AppSettings) => void;
+  updateCli: (cliName: string, settings: AppSettings) => Promise<void>;
 }
 
-/** Hook to fetch CLI version information and trigger updates. */
+/** CLI names that map to `AllCliVersions` fields (excluding gitBash). */
+const MAIN_CLI_NAMES = new Set(["claude", "codex", "gemini", "kimi", "opencode"]);
+
+/** Hook to fetch CLI version information and trigger updates (event-driven). */
 export function useCliVersions(): UseCliVersionsReturn {
   const toast = useToast();
   const [versions, setVersions] = useState<AllCliVersions | null>(null);
@@ -25,41 +24,68 @@ export function useCliVersions(): UseCliVersionsReturn {
   const [updating, setUpdating] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchVersions = useCallback(async (settings: AppSettings): Promise<CliActionResult> => {
+  // Per-CLI version events stream in as each check completes.
+  useEffect(() => {
+    const unRow = listen<CliVersionInfo>("cli_version_info", (event) => {
+      const info = event.payload;
+      setVersions((prev) => {
+        const base = prev ?? {
+          claude: placeholderInfo("Claude CLI", "claude"),
+          codex: placeholderInfo("Codex CLI", "codex"),
+          gemini: placeholderInfo("Gemini CLI", "gemini"),
+          kimi: placeholderInfo("Kimi CLI", "kimi"),
+          opencode: placeholderInfo("OpenCode CLI", "opencode"),
+        };
+        if (info.cliName === "gitBash") {
+          return { ...base, gitBash: info };
+        }
+        if (MAIN_CLI_NAMES.has(info.cliName)) {
+          return { ...base, [info.cliName]: info };
+        }
+        return base;
+      });
+    });
+    const unDone = listen<void>("cli_versions_check_complete", () => {
+      setLoading(false);
+    });
+    return () => {
+      void unRow.then((fn) => fn());
+      void unDone.then((fn) => fn());
+    };
+  }, []);
+
+  // Fire-and-forget: starts the check and returns immediately.
+  const fetchVersions = useCallback((settings: AppSettings): void => {
     setLoading(true);
     setError(null);
-    try {
-      const result = await invoke<AllCliVersions>("get_cli_versions", { settings });
-      setVersions(result);
-      return { success: true };
-    } catch (err) {
+    invoke("get_cli_versions", { settings }).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
-      toast.error("Failed to fetch CLI versions.");
-      return { success: false, message };
-    } finally {
       setLoading(false);
-    }
+      toast.error("Failed to fetch CLI versions.");
+    });
   }, [toast]);
 
-  const updateCli = useCallback(async (cliName: string, settings: AppSettings): Promise<CliActionResult> => {
+  // Update is still awaitable — it's a single-CLI action, not a batch.
+  const updateCli = useCallback(async (cliName: string, settings: AppSettings): Promise<void> => {
     setUpdating(cliName);
     setError(null);
     try {
-      const updateResult = await invoke<string>("update_cli", { cliName });
-      // Refresh version info after update
-      const result = await invoke<AllCliVersions>("get_cli_versions", { settings });
-      setVersions(result);
-      return { success: true, message: updateResult };
+      await invoke<string>("update_cli", { cliName });
+      // Re-check all versions after update (fire-and-forget).
+      fetchVersions(settings);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
       toast.error(`Failed to update ${cliName}.`);
-      return { success: false, message };
     } finally {
       setUpdating(null);
     }
-  }, [toast]);
+  }, [fetchVersions, toast]);
 
   return { versions, loading, updating, error, fetchVersions, updateCli };
+}
+
+function placeholderInfo(name: string, cliName: string): CliVersionInfo {
+  return { name, cliName, upToDate: false, updateCommand: "", available: false };
 }

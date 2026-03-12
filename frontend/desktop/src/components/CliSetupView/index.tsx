@@ -13,11 +13,6 @@ type ModelSettingsKey =
   | "kimiModel"
   | "opencodeModel";
 
-interface CliActionResult {
-  success: boolean;
-  message?: string;
-}
-
 const MODEL_KEY_MAP: Record<string, ModelSettingsKey> = {
   claude: "claudeModel",
   codex: "codexModel",
@@ -76,8 +71,8 @@ interface CliSetupViewProps {
   versions: AllCliVersions | null;
   loading: boolean;
   updating: string | null;
-  onFetchVersions: (settings: AppSettings) => Promise<CliActionResult>;
-  onUpdateCli: (cliName: string, settings: AppSettings) => Promise<CliActionResult>;
+  onFetchVersions: (settings: AppSettings) => void;
+  onUpdateCli: (cliName: string, settings: AppSettings) => Promise<void>;
   onSave: (settings: AppSettings) => void;
 }
 
@@ -112,18 +107,15 @@ export function CliSetupView({
       ]
     : FALLBACK_CLI_ENTRIES;
 
-  const refreshVersions = useCallback(async (targetSettings: AppSettings, showSuccessToast: boolean): Promise<void> => {
-    const result = await onFetchVersions(targetSettings);
-    if (!result.success) {
-      return;
-    }
+  const refreshVersions = useCallback((targetSettings: AppSettings, showSuccessToast: boolean): void => {
+    onFetchVersions(targetSettings);
     if (showSuccessToast) {
-      toast.success("CLI versions refreshed.");
+      toast.success("CLI version check started.");
     }
   }, [onFetchVersions, toast]);
 
   useEffect(() => {
-    void refreshVersions(settings, false);
+    refreshVersions(settings, false);
   }, [
     refreshVersions,
     settings.claudePath,
@@ -157,10 +149,8 @@ export function CliSetupView({
 
   async function handleUpdateCli(cliName: string, cliDisplayName: string): Promise<void> {
     if (actionsDisabled) return;
-    const result = await onUpdateCli(cliName, settings);
-    if (result.success) {
-      toast.success(result.message?.trim() || `${cliDisplayName} update completed.`);
-    }
+    await onUpdateCli(cliName, settings);
+    toast.success(`${cliDisplayName} update completed.`);
   }
 
   return (
@@ -176,7 +166,7 @@ export function CliSetupView({
             </div>
             <button
               type="button"
-              onClick={() => void refreshVersions(settings, true)}
+              onClick={() => refreshVersions(settings, true)}
               disabled={actionsDisabled}
               className="rounded-md border border-[#2e2e48] bg-[#24243a] px-4 py-2 text-sm font-medium text-[#9898b0] transition-colors hover:bg-[#2e2e48] hover:text-[#e4e4ed] disabled:cursor-not-allowed disabled:opacity-50"
             >

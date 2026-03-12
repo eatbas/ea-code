@@ -93,12 +93,20 @@ pub async fn run_cli_agent(
         command.stdin(std::process::Stdio::piped());
     }
 
+    command.kill_on_drop(true);
+
     let mut child = command
         .current_dir(workspace_path)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to spawn {binary}: {e}"))?;
+        .map_err(|e| {
+            #[cfg(target_os = "windows")]
+            if let Some(ref pf) = prompt_file {
+                remove_prompt_temp_file(pf);
+            }
+            format!("Failed to spawn {binary}: {e}")
+        })?;
 
     // Write prompt to stdin while still reading stdout/stderr to avoid deadlocks
     // when the child's output buffer fills up.

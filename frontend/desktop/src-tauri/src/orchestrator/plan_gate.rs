@@ -135,7 +135,7 @@ pub async fn run_plan_gate(
                 )),
                 workspace_path: run.workspace_path.clone(),
             },
-            settings, None, db,
+            settings, cancel_flag, None, db,
         ).await;
 
         let revised_plan = plan_r.output.clone();

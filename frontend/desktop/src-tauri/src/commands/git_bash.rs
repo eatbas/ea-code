@@ -94,6 +94,7 @@ async fn run_git_bash(script: &str, args: &[&str], timeout_secs: u64) -> Option<
             .args(args)
             .stdin(Stdio::null())
             .creation_flags(CREATE_NO_WINDOW)
+            .kill_on_drop(true)
             .output(),
     )
     .await
@@ -119,6 +120,7 @@ pub(crate) async fn command_exists(binary: &str) -> bool {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .creation_flags(CREATE_NO_WINDOW)
+            .kill_on_drop(true)
             .status(),
     )
     .await

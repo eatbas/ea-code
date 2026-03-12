@@ -23,11 +23,6 @@ import { SkillsView } from "./SkillsView";
 import { McpView } from "./McpView";
 import { AppSettingsView } from "./AppSettingsView";
 
-interface CliActionResult {
-  success: boolean;
-  message?: string;
-}
-
 interface AppContentRouterProps {
   activeView: ActiveView;
   activeSessionId: string | undefined;
@@ -48,8 +43,8 @@ interface AppContentRouterProps {
   skills: Skill[];
   skillsLoading: boolean;
   onSaveSettings: (settings: AppSettings) => void | Promise<void>;
-  onFetchVersions: (settings: AppSettings) => Promise<CliActionResult>;
-  onUpdateCli: (cliName: string, settings: AppSettings) => Promise<CliActionResult>;
+  onFetchVersions: (settings: AppSettings) => void;
+  onUpdateCli: (cliName: string, settings: AppSettings) => Promise<void>;
   onCreateSkill: (payload: CreateSkillPayload) => Promise<void>;
   onUpdateSkill: (payload: UpdateSkillPayload) => Promise<void>;
   onDeleteSkill: (id: string) => Promise<void>;

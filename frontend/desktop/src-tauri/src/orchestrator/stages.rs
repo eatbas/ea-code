@@ -1,14 +1,20 @@
 //! Stage execution functions: run agent stages, diff stages, and skipped stages.
 
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::time::Instant;
 
 use tauri::AppHandle;
+use tokio::time::Duration;
 
 use crate::agents::AgentInput;
 use crate::db::{self, DbPool};
 use crate::models::*;
 
-use super::helpers::{dispatch_agent, emit_stage, emit_stage_with_duration, resolve_stage_model, stage_to_str};
+use super::helpers::{
+    dispatch_agent, emit_stage, emit_stage_with_duration, resolve_stage_model, stage_to_str,
+    wait_for_cancel,
+};
 
 const DIFF_STAGE_DB_MARKER: &str = "[diff stored in artifacts]";
 
@@ -26,6 +32,7 @@ pub async fn execute_agent_stage(
     backend: &AgentBackend,
     input: &AgentInput,
     settings: &AppSettings,
+    cancel_flag: &Arc<AtomicBool>,
     session_id: Option<&str>,
     db: &DbPool,
 ) -> StageResult {
@@ -60,12 +67,55 @@ pub async fn execute_agent_stage(
             }
         };
 
-        match dispatch_agent(
-            backend, &model, &effective_input, settings, session_id, app,
-            run_id, stage.clone(), db,
-        )
-        .await
-        {
+        let stage_for_call = stage.clone();
+        let dispatch_result = if settings.agent_timeout_ms == 0 {
+            tokio::select! {
+                result = dispatch_agent(
+                    backend,
+                    &model,
+                    &effective_input,
+                    settings,
+                    session_id,
+                    app,
+                    run_id,
+                    stage_for_call.clone(),
+                    db,
+                ) => result,
+                _ = wait_for_cancel(cancel_flag) => {
+                    Err(format!("{stage_for_call:?} stage cancelled by user"))
+                }
+            }
+        } else {
+            tokio::select! {
+                result = tokio::time::timeout(
+                    Duration::from_millis(settings.agent_timeout_ms),
+                    dispatch_agent(
+                        backend,
+                        &model,
+                        &effective_input,
+                        settings,
+                        session_id,
+                        app,
+                        run_id,
+                        stage_for_call.clone(),
+                        db,
+                    ),
+                ) => {
+                    match result {
+                        Ok(inner) => inner,
+                        Err(_) => Err(format!(
+                            "{stage_for_call:?} stage timed out after {} ms",
+                            settings.agent_timeout_ms
+                        )),
+                    }
+                }
+                _ = wait_for_cancel(cancel_flag) => {
+                    Err(format!("{stage_for_call:?} stage cancelled by user"))
+                }
+            }
+        };
+
+        match dispatch_result {
             Ok(output) => {
                 let duration_ms = start.elapsed().as_millis() as u64;
                 emit_stage_with_duration(app, run_id, &stage, &StageStatus::Completed, iteration_num, Some(duration_ms), db);
@@ -126,11 +176,45 @@ pub async fn execute_run_level_agent_stage(
     emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num, db);
     let model = resolve_stage_model(&stage, settings);
 
-    match dispatch_agent(
-        backend, &model, input, settings, session_id, app, run_id, stage.clone(), db,
-    )
-    .await
-    {
+    let dispatch_result = if settings.agent_timeout_ms == 0 {
+        dispatch_agent(
+            backend,
+            &model,
+            input,
+            settings,
+            session_id,
+            app,
+            run_id,
+            stage.clone(),
+            db,
+        )
+        .await
+    } else {
+        match tokio::time::timeout(
+            Duration::from_millis(settings.agent_timeout_ms),
+            dispatch_agent(
+                backend,
+                &model,
+                input,
+                settings,
+                session_id,
+                app,
+                run_id,
+                stage.clone(),
+                db,
+            ),
+        )
+        .await
+        {
+            Ok(inner) => inner,
+            Err(_) => Err(format!(
+                "{stage:?} stage timed out after {} ms",
+                settings.agent_timeout_ms
+            )),
+        }
+    };
+
+    match dispatch_result {
         Ok(output) => {
             let duration_ms = start.elapsed().as_millis() as u64;
             emit_stage_with_duration(app, run_id, &stage, &StageStatus::Completed, iteration_num, Some(duration_ms), db);

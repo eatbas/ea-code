@@ -11,35 +11,33 @@ use super::parse;
 #[cfg(target_os = "windows")]
 use crate::commands::git_bash;
 
+/// Runs `<cli> mcp list` and parses the output to determine server statuses.
+/// A single call — the parser handles both JSON and plaintext output.
 pub(super) async fn fetch_native_runtime_map(
     cli_path: &str,
 ) -> Result<HashMap<String, McpRuntimeStatus>, String> {
-    let attempts: [&[&str]; 2] = [&["mcp", "list", "--json"], &["mcp", "list"]];
-    let mut last_error = None::<String>;
+    let output = run_cli(cli_path, &["mcp", "list"], 25).await?;
 
-    for args in attempts {
-        let output = run_cli(cli_path, args, 25).await?;
-        if !output.status.success() {
-            last_error = Some(summarise_output(&output));
-            continue;
-        }
+    if !output.status.success() {
+        return Err(format!(
+            "CLI `mcp list` exited with non-zero status. {}",
+            summarise_output(&output)
+        ));
+    }
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if let Some(map) = parse::parse_runtime_map(stdout.as_ref()) {
-            return Ok(map);
-        }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if let Some(map) = parse::parse_runtime_map(stdout.as_ref()) {
+        return Ok(map);
+    }
 
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if let Some(map) = parse::parse_runtime_map(stderr.as_ref()) {
-            return Ok(map);
-        }
-
-        last_error = Some(summarise_output(&output));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if let Some(map) = parse::parse_runtime_map(stderr.as_ref()) {
+        return Ok(map);
     }
 
     Err(format!(
-        "Failed to read native MCP status from CLI output. {}",
-        last_error.unwrap_or_else(|| "No usable output from CLI.".to_string())
+        "Failed to parse MCP status from CLI output. {}",
+        summarise_output(&output)
     ))
 }
 
@@ -57,13 +55,13 @@ pub(super) async fn run_cli(
 
     #[cfg(not(target_os = "windows"))]
     {
-        timeout(
-            Duration::from_secs(timeout_secs),
-            tokio::process::Command::new(binary).args(args).output(),
-        )
-        .await
-        .map_err(|_| format!("Timed out while running {binary}"))?
-        .map_err(|e| format!("Failed to run {binary}: {e}"))
+        let mut command = tokio::process::Command::new(binary);
+        command.args(args);
+        command.kill_on_drop(true);
+        timeout(Duration::from_secs(timeout_secs), command.output())
+            .await
+            .map_err(|_| format!("Timed out while running {binary}"))?
+            .map_err(|e| format!("Failed to run {binary}: {e}"))
     }
 }
 

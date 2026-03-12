@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type {
   McpCliFixResult,
   McpCliRuntimeStatus,
@@ -13,7 +14,7 @@ interface UseMcpRuntimeReturn {
   runtimeError: string | null;
   fixingKey: string | null;
   lastFixResultByKey: Record<string, McpCliFixResult>;
-  refreshRuntimeStatuses: () => Promise<boolean>;
+  refreshRuntimeStatuses: () => void;
   runFixWithPrompt: (
     request: RunCliMcpFixWithPromptRequest,
   ) => Promise<McpCliFixResult | null>;
@@ -21,6 +22,20 @@ interface UseMcpRuntimeReturn {
 
 function toKey(cliName: string, serverId: string): string {
   return `${cliName}:${serverId}`;
+}
+
+/** Merges a single CLI row into the existing list (upsert by cliName). */
+function mergeRow(
+  prev: McpCliRuntimeStatus[],
+  row: McpCliRuntimeStatus,
+): McpCliRuntimeStatus[] {
+  const idx = prev.findIndex((r) => r.cliName === row.cliName);
+  if (idx >= 0) {
+    const next = [...prev];
+    next[idx] = row;
+    return next;
+  }
+  return [...prev, row];
 }
 
 export function useMcpRuntime(): UseMcpRuntimeReturn {
@@ -33,26 +48,47 @@ export function useMcpRuntime(): UseMcpRuntimeReturn {
     Record<string, McpCliFixResult>
   >({});
 
-  const refreshRuntimeStatuses = useCallback(async (): Promise<boolean> => {
-    try {
-      const rows = await invoke<McpCliRuntimeStatus[]>("get_mcp_cli_runtime_statuses");
-      setRuntimeStatuses(rows);
-      setRuntimeError(null);
-      return true;
-    } catch (err) {
+  // ── Event listeners (mount once) ──────────────────────────────────────
+  // Per-CLI results stream in as each CLI finishes its `mcp list`.
+  // `mcp_runtime_check_complete` fires after the last CLI is done.
+  useEffect(() => {
+    const unlistenRow = listen<McpCliRuntimeStatus>(
+      "mcp_cli_runtime_status",
+      (event) => {
+        setRuntimeStatuses((prev) => mergeRow(prev, event.payload));
+      },
+    );
+    const unlistenDone = listen<void>(
+      "mcp_runtime_check_complete",
+      () => {
+        setRuntimeLoading(false);
+      },
+    );
+    return () => {
+      void unlistenRow.then((fn) => fn());
+      void unlistenDone.then((fn) => fn());
+    };
+  }, []);
+
+  // ── Fire-and-forget refresh ───────────────────────────────────────────
+  // The command returns immediately; results arrive via events above.
+  const refreshRuntimeStatuses = useCallback((): void => {
+    setRuntimeLoading(true);
+    setRuntimeError(null);
+    invoke("get_mcp_cli_runtime_statuses").catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
       setRuntimeError(message);
-      toast.error("Failed to load MCP runtime status.");
-      return false;
-    } finally {
       setRuntimeLoading(false);
-    }
+      toast.error("Failed to start MCP runtime check.");
+    });
   }, [toast]);
 
+  // Trigger first check on mount.
   useEffect(() => {
-    void refreshRuntimeStatuses();
+    refreshRuntimeStatuses();
   }, [refreshRuntimeStatuses]);
 
+  // ── Install / fix (still awaitable — individual CLI, not a batch) ─────
   const runFixWithPrompt = useCallback(
     async (
       request: RunCliMcpFixWithPromptRequest,
@@ -65,7 +101,8 @@ export function useMcpRuntime(): UseMcpRuntimeReturn {
           { request },
         );
         setLastFixResultByKey((prev) => ({ ...prev, [key]: result }));
-        await refreshRuntimeStatuses();
+        // Re-check all CLI statuses (fire-and-forget, non-blocking).
+        refreshRuntimeStatuses();
         if (result.success) {
           toast.success(
             `${request.cliName}: ${request.serverId} install/fix completed.`,

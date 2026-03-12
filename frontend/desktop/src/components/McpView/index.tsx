@@ -62,8 +62,8 @@ export function McpView({ cliHealth }: McpViewProps): ReactNode {
     setRefreshing(true);
     try {
       await invoke("invalidate_cli_cache");
-      await refreshRuntimeStatuses();
-      toast.success("MCP runtime status refreshed.");
+      refreshRuntimeStatuses();
+      toast.success("MCP runtime check started.");
     } finally {
       setRefreshing(false);
     }

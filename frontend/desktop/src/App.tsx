@@ -60,7 +60,7 @@ function App(): ReactNode {
 
   useEffect(() => {
     if (!settings) return;
-    void checkHealth(settings);
+    checkHealth(settings);
   }, [settings, checkHealth]);
 
   if (loading) {

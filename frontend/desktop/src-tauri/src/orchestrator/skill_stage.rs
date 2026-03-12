@@ -38,6 +38,7 @@ pub async fn run_skill_selection_stage(
     app: &AppHandle,
     request: &PipelineRequest,
     settings: &AppSettings,
+    cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>,
     db_pool: &DbPool,
     run_id: &str,
     session_id: &str,
@@ -128,6 +129,7 @@ pub async fn run_skill_selection_stage(
             workspace_path: request.workspace_path.clone(),
         },
         settings,
+        cancel_flag,
         Some(session_id),
         db_pool,
     )

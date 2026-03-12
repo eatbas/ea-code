@@ -63,7 +63,7 @@ pub async fn run_planning_stages(
             )),
             workspace_path: request.workspace_path.clone(),
         },
-        settings, Some(session_id), db,
+        settings, cancel_flag, Some(session_id), db,
     ).await;
     let plan_out = plan_r.output.clone();
     iter_ctx.planner_plan = Some(plan_out.clone());
@@ -99,7 +99,7 @@ pub async fn run_planning_stages(
             )),
             workspace_path: request.workspace_path.clone(),
         },
-        settings, Some(session_id), db,
+        settings, cancel_flag, Some(session_id), db,
     ).await;
     let pa_out = pa_r.output.clone();
     emit_artifact(app, run_id, "plan_audit", &pa_out, iter_num, db);

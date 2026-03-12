@@ -2,8 +2,16 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration as StdDuration, Instant};
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use crate::models::*;
+
+/// Per-CLI health event payload.
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CliHealthEvent {
+    cli_name: String,
+    status: CliStatus,
+}
 use super::cli_util::{extract_version_from_output, run_npm};
 #[cfg(target_os = "windows")]
 use super::git_bash;
@@ -45,34 +53,85 @@ pub async fn invalidate_cli_cache() -> Result<(), String> {
     Ok(())
 }
 
+/// Fire-and-forget: emits `cli_health_status` per CLI, then `cli_health_check_complete`.
 #[tauri::command]
-pub async fn check_cli_health(settings: AppSettings) -> Result<CliHealth, String> {
-    check_cli_health_inner(&settings).await
+pub async fn check_cli_health(app: AppHandle, settings: AppSettings) -> Result<(), String> {
+    let cli_paths = [
+        ("claude", settings.claude_path.clone()),
+        ("codex", settings.codex_path.clone()),
+        ("gemini", settings.gemini_path.clone()),
+        ("kimi", settings.kimi_path.clone()),
+        ("opencode", settings.opencode_path.clone()),
+    ];
+
+    tokio::spawn(async move {
+        // Windows: check bash availability first (fast — cached).
+        let bash_missing = cfg!(target_os = "windows") && !check_binary_exists("bash").await;
+        let app_complete = app.clone();
+
+        let mut handles = Vec::with_capacity(5);
+        for (cli_name, path) in cli_paths {
+            let app_handle = app.clone();
+            let cli_name = cli_name.to_string();
+            handles.push(tokio::spawn(async move {
+                let status = if bash_missing {
+                    CliStatus {
+                        available: false,
+                        path: path.clone(),
+                        error: Some("Git Bash is required on Windows to run agents".into()),
+                    }
+                } else {
+                    check_single_cli(&path).await
+                };
+                let _ = app_handle.emit("cli_health_status", CliHealthEvent {
+                    cli_name,
+                    status,
+                });
+            }));
+        }
+        for h in handles { let _ = h.await; }
+        let _ = app_complete.emit("cli_health_check_complete", ());
+    });
+
+    Ok(())
 }
+/// Fire-and-forget: emits `cli_version_info` per CLI, then `cli_versions_check_complete`.
 #[tauri::command]
-pub async fn get_cli_versions(settings: AppSettings) -> Result<AllCliVersions, String> {
-    let (claude, codex, gemini, kimi, opencode, git_bash) = tokio::join!(
-        build_cli_version_info(&settings.claude_path, "Claude CLI", "claude", "@anthropic-ai/claude-code"),
-        build_cli_version_info(&settings.codex_path, "Codex CLI", "codex", "@openai/codex",),
-        build_cli_version_info(&settings.gemini_path, "Gemini CLI", "gemini", "@google/gemini-cli"),
-        build_cli_version_info(&settings.kimi_path, "Kimi CLI", "kimi", "kimi-cli"),
-        build_cli_version_info(&settings.opencode_path, "OpenCode CLI", "opencode", "opencode-ai"),
-        async {
-            if cfg!(target_os = "windows") {
-                Some(build_git_bash_version_info().await)
-            } else {
-                None
-            }
-        },
-    );
-    Ok(AllCliVersions {
-        claude,
-        codex,
-        gemini,
-        kimi,
-        opencode,
-        git_bash,
-    })
+pub async fn get_cli_versions(app: AppHandle, settings: AppSettings) -> Result<(), String> {
+    let cli_specs: Vec<(String, &'static str, &'static str, &'static str)> = vec![
+        (settings.claude_path.clone(), "Claude CLI", "claude", "@anthropic-ai/claude-code"),
+        (settings.codex_path.clone(), "Codex CLI", "codex", "@openai/codex"),
+        (settings.gemini_path.clone(), "Gemini CLI", "gemini", "@google/gemini-cli"),
+        (settings.kimi_path.clone(), "Kimi CLI", "kimi", "kimi-cli"),
+        (settings.opencode_path.clone(), "OpenCode CLI", "opencode", "opencode-ai"),
+    ];
+
+    tokio::spawn(async move {
+        let app_complete = app.clone();
+        let mut handles = Vec::with_capacity(6);
+
+        for (path, display, cli_name, pkg) in cli_specs {
+            let app_handle = app.clone();
+            handles.push(tokio::spawn(async move {
+                let info = build_cli_version_info(&path, display, cli_name, pkg).await;
+                let _ = app_handle.emit("cli_version_info", &info);
+            }));
+        }
+
+        // Git Bash (Windows only).
+        if cfg!(target_os = "windows") {
+            let app_handle = app.clone();
+            handles.push(tokio::spawn(async move {
+                let info = build_git_bash_version_info().await;
+                let _ = app_handle.emit("cli_version_info", &info);
+            }));
+        }
+
+        for h in handles { let _ = h.await; }
+        let _ = app_complete.emit("cli_versions_check_complete", ());
+    });
+
+    Ok(())
 }
 #[tauri::command]
 pub async fn update_cli(app: AppHandle, cli_name: String) -> Result<String, String> {
@@ -194,9 +253,9 @@ async fn get_installed_version(path: &str) -> Option<String> {
             Duration::from_secs(5),
             tokio::process::Command::new(path).arg("--version").output(),
         )
-        .await
-        .ok()?
-        .ok()?;
+            .await
+            .ok()?
+            .ok()?;
         if output.status.success() {
             return extract_version_from_output(&output);
         }

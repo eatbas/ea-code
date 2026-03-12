@@ -32,8 +32,13 @@ pub(super) async fn run_npm(args: &[&str]) -> Result<std::process::Output, Strin
             .ok_or_else(|| "Failed to run npm via Git Bash".to_string());
     }
     #[cfg(not(target_os = "windows"))]
-    timeout(Duration::from_secs(20), tokio::process::Command::new("npm").args(args).output())
-        .await
-        .map_err(|_| "npm command timed out after 20 seconds".to_string())?
-        .map_err(|e| format!("Failed to run npm: {e}"))
+    {
+        let mut command = tokio::process::Command::new("npm");
+        command.args(args);
+        command.kill_on_drop(true);
+        timeout(Duration::from_secs(20), command.output())
+            .await
+            .map_err(|_| "npm command timed out after 20 seconds".to_string())?
+            .map_err(|e| format!("Failed to run npm: {e}"))
+    }
 }
