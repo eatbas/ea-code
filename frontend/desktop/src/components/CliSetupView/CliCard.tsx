@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { CliVersionInfo } from "../../types";
-import type { McpRuntimeStatus } from "../../types";
 import { useToast } from "../shared/Toast";
 
 function buildGoogleInstallSearchUrl(name: string): string {
@@ -55,26 +54,6 @@ interface CliCardProps {
   modelOptions: { value: string; label: string }[];
   onToggleModel: (value: string) => void;
   onUpdate: () => void;
-  mcpSummary?: {
-    context7: McpRuntimeStatus;
-    playwright: McpRuntimeStatus;
-  };
-}
-
-function mcpStatusLabel(status: McpRuntimeStatus): string {
-  switch (status) {
-    case "enabled":
-      return "Enabled";
-    case "disabled":
-      return "Disabled";
-    case "notInstalled":
-      return "Not installed";
-    case "error":
-      return "Error";
-    case "unknown":
-    default:
-      return "Unknown";
-  }
 }
 
 /** Card displaying a single CLI tool's version, models, and actions. */
@@ -87,7 +66,6 @@ export function CliCard({
   modelOptions,
   onToggleModel,
   onUpdate,
-  mcpSummary,
 }: CliCardProps): ReactNode {
   const toast = useToast();
   const modelControlsDisabled = actionsDisabled || !info.available;
@@ -128,16 +106,6 @@ export function CliCard({
           )}
         </div>
       </div>
-      {mcpSummary && (
-        <div className="mt-4 rounded-md bg-[#0f0f14] px-3 py-2">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-[#6b6b80]">
-            MCP
-          </p>
-          <p className="mt-1 text-xs text-[#9898b0]">
-            Context7: {mcpStatusLabel(mcpSummary.context7)} | Playwright: {mcpStatusLabel(mcpSummary.playwright)}
-          </p>
-        </div>
-      )}
       {modelOptions.length > 0 && (
         <div className="mt-4">
           <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[#6b6b80]">

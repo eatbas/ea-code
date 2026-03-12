@@ -221,15 +221,28 @@ async fn build_cli_version_info(
     cli_name: &str,
     npm_package: &str,
 ) -> CliVersionInfo {
-    let (mut installed, latest, exists) = tokio::join!(
-        get_installed_version(path),
+    // Phase 1: Try reading version from package.json on disk (no process spawn).
+    let pkg_version = if cli_name != "kimi" {
+        get_npm_package_version(npm_package).await
+    } else {
+        None
+    };
+
+    // Phase 2: Parallel — HTTP latest + binary existence + maybe --version.
+    // Skip the costly --version spawn when we already have a file-based version.
+    let need_cli_version = pkg_version.is_none();
+    let (cli_version, latest, exists) = tokio::join!(
+        async {
+            if need_cli_version {
+                get_installed_version(path).await
+            } else {
+                None
+            }
+        },
         get_latest_version(cli_name, npm_package),
         check_binary_exists(path),
     );
-    // Fallback: if --version timed out but binary exists, read version from package.json
-    if installed.is_none() && exists && cli_name != "kimi" {
-        installed = get_npm_package_version(npm_package).await;
-    }
+    let installed = pkg_version.or(cli_version);
     let available = installed.is_some() || exists;
     let up_to_date = matches!((&installed, &latest), (Some(i), Some(l)) if i == l);
     let update_command = if cli_name == "kimi" {

@@ -1,11 +1,10 @@
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo } from "react";
-import type { AppSettings, CliVersionInfo, AllCliVersions, McpRuntimeStatus } from "../../types";
+import { useCallback, useEffect } from "react";
+import type { AppSettings, CliVersionInfo, AllCliVersions } from "../../types";
 import { CLI_MODEL_OPTIONS } from "../../types";
 import { sanitiseAgentAssignmentsForEnabledModels } from "../../utils/agentSettings";
 import { useToast } from "../shared/Toast";
 import { CliCard } from "./CliCard";
-import { useMcpRuntime } from "../../hooks/useMcpRuntime";
 
 type ModelSettingsKey =
   | "claudeModel"
@@ -100,7 +99,6 @@ export function CliSetupView({
   onSave,
 }: CliSetupViewProps): ReactNode {
   const toast = useToast();
-  const { runtimeStatuses, runtimeLoading } = useMcpRuntime();
   const actionsDisabled = loading || updating !== null;
 
   const cliEntries: CliVersionInfo[] = versions
@@ -113,10 +111,6 @@ export function CliSetupView({
         ...(versions.gitBash ? [versions.gitBash] : []),
       ]
     : FALLBACK_CLI_ENTRIES;
-  const runtimeByCli = useMemo(
-    () => new Map(runtimeStatuses.map((row) => [row.cliName, row])),
-    [runtimeStatuses],
-  );
 
   const refreshVersions = useCallback(async (targetSettings: AppSettings, showSuccessToast: boolean): Promise<void> => {
     const result = await onFetchVersions(targetSettings);
@@ -143,16 +137,6 @@ export function CliSetupView({
     const key = MODEL_KEY_MAP[cliName];
     if (!key) return new Set();
     return parseEnabledModels(settings[key]);
-  }
-
-  function getMcpSummary(cliName: string): { context7: McpRuntimeStatus; playwright: McpRuntimeStatus } | undefined {
-    if (!["claude", "codex", "gemini", "kimi", "opencode"].includes(cliName)) {
-      return undefined;
-    }
-    const runtime = runtimeByCli.get(cliName);
-    const context7 = runtime?.serverStatuses.find((s) => s.serverId === "context7")?.status ?? "unknown";
-    const playwright = runtime?.serverStatuses.find((s) => s.serverId === "playwright")?.status ?? "unknown";
-    return { context7, playwright };
   }
 
   function handleToggleModel(cliName: string, model: string): void {
@@ -212,13 +196,9 @@ export function CliSetupView({
                   modelOptions={CLI_MODEL_OPTIONS[info.cliName] ?? []}
                   onToggleModel={(model) => handleToggleModel(info.cliName, model)}
                   onUpdate={() => void handleUpdateCli(info.cliName, info.name)}
-                  mcpSummary={getMcpSummary(info.cliName)}
                 />
               ))}
             </div>
-          )}
-          {runtimeLoading && (
-            <p className="text-xs text-[#6b6b80]">Loading MCP runtime summary...</p>
           )}
         </div>
       </div>
