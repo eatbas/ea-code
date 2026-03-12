@@ -129,7 +129,7 @@ impl Default for AppSettings {
             require_git: true,
             claude_model: "sonnet".to_string(),
             codex_model: "gpt-5.3-codex".to_string(),
-            gemini_model: "gemini-3.0-flash".to_string(),
+            gemini_model: "gemini-3.0-flash-preview".to_string(),
             kimi_model: "kimi-code/kimi-for-coding".to_string(),
             opencode_model: "opencode/glm-5".to_string(),
             prompt_enhancer_model: "sonnet".to_string(),
@@ -196,7 +196,7 @@ impl AppSettings {
         match cli_name {
             "claude" => Some("sonnet"),
             "codex" => Some("gpt-5.3-codex"),
-            "gemini" => Some("gemini-3.0-flash"),
+            "gemini" => Some("gemini-3.0-flash-preview"),
             "kimi" => Some("kimi-code"),
             "opencode" => Some("opencode/glm-5"),
             _ => None,

@@ -25,7 +25,7 @@ CREATE TABLE settings (
     updated_at                      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     claude_model                    TEXT    NOT NULL DEFAULT 'sonnet',
     codex_model                     TEXT    NOT NULL DEFAULT 'gpt-5.3-codex',
-    gemini_model                    TEXT    NOT NULL DEFAULT 'gemini-3.0-flash',
+    gemini_model                    TEXT    NOT NULL DEFAULT 'gemini-3.0-flash-preview',
     kimi_model                      TEXT    NOT NULL DEFAULT 'kimi-code',
     opencode_model                  TEXT    NOT NULL DEFAULT 'opencode/glm-5',
     prompt_enhancer_model           TEXT    NOT NULL DEFAULT 'sonnet',

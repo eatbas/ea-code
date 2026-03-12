@@ -103,6 +103,10 @@ async fn run_git_bash(script: &str, args: &[&str], timeout_secs: u64) -> Option<
         .arg(script)
         .args(args)
         .stdin(Stdio::null())
+        // Tauri GUI processes on Windows may not have a valid inherited stdout/stderr.
+        // Always pipe child output so CLIs (for example Kimi via Python/Colorama) can write safely.
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .creation_flags(CREATE_NO_WINDOW)
         .kill_on_drop(true);
 
