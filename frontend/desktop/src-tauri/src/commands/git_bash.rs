@@ -89,7 +89,7 @@ async fn run_git_bash(script: &str, args: &[&str], timeout_secs: u64) -> Option<
     timeout(
         Duration::from_secs(timeout_secs),
         Command::new(git_bash)
-            .arg("-lc")
+            .arg("-c")
             .arg(script)
             .args(args)
             .stdin(Stdio::null())
@@ -106,9 +106,25 @@ pub(crate) async fn command_exists(binary: &str) -> bool {
     if binary.eq_ignore_ascii_case("bash") {
         return find_git_bash().is_some();
     }
-    run_git_bash("command -v \"$0\" >/dev/null 2>&1", &[binary], 10)
-        .await
-        .is_some_and(|output| output.status.success())
+    // Full path: check file existence directly (no spawn).
+    if binary.contains('\\') || binary.contains('/') {
+        return Path::new(binary).exists();
+    }
+    // Use native where.exe for PATH lookup — avoids spawning Git Bash entirely.
+    timeout(
+        Duration::from_secs(5),
+        Command::new("where.exe")
+            .arg(binary)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW)
+            .status(),
+    )
+    .await
+    .ok()
+    .and_then(|r| r.ok())
+    .is_some_and(|s| s.success())
 }
 
 #[cfg(target_os = "windows")]
