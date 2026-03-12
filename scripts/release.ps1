@@ -1,9 +1,10 @@
 # EA Code Release Script (PowerShell)
-# Usage: .\scripts\release.ps1 [version|patch|minor|major]
+# Usage: .\scripts\release.ps1 [version|patch|minor|major] [-AutoTag]
 
 param(
     [Parameter(Position = 0)]
-    [string]$Arg = "patch"
+    [string]$Arg = "patch",
+    [switch]$AutoTag
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,7 +35,7 @@ if ($Arg -match "^\d+\.\d+\.\d+$") {
 } elseif ($Arg -eq "major") {
     $Version = "$($Major + 1).0.0"
 } else {
-    Write-Host "Usage: .\scripts\release.ps1 [version|patch|minor|major]" -ForegroundColor Cyan
+    Write-Host "Usage: .\scripts\release.ps1 [version|patch|minor|major] [-AutoTag]" -ForegroundColor Cyan
     exit 1
 }
 
@@ -66,27 +67,45 @@ if ($Confirm -and $Confirm -ne "y" -and $Confirm -ne "Y") {
 $TauriContent = Get-Content $TauriPath -Raw
 $TauriContent = $TauriContent -replace [regex]::Escape("`"version`": `"$CurrentVersion`""), "`"version`": `"$Version`""
 Set-Content $TauriPath $TauriContent -NoNewline
-Write-Host "[1/6] Bumped frontend/desktop/src-tauri/tauri.conf.json" -ForegroundColor Green
+Write-Host "[1/7] Bumped frontend/desktop/src-tauri/tauri.conf.json" -ForegroundColor Green
 
 $CargoContent = Get-Content $CargoPath -Raw
 $CargoContent = $CargoContent -replace "(?m)^(version\s*=\s*)`"$([regex]::Escape($CurrentVersion))`"", "`$1`"$Version`""
 Set-Content $CargoPath $CargoContent -NoNewline
-Write-Host "[2/6] Bumped frontend/desktop/src-tauri/Cargo.toml" -ForegroundColor Green
+Write-Host "[2/7] Bumped frontend/desktop/src-tauri/Cargo.toml" -ForegroundColor Green
 
 $PackageContent = Get-Content $PackagePath -Raw
 $PackageContent = $PackageContent -replace [regex]::Escape("`"version`": `"$CurrentVersion`""), "`"version`": `"$Version`""
 Set-Content $PackagePath $PackageContent -NoNewline
-Write-Host "[3/6] Bumped frontend/desktop/package.json" -ForegroundColor Green
+Write-Host "[3/7] Bumped frontend/desktop/package.json" -ForegroundColor Green
 
 git add $TauriPath $CargoPath $PackagePath
 git commit -m "chore: bump version to $Version"
-Write-Host "[4/6] Committed version bump" -ForegroundColor Green
+Write-Host "[4/7] Committed version bump" -ForegroundColor Green
+
+git push origin main
+Write-Host "[5/7] Pushed version bump commit to origin/main" -ForegroundColor Green
+
+if (-not $AutoTag) {
+    Write-Host ""
+    Write-Host "Wait for the CI workflow to finish successfully before pushing the release tag." -ForegroundColor Yellow
+    Write-Host "CI: https://github.com/eatbas/ea-code/actions/workflows/ci.yml" -ForegroundColor Yellow
+    $PushTagNow = Read-Host "Push release tag $Tag now? [y/N]"
+    if (-not ($PushTagNow -eq "y" -or $PushTagNow -eq "Y")) {
+        Write-Host ""
+        Write-Host "Tag not pushed." -ForegroundColor Cyan
+        Write-Host "After CI passes, run:" -ForegroundColor Cyan
+        Write-Host "  git tag $Tag" -ForegroundColor Yellow
+        Write-Host "  git push origin $Tag" -ForegroundColor Yellow
+        exit 0
+    }
+}
 
 git tag $Tag
-Write-Host "[5/6] Created tag $Tag" -ForegroundColor Green
+Write-Host "[6/7] Created tag $Tag" -ForegroundColor Green
 
-git push origin main --tags
-Write-Host "[6/6] Pushed commit and tag to origin/main" -ForegroundColor Green
+git push origin $Tag
+Write-Host "[7/7] Pushed tag $Tag" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "Release $Tag triggered. Monitor at:" -ForegroundColor Cyan
