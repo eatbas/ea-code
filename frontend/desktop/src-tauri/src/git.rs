@@ -61,9 +61,10 @@ async fn run_git(args: &[&str]) -> Result<std::process::Output, String> {
 
 #[cfg(not(target_os = "windows"))]
 async fn run_git(args: &[&str]) -> Result<std::process::Output, String> {
-    tokio::process::Command::new("git")
-        .args(args)
-        .output()
+    let mut cmd = tokio::process::Command::new("git");
+    cmd.args(args).kill_on_drop(true);
+    tokio::time::timeout(std::time::Duration::from_secs(15), cmd.output())
         .await
+        .map_err(|_| "git command timed out after 15 s".to_string())?
         .map_err(|e| format!("Failed to run git: {e}"))
 }

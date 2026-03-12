@@ -9,6 +9,7 @@ use std::time::Instant;
 
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
+use tokio::time::Duration;
 use uuid::Uuid;
 
 use crate::agents::AgentInput;
@@ -211,75 +212,76 @@ async fn run_direct_task(
     let start = Instant::now();
     emit_stage(app, run_id, &PipelineStage::DirectTask, &StageStatus::Running, 1, db);
 
-    if wait_if_paused(pause_flag, cancel_flag).await {
-        push_cancel_iteration(run, 1, Vec::new());
-        return Ok(());
-    }
-    if is_cancelled(cancel_flag) {
+    if wait_if_paused(pause_flag, cancel_flag).await || is_cancelled(cancel_flag) {
         push_cancel_iteration(run, 1, Vec::new());
         return Ok(());
     }
 
-    let result = dispatch_agent(
-        backend,
-        model,
-        &input,
-        settings,
-        Some(session_id),
-        app,
-        run_id,
-        PipelineStage::DirectTask,
-        db,
-    )
-    .await;
+    let result = if settings.agent_timeout_ms == 0 {
+        tokio::select! {
+            res = dispatch_agent(
+                backend, model, &input, settings, Some(session_id),
+                app, run_id, PipelineStage::DirectTask, db,
+            ) => res,
+            _ = wait_for_cancel(cancel_flag) => {
+                push_cancel_iteration(run, 1, Vec::new());
+                return Ok(());
+            }
+        }
+    } else {
+        tokio::select! {
+            res = tokio::time::timeout(
+                Duration::from_millis(settings.agent_timeout_ms),
+                dispatch_agent(
+                    backend, model, &input, settings, Some(session_id),
+                    app, run_id, PipelineStage::DirectTask, db,
+                ),
+            ) => {
+                match res {
+                    Ok(inner) => inner,
+                    Err(_) => Err(format!(
+                        "DirectTask stage timed out after {} ms",
+                        settings.agent_timeout_ms
+                    )),
+                }
+            }
+            _ = wait_for_cancel(cancel_flag) => {
+                push_cancel_iteration(run, 1, Vec::new());
+                return Ok(());
+            }
+        }
+    };
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
-    match result {
-        Ok(out) => {
-            emit_stage_with_duration(app, run_id, &PipelineStage::DirectTask, &StageStatus::Completed, 1, Some(duration_ms), db);
-            // Emit the raw CLI output as a "result" artefact so the frontend can parse it
-            emit_artifact(app, run_id, "result", &out.raw_text, 1, db);
-            let _ = db::runs::insert_stage(
-                db, iteration_db_id, "direct_task", "completed",
-                &out.raw_text, duration_ms as i32, None,
-            );
-            run.iterations.push(Iteration {
-                number: 1,
-                stages: vec![StageResult {
-                    stage: PipelineStage::DirectTask,
-                    status: StageStatus::Completed,
-                    output: out.raw_text,
-                    duration_ms,
-                    error: None,
-                }],
-                verdict: Some(JudgeVerdict::Complete),
-                judge_reasoning: None,
-            });
-            run.status = PipelineStatus::Completed;
-            run.final_verdict = Some(JudgeVerdict::Complete);
-        }
-        Err(e) => {
-            emit_stage_with_duration(app, run_id, &PipelineStage::DirectTask, &StageStatus::Failed, 1, Some(duration_ms), db);
-            let _ = db::runs::insert_stage(
-                db, iteration_db_id, "direct_task", "failed",
-                "", duration_ms as i32, Some(&e),
-            );
-            run.iterations.push(Iteration {
-                number: 1,
-                stages: vec![StageResult {
-                    stage: PipelineStage::DirectTask,
-                    status: StageStatus::Failed,
-                    output: String::new(),
-                    duration_ms,
-                    error: Some(e.clone()),
-                }],
-                verdict: None,
-                judge_reasoning: None,
-            });
-            run.status = PipelineStatus::Failed;
-            run.error = Some(e);
-        }
+    let (status, output, error, verdict) = match result {
+        Ok(out) => (StageStatus::Completed, out.raw_text, None, Some(JudgeVerdict::Complete)),
+        Err(e) => (StageStatus::Failed, String::new(), Some(e), None),
+    };
+    emit_stage_with_duration(app, run_id, &PipelineStage::DirectTask, &status, 1, Some(duration_ms), db);
+    if !output.is_empty() {
+        emit_artifact(app, run_id, "result", &output, 1, db);
+    }
+    let db_status = if error.is_none() { "completed" } else { "failed" };
+    let _ = db::runs::insert_stage(
+        db, iteration_db_id, "direct_task", db_status,
+        &output, duration_ms as i32, error.as_deref(),
+    );
+    run.iterations.push(Iteration {
+        number: 1,
+        stages: vec![StageResult {
+            stage: PipelineStage::DirectTask, status, output, duration_ms,
+            error: error.clone(),
+        }],
+        verdict,
+        judge_reasoning: None,
+    });
+    if let Some(ref e) = error {
+        run.status = PipelineStatus::Failed;
+        run.error = Some(e.clone());
+    } else {
+        run.status = PipelineStatus::Completed;
+        run.final_verdict = Some(JudgeVerdict::Complete);
     }
 
     Ok(())
@@ -288,7 +290,6 @@ fn run_retention_cleanup(db: &DbPool, retention_days: u32) {
     if retention_days == 0 {
         return;
     }
-
     match db::cleanup::cleanup_old_runs(db, retention_days as i32) {
         Ok(deleted) if deleted > 0 => {
             let _ = db::cleanup::pragma_optimize(db);

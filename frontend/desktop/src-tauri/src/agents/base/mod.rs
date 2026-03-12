@@ -2,6 +2,8 @@ use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 #[cfg(not(target_os = "windows"))]
 use tokio::process::Command;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 use crate::db::DbPool;
 use crate::events::{EVENT_PIPELINE_LOG, PipelineLogPayload};
@@ -11,6 +13,47 @@ use crate::models::PipelineStage;
 mod windows;
 #[cfg(target_os = "windows")]
 use windows::{build_windows_git_bash_command, remove_prompt_temp_file, write_prompt_temp_file};
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(target_os = "windows")]
+fn terminate_process_tree(pid: u32) {
+    let pid_arg = pid.to_string();
+    let _ = std::process::Command::new("taskkill")
+        .args(["/T", "/F", "/PID", pid_arg.as_str()])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
+#[cfg(target_os = "windows")]
+struct ProcessTreeGuard {
+    pid: Option<u32>,
+    armed: bool,
+}
+
+#[cfg(target_os = "windows")]
+impl ProcessTreeGuard {
+    fn new(pid: Option<u32>) -> Self {
+        Self { pid, armed: true }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for ProcessTreeGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            if let Some(pid) = self.pid {
+                terminate_process_tree(pid);
+            }
+        }
+    }
+}
 
 /// Input passed to each agent invocation.
 #[derive(Clone, Debug)]
@@ -108,6 +151,9 @@ pub async fn run_cli_agent(
             format!("Failed to spawn {binary}: {e}")
         })?;
 
+    #[cfg(target_os = "windows")]
+    let mut process_tree_guard = ProcessTreeGuard::new(child.id());
+
     // Write prompt to stdin while still reading stdout/stderr to avoid deadlocks
     // when the child's output buffer fills up.
     let stdin_handle = if let Some(text) = stdin_text {
@@ -201,6 +247,8 @@ pub async fn run_cli_agent(
     if let Some(ref pf) = prompt_file {
         remove_prompt_temp_file(pf);
     }
+    #[cfg(target_os = "windows")]
+    process_tree_guard.disarm();
 
     if !status.success() {
         let output = if stdout_output.trim().is_empty() {

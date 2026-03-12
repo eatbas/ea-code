@@ -14,6 +14,17 @@ use tokio::time::{timeout, Duration};
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[cfg(target_os = "windows")]
+fn terminate_process_tree(pid: u32) {
+    let pid_arg = pid.to_string();
+    let _ = std::process::Command::new("taskkill")
+        .args(["/T", "/F", "/PID", pid_arg.as_str()])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
+#[cfg(target_os = "windows")]
 static GIT_BASH_PATH: OnceLock<Option<String>> = OnceLock::new();
 
 #[cfg(target_os = "windows")]
@@ -86,20 +97,27 @@ fn find_git_bash_inner() -> Option<String> {
 #[cfg(target_os = "windows")]
 async fn run_git_bash(script: &str, args: &[&str], timeout_secs: u64) -> Option<Output> {
     let git_bash = find_git_bash()?;
-    timeout(
-        Duration::from_secs(timeout_secs),
-        Command::new(git_bash)
-            .arg("-c")
-            .arg(script)
-            .args(args)
-            .stdin(Stdio::null())
-            .creation_flags(CREATE_NO_WINDOW)
-            .kill_on_drop(true)
-            .output(),
-    )
-    .await
-    .ok()?
-    .ok()
+    let mut command = Command::new(git_bash);
+    command
+        .arg("-c")
+        .arg(script)
+        .args(args)
+        .stdin(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .kill_on_drop(true);
+
+    let child = command.spawn().ok()?;
+    let child_pid = child.id();
+
+    match timeout(Duration::from_secs(timeout_secs), child.wait_with_output()).await {
+        Ok(output) => output.ok(),
+        Err(_) => {
+            if let Some(pid) = child_pid {
+                terminate_process_tree(pid);
+            }
+            None
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]
