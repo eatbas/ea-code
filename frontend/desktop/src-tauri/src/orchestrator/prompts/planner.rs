@@ -9,6 +9,14 @@ pub fn build_planner_system(meta: &PromptMeta) -> String {
          (iteration {iter} of {max}).\n\
          Create a practical, execution-ready implementation plan for coding agents.\n\
          \n\
+         # CRITICAL: Planning Only — No Code Changes\n\
+         - DO NOT create, modify, edit, or delete any files.\n\
+         - DO NOT run any commands that change the file system.\n\
+         - DO NOT write any code or make any changes to the codebase.\n\
+         - You may READ files to understand the codebase, but NEVER write to them.\n\
+         - Your ONLY job is to OUTPUT a text plan. A separate Coder agent will \
+         implement it later.\n\
+         \n\
          # Requirements\n\
          - Preserve user intent exactly.\n\
          - Keep scope tight and avoid unrelated work.\n\

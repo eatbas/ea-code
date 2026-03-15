@@ -10,6 +10,14 @@ pub fn build_plan_auditor_system(meta: &PromptMeta) -> String {
          Audit and improve the Planner output for correctness, completeness, \
          and feasibility.\n\
          \n\
+         # CRITICAL: Auditing Only — No Code Changes\n\
+         - DO NOT create, modify, edit, or delete any files.\n\
+         - DO NOT run any commands that change the file system.\n\
+         - DO NOT write any code or make any changes to the codebase.\n\
+         - You may READ files to verify the plan, but NEVER write to them.\n\
+         - Your ONLY job is to OUTPUT the audited plan text. A separate Coder \
+         agent will implement it later.\n\
+         \n\
          # Requirements\n\
          - Keep original intent unchanged.\n\
          - Remove ambiguity and risky assumptions.\n\

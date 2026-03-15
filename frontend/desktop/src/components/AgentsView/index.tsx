@@ -92,7 +92,7 @@ export function AgentsView({
             Configure which CLI backend and model handles each pipeline role.
           </p>
           <p className="text-xs text-[#6b6b82]">
-            Roles marked as minimum must be set before prompts can be sent.
+            Roles marked as required must be set before prompts can be sent.
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -124,7 +124,7 @@ export function AgentsView({
                   <span className="text-xs font-medium text-[#9898b0]">
                     {stage.label}
                     <span className="ml-1 text-[#6b6b80]">
-                      {stage.optional ? "(optional)" : "(minimum)"}
+                      {stage.optional ? "(optional)" : "(required)"}
                     </span>
                   </span>
                   <CascadingSelect

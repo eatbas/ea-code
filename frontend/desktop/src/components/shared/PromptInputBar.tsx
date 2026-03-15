@@ -55,14 +55,14 @@ export function PromptInputBar({
     disabledReason = "Type a prompt before sending.";
   } else if (missingProject && blockedByMinimumAgents) {
     disabledReason = missingMinimumAgents
-      ? "No project selected and no agents selected. Select a project and configure minimum agent roles before sending."
+      ? "No project selected and no agents selected. Select a project and configure required agent roles before sending."
       : "No project selected and agent models are not selected. Select a project and configure required models before sending.";
   } else if (missingProject) {
     disabledReason = "No project selected. Select a project before sending.";
   } else if (blockedByMinimumAgents) {
     disabledReason = missingMinimumAgentModels
       ? "Agent models are not selected. Go to Settings/CLI Setup and choose models before sending."
-      : "No agents selected. Go to Settings/Agents and set the minimum agent roles before sending.";
+      : "No agents selected. Go to Settings/Agents and set the required agent roles before sending.";
   }
 
   useEffect(() => {
