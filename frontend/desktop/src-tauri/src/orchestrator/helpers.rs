@@ -9,9 +9,9 @@ use tauri::{AppHandle, Emitter};
 use crate::agents::{
     run_claude, run_codex, run_gemini, run_kimi, run_opencode, AgentInput, AgentOutput,
 };
-use crate::db::{self, DbPool};
 use crate::events::*;
 use crate::models::*;
+use crate::storage::runs;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -24,7 +24,8 @@ pub fn epoch_millis() -> String {
         .to_string()
 }
 
-/// Serialises a PipelineStage to its snake_case string for DB storage.
+/// Serialises a PipelineStage to its snake_case string.
+#[allow(dead_code)]
 pub fn stage_to_str(stage: &PipelineStage) -> String {
     serde_json::to_value(stage)
         .ok()
@@ -42,7 +43,6 @@ pub async fn dispatch_agent(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
-    db: &DbPool,
 ) -> Result<AgentOutput, String> {
     if model.is_empty() {
         eprintln!(
@@ -53,22 +53,28 @@ pub async fn dispatch_agent(
     match backend {
         AgentBackend::Claude => {
             run_claude(
-                input, &settings.claude_path, model, settings.agent_max_turns, session_id,
-                app, run_id, stage, db,
+                input,
+                &settings.claude_path,
+                model,
+                settings.agent_max_turns,
+                session_id,
+                app,
+                run_id,
+                stage,
             )
             .await
         }
         AgentBackend::Codex => {
-            run_codex(input, &settings.codex_path, model, session_id, app, run_id, stage, db).await
+            run_codex(input, &settings.codex_path, model, session_id, app, run_id, stage).await
         }
         AgentBackend::Gemini => {
-            run_gemini(input, &settings.gemini_path, model, app, run_id, stage, db).await
+            run_gemini(input, &settings.gemini_path, model, app, run_id, stage).await
         }
         AgentBackend::Kimi => {
-            run_kimi(input, &settings.kimi_path, model, app, run_id, stage, db).await
+            run_kimi(input, &settings.kimi_path, model, app, run_id, stage).await
         }
         AgentBackend::OpenCode => {
-            run_opencode(input, &settings.opencode_path, model, app, run_id, stage, db).await
+            run_opencode(input, &settings.opencode_path, model, app, run_id, stage).await
         }
     }
 }
@@ -121,7 +127,9 @@ pub fn resolve_stage_model(stage: &PipelineStage, settings: &AppSettings) -> Str
             settings.executive_summary_agent.as_ref(),
             settings,
         ),
-        PipelineStage::DiffAfterCoder | PipelineStage::DiffAfterCodeFixer | PipelineStage::DirectTask => String::new(),
+        PipelineStage::DiffAfterCoder | PipelineStage::DiffAfterCodeFixer | PipelineStage::DirectTask => {
+            String::new()
+        }
     }
 }
 
@@ -160,20 +168,18 @@ fn first_enabled_model_for_backend(
     csv.split(',').next().unwrap_or("").trim().to_string()
 }
 
-/// Emits a stage status transition event and persists current stage to DB.
+/// Emits a stage status transition event.
 pub fn emit_stage(
     app: &AppHandle,
     run_id: &str,
     stage: &PipelineStage,
     status: &StageStatus,
     iteration: u32,
-    db: &DbPool,
 ) {
-    emit_stage_with_duration(app, run_id, stage, status, iteration, None, db);
+    emit_stage_with_duration(app, run_id, stage, status, iteration, None);
 }
 
-/// Emits a stage status transition event with an optional duration, and
-/// persists the current stage to the DB so polled views can show progress.
+/// Emits a stage status transition event with an optional duration.
 pub fn emit_stage_with_duration(
     app: &AppHandle,
     run_id: &str,
@@ -181,7 +187,6 @@ pub fn emit_stage_with_duration(
     status: &StageStatus,
     iteration: u32,
     duration_ms: Option<u64>,
-    db: &DbPool,
 ) {
     let _ = app.emit(
         EVENT_PIPELINE_STAGE,
@@ -194,43 +199,23 @@ pub fn emit_stage_with_duration(
         },
     );
 
-    // Persist current stage to DB for polled session views
-    if matches!(status, StageStatus::Running) {
-        let _ = db::runs::update_current_stage(
-            db,
-            run_id,
-            Some(&stage_to_str(stage)),
-            iteration as i32,
-        );
+    // Update summary.json with current stage for crash recovery
+    if let Ok(mut summary) = runs::read_summary(run_id) {
+        if matches!(status, StageStatus::Running) {
+            summary.current_stage = Some(stage.clone());
+            let _ = runs::update_summary(run_id, &summary);
+        }
     }
 }
 
-/// Transient artefact kinds that are either rebuilt every run or already stored
-/// canonically in `stages.output`. These are emitted via Tauri events for
-/// real-time display but skipped when writing to the `artifacts` table.
-const TRANSIENT_ARTIFACT_KINDS: &[&str] = &[
-    // Rebuilt fresh every run — zero historical value
-    "workspace_context",
-    "session_memory",
-    // Already stored in stages.output (canonical) — no need to duplicate
-    "result",
-    "plan",
-    "plan_audit",
-    "review",
-    "judge",
-    "diff",
-];
-
-/// Emits an artefact event and persists it to the database.
-/// Transient kinds (workspace_context, session_memory) are emitted for real-time
-/// display but not written to the database.
+/// Emits a pipeline artefact event so the frontend can display stage outputs,
+/// and persists the artefact to disk for historical viewing.
 pub fn emit_artifact(
     app: &AppHandle,
     run_id: &str,
     kind: &str,
     content: &str,
     iteration: u32,
-    db: &DbPool,
 ) {
     let _ = app.emit(
         EVENT_PIPELINE_ARTIFACT,
@@ -241,8 +226,10 @@ pub fn emit_artifact(
             iteration,
         },
     );
-    if !TRANSIENT_ARTIFACT_KINDS.contains(&kind) {
-        let _ = db::artifacts::insert(db, run_id, iteration as i32, kind, content);
+
+    // Persist artefact to disk for historical viewing
+    if let Err(e) = runs::write_artifact(run_id, iteration, kind, content) {
+        eprintln!("Warning: Failed to persist artefact '{kind}': {e}");
     }
 }
 
@@ -292,4 +279,3 @@ pub fn backend_to_db_str(backend: &AgentBackend) -> &'static str {
         AgentBackend::OpenCode => "opencode",
     }
 }
-

@@ -6,16 +6,16 @@ use std::mem;
 use tauri::AppHandle;
 
 use crate::agents::AgentInput;
-use crate::db::{self, DbPool};
-use crate::models::*;
+use crate::models::{RunEvent, StageEndStatus, *};
+use crate::storage::{self, runs, skills};
 
-use super::helpers::*;
-use super::prompts::{self, PromptMeta};
-use super::run_setup::compose_agent_context;
-use super::skill_selection::{
+use crate::orchestrator::prompts::{self, PromptMeta};
+use crate::orchestrator::run_setup::compose_agent_context;
+use crate::orchestrator::skill_selection::{
     build_selected_skills_section, build_skill_selector_user, parse_skill_selection_output,
 };
-use super::stages::*;
+use crate::orchestrator::stages::execute_agent_stage;
+use crate::orchestrator::stages::execute_skipped_stage;
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,13 +25,6 @@ struct SkillCatalogEntry {
     description: String,
 }
 
-#[derive(Debug, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SkillSelectionArtifact<'a> {
-    selected_skill_ids: &'a [String],
-    reason: &'a str,
-}
-
 /// Runs the optional skill selection stage and returns prompt text for selected skills.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_skill_selection_stage(
@@ -39,11 +32,9 @@ pub async fn run_skill_selection_stage(
     request: &PipelineRequest,
     settings: &AppSettings,
     cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>,
-    db_pool: &DbPool,
     run_id: &str,
     session_id: &str,
     iter_num: u32,
-    iteration_db_id: i32,
     meta: &PromptMeta,
     enhanced: &str,
     selected_plan: Option<&str>,
@@ -59,43 +50,40 @@ pub async fn run_skill_selection_stage(
                 app,
                 run_id,
                 iter_num,
-                iteration_db_id,
                 PipelineStage::SkillSelect,
                 "No skill selector agent configured.",
-                db_pool,
             ));
             return Ok(None);
         }
     };
 
-    let skills = db::skills::list_active(db_pool)?
-        .into_iter()
-        .map(|row| Skill {
-            id: row.id,
-            name: row.name,
-            description: row.description,
-            instructions: row.instructions,
-            tags: row.tags,
-            is_active: row.is_active,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-        })
-        .collect::<Vec<_>>();
+    let skill_files = match skills::list_skills() {
+        Ok(files) => files,
+        Err(e) => {
+            eprintln!("Warning: Failed to list skills: {e}");
+            stages.push(execute_skipped_stage(
+                app,
+                run_id,
+                iter_num,
+                PipelineStage::SkillSelect,
+                "Failed to load skills catalogue.",
+            ));
+            return Ok(None);
+        }
+    };
 
-    if skills.is_empty() {
+    if skill_files.is_empty() {
         stages.push(execute_skipped_stage(
             app,
             run_id,
             iter_num,
-            iteration_db_id,
             PipelineStage::SkillSelect,
             "No active skills found.",
-            db_pool,
         ));
         return Ok(None);
     }
 
-    let catalogue = skills
+    let catalogue = skill_files
         .iter()
         .map(|skill| SkillCatalogEntry {
             id: skill.id.clone(),
@@ -107,11 +95,14 @@ pub async fn run_skill_selection_stage(
         .map_err(|e| format!("Failed to serialise skill catalogue: {e}"))?;
 
     run.current_stage = Some(PipelineStage::SkillSelect);
+
+    let seq_start = runs::next_sequence(run_id).unwrap_or(1);
+    append_stage_start_event(run_id, &PipelineStage::SkillSelect, iter_num, seq_start)?;
+
     let result = execute_agent_stage(
         app,
         run_id,
         iter_num,
-        iteration_db_id,
         PipelineStage::SkillSelect,
         selector,
         &AgentInput {
@@ -131,13 +122,22 @@ pub async fn run_skill_selection_stage(
         settings,
         cancel_flag,
         Some(session_id),
-        db_pool,
     )
     .await;
 
     let selector_output = result.output.clone();
+    let duration_ms = result.duration_ms;
+
     if result.status == StageStatus::Failed {
         stages.push(result);
+        append_stage_end_event(
+            run_id,
+            &PipelineStage::SkillSelect,
+            iter_num,
+            seq_start + 1,
+            &StageEndStatus::Failed,
+            duration_ms,
+        )?;
         run.iterations.push(Iteration {
             number: iter_num,
             stages: mem::take(stages),
@@ -149,8 +149,16 @@ pub async fn run_skill_selection_stage(
         return Ok(None);
     }
     stages.push(result);
+    append_stage_end_event(
+        run_id,
+        &PipelineStage::SkillSelect,
+        iter_num,
+        seq_start + 1,
+        &StageEndStatus::Completed,
+        duration_ms,
+    )?;
 
-    let known_ids = skills
+    let known_ids = skill_files
         .iter()
         .map(|skill| skill.id.clone())
         .collect::<HashSet<_>>();
@@ -163,17 +171,10 @@ pub async fn run_skill_selection_stage(
         },
     };
 
-    let selected = skills
+    let selected = skill_files
         .into_iter()
         .filter(|skill| decision.selected_skill_ids.contains(&skill.id))
         .collect::<Vec<_>>();
-
-    let artifact = serde_json::to_string_pretty(&SkillSelectionArtifact {
-        selected_skill_ids: &decision.selected_skill_ids,
-        reason: &decision.reason,
-    })
-    .unwrap_or_else(|_| "{\"selectedSkillIds\":[],\"reason\":\"serialisation error\"}".to_string());
-    emit_artifact(app, run_id, "selected_skills", &artifact, iter_num, db_pool);
 
     let section = build_selected_skills_section(&selected);
     if section.trim().is_empty() {
@@ -181,4 +182,44 @@ pub async fn run_skill_selection_stage(
     } else {
         Ok(Some(section))
     }
+}
+
+/// Appends a stage_start event to the event log.
+fn append_stage_start_event(
+    run_id: &str,
+    stage: &PipelineStage,
+    iteration: u32,
+    seq: u64,
+) -> Result<(), String> {
+    let event = RunEvent::StageStart {
+        v: 1,
+        seq,
+        ts: storage::now_rfc3339(),
+        stage: stage.clone(),
+        iteration,
+    };
+    runs::append_event(run_id, event)
+}
+
+/// Appends a stage_end event to the event log.
+fn append_stage_end_event(
+    run_id: &str,
+    stage: &PipelineStage,
+    iteration: u32,
+    seq: u64,
+    status: &StageEndStatus,
+    duration_ms: u64,
+) -> Result<(), String> {
+    let event = RunEvent::StageEnd {
+        v: 1,
+        seq,
+        ts: storage::now_rfc3339(),
+        stage: stage.clone(),
+        iteration,
+        status: status.clone(),
+        duration_ms,
+        audit_verdict: None,
+        verdict: None,
+    };
+    runs::append_event(run_id, event)
 }

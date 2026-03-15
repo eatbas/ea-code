@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
-use crate::db;
+use crate::storage;
 use crate::events::{PipelineErrorPayload, EVENT_PIPELINE_ERROR};
 use crate::models::*;
 
@@ -19,7 +19,7 @@ pub async fn run_pipeline(
 ) -> Result<(), String> {
     use tauri::Emitter;
 
-    let loaded_settings = db::settings::get(&state.db)?;
+    let loaded_settings = storage::settings::read_settings()?;
     if !request.direct_task {
         let missing = loaded_settings.missing_minimum_agents();
         if !missing.is_empty() {
@@ -29,7 +29,7 @@ pub async fn run_pipeline(
             ));
         }
     }
-    let db = state.db.clone();
+    
     let run_id = Uuid::new_v4().to_string();
     let cancel_flag = Arc::new(AtomicBool::new(false));
     let pause_flag = Arc::new(AtomicBool::new(false));
@@ -51,8 +51,7 @@ pub async fn run_pipeline(
     let pause_flags_registry = state.pause_flags.clone();
     let answer_senders_registry = state.answer_senders.clone();
 
-    // Clone pool + retention setting so we can run cleanup after the pipeline finishes
-    let cleanup_db = db.clone();
+    // Get retention setting for cleanup after the pipeline finishes
     let retention_days = loaded_settings.retention_days;
 
     // Spawn the pipeline as a background task so the command returns promptly
@@ -66,13 +65,12 @@ pub async fn run_pipeline(
             cancel_flag,
             pause_flag,
             answer_sender,
-            db,
         )
         .await;
 
-        // Best-effort retention cleanup after each run (skip VACUUM — too heavy)
+        // Best-effort retention cleanup after each run
         if retention_days > 0 {
-            let _ = db::cleanup::cleanup_old_runs(&cleanup_db, retention_days as i32);
+            let _ = storage::cleanup::cleanup_old_runs(retention_days);
         }
 
         if let Err(e) = result {
@@ -120,7 +118,13 @@ pub async fn cancel_pipeline(state: State<'_, AppState>, run_id: String) -> Resu
         flag.store(false, Ordering::SeqCst);
     }
 
-    let _ = db::run_status::cancel_run(&state.db, &run_id);
+    // File-based storage: update run status via summary.json
+    if let Ok(mut summary) = storage::runs::read_summary(&run_id) {
+        summary.status = RunFileStatus::Cancelled;
+        summary.completed_at = Some(storage::now_rfc3339());
+        let _ = storage::runs::update_summary(&run_id, &summary);
+    }
+    
     Ok(())
 }
 
@@ -133,7 +137,13 @@ pub async fn pause_pipeline(state: State<'_, AppState>, run_id: String) -> Resul
     if let Some(flag) = pause_flag {
         flag.store(true, Ordering::SeqCst);
     }
-    let _ = db::run_status::pause_run(&state.db, &run_id);
+    
+    // File-based storage: update run status via summary.json
+    if let Ok(mut summary) = storage::runs::read_summary(&run_id) {
+        summary.status = RunFileStatus::Paused;
+        let _ = storage::runs::update_summary(&run_id, &summary);
+    }
+    
     Ok(())
 }
 
@@ -146,7 +156,13 @@ pub async fn resume_pipeline(state: State<'_, AppState>, run_id: String) -> Resu
     if let Some(flag) = pause_flag {
         flag.store(false, Ordering::SeqCst);
     }
-    let _ = db::run_status::resume_run(&state.db, &run_id);
+    
+    // File-based storage: update run status via summary.json
+    if let Ok(mut summary) = storage::runs::read_summary(&run_id) {
+        summary.status = RunFileStatus::Running;
+        let _ = storage::runs::update_summary(&run_id, &summary);
+    }
+    
     Ok(())
 }
 

@@ -8,6 +8,7 @@ import { useCliVersions } from "./hooks/useCliVersions";
 import { useCliHealth } from "./hooks/useCliHealth";
 import { useHistory } from "./hooks/useHistory";
 import { useSkills } from "./hooks/useSkills";
+import { useLiveSessionStatus } from "./hooks/useLiveSessionStatus";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { useAppViewState } from "./hooks/useAppViewState";
 import { isActive } from "./utils/statusHelpers";
@@ -26,7 +27,8 @@ function App(): ReactNode {
   const { health: cliHealth, checking: cliHealthChecking, checkHealth } = useCliHealth();
   const { projects, sessions, loadSessions, loadProjects, loadSessionDetail, loadMoreRuns, deleteSession } = useHistory();
   const { skills, loading: skillsLoading, createSkill, updateSkill, deleteSkill } = useSkills();
-  const { installing: installingUpdate, updateVersion } = useUpdateCheck();
+  const hasLiveSessions = useLiveSessionStatus();
+  const { status: updateStatus, updateVersion } = useUpdateCheck(hasLiveSessions);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
 
   const {
@@ -139,7 +141,12 @@ function App(): ReactNode {
             onAnswer={answerQuestion}
           />
         )}
-        {installingUpdate && <UpdateInstallBanner version={updateVersion} />}
+        {updateStatus !== "idle" && (
+          <UpdateInstallBanner
+            mode={updateStatus}
+            version={updateVersion}
+          />
+        )}
       </div>
       {openingWorkspace && <ProjectLoadingOverlay />}
     </div>

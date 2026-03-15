@@ -1,4 +1,4 @@
-pub(crate) mod app_settings;
+pub(crate) mod app;
 pub(crate) mod cli;
 pub(crate) mod cli_http;
 pub(crate) mod cli_util;
@@ -19,7 +19,6 @@ use std::{collections::HashMap};
 
 use tokio::sync::Mutex;
 
-use crate::db::DbPool;
 use crate::models::PipelineAnswer;
 
 pub type RunCancelFlag = Arc<AtomicBool>;
@@ -28,10 +27,10 @@ pub type PipelineAnswerSender = tokio::sync::oneshot::Sender<PipelineAnswer>;
 pub type RunAnswerSender = Arc<Mutex<Option<PipelineAnswerSender>>>;
 
 /// Shared application state, holding per-run cancel/pause flags,
-/// per-run answer channels, and the database pool.
+/// per-run answer channels. Database pool has been removed in favour
+/// of file-based storage.
 pub struct AppState {
     pub cancel_flags: Arc<Mutex<HashMap<String, RunCancelFlag>>>,
     pub pause_flags: Arc<Mutex<HashMap<String, RunPauseFlag>>>,
     pub answer_senders: Arc<Mutex<HashMap<String, RunAnswerSender>>>,
-    pub db: DbPool,
 }

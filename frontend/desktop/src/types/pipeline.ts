@@ -5,10 +5,8 @@ export type PipelineStage =
   | "plan"
   | "plan_audit"
   | "coder"
-  | "diff_after_coder"
   | "code_reviewer"
   | "code_fixer"
-  | "diff_after_code_fixer"
   | "judge"
   | "executive_summary"
   | "direct_task";
@@ -29,7 +27,9 @@ export type PipelineStatus =
   | "failed"
   | "cancelled";
 
-/** Represents one stage's result in the pipeline timeline. */
+/** Represents one stage's result in the pipeline timeline.
+ *  Note: This is used for live pipeline UI, not for stored data.
+ */
 export interface StageResult {
   stage: PipelineStage;
   status: StageStatus;
@@ -38,7 +38,9 @@ export interface StageResult {
   error?: string;
 }
 
-/** A single iteration of the self-improving loop. */
+/** A single iteration of the self-improving loop.
+ *  Note: This is used for live pipeline UI, not for stored data.
+ */
 export interface Iteration {
   number: number;
   stages: StageResult[];
@@ -46,7 +48,9 @@ export interface Iteration {
   judgeReasoning?: string;
 }
 
-/** Full pipeline run state for the frontend. */
+/** Full pipeline run state for the frontend.
+ *  Note: This is used for live pipeline UI, not for stored data.
+ */
 export interface PipelineRun {
   id: string;
   sessionId?: string;

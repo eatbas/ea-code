@@ -11,7 +11,7 @@ import type {
   Skill,
   UpdateSkillPayload,
   WorkspaceInfo,
-  ProjectSummary,
+  ProjectEntry,
 } from "../types";
 import { isRunInProgress, isRunTerminalState } from "../utils/statusHelpers";
 import { IdleView } from "./IdleView";
@@ -21,7 +21,6 @@ import { AgentsView } from "./AgentsView";
 import { CliSetupView } from "./CliSetupView";
 import { SkillsView } from "./SkillsView";
 import { McpView } from "./McpView";
-import { AppSettingsView } from "./AppSettingsView";
 
 interface AppContentRouterProps {
   activeView: ActiveView;
@@ -30,7 +29,7 @@ interface AppContentRouterProps {
   stageLogs: Record<string, string[]>;
   artifacts: Record<string, string>;
   workspace: WorkspaceInfo | null;
-  projects: ProjectSummary[];
+  projects: ProjectEntry[];
   sessionDetail: SessionDetail | null;
   sessionDetailLoading: boolean;
   sessionLoadingMore: boolean;
@@ -160,7 +159,6 @@ export function AppContentRouter({
   }
 
   if (activeView === "mcp") return <McpView cliHealth={cliHealth} />;
-  if (activeView === "app-settings") return <AppSettingsView />;
 
   if (activeSessionId) {
     return (

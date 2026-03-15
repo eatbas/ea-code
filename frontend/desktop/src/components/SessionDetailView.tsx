@@ -65,17 +65,16 @@ export function SessionDetailView({
   const showResume = liveRun?.status === "paused";
   const hasLiveTerminal = !!liveRun && liveRun.id === activeRunId;
 
-  const liveRunStages = liveRun ? liveRun.iterations.flatMap((iter) => iter.stages) : [];
   const terminal = useRecentTerminal(
     hasLiveTerminal ? stageLogs : {},
-    liveRun?.currentStage,
-    liveRunStages,
+    liveRun?.currentStage ?? undefined,
+    [],
   );
 
   const iterationText = liveRun
-    ? `Iteration ${Math.max(1, liveRun.currentIteration)}/${Math.max(1, liveRun.maxIterations)}`
+    ? `Iteration ${Math.max(1, liveRun.currentIteration ?? 1)}/${Math.max(1, liveRun.maxIterations)}`
     : "";
-  const elapsedText = useElapsedTimer(liveRun?.status, liveRun?.startedAt, liveRun?.completedAt);
+  const elapsedText = useElapsedTimer(liveRun?.status, liveRun?.startedAt, liveRun?.completedAt ?? undefined);
 
   if (loading) {
     return (

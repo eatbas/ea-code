@@ -1,8 +1,8 @@
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  ProjectSummary,
-  SessionSummary,
+  ProjectEntry,
+  SessionMeta,
   SessionDetail,
 } from "../types";
 import { useToast } from "../components/shared/Toast";
@@ -13,8 +13,8 @@ interface LoadSessionDetailOptions {
 }
 
 interface UseHistoryReturn {
-  projects: ProjectSummary[];
-  sessions: SessionSummary[];
+  projects: ProjectEntry[];
+  sessions: SessionMeta[];
   loadProjects: () => Promise<void>;
   loadSessions: (projectPath: string) => Promise<void>;
   loadSessionDetail: (sessionId: string, options?: LoadSessionDetailOptions) => Promise<SessionDetail>;
@@ -23,15 +23,15 @@ interface UseHistoryReturn {
   deleteSession: (sessionId: string) => Promise<void>;
 }
 
-/** Hook for querying project and session history from the database. */
+/** Hook for querying project and session history from file-based storage. */
 export function useHistory(): UseHistoryReturn {
   const toast = useToast();
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [projects, setProjects] = useState<ProjectEntry[]>([]);
+  const [sessions, setSessions] = useState<SessionMeta[]>([]);
 
   const loadProjects = useCallback(async (): Promise<void> => {
     try {
-      const result = await invoke<ProjectSummary[]>("list_projects");
+      const result = await invoke<ProjectEntry[]>("list_projects");
       setProjects(result);
     } catch {
       toast.error("Failed to load projects.");
@@ -40,7 +40,7 @@ export function useHistory(): UseHistoryReturn {
 
   const loadSessions = useCallback(async (projectPath: string): Promise<void> => {
     try {
-      const result = await invoke<SessionSummary[]>("list_sessions", { projectPath });
+      const result = await invoke<SessionMeta[]>("list_sessions", { projectPath });
       setSessions(result);
     } catch {
       toast.error("Failed to load sessions.");

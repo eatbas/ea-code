@@ -17,6 +17,7 @@ pub async fn git_status(path: &str) -> String {
 }
 
 /// Returns the diff of all changes (staged and unstaged) in the workspace.
+#[allow(dead_code)]
 pub async fn git_diff(path: &str) -> String {
     run_git(&["-C", path, "diff"])
         .await

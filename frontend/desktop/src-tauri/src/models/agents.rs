@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Agent role identifiers for the orchestration pipeline.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum AgentRole {
     PromptEnhancer,
     Planner,

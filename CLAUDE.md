@@ -7,7 +7,7 @@ Tauri v2 desktop application that orchestrates Claude, Codex, and Gemini CLIs in
 - **Desktop App**: React 19 + TypeScript 5.8 + Tailwind CSS v4 (Tauri v2 frontend)
 - **Website**: React 19 + TypeScript 5.8 + Tailwind CSS v4 (Vite SPA)
 - **Backend**: Rust (Tauri v2) + SQLite (Diesel ORM 2.2)
-- **Database**: `~/.config/ea-code/ea-code.db`
+- **Storage**: `~/.ea-code/` (JSONL-based persistence)
 
 ---
 
@@ -158,8 +158,8 @@ Rust enums and TypeScript types **must stay in sync** when adding or renaming pi
 ## Development Environment
 
 - Vite dev server: port **1420** (fixed in `tauri.conf.json`), HMR on port **1421**.
-- No `.env` loading — database and config paths are hardcoded to `~/.config/ea-code/`.
-- Prompt temp files written to `~/.config/ea-code/prompts/` (Windows Git Bash workaround for multi-line args).
+- No `.env` loading — storage paths are hardcoded to `~/.ea-code/`.
+- Prompt temp files written to `~/.ea-code/prompts/` (Windows Git Bash workaround for multi-line args).
 
 ---
 

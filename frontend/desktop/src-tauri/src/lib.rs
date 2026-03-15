@@ -1,49 +1,79 @@
 mod agents;
 mod commands;
-pub mod db;
 mod events;
 mod git;
 mod models;
 mod orchestrator;
-pub mod schema;
+pub mod storage;
 
 use commands::AppState;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::Manager;
 use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialise the SQLite database and run pending migrations
-    let pool = db::init_db().unwrap_or_else(|e| {
-        panic!("Failed to initialise database — check permissions for ~/.config/ea-code/: {e}");
-    });
+    // Migrate config directory from old location (AppData/Roaming/ea-code/) to new (~/.ea-code/)
+    if let Err(e) = storage::recovery::migrate_config_dir() {
+        eprintln!("Warning: config directory migration failed: {e}");
+    }
 
-    // Import legacy settings.json if it exists (first launch only)
-    if let Err(e) = db::import_legacy_settings(&pool) {
+    // Migrate flat sessions/ layout to projects/{id}/sessions/{id}/ hierarchy
+    if let Err(e) = storage::migration::migrate_to_project_hierarchy() {
+        eprintln!("Warning: storage hierarchy migration failed: {e}");
+    }
+
+    // Ensure storage directories exist
+    if let Err(e) = storage::ensure_dirs() {
+        eprintln!("Failed to initialise storage directories: {e}");
+    }
+
+    // N7: Recover any orphaned backup files from interrupted atomic writes
+    if let Err(e) = storage::recover_orphaned_backups() {
+        eprintln!("Warning: failed to recover orphaned backups: {e}");
+    }
+
+    // Import legacy settings from SQLite if needed (one-time migration)
+    if let Err(e) = storage::settings::import_from_legacy_json() {
         eprintln!("Warning: failed to import legacy settings: {e}");
     }
-    let _ = db::run_status::pause_all_running(&pool);
+
+    // Run crash recovery to mark any interrupted runs as crashed
+    if let Err(e) = storage::recovery::recover_all_crashed() {
+        eprintln!("Warning: crash recovery failed: {e}");
+    }
 
     // Retention cleanup: delete completed runs older than configured threshold
-    if let Ok(settings) = db::settings::get(&pool) {
+    if let Ok(settings) = storage::settings::read_settings() {
         if settings.retention_days > 0 {
-            match db::cleanup::cleanup_old_runs(&pool, settings.retention_days as i32) {
-                Ok(deleted) if deleted > 0 => {
-                    eprintln!("[startup] Cleaned up {deleted} old runs");
-                }
+            match storage::cleanup::cleanup_old_runs(settings.retention_days) {
+                Ok(()) => {}
                 Err(e) => eprintln!("Warning: retention cleanup failed: {e}"),
-                _ => {}
             }
         }
     }
 
-    // Lightweight maintenance — let SQLite optimise its query planner stats.
-    // Avoids full VACUUM which rewrites the entire file and blocks on large DBs.
-    let _ = db::cleanup::pragma_optimize(&pool);
+    // Sync built-in MCP catalog
+    if let Err(e) = storage::mcp::sync_builtin_catalog() {
+        eprintln!("Warning: MCP catalog sync failed: {e}");
+    }
 
-    let app = tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(desktop)]
+    {
+        use tauri::Manager;
+
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }));
+    }
+
+    let app = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -53,9 +83,9 @@ pub fn run() {
             cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             pause_flags: Arc::new(Mutex::new(HashMap::new())),
             answer_senders: Arc::new(Mutex::new(HashMap::new())),
-            db: pool,
         })
         .invoke_handler(tauri::generate_handler![
+            commands::app::has_live_sessions,
             // Workspace commands
             commands::workspace::select_workspace,
             commands::workspace::validate_environment,
@@ -83,6 +113,9 @@ pub fn run() {
             commands::mcp::create_mcp_server,
             commands::mcp::update_mcp_server,
             commands::mcp::delete_mcp_server,
+            commands::mcp::get_mcp_config,
+            commands::mcp::save_mcp_config,
+            commands::mcp::sync_mcp_catalog,
             commands::mcp::set_context7_api_key,
             commands::mcp_runtime::get_mcp_cli_runtime_statuses,
             commands::mcp_runtime::run_cli_mcp_fix_with_prompt,
@@ -97,22 +130,16 @@ pub fn run() {
             commands::history::get_session_detail,
             commands::history::create_session,
             commands::history::get_run_detail,
+            commands::history::get_run_events,
             commands::history::get_run_artifacts,
             commands::history::delete_session,
-            // App settings / DB browser commands
-            commands::app_settings::get_db_stats,
-            commands::app_settings::get_table_rows,
-            commands::app_settings::truncate_table,
-            commands::app_settings::restart_app,
         ])
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");
 
-    app.run(|app_handle, event| {
+    app.run(|_app_handle, event| {
         if let tauri::RunEvent::ExitRequested { .. } = event {
-            if let Some(state) = app_handle.try_state::<AppState>() {
-                let _ = db::run_status::pause_all_running(&state.db);
-            }
+            // Clean up can be done here if needed
         }
     });
 }

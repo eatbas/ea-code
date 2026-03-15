@@ -1,5 +1,7 @@
 //! Prompt builder for the Judge agent — the completion evaluator.
 
+use crate::models::ReviewFindings;
+
 use super::PromptMeta;
 
 pub fn build_judge_system(meta: &PromptMeta) -> String {
@@ -73,8 +75,8 @@ pub fn build_judge_system(meta: &PromptMeta) -> String {
          - Run: git diff --no-ext-diff --\n\
          - Run: git ls-files --others --exclude-standard\n\
          - For each untracked file: git diff --no-index -- /dev/null <file-path>\n\
-         - If a [GIT DIFF] section is provided, use it when command execution \
-         is unavailable.\n\
+         - Use the review findings below as guidance, but always verify by \
+         inspecting the actual code changes.\n\
          \n\
          # Output Format\n\
          Your response MUST begin with exactly one of these two lines \
@@ -130,8 +132,7 @@ pub fn build_judge_user(
     original_prompt: &str,
     enhanced_prompt: &str,
     plan: Option<&str>,
-    review_output: &str,
-    fix_output: &str,
+    findings: &ReviewFindings,
     previous_judge: Option<&str>,
 ) -> String {
     let mut parts = vec![
@@ -141,11 +142,52 @@ pub fn build_judge_user(
     if let Some(p) = plan {
         parts.push(format!("--- Approved Plan ---\n{p}"));
     }
-    parts.push(format!("--- Review Output ---\n{review_output}"));
-    parts.push(format!("--- Fix Output ---\n{fix_output}"));
+
+    // Format compact findings block
+    let blockers_text = if findings.blockers.is_empty() {
+        "None".to_string()
+    } else {
+        findings
+            .blockers
+            .iter()
+            .map(|b| format!("  - {b}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    let warnings_text = if findings.warnings.is_empty() {
+        "None".to_string()
+    } else {
+        findings
+            .warnings
+            .iter()
+            .map(|w| format!("  - {w}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    let tests_str = if findings.tests_run { "run" } else { "not run" };
+
+    parts.push(format!(
+        "--- Review Findings ---\n\
+         BLOCKERS: {}\n\
+         {}\n\
+         WARNINGS: {}\n\
+         {}\n\
+         TESTS: {}\n\
+         VERDICT: {}",
+        findings.blockers.len(),
+        blockers_text,
+        findings.warnings.len(),
+        warnings_text,
+        tests_str,
+        findings.verdict
+    ));
+
     if let Some(prev) = previous_judge {
         parts.push(format!("PREVIOUS JUDGE VERDICT:\n{prev}"));
     }
+
     parts.push(
         "Inspect repository changes using tools (especially git diff) \
          before final judgement.\n\
@@ -186,11 +228,58 @@ mod tests {
 
     #[test]
     fn judge_user_includes_previous_verdict() {
+        let findings = ReviewFindings {
+            blockers: vec!["Test blocker".to_string()],
+            warnings: vec![],
+            nits: vec![],
+            tests_run: true,
+            test_results: vec![],
+            verdict: "FAIL".to_string(),
+        };
         let user = build_judge_user(
-            "task", "enhanced", None, "review", "fix",
+            "task",
+            "enhanced",
+            None,
+            &findings,
             Some("NOT COMPLETE\n## Checklist\n- [ ] blockers"),
         );
         assert!(user.contains("PREVIOUS JUDGE VERDICT"));
         assert!(user.contains("blockers"));
+    }
+
+    #[test]
+    fn judge_user_includes_findings_block() {
+        let findings = ReviewFindings {
+            blockers: vec!["Missing validation".to_string()],
+            warnings: vec!["Naming could improve".to_string()],
+            nits: vec![],
+            tests_run: false,
+            test_results: vec![],
+            verdict: "FAIL".to_string(),
+        };
+        let user = build_judge_user("task", "enhanced", None, &findings, None);
+        assert!(user.contains("--- Review Findings ---"));
+        assert!(user.contains("BLOCKERS: 1"));
+        assert!(user.contains("Missing validation"));
+        assert!(user.contains("WARNINGS: 1"));
+        assert!(user.contains("Naming could improve"));
+        assert!(user.contains("TESTS: not run"));
+        assert!(user.contains("VERDICT: FAIL"));
+    }
+
+    #[test]
+    fn judge_user_handles_empty_findings() {
+        let findings = ReviewFindings {
+            blockers: vec![],
+            warnings: vec![],
+            nits: vec![],
+            tests_run: true,
+            test_results: vec![],
+            verdict: "PASS".to_string(),
+        };
+        let user = build_judge_user("task", "enhanced", None, &findings, None);
+        assert!(user.contains("BLOCKERS: 0"));
+        assert!(user.contains("None"));
+        assert!(user.contains("VERDICT: PASS"));
     }
 }

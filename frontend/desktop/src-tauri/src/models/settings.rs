@@ -11,6 +11,10 @@ pub const AI_CLI_NAMES: [&str; 5] = ["claude", "codex", "gemini", "kimi", "openc
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
+    #[serde(default = "default_theme")]
+    pub theme: String,
+    #[serde(default)]
+    pub default_agent: Option<String>,
     pub claude_path: String,
     pub codex_path: String,
     pub gemini_path: String,
@@ -75,7 +79,7 @@ pub struct AppSettings {
     pub max_plan_revisions: u32,
     /// Use compact handoff mode to reduce token usage.
     #[serde(default)]
-    pub token_optimized_prompts: bool,
+    pub token_optimised_prompts: bool,
     /// Number of retries per agent call on failure (0 = no retry).
     #[serde(default = "default_agent_retry_count")]
     pub agent_retry_count: u32,
@@ -106,6 +110,10 @@ fn default_agent_max_turns() -> u32 {
     25
 }
 
+fn default_theme() -> String {
+    "system".to_string()
+}
+
 fn default_retention_days() -> u32 {
     90
 }
@@ -113,6 +121,8 @@ fn default_retention_days() -> u32 {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            theme: "system".to_string(),
+            default_agent: None,
             claude_path: "claude".to_string(),
             codex_path: "codex".to_string(),
             gemini_path: "gemini".to_string(),
@@ -145,7 +155,7 @@ impl Default for AppSettings {
             require_plan_approval: false,
             plan_auto_approve_timeout_sec: 45,
             max_plan_revisions: 3,
-            token_optimized_prompts: false,
+            token_optimised_prompts: false,
             agent_retry_count: 1,
             agent_timeout_ms: 0,
             agent_max_turns: 25,

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { PipelineStage } from "../../types";
-import { formatDuration, formatTimestamp, formatTokens, normaliseDisplayText, parseCliResult, parseUtcTimestamp } from "../../utils/formatters";
+import { formatDuration, formatTimestamp, normaliseDisplayText, parseUtcTimestamp } from "../../utils/formatters";
 import { statusToneClasses } from "../../utils/statusHelpers";
 import { STAGE_LABELS } from "./constants";
 
@@ -15,8 +15,8 @@ interface ResultCardProps {
   error?: string;
   /** Stage timing rows for collapsible breakdown. */
   stageRows?: { name: string; durationMs: number }[];
-  /** Raw artifact map - used for tokens, raw output, and judge detail sections. */
-  artifacts?: Record<string, string>;
+  /** Optional judge reasoning to display. */
+  judgeReasoning?: string;
 }
 
 /** Unified result card used by both ChatView and RunCard (session history). */
@@ -29,20 +29,9 @@ export function ResultCard({
   executiveSummary,
   error,
   stageRows,
-  artifacts,
+  judgeReasoning,
 }: ResultCardProps): ReactNode {
   const statusClasses = statusToneClasses(status);
-
-  // Extract token info from CLI result artifact if available
-  const cliResult = artifacts?.["result"] ? parseCliResult(artifacts["result"]) : null;
-  const inputTokens = cliResult?.usage?.inputTokens;
-  const outputTokens = cliResult?.usage?.outputTokens;
-  const cacheReadTokens = cliResult?.usage?.cacheReadInputTokens;
-  const totalInputDisplay = (inputTokens ?? 0) + (cacheReadTokens ?? 0);
-  const hasTokens = inputTokens !== undefined || outputTokens !== undefined;
-
-  // Use CLI result text or executive summary
-  const resultText = cliResult?.result ?? executiveSummary;
 
   return (
     <div className={`rounded-lg border px-3 py-2 ${statusClasses.cardBg} ${statusClasses.cardBorder}`}>
@@ -71,25 +60,25 @@ export function ResultCard({
       </div>
 
       {/* Result / executive summary text */}
-      {resultText && (
+      {executiveSummary && (
         <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[#c4c4d4]">
-          {resultText}
+          {executiveSummary}
         </p>
       )}
       {error && (
         <p className="mt-1.5 text-xs text-[#ef4444]">{error}</p>
       )}
 
-      {/* Token display */}
-      {hasTokens && (
-        <div className="mt-1.5 flex items-center gap-3 text-[10px]">
-          {totalInputDisplay > 0 && (
-            <span className="text-blue-400">↑ ~{formatTokens(totalInputDisplay)}</span>
-          )}
-          {outputTokens !== undefined && outputTokens > 0 && (
-            <span className="text-green-400">↓ ~{formatTokens(outputTokens)}</span>
-          )}
-        </div>
+      {/* Judge reasoning */}
+      {judgeReasoning && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-[10px] text-[#9898b0] opacity-70">
+            Judge details
+          </summary>
+          <pre className="mt-1.5 overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
+            {normaliseDisplayText(judgeReasoning)}
+          </pre>
+        </details>
       )}
 
       {/* Collapsible: cost breakdown */}
@@ -116,40 +105,41 @@ export function ResultCard({
           </table>
         </details>
       )}
-
-      {/* Collapsible: raw output */}
-      {artifacts?.["result"] && (
-        <details className="mt-2">
-          <summary className="cursor-pointer text-[10px] text-[#9898b0] opacity-70">
-            Raw output
-          </summary>
-          <pre className="mt-1.5 overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
-            {normaliseDisplayText(artifacts["result"])}
-          </pre>
-        </details>
-      )}
-
-      {/* Collapsible: judge details */}
-      {artifacts?.["judge"] && (
-        <details className="mt-2">
-          <summary className="cursor-pointer text-[10px] text-[#9898b0] opacity-70">
-            Judge details
-          </summary>
-          <pre className="mt-1.5 overflow-x-auto rounded bg-[#0f0f14] p-2 text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
-            {normaliseDisplayText(artifacts["judge"])}
-          </pre>
-        </details>
-      )}
     </div>
   );
 }
 
-/** Builds stage timing rows from a stages array. Works with both StageResult and StageEntry shapes. */
+/** Builds stage timing rows from events array.
+ *  Extracts stage timing from RunEvent timeline.
+ */
+export function buildStageRowsFromEvents(
+  events: { stage?: string; durationMs?: number; type?: string }[],
+): { name: string; durationMs: number }[] {
+  const stageDurations = new Map<string, number>();
+
+  for (const event of events) {
+    if (event.type === "stage_end" && event.stage && event.durationMs) {
+      const existing = stageDurations.get(event.stage) ?? 0;
+      stageDurations.set(event.stage, existing + event.durationMs);
+    }
+  }
+
+  return Array.from(stageDurations.entries())
+    .filter(([, durationMs]) => durationMs > 0)
+    .map(([stage, durationMs]) => ({
+      name: STAGE_LABELS[stage as PipelineStage] ?? stage,
+      durationMs,
+    }));
+}
+
+/** Builds stage timing rows from a stages array (for legacy/live pipeline use).
+ *  Works with both StageResult and old StageEntry shapes.
+ */
 export function buildStageRows(
   stages: { stage: string; durationMs: number }[],
 ): { name: string; durationMs: number }[] {
   return stages
-    .filter((s) => s.durationMs > 0 && s.stage !== "diff_after_coder" && s.stage !== "diff_after_code_fixer")
+    .filter((s) => s.durationMs > 0)
     .map((s) => ({
       name: STAGE_LABELS[s.stage as PipelineStage] ?? s.stage,
       durationMs: s.durationMs,

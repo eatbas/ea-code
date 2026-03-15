@@ -1,26 +1,21 @@
-use tauri::State;
-
-use crate::db;
-
-use super::AppState;
+use crate::storage;
+use crate::models::{SessionDetail, RunDetail, RunEvent};
 
 /// Returns recently opened projects for the sidebar.
 #[tauri::command]
-pub async fn list_projects(
-    state: State<'_, AppState>,
-) -> Result<Vec<db::models::ProjectRow>, String> {
-    db::projects::list_recent(&state.db, 20)
+pub async fn list_projects() -> Result<Vec<crate::models::ProjectEntry>, String> {
+    storage::projects::read_projects()
 }
 
 /// Returns session threads for a given project path.
+/// Resolves the filesystem path to a project_id, then lists sessions for that project.
 #[tauri::command]
-pub async fn list_sessions(
-    state: State<'_, AppState>,
-    project_path: String,
-) -> Result<Vec<db::models::SessionSummary>, String> {
-    let project = db::projects::get_by_path(&state.db, &project_path)?
-        .ok_or_else(|| "Project not found".to_string())?;
-    db::sessions::list_for_project(&state.db, project.id, 50)
+pub async fn list_sessions(project_path: String) -> Result<Vec<crate::models::SessionMeta>, String> {
+    let project = match storage::projects::find_by_path(&project_path) {
+        Some(p) => p,
+        None => return Ok(Vec::new()),
+    };
+    storage::sessions::list_sessions(&project.id)
 }
 
 /// Returns paginated session detail with batch-loaded runs for the ChatView.
@@ -30,70 +25,87 @@ pub async fn list_sessions(
 /// so the frontend can show a "Load earlier runs" button.
 #[tauri::command]
 pub async fn get_session_detail(
-    state: State<'_, AppState>,
     session_id: String,
     limit: Option<i64>,
     offset: Option<i64>,
-) -> Result<db::models::SessionDetail, String> {
-    let session = db::sessions::get_by_id(&state.db, &session_id)?
-        .ok_or_else(|| "Session not found".to_string())?;
+) -> Result<SessionDetail, String> {
+    let session = storage::sessions::read_session(&session_id)?;
 
-    let project_path = db::sessions::get_project_path(&state.db, &session_id)?;
+    // Get all runs for this session
+    let mut all_runs = storage::runs::list_runs(&session_id)?;
 
-    let total_runs = db::run_detail::count_for_session(&state.db, &session_id)?;
-    let run_details = db::run_detail::list_full_for_session(
-        &state.db,
-        &session_id,
-        limit.unwrap_or(20),
-        offset.unwrap_or(0),
-    )?;
+    // Sort by started_at descending (newest first) for pagination
+    // This ensures we load the most recent runs when offset=0
+    all_runs.sort_by(|a, b| b.started_at.cmp(&a.started_at));
 
-    Ok(db::models::SessionDetail {
+    let total_runs = all_runs.len() as u32;
+
+    // Apply pagination
+    let limit = limit.unwrap_or(20) as usize;
+    let offset = offset.unwrap_or(0) as usize;
+
+    let mut paginated_runs: Vec<_> = all_runs
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect();
+
+    // Reverse back to chronological order (oldest first) for display
+    paginated_runs.reverse();
+
+    Ok(SessionDetail {
         id: session.id,
         title: session.title,
-        project_path,
+        project_path: session.project_path,
         created_at: session.created_at,
         updated_at: session.updated_at,
-        runs: run_details,
+        runs: paginated_runs,
         total_runs,
     })
 }
 
 /// Creates a new session thread for a project.
+/// Resolves the filesystem path to a project_id to place the session correctly.
 #[tauri::command]
-pub async fn create_session(
-    state: State<'_, AppState>,
-    project_path: String,
-) -> Result<String, String> {
-    let project = db::projects::get_by_path(&state.db, &project_path)?
-        .ok_or_else(|| "Project not found".to_string())?;
+pub async fn create_session(project_path: String) -> Result<String, String> {
+    let project = storage::projects::find_by_path(&project_path)
+        .ok_or_else(|| format!("Project not found for path: {project_path}"))?;
 
     let session_id = uuid::Uuid::new_v4().to_string();
-    db::sessions::create(&state.db, &session_id, project.id, "New Session")?;
-
+    let meta = storage::sessions::create_session_meta(
+        session_id.clone(),
+        "New Session".to_string(),
+        project_path,
+        project.id,
+    );
+    storage::sessions::create_session(&meta)?;
     Ok(session_id)
 }
 
 /// Returns full detail for a single run.
 #[tauri::command]
-pub async fn get_run_detail(
-    state: State<'_, AppState>,
-    run_id: String,
-) -> Result<db::models::RunDetail, String> {
-    db::run_detail::get_full(&state.db, &run_id)
+pub async fn get_run_detail(run_id: String) -> Result<RunDetail, String> {
+    let summary = storage::runs::read_summary(&run_id)?;
+    let events = storage::runs::read_events(&run_id)?;
+    Ok(RunDetail { summary, events })
 }
 
-/// Returns artefacts for a run.
+/// Get events for a specific run (lazy loading).
+#[tauri::command]
+pub async fn get_run_events(run_id: String) -> Result<Vec<RunEvent>, String> {
+    storage::runs::read_events(&run_id)
+}
+
+/// Returns all persisted artefacts for a run.
 #[tauri::command]
 pub async fn get_run_artifacts(
-    state: State<'_, AppState>,
     run_id: String,
-) -> Result<Vec<db::models::ArtifactRow>, String> {
-    db::artifacts::get_for_run(&state.db, &run_id)
+) -> Result<std::collections::HashMap<String, String>, String> {
+    storage::runs::read_all_artifacts(&run_id)
 }
 
 /// Deletes a session and all associated data.
 #[tauri::command]
-pub async fn delete_session(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
-    db::sessions::delete(&state.db, &session_id)
+pub async fn delete_session(session_id: String) -> Result<(), String> {
+    storage::sessions::delete_session(&session_id)
 }

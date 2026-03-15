@@ -1,6 +1,5 @@
 use tauri::AppHandle;
 
-use crate::db::DbPool;
 use crate::models::PipelineStage;
 
 use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
@@ -21,7 +20,6 @@ pub async fn run_kimi(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
-    db: &DbPool,
 ) -> Result<AgentOutput, String> {
     let full_prompt = build_full_prompt(input);
 
@@ -34,7 +32,6 @@ pub async fn run_kimi(
         app,
         run_id,
         stage.clone(),
-        db,
     )
     .await?;
 
@@ -57,7 +54,6 @@ pub async fn run_kimi(
             app,
             run_id,
             stage,
-            db,
         )
         .await;
     }
@@ -73,7 +69,6 @@ async fn run_kimi_once(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
-    db: &DbPool,
 ) -> Result<AgentOutput, String> {
     let mut args = vec![
         "--print".to_string(),
@@ -93,7 +88,6 @@ async fn run_kimi_once(
         app,
         run_id,
         stage,
-        db,
         Some(full_prompt),
         &[("PYTHONIOENCODING", "utf-8")],
     )

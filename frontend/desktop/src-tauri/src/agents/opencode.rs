@@ -1,6 +1,5 @@
 use tauri::AppHandle;
 
-use crate::db::DbPool;
 use crate::models::PipelineStage;
 
 use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
@@ -19,7 +18,6 @@ pub async fn run_opencode(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
-    db: &DbPool,
 ) -> Result<AgentOutput, String> {
     let full_prompt = build_full_prompt(input);
     let mut args: Vec<String> = Vec::new();
@@ -36,7 +34,6 @@ pub async fn run_opencode(
         app,
         run_id,
         stage,
-        db,
         Some(&full_prompt),
         &[],
     )

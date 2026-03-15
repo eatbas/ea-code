@@ -5,7 +5,6 @@ use tokio::process::Command;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
-use crate::db::DbPool;
 use crate::events::{EVENT_PIPELINE_LOG, PipelineLogPayload};
 use crate::models::PipelineStage;
 
@@ -103,7 +102,6 @@ pub async fn run_cli_agent(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
-    _db: &DbPool,
     stdin_text: Option<&str>,
     extra_envs: &[(&str, &str)],
 ) -> Result<AgentOutput, String> {

@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter};
 
-use crate::db;
+use crate::storage;
 use crate::models::{
     AppSettings, McpCliFixResult, McpCliRuntimeStatus, McpCliServerRuntimeStatus,
     McpRuntimeStatus, McpVerificationConfidence, AI_CLI_NAMES,
 };
-
-use super::AppState;
 
 mod install;
 mod native;
@@ -32,11 +30,8 @@ pub struct RunCliMcpFixWithPromptRequest {
 /// When every CLI is done, emits `mcp_runtime_check_complete`.
 /// No joining — the frontend never blocks on the slowest CLI.
 #[tauri::command]
-pub async fn get_mcp_cli_runtime_statuses(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    let settings = db::settings::get(&state.db)?;
+pub async fn get_mcp_cli_runtime_statuses(app: AppHandle) -> Result<(), String> {
+    let settings = storage::settings::read_settings()?;
 
     let pairs: Vec<(String, String)> = AI_CLI_NAMES
         .iter()
@@ -78,9 +73,15 @@ pub async fn get_mcp_cli_runtime_statuses(
     Ok(())
 }
 
+/// Fire-and-forget wrapper for tauri command compatibility.
+#[tauri::command]
+#[allow(dead_code)]
+pub async fn get_mcp_cli_runtime_statuses_with_state(app: AppHandle) -> Result<(), String> {
+    get_mcp_cli_runtime_statuses(app).await
+}
+
 #[tauri::command]
 pub async fn run_cli_mcp_fix_with_prompt(
-    state: State<'_, AppState>,
     request: RunCliMcpFixWithPromptRequest,
 ) -> Result<McpCliFixResult, String> {
     let cli_name = request.cli_name.trim().to_lowercase();
@@ -93,7 +94,7 @@ pub async fn run_cli_mcp_fix_with_prompt(
         return Err(format!("Unsupported MCP server for fix: {}", request.server_id));
     }
 
-    let settings = db::settings::get(&state.db)?;
+    let settings = storage::settings::read_settings()?;
     let cli_path = settings
         .path_for_cli(&cli_name)
         .ok_or_else(|| format!("Unsupported CLI for MCP fix: {}", request.cli_name))?;
@@ -111,7 +112,7 @@ pub async fn run_cli_mcp_fix_with_prompt(
     }
 
     // Build the server spec from the built-in definition + database env vars.
-    let spec = build_server_spec(&state.db, &server_id)?;
+    let spec = build_server_spec(&server_id)?;
 
     let (output, used_fallback) = if install::supports_direct_add(&cli_name) {
         // --- Tier 1: deterministic `mcp add` (30 s) ---
@@ -243,11 +244,8 @@ async fn verify_single_server_runtime(
     }
 }
 
-/// Constructs an `McpServerSpec` from the built-in definitions plus database env vars.
-fn build_server_spec(
-    pool: &db::DbPool,
-    server_id: &str,
-) -> Result<install::McpServerSpec, String> {
+/// Constructs an `McpServerSpec` from the built-in definitions plus storage env vars.
+fn build_server_spec(server_id: &str) -> Result<install::McpServerSpec, String> {
     let (command, args_json) = match server_id {
         "context7" => ("npx", r#"["-y","@upstash/context7-mcp"]"#),
         "playwright" => ("npx", r#"["-y","@playwright/mcp"]"#),
@@ -259,10 +257,15 @@ fn build_server_spec(
 
     let mut env = HashMap::new();
     if server_id == "context7" {
-        if let Ok(Some(key)) = db::mcp::get_server_env_var(pool, "context7", "CONTEXT7_API_KEY") {
-            let key = key.trim().to_string();
-            if !key.is_empty() {
-                env.insert("CONTEXT7_API_KEY".to_string(), key);
+        // Read API key from storage
+        if let Ok(mcp_config) = storage::mcp::read_mcp_config() {
+            if let Some((_, server)) = mcp_config.servers.iter().find(|(id, _)| *id == "context7") {
+                if let Some(key) = server.env.get("CONTEXT7_API_KEY") {
+                    let key = key.trim().to_string();
+                    if !key.is_empty() {
+                        env.insert("CONTEXT7_API_KEY".to_string(), key);
+                    }
+                }
             }
         }
     }

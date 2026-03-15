@@ -8,10 +8,7 @@ const GIT_BASH_INSTALL_URL: &str = "https://git-scm.com/download/win";
 /// Writes the prompt to a temp file so it can be read by bash via `$(cat ...)`,
 /// avoiding Windows `CreateProcess` argument mangling for multi-line content.
 pub(super) fn write_prompt_temp_file(prompt: &str) -> Result<String, String> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| "Cannot determine config directory".to_string())?
-        .join("ea-code")
-        .join("prompts");
+    let config_dir = crate::storage::config_dir()?.join("prompts");
     std::fs::create_dir_all(&config_dir)
         .map_err(|e| format!("Failed to create prompt temp directory: {e}"))?;
     let stamp = std::time::SystemTime::now()

@@ -9,14 +9,15 @@ use tauri::AppHandle;
 use tokio::sync::Mutex;
 
 use crate::agents::AgentInput;
-use crate::db::{self, DbPool};
+use crate::models::{RunEvent, StageEndStatus};
 use crate::models::*;
+use crate::storage::{self, runs};
 
-use super::helpers::*;
-use super::prompts::{self, PromptMeta};
-use super::run_setup::*;
-use super::stages::*;
-use super::user_questions::*;
+use crate::orchestrator::helpers::{is_cancelled, push_cancel_iteration, wait_if_paused};
+use crate::orchestrator::prompts::{self, PromptMeta};
+use crate::orchestrator::run_setup::{compose_agent_context, IterationContext};
+use crate::orchestrator::stages::execute_agent_stage;
+use crate::orchestrator::user_questions::{ask_user_question, ask_user_question_with_timeout};
 
 /// Runs the plan gate. Returns `true` if the iteration loop should break
 /// (only on cancellation).
@@ -27,10 +28,8 @@ pub async fn run_plan_gate(
     cancel_flag: &Arc<AtomicBool>,
     pause_flag: &Arc<AtomicBool>,
     answer_sender: &Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
-    db: &DbPool,
     run_id: &str,
     iter_num: u32,
-    iteration_db_id: i32,
     meta: &PromptMeta,
     enhanced: &str,
     workspace_context: &str,
@@ -61,17 +60,31 @@ pub async fn run_plan_gate(
 
         let answer = if settings.plan_auto_approve_timeout_sec > 0 {
             ask_user_question_with_timeout(
-                app, run_id, &PipelineStage::PlanAudit, iter_num,
-                question, plan_text.clone(), true,
-                cancel_flag, answer_sender, db,
+                app,
+                run_id,
+                &PipelineStage::PlanAudit,
+                iter_num,
+                question,
+                plan_text.clone(),
+                true,
+                cancel_flag,
+                answer_sender,
                 settings.plan_auto_approve_timeout_sec as u64,
-            ).await?
+            )
+            .await?
         } else {
             ask_user_question(
-                app, run_id, &PipelineStage::PlanAudit, iter_num,
-                question, plan_text.clone(), true,
-                cancel_flag, answer_sender, db,
-            ).await?
+                app,
+                run_id,
+                &PipelineStage::PlanAudit,
+                iter_num,
+                question,
+                plan_text.clone(),
+                true,
+                cancel_flag,
+                answer_sender,
+            )
+            .await?
         };
 
         if is_cancelled(cancel_flag) {
@@ -88,9 +101,19 @@ pub async fn run_plan_gate(
         let action_lower = action.to_lowercase();
 
         if action_lower == "approve" || action_lower.is_empty() {
-            let _ = db::runs::update_iteration_plan_approval(
-                db, run_id, iter_num as i32, "approved", revisions as i32,
-            );
+            // Log plan approval as event
+            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let event = RunEvent::Question {
+                v: 1,
+                seq,
+                ts: storage::now_rfc3339(),
+                stage: PipelineStage::PlanAudit,
+                iteration: iter_num,
+                question: "Plan approval".to_string(),
+                answer: format!("approved (after {} revisions)", revisions),
+                skipped: false,
+            };
+            let _ = runs::append_event(run_id, event);
             return Ok(false);
         }
 
@@ -98,18 +121,38 @@ pub async fn run_plan_gate(
             iter_ctx.audited_plan = None;
             iter_ctx.planner_plan = None;
 
-            let _ = db::runs::update_iteration_plan_approval(
-                db, run_id, iter_num as i32, "skipped", revisions as i32,
-            );
+            // Log plan skip as event
+            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let event = RunEvent::Question {
+                v: 1,
+                seq,
+                ts: storage::now_rfc3339(),
+                stage: PipelineStage::PlanAudit,
+                iteration: iter_num,
+                question: "Plan approval".to_string(),
+                answer: format!("skipped (after {} revisions)", revisions),
+                skipped: true,
+            };
+            let _ = runs::append_event(run_id, event);
             return Ok(false);
         }
 
         // User provided revision feedback.
         revisions += 1;
         if revisions > max_revisions {
-            let _ = db::runs::update_iteration_plan_approval(
-                db, run_id, iter_num as i32, "approved_max_revisions", revisions as i32,
-            );
+            // Log max revisions reached
+            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let event = RunEvent::Question {
+                v: 1,
+                seq,
+                ts: storage::now_rfc3339(),
+                stage: PipelineStage::PlanAudit,
+                iteration: iter_num,
+                question: "Plan approval".to_string(),
+                answer: format!("approved_max_revisions ({revisions} revisions)"),
+                skipped: false,
+            };
+            let _ = runs::append_event(run_id, event);
             return Ok(false);
         }
 
@@ -120,12 +163,23 @@ pub async fn run_plan_gate(
         // Re-plan with user feedback.
         let user_feedback = action.to_string();
         run.current_stage = Some(PipelineStage::Plan);
+
+        let plan_seq = runs::next_sequence(run_id).unwrap_or(1);
+        append_stage_start_event(run_id, &PipelineStage::Plan, iter_num, plan_seq)?;
+
         let plan_r = execute_agent_stage(
-            app, run_id, iter_num, iteration_db_id, PipelineStage::Plan,
-            settings.planner_agent.as_ref().unwrap_or(&crate::models::AgentBackend::Claude),
+            app,
+            run_id,
+            iter_num,
+            PipelineStage::Plan,
+            settings
+                .planner_agent
+                .as_ref()
+                .unwrap_or(&crate::models::AgentBackend::Claude),
             &AgentInput {
                 prompt: prompts::build_planner_user(
-                    &iter_ctx.original_prompt, enhanced,
+                    &iter_ctx.original_prompt,
+                    enhanced,
                     iter_ctx.selected_plan(),
                     Some(&user_feedback),
                 ),
@@ -135,19 +189,90 @@ pub async fn run_plan_gate(
                 )),
                 workspace_path: run.workspace_path.clone(),
             },
-            settings, cancel_flag, None, db,
-        ).await;
+            settings,
+            cancel_flag,
+            None,
+        )
+        .await;
 
         let revised_plan = plan_r.output.clone();
+        let plan_duration = plan_r.duration_ms;
+
         if plan_r.status == StageStatus::Failed {
-            let _ = db::runs::update_iteration_plan_approval(
-                db, run_id, iter_num as i32, "approved_revision_failed", revisions as i32,
-            );
+            append_stage_end_event(
+                run_id,
+                &PipelineStage::Plan,
+                iter_num,
+                plan_seq + 1,
+                &StageEndStatus::Failed,
+                plan_duration,
+            )?;
+            // Log revision failure
+            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let event = RunEvent::Question {
+                v: 1,
+                seq,
+                ts: storage::now_rfc3339(),
+                stage: PipelineStage::PlanAudit,
+                iteration: iter_num,
+                question: "Plan approval".to_string(),
+                answer: format!("approved_revision_failed ({revisions} revisions)"),
+                skipped: false,
+            };
+            let _ = runs::append_event(run_id, event);
             return Ok(false);
         }
 
+        append_stage_end_event(
+            run_id,
+            &PipelineStage::Plan,
+            iter_num,
+            plan_seq + 1,
+            &StageEndStatus::Completed,
+            plan_duration,
+        )?;
+
         iter_ctx.planner_plan = Some(revised_plan.clone());
         iter_ctx.audited_plan = Some(revised_plan.clone());
-        emit_artifact(app, run_id, "plan_revised", &revised_plan, iter_num, db);
     }
+}
+
+/// Appends a stage_start event to the event log.
+fn append_stage_start_event(
+    run_id: &str,
+    stage: &PipelineStage,
+    iteration: u32,
+    seq: u64,
+) -> Result<(), String> {
+    let event = RunEvent::StageStart {
+        v: 1,
+        seq,
+        ts: storage::now_rfc3339(),
+        stage: stage.clone(),
+        iteration,
+    };
+    runs::append_event(run_id, event)
+}
+
+/// Appends a stage_end event to the event log.
+fn append_stage_end_event(
+    run_id: &str,
+    stage: &PipelineStage,
+    iteration: u32,
+    seq: u64,
+    status: &StageEndStatus,
+    duration_ms: u64,
+) -> Result<(), String> {
+    let event = RunEvent::StageEnd {
+        v: 1,
+        seq,
+        ts: storage::now_rfc3339(),
+        stage: stage.clone(),
+        iteration,
+        status: status.clone(),
+        duration_ms,
+        audit_verdict: None,
+        verdict: None,
+    };
+    runs::append_event(run_id, event)
 }

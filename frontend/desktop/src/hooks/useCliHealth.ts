@@ -51,10 +51,15 @@ export function useCliHealth(): UseCliHealthReturn {
 
   const checkHealth = useCallback((settings: AppSettings): void => {
     setChecking(true);
-    invoke("check_cli_health", { settings }).catch(() => {
-      setChecking(false);
-      toast.error("CLI health check failed.");
-    });
+    invoke("invalidate_cli_cache")
+      .catch(() => {
+        /* best-effort — continue even if invalidation fails */
+      })
+      .then(() => invoke("check_cli_health", { settings }))
+      .catch(() => {
+        setChecking(false);
+        toast.error("CLI health check failed.");
+      });
   }, [toast]);
 
   return { health, checking, checkHealth };

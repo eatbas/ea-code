@@ -8,13 +8,14 @@ use tauri::AppHandle;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::db::{self, DbPool};
 use crate::events::*;
+use crate::models::RunEvent;
 use crate::models::*;
+use crate::storage::{self, runs};
 
-use super::helpers::{emit_stage, stage_to_str, wait_for_cancel};
+use crate::orchestrator::helpers::{emit_stage, wait_for_cancel};
 
-/// Pauses the pipeline and asks the user a question, persisting Q&A to DB.
+/// Pauses the pipeline and asks the user a question, persisting Q&A to event log.
 pub async fn ask_user_question(
     app: &AppHandle,
     run_id: &str,
@@ -25,15 +26,8 @@ pub async fn ask_user_question(
     optional: bool,
     cancel_flag: &Arc<AtomicBool>,
     answer_sender: &Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
-    db: &DbPool,
 ) -> Result<Option<PipelineAnswer>, String> {
     let question_id = Uuid::new_v4().to_string();
-    let stage_str = stage_to_str(stage);
-
-    let _ = db::questions::insert(
-        db, &question_id, run_id, &stage_str,
-        iteration as i32, &question_text, &agent_output, optional,
-    );
 
     let (tx, rx) = tokio::sync::oneshot::channel::<PipelineAnswer>();
     {
@@ -41,12 +35,21 @@ pub async fn ask_user_question(
         *lock = Some(tx);
     }
 
-    emit_question_event(app, run_id, &question_id, stage, iteration, &question_text, &agent_output, optional);
-    emit_stage(app, run_id, stage, &StageStatus::WaitingForInput, iteration, db);
+    emit_question_event(
+        app,
+        run_id,
+        &question_id,
+        stage,
+        iteration,
+        &question_text,
+        &agent_output,
+        optional,
+    );
+    emit_stage(app, run_id, stage, &StageStatus::WaitingForInput, iteration);
 
     tokio::select! {
         answer = rx => {
-            handle_answer_result(answer, db, &question_id)
+            handle_answer_result(answer, run_id, stage, iteration)
         }
         _ = wait_for_cancel(cancel_flag) => {
             let mut lock = answer_sender.lock().await;
@@ -68,16 +71,9 @@ pub async fn ask_user_question_with_timeout(
     optional: bool,
     cancel_flag: &Arc<AtomicBool>,
     answer_sender: &Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
-    db: &DbPool,
     timeout_sec: u64,
 ) -> Result<Option<PipelineAnswer>, String> {
     let question_id = Uuid::new_v4().to_string();
-    let stage_str = stage_to_str(stage);
-
-    let _ = db::questions::insert(
-        db, &question_id, run_id, &stage_str,
-        iteration as i32, &question_text, &agent_output, optional,
-    );
 
     let (tx, rx) = tokio::sync::oneshot::channel::<PipelineAnswer>();
     {
@@ -85,20 +81,41 @@ pub async fn ask_user_question_with_timeout(
         *lock = Some(tx);
     }
 
-    emit_question_event(app, run_id, &question_id, stage, iteration, &question_text, &agent_output, optional);
-    emit_stage(app, run_id, stage, &StageStatus::WaitingForInput, iteration, db);
+    emit_question_event(
+        app,
+        run_id,
+        &question_id,
+        stage,
+        iteration,
+        &question_text,
+        &agent_output,
+        optional,
+    );
+    emit_stage(app, run_id, stage, &StageStatus::WaitingForInput, iteration);
 
     let timeout_duration = std::time::Duration::from_secs(timeout_sec);
 
     tokio::select! {
         answer = rx => {
-            handle_answer_result(answer, db, &question_id)
+            handle_answer_result(answer, run_id, stage, iteration)
         }
         _ = tokio::time::sleep(timeout_duration) => {
             // Timeout — auto-approve by returning None (caller treats as approve).
             let mut lock = answer_sender.lock().await;
             *lock = None;
-            let _ = db::questions::record_answer(db, &question_id, Some("auto-approved (timeout)"), false);
+            // Log auto-approval as event
+            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let event = RunEvent::Question {
+                v: 1,
+                seq,
+                ts: storage::now_rfc3339(),
+                stage: stage.clone(),
+                iteration,
+                question: question_text,
+                answer: "auto-approved (timeout)".to_string(),
+                skipped: false,
+            };
+            let _ = runs::append_event(run_id, event);
             Ok(None)
         }
         _ = wait_for_cancel(cancel_flag) => {
@@ -139,16 +156,33 @@ fn emit_question_event(
 /// Handles the result from a oneshot answer channel.
 fn handle_answer_result(
     answer: Result<PipelineAnswer, tokio::sync::oneshot::error::RecvError>,
-    db: &DbPool,
-    question_id: &str,
+    run_id: &str,
+    stage: &PipelineStage,
+    iteration: u32,
 ) -> Result<Option<PipelineAnswer>, String> {
     match answer {
         Ok(a) => {
-            let _ = db::questions::record_answer(
-                db, question_id,
-                if a.skipped { None } else { Some(&a.answer) },
-                a.skipped,
-            );
+            // Log Q&A to event log
+            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let event = RunEvent::Question {
+                v: 1,
+                seq,
+                ts: storage::now_rfc3339(),
+                stage: stage.clone(),
+                iteration,
+                question: if a.skipped {
+                    "Question skipped".to_string()
+                } else {
+                    "User answered".to_string()
+                },
+                answer: if a.skipped {
+                    "skipped".to_string()
+                } else {
+                    a.answer.clone()
+                },
+                skipped: a.skipped,
+            };
+            let _ = runs::append_event(run_id, event);
             Ok(Some(a))
         }
         Err(_) => Err("Answer channel dropped unexpectedly".to_string()),

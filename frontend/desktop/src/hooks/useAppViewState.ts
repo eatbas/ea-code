@@ -5,7 +5,7 @@ import type {
   PipelineRun,
   RunOptions,
   SessionDetail,
-  SessionSummary,
+  SessionMeta,
   WorkspaceInfo,
 } from "../types";
 import { isLiveSessionStatus, isRunInProgress, isRunTerminalState } from "../utils/statusHelpers";
@@ -13,7 +13,7 @@ import { isLiveSessionStatus, isRunInProgress, isRunTerminalState } from "../uti
 interface UseAppViewStateArgs {
   workspace: WorkspaceInfo | null;
   run: PipelineRun | null;
-  sessions: SessionSummary[];
+  sessions: SessionMeta[];
   loadProjects: () => Promise<void>;
   loadSessions: (projectPath: string) => Promise<void>;
   loadSessionDetail: (sessionId: string) => Promise<SessionDetail>;

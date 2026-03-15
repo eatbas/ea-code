@@ -1,0 +1,5 @@
+[env]
+# ring crate requires clang for aarch64-pc-windows-msvc builds.
+# LLVM is installed but not on the default PATH in VS Code terminals.
+CC = "C:\\Program Files\\LLVM\\bin\\clang.exe"
+AR = "C:\\Program Files\\LLVM\\bin\\llvm-ar.exe"

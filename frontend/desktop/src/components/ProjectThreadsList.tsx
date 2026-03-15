@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
-import type { ProjectSummary, SessionSummary } from "../types";
+import type { ProjectEntry, SessionMeta } from "../types";
 import { projectDisplayName } from "../utils/formatters";
 import { isActiveStatusValue } from "../utils/statusHelpers";
 
 interface ProjectThreadsListProps {
-  projects: ProjectSummary[];
-  sessions: SessionSummary[];
+  projects: ProjectEntry[];
+  sessions: SessionMeta[];
   activeProjectPath?: string;
   activeSessionId?: string;
   /** Session ID of the currently running pipeline (shows spinner). */
@@ -60,7 +60,7 @@ export function ProjectThreadsList({
           {projects.map((project) => {
             const isActiveProject = project.path === activeProjectPath;
             return (
-              <div key={project.id} className="rounded-lg">
+              <div key={project.path} className="rounded-lg">
                 <button
                   onClick={() => void onSelectProject(project.path)}
                   className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${

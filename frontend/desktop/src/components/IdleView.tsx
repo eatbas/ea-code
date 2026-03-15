@@ -74,7 +74,7 @@ export function IdleView({
                 const isActive = project.path === workspace?.path;
                 return (
                   <button
-                    key={project.id}
+                    key={project.path}
                     onClick={() => {
                       void onSelectProject(project.path);
                       setDropdownOpen(false);

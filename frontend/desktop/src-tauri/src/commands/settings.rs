@@ -1,21 +1,14 @@
-use tauri::State;
-
-use crate::db;
+use crate::storage;
 use crate::models::AppSettings;
 
-use super::AppState;
-
-/// Returns the current application settings from the database.
+/// Returns the current application settings from file storage.
 #[tauri::command]
-pub async fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {
-    db::settings::get(&state.db)
+pub async fn get_settings() -> Result<AppSettings, String> {
+    storage::settings::read_settings()
 }
 
-/// Persists application settings to the database.
+/// Persists application settings to file storage.
 #[tauri::command]
-pub async fn save_settings(
-    state: State<'_, AppState>,
-    new_settings: AppSettings,
-) -> Result<(), String> {
-    db::settings::update(&state.db, &new_settings)
+pub async fn save_settings(new_settings: AppSettings) -> Result<(), String> {
+    storage::settings::write_settings(&new_settings)
 }

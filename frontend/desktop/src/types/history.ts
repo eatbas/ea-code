@@ -1,4 +1,6 @@
 import type { AgentBackend } from "./agents";
+import type { SessionMeta, RunSummaryFile, ProjectEntry } from "./storage";
+import type { RunEvent } from "./events";
 
 /** Options passed from IdleView to App when submitting a prompt. */
 export interface RunOptions {
@@ -34,116 +36,55 @@ export interface WorkspaceInfo {
 
 // ---- History / persistence types ----
 
-/** Project bookmark stored in the database. */
-export interface ProjectSummary {
-  id: number;
-  path: string;
-  name: string;
-  isGitRepo: boolean;
-  branch?: string;
-  lastOpened: string;
-  createdAt: string;
-}
+/** Project bookmark - re-export from storage for backwards compatibility. */
+export type ProjectSummary = ProjectEntry;
 
-/** Lightweight session summary for the sidebar. */
-export interface SessionSummary {
-  id: string;
-  title: string;
-  projectId: number;
-  runCount: number;
-  lastPrompt?: string;
-  lastStatus?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+/** Session summary - re-export from storage (SessionMeta replaces SessionSummary). */
+export type SessionSummary = SessionMeta;
 
-/** Full session detail with paginated runs. */
+/** Run summary - re-export from storage (RunSummaryFile is the storage shape). */
+export type RunSummary = RunSummaryFile;
+
+/** Full session detail with paginated runs.
+ *
+ * Note: runs only contain summaries (no events) for efficient loading.
+ * Use get_run_events to lazy-load events for individual runs.
+ */
 export interface SessionDetail {
   id: string;
   title: string;
   projectPath: string;
   createdAt: string;
   updatedAt: string;
-  runs: RunDetail[];
+  runs: RunSummary[];
   /** Total number of runs in this session (for pagination). */
   totalRuns: number;
 }
 
-/** Lightweight run summary for history lists. */
-export interface RunSummary {
-  id: string;
-  prompt: string;
-  status: string;
-  finalVerdict?: string;
-  executiveSummary?: string;
-  startedAt: string;
-  completedAt?: string;
-}
-
-/** Full run detail with iterations, stages, and questions. */
+/** Full run detail with events timeline.
+ *
+ * Mirrors the Rust RunDetail struct: { summary: RunSummary, events: Vec<RunEvent> }
+ */
 export interface RunDetail {
-  id: string;
-  prompt: string;
-  status: string;
-  finalVerdict?: string;
-  error?: string;
-  executiveSummary?: string;
-  executiveSummaryStatus?: string;
-  executiveSummaryError?: string;
-  executiveSummaryAgent?: string;
-  executiveSummaryModel?: string;
-  executiveSummaryGeneratedAt?: string;
-  maxIterations: number;
-  startedAt: string;
-  completedAt?: string;
-  currentStage?: string;
-  currentIteration: number;
-  currentStageStartedAt?: string;
-  iterations: IterationDetail[];
-  questions: QuestionEntry[];
+  /** Run summary from summary.json - contains all run metadata. */
+  summary: RunSummaryFile;
+  /** Event timeline from events.jsonl - contains stage timing and status. */
+  events: RunEvent[];
 }
 
-/** Full iteration detail with stages. */
-export interface IterationDetail {
-  number: number;
-  verdict?: string;
-  judgeReasoning?: string;
-  stages: StageEntry[];
-}
-
-/** Stored stage entry from the database. */
-export interface StageEntry {
-  id: number;
-  iterationId: number;
-  stage: string;
-  status: string;
-  output: string;
-  durationMs: number;
-  error?: string;
-  createdAt: string;
-}
-
-/** Stored artefact entry from the database. */
-export interface ArtifactEntry {
-  id: number;
-  runId: string;
-  iteration: number;
-  kind: string;
-  content: string;
-  createdAt: string;
-}
-
-/** Stored question/answer entry from the database. */
+/** Stored question/answer entry from events. */
 export interface QuestionEntry {
   id: string;
   runId: string;
   stage: string;
   iteration: number;
   questionText: string;
-  agentOutput: string;
   optional: boolean;
   answer?: string;
   skipped: boolean;
   askedAt: string;
   answeredAt?: string;
 }
+
+// Re-export storage types for convenience
+export type { SessionMeta, RunSummaryFile, RunEvent, ProjectEntry };

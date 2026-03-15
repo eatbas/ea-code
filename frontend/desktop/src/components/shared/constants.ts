@@ -16,10 +16,8 @@ export const STAGE_LABELS: Record<PipelineStage, string> = {
   plan: "Planning",
   plan_audit: "Auditing Plan",
   coder: "Coding",
-  diff_after_coder: "Diff",
   code_reviewer: "Code Review",
   code_fixer: "Code Fix",
-  diff_after_code_fixer: "Diff",
   judge: "Judge",
   executive_summary: "Summary",
   direct_task: "Direct Task",
@@ -32,18 +30,15 @@ export const STAGE_BADGE_CLASSES: Record<PipelineStage, string> = {
   plan: "bg-[#40c4ff]/25",
   plan_audit: "bg-[#ffc440]/25",
   coder: "bg-[#5a8cff]/25",
-  diff_after_coder: "bg-[#969696]/20",
   code_reviewer: "bg-[#ffb432]/20",
   code_fixer: "bg-[#b464ff]/20",
-  diff_after_code_fixer: "bg-[#969696]/20",
   judge: "bg-[#ff6464]/20",
   executive_summary: "bg-[#00c850]/30",
   direct_task: "bg-[#5a8cff]/25",
 };
 
-/** Display labels for artefact kinds. */
+/** Display labels for artifact kinds (kept for runtime artifact display during live runs). */
 export const ARTIFACT_LABELS: Record<string, string> = {
-  diff: "Diff",
   plan: "Plan",
   plan_audit: "Plan Audit",
   plan_final: "Final Plan",

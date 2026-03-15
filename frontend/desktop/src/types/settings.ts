@@ -2,6 +2,10 @@ import type { AgentBackend } from "./agents";
 
 /** Application settings persisted locally. */
 export interface AppSettings {
+  /** UI theme preference. */
+  theme: "system" | "light" | "dark";
+  /** Default agent backend for new sessions. */
+  defaultAgent: string | null;
   claudePath: string;
   codexPath: string;
   geminiPath: string;
@@ -25,7 +29,7 @@ export interface AppSettings {
   /** Maximum number of plan revision rounds before auto-approving. */
   maxPlanRevisions: number;
   /** Use token-optimised prompt variants (compact handoff, git inspection). */
-  tokenOptimizedPrompts: boolean;
+  tokenOptimisedPrompts: boolean;
   /** Number of retries per agent call on failure (0 = no retries). */
   agentRetryCount: number;
   /** Per-agent timeout in milliseconds (0 = no timeout). */
@@ -58,6 +62,8 @@ export interface AppSettings {
 
 /** Default settings values. */
 export const DEFAULT_SETTINGS: AppSettings = {
+  theme: "system",
+  defaultAgent: null,
   claudePath: "claude",
   codexPath: "codex",
   geminiPath: "gemini",
@@ -77,7 +83,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   requirePlanApproval: false,
   planAutoApproveTimeoutSec: 45,
   maxPlanRevisions: 3,
-  tokenOptimizedPrompts: false,
+  tokenOptimisedPrompts: false,
   agentRetryCount: 1,
   agentTimeoutMs: 0,
   agentMaxTurns: 25,
@@ -111,7 +117,7 @@ export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[
   ],
   gemini: [
     { value: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
-    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview" },
+    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
   ],
   kimi: [
     { value: "kimi-code/kimi-for-coding", label: "Kimi Code" },

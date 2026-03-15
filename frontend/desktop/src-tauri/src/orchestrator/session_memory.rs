@@ -1,8 +1,8 @@
 //! Session memory utilities for cross-agent continuity.
 
-use crate::db::{self, DbPool};
+use crate::storage::runs;
 
-const MEMORY_RUN_LIMIT: i64 = 6;
+const MEMORY_RUN_LIMIT: usize = 6;
 const PROMPT_CHAR_LIMIT: usize = 220;
 const SUMMARY_CHAR_LIMIT: usize = 700;
 const MEMORY_CHAR_CAP: usize = 5_000;
@@ -10,21 +10,23 @@ const MEMORY_CHAR_CAP: usize = 5_000;
 /// Builds a compact memory block from recent run summaries in the same
 /// session so different agent backends can share continuity.
 pub fn build_session_memory_context(
-    db_pool: &DbPool,
     session_id: &str,
     exclude_run_id: Option<&str>,
 ) -> String {
-    let runs = match db::run_detail::list_recent_for_session(
-        db_pool,
-        session_id,
-        MEMORY_RUN_LIMIT,
-        exclude_run_id,
-    ) {
-        Ok(items) => items,
+    // Get all runs for this session
+    let run_summaries = match runs::list_runs(session_id) {
+        Ok(summaries) => summaries,
         Err(_) => return String::new(),
     };
 
-    if runs.is_empty() {
+    // Filter out excluded run and take most recent limit
+    let recent_runs: Vec<_> = run_summaries
+        .into_iter()
+        .filter(|r| exclude_run_id.map_or(true, |id| r.id != id))
+        .take(MEMORY_RUN_LIMIT)
+        .collect();
+
+    if recent_runs.is_empty() {
         return String::new();
     }
 
@@ -33,19 +35,19 @@ pub fn build_session_memory_context(
         "Use this as factual continuity across prior runs in the same session.".to_string(),
     ];
 
-    for (idx, run) in runs.iter().enumerate() {
+    for (idx, run) in recent_runs.iter().enumerate() {
         lines.push(format!("Run {}:", idx + 1));
         lines.push(format!("- Run ID: {}", run.id));
         lines.push(format!("- Started At: {}", run.started_at));
-        lines.push(format!("- Status: {}", run.status));
-        if let Some(verdict) = run.final_verdict.as_deref() {
-            lines.push(format!("- Verdict: {verdict}"));
+        lines.push(format!("- Status: {:?}", run.status));
+        if let Some(ref verdict) = run.final_verdict {
+            lines.push(format!("- Verdict: {verdict:?}"));
         }
         lines.push(format!(
             "- Prompt: {}",
             truncate_chars(run.prompt.trim(), PROMPT_CHAR_LIMIT)
         ));
-        if let Some(summary) = run
+        if let Some(ref summary) = run
             .executive_summary
             .as_deref()
             .map(str::trim)
@@ -55,6 +57,15 @@ pub fn build_session_memory_context(
                 "- Executive Summary: {}",
                 truncate_chars(summary, SUMMARY_CHAR_LIMIT)
             ));
+        }
+        if !run.files_changed.is_empty() {
+            lines.push(format!("- Files Changed: {}", run.files_changed.len()));
+            for file in run.files_changed.iter().take(5) {
+                lines.push(format!("  * {}", file));
+            }
+            if run.files_changed.len() > 5 {
+                lines.push(format!("  * ... and {} more", run.files_changed.len() - 5));
+            }
         }
     }
 
@@ -83,4 +94,39 @@ fn truncate_chars(text: &str, max_chars: usize) -> String {
     }
     let clipped = text.chars().take(max_chars).collect::<String>();
     format!("{clipped}...")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_truncate_chars_under_limit() {
+        let text = "Short text";
+        assert_eq!(truncate_chars(text, 100), text);
+    }
+
+    #[test]
+    fn test_truncate_chars_over_limit() {
+        let text = "a".repeat(100);
+        let result = truncate_chars(&text, 50);
+        assert_eq!(result.len(), 53); // 50 chars + "..."
+        assert!(result.ends_with("..."));
+    }
+
+    #[test]
+    fn test_merge_shared_context() {
+        let workspace = "Git repo at /path";
+        let memory = "SESSION MEMORY\nRun 1:";
+        let merged = merge_shared_context(workspace, memory);
+        assert!(merged.contains("WORKSPACE CONTEXT"));
+        assert!(merged.contains("SESSION MEMORY"));
+    }
+
+    #[test]
+    fn test_merge_shared_context_with_empty() {
+        assert_eq!(merge_shared_context("test", ""), "WORKSPACE CONTEXT\ntest");
+        assert_eq!(merge_shared_context("", "test"), "SESSION MEMORY\ntest");
+        assert_eq!(merge_shared_context("", ""), "");
+    }
 }

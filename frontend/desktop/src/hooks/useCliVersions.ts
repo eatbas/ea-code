@@ -54,16 +54,22 @@ export function useCliVersions(): UseCliVersionsReturn {
     };
   }, []);
 
-  // Fire-and-forget: starts the check and returns immediately.
+  // Fire-and-forget: clears the availability cache first so freshly
+  // installed (or removed) CLIs are detected, then starts the check.
   const fetchVersions = useCallback((settings: AppSettings): void => {
     setLoading(true);
     setError(null);
-    invoke("get_cli_versions", { settings }).catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message);
-      setLoading(false);
-      toast.error("Failed to fetch CLI versions.");
-    });
+    invoke("invalidate_cli_cache")
+      .catch(() => {
+        /* best-effort — continue even if invalidation fails */
+      })
+      .then(() => invoke("get_cli_versions", { settings }))
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
+        setLoading(false);
+        toast.error("Failed to fetch CLI versions.");
+      });
   }, [toast]);
 
   // Update is still awaitable — it's a single-CLI action, not a batch.

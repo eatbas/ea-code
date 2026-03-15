@@ -1,15 +1,12 @@
 use crate::models::*;
-use tauri::{AppHandle, State};
+use crate::storage;
+use tauri::AppHandle;
 
 use super::cli::check_cli_health_inner;
-use super::AppState;
 
 /// Validates a workspace directory and returns its git status.
 #[tauri::command]
-pub async fn select_workspace(
-    state: State<'_, AppState>,
-    path: String,
-) -> Result<WorkspaceInfo, String> {
+pub async fn select_workspace(path: String) -> Result<WorkspaceInfo, String> {
     let meta = std::fs::metadata(&path).map_err(|e| format!("Cannot access path: {e}"))?;
 
     if !meta.is_dir() {
@@ -22,8 +19,7 @@ pub async fn select_workspace(
         .and_then(|os| os.to_str())
         .unwrap_or(&path);
 
-    crate::db::projects::upsert(
-        &state.db,
+    storage::projects::upsert(
         &path,
         workspace_name,
         info.is_git_repo,

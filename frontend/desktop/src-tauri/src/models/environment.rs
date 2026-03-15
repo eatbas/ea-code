@@ -52,6 +52,7 @@ pub struct CliVersionInfo {
 /// Aggregate version information for all CLI tools.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct AllCliVersions {
     pub claude: CliVersionInfo,
     pub codex: CliVersionInfo,

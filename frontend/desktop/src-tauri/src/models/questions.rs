@@ -29,6 +29,7 @@ pub struct PipelineRequest {
 /// Represents a question posed by the pipeline to the user between stages.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct PipelineQuestion {
     pub run_id: String,
     pub question_id: String,

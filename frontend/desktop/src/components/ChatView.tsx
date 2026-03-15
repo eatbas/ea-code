@@ -7,7 +7,6 @@ import { useElapsedTimer } from "../hooks/useElapsedTimer";
 import { useRecentTerminal } from "../hooks/useRecentTerminal";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
 import { ResultCard, buildStageRows, computeDuration } from "./shared/ResultCard";
-import { ArtifactCard } from "./shared/ArtifactCard";
 import { PromptReceivedCard } from "./shared/PromptReceivedCard";
 import { StageInputOutputCard } from "./shared/StageInputOutputCard";
 import { RichStageCard } from "./shared/RichStageCard";
@@ -16,11 +15,24 @@ import { RecentTerminalPanel } from "./shared/RecentTerminalPanel";
 import { WorkspaceFooter } from "./shared/WorkspaceFooter";
 import { PipelineControlBar } from "./shared/PipelineControlBar";
 
-const EXCLUDED_ARTIFACT_KINDS = new Set(["result", "executive_summary", "judge", "review", "workspace_context", "session_memory", "enhanced_prompt", "plan", "plan_audit", "plan_final"]);
+/** Artifact kinds that are handled specially and not shown as generic artifact cards. */
+const EXCLUDED_ARTIFACT_KINDS = new Set([
+  "result",
+  "executive_summary",
+  "judge",
+  "review",
+  "workspace_context",
+  "session_memory",
+  "enhanced_prompt",
+  "plan",
+  "plan_audit",
+  "plan_final",
+]);
 
 interface ChatViewProps {
   run: PipelineRun;
   stageLogs: Record<string, string[]>;
+  /** Artifacts from live pipeline (only available during active run). */
   artifacts: Record<string, string>;
   cliHealth: CliHealth | null;
   settings: AppSettings | null;
@@ -49,7 +61,7 @@ export function ChatView({
   const { label: statusLabel } = statusInfo(run.status);
   const statusClasses = statusToneClasses(run.status);
   const allStages = run.iterations.flatMap((iter) => iter.stages);
-  const visibleStages = allStages.filter((stage) => stage.stage !== "diff_after_coder" && stage.stage !== "diff_after_code_fixer");
+  const visibleStages = allStages;
   const terminal = useRecentTerminal(stageLogs, run.currentStage, allStages);
 
   const enhancedPrompt = artifacts["enhanced_prompt"];
@@ -59,7 +71,7 @@ export function ChatView({
   const planInputForAudit = resolvePlanText(planArtifact);
   const latestCompletedPlanIndex = visibleStages.reduce((latest, stage, idx) => (stage.stage === "plan" && stage.status === "completed" ? idx : latest), -1);
   const latestCompletedPlanAuditIndex = visibleStages.reduce((latest, stage, idx) => (stage.stage === "plan_audit" && stage.status === "completed" ? idx : latest), -1);
-  const otherArtifacts = Object.entries(artifacts).filter(([kind]) => !EXCLUDED_ARTIFACT_KINDS.has(kind) && kind !== "diff" && !kind.startsWith("diff_"));
+  const otherArtifacts = Object.entries(artifacts).filter(([kind]) => !EXCLUDED_ARTIFACT_KINDS.has(kind) && !kind.startsWith("diff_"));
   const headerTitle = run.prompt.length > 60 ? `${run.prompt.slice(0, 60)}...` : run.prompt;
   const isPaused = run.status === "paused";
   const iterationText = `Iteration ${Math.max(1, run.currentIteration)}/${Math.max(1, run.maxIterations)}`;
@@ -146,13 +158,19 @@ export function ChatView({
               executiveSummary={artifacts["executive_summary"]}
               error={run.error}
               stageRows={buildStageRows(allStages)}
-              artifacts={artifacts}
             />
           )}
           {otherArtifacts.length > 0 && (
             <div className="flex flex-col gap-2">
               {otherArtifacts.map(([kind, content]) => (
-                <ArtifactCard key={kind} kind={kind} content={content} />
+                <div key={kind} className="rounded border border-[#2e2e48] bg-[#14141e] p-3">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9898b0]">
+                    {kind}
+                  </span>
+                  <pre className="mt-2 overflow-x-auto text-[11px] text-[#e4e4ed] whitespace-pre-wrap break-words">
+                    {content}
+                  </pre>
+                </div>
               ))}
             </div>
           )}

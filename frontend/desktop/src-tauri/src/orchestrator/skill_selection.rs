@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use crate::models::Skill;
+
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -12,6 +12,7 @@ struct RawSkillSelection {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SkillSelectionDecision {
     pub selected_skill_ids: Vec<String>,
     pub reason: String,
@@ -49,7 +50,7 @@ pub fn build_skill_selector_user(
     sections.join("\n\n")
 }
 
-pub fn build_selected_skills_section(skills: &[Skill]) -> String {
+pub fn build_selected_skills_section(skills: &[crate::models::SkillFile]) -> String {
     if skills.is_empty() {
         return String::new();
     }
@@ -58,7 +59,7 @@ pub fn build_selected_skills_section(skills: &[Skill]) -> String {
     blocks.push("SELECTED SKILLS (apply relevant guidance below):".to_string());
 
     for skill in skills {
-        let instructions = skill.instructions.trim();
+        let instructions = skill.prompt.trim();
         blocks.push(format!(
             "### [{}] {}\nDescription: {}\nInstructions:\n{}",
             skill.id,
