@@ -5,6 +5,7 @@
 pub mod cleanup;
 pub mod index;
 pub mod mcp;
+pub mod messages;
 pub mod migration;
 pub mod projects;
 pub mod recovery;

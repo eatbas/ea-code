@@ -1,5 +1,5 @@
 import type { AgentBackend } from "./agents";
-import type { SessionMeta, RunSummaryFile, ProjectEntry } from "./storage";
+import type { SessionMeta, RunSummaryFile, ProjectEntry, ChatMessage } from "./storage";
 import type { RunEvent } from "./events";
 
 /** Options passed from IdleView to App when submitting a prompt. */
@@ -59,6 +59,8 @@ export interface SessionDetail {
   runs: RunSummary[];
   /** Total number of runs in this session (for pagination). */
   totalRuns: number;
+  /** Chat messages for this session (from messages.jsonl). */
+  messages: ChatMessage[];
 }
 
 /** Full run detail with events timeline.
@@ -87,4 +89,4 @@ export interface QuestionEntry {
 }
 
 // Re-export storage types for convenience
-export type { SessionMeta, RunSummaryFile, RunEvent, ProjectEntry };
+export type { SessionMeta, RunSummaryFile, RunEvent, ProjectEntry, ChatMessage };

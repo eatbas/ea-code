@@ -19,4 +19,4 @@ pub use questions::*;
 pub use settings::*;
 #[allow(unused_imports)]
 pub use skills::Skill;
-pub use storage::{ProjectEntry, SessionMeta, SkillFile, McpConfigFile, McpServerConfig, RunSummary, RunFileStatus, GitBaseline, StorageStats, SessionDetail, RunDetail, ReviewFindings};
+pub use storage::{ProjectEntry, SessionMeta, SkillFile, McpConfigFile, McpServerConfig, RunSummary, RunFileStatus, GitBaseline, StorageStats, SessionDetail, RunDetail, ReviewFindings, ChatMessage, ChatRole};

@@ -132,6 +132,7 @@ pub fn run() {
             commands::history::get_run_detail,
             commands::history::get_run_events,
             commands::history::get_run_artifacts,
+            commands::history::get_session_messages,
             commands::history::delete_session,
         ])
         .build(tauri::generate_context!())

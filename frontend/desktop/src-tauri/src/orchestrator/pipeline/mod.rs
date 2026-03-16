@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::events::*;
 use crate::models::*;
-use crate::storage::{cleanup, projects, runs, sessions};
+use crate::storage::{cleanup, messages, projects, runs, sessions};
 
 use super::helpers::*;
 use super::iteration::run_iteration;
@@ -85,6 +85,12 @@ pub async fn run_pipeline(
     if let Err(e) = runs::create_run(&run_id, &session_id, &request.prompt, settings.max_iterations, &request.workspace_path)
     {
         eprintln!("Warning: Failed to create run: {e}");
+    }
+
+    // Append user chat message to session log
+    let user_msg = messages::user_message(&request.prompt, Some(run_id.clone()));
+    if let Err(e) = messages::append_message(&session_id, &user_msg) {
+        eprintln!("Warning: Failed to append user message: {e}");
     }
 
     // Touch session to update timestamp
@@ -191,6 +197,27 @@ pub async fn run_pipeline(
     if !matches!(run.status, PipelineStatus::Cancelled) {
         run.current_stage = Some(PipelineStage::ExecutiveSummary);
         run_executive_summary(&app, &run_id, &run, &settings, &session_id).await;
+    }
+
+    // Append assistant chat message with executive summary or cancellation notice
+    let assistant_content = if matches!(run.status, PipelineStatus::Cancelled) {
+        "Pipeline cancelled by user.".to_string()
+    } else {
+        runs::read_summary(&run_id)
+            .ok()
+            .and_then(|s| s.executive_summary)
+            .unwrap_or_else(|| {
+                let status_label = if run.status == PipelineStatus::Completed {
+                    "completed"
+                } else {
+                    "ended"
+                };
+                format!("Pipeline {status_label}.")
+            })
+    };
+    let assistant_msg = messages::assistant_message(&assistant_content, Some(run_id.clone()));
+    if let Err(e) = messages::append_message(&session_id, &assistant_msg) {
+        eprintln!("Warning: Failed to append assistant message: {e}");
     }
 
     let total_duration_ms = pipeline_start.elapsed().as_millis() as u64;

@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
-import type { SessionDetail, RunOptions, CliHealth, AppSettings } from "../types";
+import { useEffect, useMemo, useRef } from "react";
+import type { SessionDetail, RunOptions, RunSummary, CliHealth, AppSettings } from "../types";
 import { useElapsedTimer } from "../hooks/useElapsedTimer";
 import { useRecentTerminal } from "../hooks/useRecentTerminal";
 import { isActiveStatusValue, isLiveSessionStatus, statusToneClasses } from "../utils/statusHelpers";
 import { RunCard } from "./RunCard";
+import { AssistantMessageBubble } from "./shared/AssistantMessageBubble";
 import { PromptInputBar } from "./shared/PromptInputBar";
 import { RecentTerminalPanel } from "./shared/RecentTerminalPanel";
 import { WorkspaceFooter } from "./shared/WorkspaceFooter";
@@ -27,7 +28,7 @@ interface SessionDetailViewProps {
   onBackToHome: () => void;
 }
 
-/** Displays a session's run history and allows continuing the conversation. */
+/** Displays a session's conversation history and allows continuing the conversation. */
 export function SessionDetailView({
   sessionDetail,
   loading,
@@ -46,12 +47,24 @@ export function SessionDetailView({
 }: SessionDetailViewProps): ReactNode {
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const messages = sessionDetail?.messages ?? [];
+  const runs = sessionDetail?.runs ?? [];
+  const hasMessages = messages.length > 0;
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) { el.scrollTop = el.scrollHeight; }
-  }, [sessionDetail?.id, sessionDetail?.runs.length]);
+  }, [sessionDetail?.id, runs.length, messages.length]);
 
-  const runs = sessionDetail?.runs ?? [];
+  // Build run lookup by ID for O(1) access from message runId
+  const runById = useMemo(() => {
+    const map = new Map<string, RunSummary>();
+    for (const run of runs) {
+      map.set(run.id, run);
+    }
+    return map;
+  }, [runs]);
+
   const liveRun = [...runs].reverse().find((run) => isLiveSessionStatus(run.status));
 
   const liveStatusLabel =
@@ -115,27 +128,36 @@ export function SessionDetailView({
 
       <div ref={scrollRef} className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-6 [scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto max-w-2xl flex flex-col gap-6">
-          {sessionDetail.runs.length < sessionDetail.totalRuns && onLoadMore && (
+          {runs.length < sessionDetail.totalRuns && onLoadMore && (
             <div className="flex justify-center">
               <button
                 onClick={onLoadMore}
                 disabled={loadingMore}
                 className="rounded-lg border border-[#2e2e48] bg-[#1a1a24] px-4 py-2 text-xs text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors disabled:opacity-50"
               >
-                {loadingMore ? "Loading..." : `Load earlier runs (${sessionDetail.totalRuns - sessionDetail.runs.length} more)`}
+                {loadingMore ? "Loading..." : `Load earlier runs (${sessionDetail.totalRuns - runs.length} more)`}
               </button>
             </div>
           )}
 
-          {sessionDetail.runs.length === 0 && (
+          {runs.length === 0 && messages.length === 0 && (
             <div className="text-center text-sm text-[#9898b0] py-8">
-              No runs in this session yet. Send a prompt to get started.
+              No messages yet. Send a prompt to get started.
             </div>
           )}
 
-          {sessionDetail.runs.map((run) => (
-            <RunCard key={run.id} run={run} settings={settings} />
-          ))}
+          {hasMessages ? (
+            <MessageTimeline
+              messages={messages}
+              runById={runById}
+              settings={settings}
+            />
+          ) : (
+            /* Fallback: legacy sessions without messages.jsonl — render RunCards directly */
+            runs.map((run) => (
+              <RunCard key={run.id} run={run} settings={settings} />
+            ))
+          )}
         </div>
       </div>
 
@@ -172,5 +194,52 @@ export function SessionDetailView({
         <WorkspaceFooter path={sessionDetail.projectPath} />
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Message timeline sub-component
+// ---------------------------------------------------------------------------
+
+interface MessageTimelineProps {
+  messages: SessionDetail["messages"];
+  runById: Map<string, RunSummary>;
+  settings: AppSettings | null;
+}
+
+/** Renders the conversation as a chat timeline driven by messages.jsonl. */
+function MessageTimeline({ messages, runById, settings }: MessageTimelineProps): ReactNode {
+  return (
+    <>
+      {messages.map((msg, idx) => {
+        if (msg.role === "user") {
+          return (
+            <div key={`msg-${idx}`} className="flex justify-end">
+              <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#2a2a3e] px-4 py-3 text-sm text-[#e4e4ed] whitespace-pre-wrap">
+                {msg.content}
+              </div>
+            </div>
+          );
+        }
+
+        // Assistant message — show bubble + linked RunCard (if available)
+        const linkedRun = msg.runId ? runById.get(msg.runId) : undefined;
+        return (
+          <div key={`msg-${idx}`} className="flex flex-col gap-3">
+            <AssistantMessageBubble
+              content={msg.content}
+              timestamp={msg.timestamp}
+            />
+            {linkedRun && (
+              <RunCard
+                run={linkedRun}
+                settings={settings}
+                hidePromptBubble
+              />
+            )}
+          </div>
+        );
+      })}
+    </>
   );
 }

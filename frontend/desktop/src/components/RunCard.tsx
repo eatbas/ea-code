@@ -14,6 +14,8 @@ import { ResultCard, buildStageRowsFromEvents, computeDuration } from "./shared/
 interface RunCardProps {
   run: RunSummary;
   settings: AppSettings | null;
+  /** When true, hides the user prompt bubble (rendered separately in message-driven view). */
+  hidePromptBubble?: boolean;
 }
 
 /** Converts RunEvent array to StageResult array for display purposes.
@@ -48,7 +50,7 @@ function eventsToStageResults(events: RunEvent[]): StageResult[] {
 /** Displays a single historical run with full step-by-step timeline.
  *  Events are lazy-loaded when the card is expanded.
  */
-export function RunCard({ run, settings }: RunCardProps): ReactNode {
+export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): ReactNode {
   const [events, setEvents] = useState<RunEvent[] | null>(null);
   const [artifacts, setArtifacts] = useState<Record<string, string>>({});
   const [loadingEvents, setLoadingEvents] = useState(false);
@@ -94,12 +96,14 @@ export function RunCard({ run, settings }: RunCardProps): ReactNode {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* User prompt - right-aligned bubble */}
-      <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#2a2a3e] px-4 py-3 text-sm text-[#e4e4ed] whitespace-pre-wrap">
-          {run.prompt}
+      {/* User prompt - right-aligned bubble (hidden when rendered from message timeline) */}
+      {!hidePromptBubble && (
+        <div className="flex justify-end">
+          <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#2a2a3e] px-4 py-3 text-sm text-[#e4e4ed] whitespace-pre-wrap">
+            {run.prompt}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Expand/collapse button for terminal runs */}
       {isTerminalStatus && (

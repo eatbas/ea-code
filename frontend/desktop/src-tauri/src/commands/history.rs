@@ -1,5 +1,5 @@
 use crate::storage;
-use crate::models::{SessionDetail, RunDetail, RunEvent};
+use crate::models::{ChatMessage, SessionDetail, RunDetail, RunEvent};
 
 /// Returns recently opened projects for the sidebar.
 #[tauri::command]
@@ -53,6 +53,9 @@ pub async fn get_session_detail(
     // Reverse back to chronological order (oldest first) for display
     paginated_runs.reverse();
 
+    // Load chat messages for this session
+    let messages = storage::messages::read_messages(&session_id).unwrap_or_default();
+
     Ok(SessionDetail {
         id: session.id,
         title: session.title,
@@ -61,6 +64,7 @@ pub async fn get_session_detail(
         updated_at: session.updated_at,
         runs: paginated_runs,
         total_runs,
+        messages,
     })
 }
 
@@ -102,6 +106,12 @@ pub async fn get_run_artifacts(
     run_id: String,
 ) -> Result<std::collections::HashMap<String, String>, String> {
     storage::runs::read_all_artifacts(&run_id)
+}
+
+/// Returns all chat messages for a session.
+#[tauri::command]
+pub async fn get_session_messages(session_id: String) -> Result<Vec<ChatMessage>, String> {
+    storage::messages::read_messages(&session_id)
 }
 
 /// Deletes a session and all associated data.

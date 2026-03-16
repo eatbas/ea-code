@@ -183,6 +183,8 @@ pub struct SessionDetail {
     pub updated_at: String,
     pub runs: Vec<RunSummary>,
     pub total_runs: u32,
+    /// Chat messages for this session (from messages.jsonl).
+    pub messages: Vec<ChatMessage>,
 }
 
 /// Run detail for run view.
@@ -200,4 +202,23 @@ pub struct StorageStats {
     pub total_sessions: usize,
     pub total_runs: usize,
     pub total_events_bytes: u64,
+}
+
+/// Role in a chat message.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatRole {
+    User,
+    Assistant,
+}
+
+/// A single chat message stored in messages.jsonl at the session level.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatMessage {
+    pub role: ChatRole,
+    pub content: String,
+    pub timestamp: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
 }

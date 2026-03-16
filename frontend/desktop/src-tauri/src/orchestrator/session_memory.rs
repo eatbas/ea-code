@@ -1,8 +1,10 @@
 //! Session memory utilities for cross-agent continuity.
 
-use crate::storage::runs;
+use crate::models::ChatRole;
+use crate::storage::{messages, runs};
 
 const MEMORY_RUN_LIMIT: usize = 6;
+const MESSAGE_HISTORY_LIMIT: usize = 10;
 const PROMPT_CHAR_LIMIT: usize = 220;
 const SUMMARY_CHAR_LIMIT: usize = 700;
 const MEMORY_CHAR_CAP: usize = 5_000;
@@ -26,7 +28,11 @@ pub fn build_session_memory_context(
         .take(MEMORY_RUN_LIMIT)
         .collect();
 
-    if recent_runs.is_empty() {
+    // Load recent chat messages for conversational context
+    let recent_messages = messages::read_recent_messages(session_id, MESSAGE_HISTORY_LIMIT)
+        .unwrap_or_default();
+
+    if recent_runs.is_empty() && recent_messages.is_empty() {
         return String::new();
     }
 
@@ -34,6 +40,23 @@ pub fn build_session_memory_context(
         "SESSION MEMORY".to_string(),
         "Use this as factual continuity across prior runs in the same session.".to_string(),
     ];
+
+    // Include conversation history for cross-run context
+    if !recent_messages.is_empty() {
+        lines.push(String::new());
+        lines.push("CONVERSATION HISTORY".to_string());
+        for msg in &recent_messages {
+            let role_label = match msg.role {
+                ChatRole::User => "User",
+                ChatRole::Assistant => "Assistant",
+            };
+            lines.push(format!(
+                "{}: {}",
+                role_label,
+                truncate_chars(&msg.content, PROMPT_CHAR_LIMIT)
+            ));
+        }
+    }
 
     for (idx, run) in recent_runs.iter().enumerate() {
         lines.push(format!("Run {}:", idx + 1));

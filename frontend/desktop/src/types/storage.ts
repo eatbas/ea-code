@@ -225,3 +225,22 @@ export interface ReviewFindings {
   /** The reviewer's overall verdict (PASS or FAIL). */
   verdict: "PASS" | "FAIL";
 }
+
+// ============================================================================
+// Chat messages (session-level conversation log)
+// ============================================================================
+
+/** Role in a chat message. */
+export type ChatRole = "user" | "assistant";
+
+/** A single chat message from messages.jsonl at the session level. */
+export interface ChatMessage {
+  /** Who sent the message. */
+  role: ChatRole;
+  /** Message content text. */
+  content: string;
+  /** Timestamp in RFC 3339 format. */
+  timestamp: string;
+  /** Associated pipeline run ID (if this message triggered/resulted from a run). */
+  runId?: string;
+}
