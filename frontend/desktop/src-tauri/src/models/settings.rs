@@ -28,12 +28,27 @@ pub struct AppSettings {
     pub skill_selector_agent: Option<AgentBackend>,
     #[serde(default)]
     pub planner_agent: Option<AgentBackend>,
+    /// Planner slot 2 backend (optional — parallel planning).
+    #[serde(default)]
+    pub planner_2_agent: Option<AgentBackend>,
+    /// Planner slot 3 backend (optional — parallel planning).
+    #[serde(default)]
+    pub planner_3_agent: Option<AgentBackend>,
     #[serde(default)]
     pub plan_auditor_agent: Option<AgentBackend>,
     #[serde(default)]
     pub coder_agent: Option<AgentBackend>,
     #[serde(default)]
     pub code_reviewer_agent: Option<AgentBackend>,
+    /// Reviewer slot 2 backend (optional — parallel review).
+    #[serde(default)]
+    pub code_reviewer_2_agent: Option<AgentBackend>,
+    /// Reviewer slot 3 backend (optional — parallel review).
+    #[serde(default)]
+    pub code_reviewer_3_agent: Option<AgentBackend>,
+    /// Review Merger agent backend (activates when 2+ reviewers configured).
+    #[serde(default)]
+    pub review_merger_agent: Option<AgentBackend>,
     #[serde(default)]
     pub code_fixer_agent: Option<AgentBackend>,
     #[serde(default)]
@@ -58,16 +73,37 @@ pub struct AppSettings {
     pub skill_selector_model: Option<String>,
     #[serde(default)]
     pub planner_model: Option<String>,
+    /// Model for planner slot 2.
+    #[serde(default)]
+    pub planner_2_model: Option<String>,
+    /// Model for planner slot 3.
+    #[serde(default)]
+    pub planner_3_model: Option<String>,
     #[serde(default)]
     pub plan_auditor_model: Option<String>,
     pub coder_model: String,
     pub code_reviewer_model: String,
+    /// Model for reviewer slot 2.
+    #[serde(default)]
+    pub code_reviewer_2_model: Option<String>,
+    /// Model for reviewer slot 3.
+    #[serde(default)]
+    pub code_reviewer_3_model: Option<String>,
+    /// Model for review merger stage.
+    #[serde(default)]
+    pub review_merger_model: Option<String>,
     pub code_fixer_model: String,
     pub final_judge_model: String,
     #[serde(default)]
     pub executive_summary_agent: Option<AgentBackend>,
     #[serde(default = "default_executive_summary_model")]
     pub executive_summary_model: String,
+    /// Budget mode: skip all planning stages, send prompt directly to coder.
+    #[serde(default)]
+    pub budget_mode: bool,
+    /// Minimum weighted review score to pass (default 7.0).
+    #[serde(default = "default_review_pass_score")]
+    pub review_pass_score: f64,
     /// Pause pipeline after planning for user approval.
     #[serde(default)]
     pub require_plan_approval: bool,
@@ -118,6 +154,10 @@ fn default_retention_days() -> u32 {
     90
 }
 
+fn default_review_pass_score() -> f64 {
+    7.0
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -130,9 +170,14 @@ impl Default for AppSettings {
             opencode_path: "opencode".to_string(),
             prompt_enhancer_agent: None,
             planner_agent: None,
+            planner_2_agent: None,
+            planner_3_agent: None,
             plan_auditor_agent: None,
             coder_agent: None,
             code_reviewer_agent: None,
+            code_reviewer_2_agent: None,
+            code_reviewer_3_agent: None,
+            review_merger_agent: None,
             code_fixer_agent: None,
             final_judge_agent: None,
             max_iterations: 3,
@@ -145,13 +190,20 @@ impl Default for AppSettings {
             prompt_enhancer_model: "sonnet".to_string(),
             skill_selector_model: None,
             planner_model: None,
+            planner_2_model: None,
+            planner_3_model: None,
             plan_auditor_model: None,
             coder_model: "sonnet".to_string(),
             code_reviewer_model: "gpt-5.3-codex".to_string(),
+            code_reviewer_2_model: None,
+            code_reviewer_3_model: None,
+            review_merger_model: None,
             code_fixer_model: "sonnet".to_string(),
             final_judge_model: "gpt-5.3-codex".to_string(),
             executive_summary_agent: None,
             executive_summary_model: "gpt-5.3-codex".to_string(),
+            budget_mode: false,
+            review_pass_score: 7.0,
             require_plan_approval: false,
             plan_auto_approve_timeout_sec: 45,
             max_plan_revisions: 3,
@@ -236,5 +288,29 @@ impl AppSettings {
         }
 
         missing
+    }
+
+    /// Returns the number of active planner slots (0-3).
+    pub fn active_planner_count(&self) -> usize {
+        [
+            self.planner_agent.is_some(),
+            self.planner_2_agent.is_some(),
+            self.planner_3_agent.is_some(),
+        ]
+        .iter()
+        .filter(|&&v| v)
+        .count()
+    }
+
+    /// Returns the number of active reviewer slots (1-3).
+    pub fn active_reviewer_count(&self) -> usize {
+        [
+            self.code_reviewer_agent.is_some(),
+            self.code_reviewer_2_agent.is_some(),
+            self.code_reviewer_3_agent.is_some(),
+        ]
+        .iter()
+        .filter(|&&v| v)
+        .count()
     }
 }

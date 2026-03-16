@@ -67,3 +67,67 @@ pub fn build_plan_auditor_user(
     }
     parts.join("\n\n")
 }
+
+/// System prompt for the Plan Auditor when merging 2-3 parallel plans.
+pub fn build_plan_auditor_merge_system(meta: &PromptMeta) -> String {
+    format!(
+        "# Role\n\
+         You are the Plan Merger & Auditor agent in a multi-agent coding pipeline \
+         (iteration {iter} of {max}).\n\
+         You receive multiple independent plans from parallel planners. Your job is \
+         to synthesise them into ONE unified plan, then audit it.\n\
+         \n\
+         # CRITICAL: Merging & Auditing Only — No Code Changes\n\
+         - DO NOT create, modify, edit, or delete any files.\n\
+         - DO NOT run any commands that change the file system.\n\
+         - You may READ files to verify the plans, but NEVER write to them.\n\
+         - Your ONLY job is to OUTPUT the merged and audited plan text.\n\
+         \n\
+         # Merging Strategy\n\
+         1. Identify steps that MULTIPLE planners agree on — these are high-confidence \
+         and should be included.\n\
+         2. Where planners DIVERGE, evaluate the reasoning and pick the strongest \
+         approach. Note disagreements briefly.\n\
+         3. Remove duplicates and consolidate overlapping steps.\n\
+         4. Ensure the final plan is complete, ordered, and implementation-ready.\n\
+         \n\
+         # Audit Requirements\n\
+         - Keep original intent unchanged.\n\
+         - Remove ambiguity and risky assumptions.\n\
+         - Ensure steps are implementable by coding agents.\n\
+         - The first line MUST be exactly APPROVED or REJECTED.\n\
+         - Use this exact section header: --- Improved Plan ---\n\
+         \n\
+         # Output Constraints\n\
+         - Return only the merged, audited final plan text.\n\
+         - No markdown fences.",
+        iter = meta.iteration,
+        max = meta.max_iterations,
+    )
+}
+
+/// User message for the Plan Auditor when merging 2-3 parallel plans.
+pub fn build_plan_auditor_merge_user(
+    original_prompt: &str,
+    enhanced_prompt: &str,
+    plans: &[(String, String)],
+    previous_plan: Option<&str>,
+    judge_feedback: Option<&str>,
+) -> String {
+    let mut parts = vec![
+        format!("--- Original Prompt ---\n{original_prompt}"),
+        format!("--- Enhanced Prompt ---\n{enhanced_prompt}"),
+    ];
+    for (label, plan_text) in plans {
+        parts.push(format!("--- {label} ---\n{plan_text}"));
+    }
+    if let Some(prev) = previous_plan {
+        parts.push(format!("--- Previous Accepted Plan ---\n{prev}"));
+    }
+    if let Some(feedback) = judge_feedback {
+        parts.push(format!(
+            "--- Judge Feedback From Previous Iteration ---\n{feedback}"
+        ));
+    }
+    parts.join("\n\n")
+}

@@ -8,14 +8,19 @@ interface RunTimelineProps {
   iteration: number;
 }
 
-/** All stages in pipeline order. */
+/** All stages in pipeline order (parallel stages adjacent). */
 const STAGE_ORDER: PipelineStage[] = [
   "prompt_enhance",
   "plan",
+  "plan_2",
+  "plan_3",
   "plan_audit",
   "skill_select",
   "coder",
   "code_reviewer",
+  "code_reviewer_2",
+  "code_reviewer_3",
+  "review_merge",
   "code_fixer",
   "judge",
 ];

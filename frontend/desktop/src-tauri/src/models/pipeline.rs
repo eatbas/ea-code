@@ -7,10 +7,20 @@ pub enum PipelineStage {
     PromptEnhance,
     SkillSelect,
     Plan,
+    /// Planner slot 2 (parallel planning).
+    Plan2,
+    /// Planner slot 3 (parallel planning).
+    Plan3,
     PlanAudit,
     Coder,
     DiffAfterCoder,
     CodeReviewer,
+    /// Reviewer slot 2 (parallel review).
+    CodeReviewer2,
+    /// Reviewer slot 3 (parallel review).
+    CodeReviewer3,
+    /// Review Merger — combines findings from 2-3 reviewers.
+    ReviewMerge,
     CodeFixer,
     DiffAfterCodeFixer,
     Judge,

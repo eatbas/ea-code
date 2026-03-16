@@ -10,6 +10,7 @@ mod generator;
 mod judge;
 mod plan_auditor;
 mod planner;
+mod review_merger;
 mod reviewer;
 mod skills;
 
@@ -20,6 +21,7 @@ pub use generator::*;
 pub use judge::*;
 pub use plan_auditor::*;
 pub use planner::*;
+pub use review_merger::*;
 pub use reviewer::*;
 pub use skills::*;
 

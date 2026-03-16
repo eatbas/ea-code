@@ -1,4 +1,5 @@
 //! Review, fix, and judge sub-stages for a single iteration.
+//! Supports 1-3 parallel reviewers with optional Review Merger.
 
 use std::mem;
 use std::sync::atomic::AtomicBool;
@@ -8,7 +9,7 @@ use tauri::AppHandle;
 use tokio::sync::Mutex;
 
 use crate::agents::AgentInput;
-use crate::models::{StageEndStatus, *};
+use crate::models::{AgentBackend, StageEndStatus, *};
 use crate::storage::runs;
 
 use crate::orchestrator::parsing::{extract_question, parse_review_findings};
@@ -23,8 +24,28 @@ pub mod stages;
 
 pub use judge::run_judge_stage;
 
+/// A configured reviewer slot.
+struct ReviewerSlot {
+    backend: AgentBackend,
+    stage: PipelineStage,
+}
 
-/// Review + Fix stages (diff stages removed - agents read git directly).
+/// Collects active reviewer slots from settings.
+fn active_reviewer_slots(settings: &AppSettings) -> Vec<ReviewerSlot> {
+    let mut slots = Vec::new();
+    if let Some(b) = &settings.code_reviewer_agent {
+        slots.push(ReviewerSlot { backend: b.clone(), stage: PipelineStage::CodeReviewer });
+    }
+    if let Some(b) = &settings.code_reviewer_2_agent {
+        slots.push(ReviewerSlot { backend: b.clone(), stage: PipelineStage::CodeReviewer2 });
+    }
+    if let Some(b) = &settings.code_reviewer_3_agent {
+        slots.push(ReviewerSlot { backend: b.clone(), stage: PipelineStage::CodeReviewer3 });
+    }
+    slots
+}
+
+/// Review + Fix stages (supports 1-3 parallel reviewers + optional merger).
 #[allow(clippy::too_many_arguments)]
 pub async fn run_review_fix_stages(
     app: &AppHandle,
@@ -46,10 +67,13 @@ pub async fn run_review_fix_stages(
     iter_ctx: &mut IterationContext,
     workspace_context: &str,
 ) -> Result<(), String> {
-    let reviewer_agent = settings.code_reviewer_agent.as_ref().ok_or_else(|| {
-        "Code Reviewer is not set. Go to Settings/Agents and configure the minimum roles."
-            .to_string()
-    })?;
+    let reviewer_slots = active_reviewer_slots(settings);
+    if reviewer_slots.is_empty() {
+        return Err(
+            "Code Reviewer is not set. Go to Settings/Agents and configure the minimum roles."
+                .to_string(),
+        );
+    }
     let fixer_agent = settings.code_fixer_agent.as_ref().ok_or_else(|| {
         "Code Fixer is not set. Go to Settings/Agents and configure the minimum roles."
             .to_string()
@@ -64,82 +88,38 @@ pub async fn run_review_fix_stages(
         return Ok(());
     }
 
-    // --- Code Reviewer stage (diff stage removed) ---
-    if wait_if_paused(pause_flag, cancel_flag).await {
-        push_cancel_iteration(run, iter_num, mem::take(stages));
+    // --- Run reviewers (1 sequential, 2-3 parallel) ---
+    let reviewer_user_prompt = prompts::build_reviewer_user(
+        &request.prompt, enhanced, iter_ctx.selected_plan(), judge_feedback,
+    );
+    let reviewer_context = super::run_setup::compose_agent_context(
+        prompts::build_reviewer_system(meta), workspace_context,
+    );
+
+    let rev_out = if reviewer_slots.len() == 1 {
+        run_single_reviewer(
+            app, run_id, iter_num, &reviewer_slots[0], &reviewer_user_prompt,
+            &reviewer_context, &request.workspace_path, settings, cancel_flag,
+            session_id, run, stages,
+        ).await?
+    } else {
+        run_parallel_reviewers_and_merge(
+            app, request, run_id, iter_num, &reviewer_slots, &reviewer_user_prompt,
+            &reviewer_context, settings, cancel_flag, session_id, meta,
+            enhanced, workspace_context, run, stages, iter_ctx,
+        ).await?
+    };
+
+    // Empty means all reviewers failed or merger failed.
+    if rev_out.is_empty() {
         return Ok(());
     }
-    run.current_stage = Some(PipelineStage::CodeReviewer);
-    let rev_seq = runs::next_sequence(run_id).unwrap_or(1);
-    stages::append_stage_start_event(run_id, &PipelineStage::CodeReviewer, iter_num, rev_seq)?;
 
-    let rev_r = execute_agent_stage(
-        app,
-        run_id,
-        iter_num,
-        PipelineStage::CodeReviewer,
-        reviewer_agent,
-        &AgentInput {
-            prompt: prompts::build_reviewer_user(
-                &request.prompt,
-                enhanced,
-                iter_ctx.selected_plan(),
-                judge_feedback,
-            ),
-            context: Some(super::run_setup::compose_agent_context(
-                prompts::build_reviewer_system(meta),
-                workspace_context,
-            )),
-            workspace_path: request.workspace_path.clone(),
-        },
-        settings,
-        cancel_flag,
-        Some(session_id),
-    )
-    .await;
-    let rev_out = rev_r.output.clone();
-    let rev_duration = rev_r.duration_ms;
     iter_ctx.review_output = Some(rev_out.clone());
     iter_ctx.review_user_guidance = None;
-
-    // Parse findings for later use by Judge
     let findings = parse_review_findings(&rev_out);
-    iter_ctx.review_findings = Some(findings.clone());
+    iter_ctx.review_findings = Some(findings);
 
-    if rev_r.status != StageStatus::Failed {
-        crate::orchestrator::helpers::emit_artifact(app, run_id, "review", &rev_out, iter_num);
-    }
-
-    if rev_r.status == StageStatus::Failed {
-        stages.push(rev_r);
-        stages::append_stage_end_event(
-            run_id,
-            &PipelineStage::CodeReviewer,
-            iter_num,
-            rev_seq + 1,
-            &StageEndStatus::Failed,
-            rev_duration,
-        )?;
-        run.iterations.push(Iteration {
-            number: iter_num,
-            stages: mem::take(stages),
-            verdict: None,
-            judge_reasoning: None,
-        });
-        run.status = PipelineStatus::Failed;
-        run.error = Some("Code Reviewer / Auditor stage failed".to_string());
-        stages::update_run_summary(run_id, session_id, run)?;
-        return Ok(());
-    }
-    stages.push(rev_r);
-    crate::orchestrator::iteration_review::stages::append_stage_end_event(
-        run_id,
-        &PipelineStage::CodeReviewer,
-        iter_num,
-        rev_seq + 1,
-        &StageEndStatus::Completed,
-        rev_duration,
-    )?;
     if wait_if_paused(pause_flag, cancel_flag).await {
         push_cancel_iteration(run, iter_num, mem::take(stages));
         return Ok(());
@@ -150,60 +130,37 @@ pub async fn run_review_fix_stages(
     }
 
     // --- Code Fixer stage ---
-    if wait_if_paused(pause_flag, cancel_flag).await {
-        push_cancel_iteration(run, iter_num, mem::take(stages));
-        return Ok(());
-    }
     run.current_stage = Some(PipelineStage::CodeFixer);
     let fix_seq = runs::next_sequence(run_id).unwrap_or(1);
     stages::append_stage_start_event(run_id, &PipelineStage::CodeFixer, iter_num, fix_seq)?;
 
     let fix_r = execute_agent_stage(
-        app,
-        run_id,
-        iter_num,
-        PipelineStage::CodeFixer,
-        fixer_agent,
+        app, run_id, iter_num, PipelineStage::CodeFixer, fixer_agent,
         &AgentInput {
             prompt: prompts::build_fixer_user(
-                &request.prompt,
-                enhanced,
-                iter_ctx.selected_plan(),
-                selected_skills_section,
-                &rev_out,
-                judge_feedback,
-                handoff_json,
+                &request.prompt, enhanced, iter_ctx.selected_plan(),
+                selected_skills_section, &rev_out, judge_feedback, handoff_json,
             ),
             context: Some(super::run_setup::compose_agent_context(
-                prompts::build_fixer_system(meta),
-                workspace_context,
+                prompts::build_fixer_system(meta), workspace_context,
             )),
             workspace_path: request.workspace_path.clone(),
         },
-        settings,
-        cancel_flag,
-        Some(session_id),
-    )
-    .await;
+        settings, cancel_flag, Some(session_id),
+    ).await;
     let fix_out = fix_r.output.clone();
     let fix_duration = fix_r.duration_ms;
     iter_ctx.fix_output = Some(fix_out.clone());
 
     if fix_r.status == StageStatus::Failed {
         stages.push(fix_r);
-        crate::orchestrator::iteration_review::stages::append_stage_end_event(
-            run_id,
-            &PipelineStage::CodeFixer,
-            iter_num,
-            fix_seq + 1,
-            &StageEndStatus::Failed,
-            fix_duration,
+        stages::append_stage_end_event(
+            run_id, &PipelineStage::CodeFixer, iter_num, fix_seq + 1,
+            &StageEndStatus::Failed, fix_duration,
         )?;
         run.iterations.push(Iteration {
-            number: iter_num,
-            stages: mem::take(stages),
-            verdict: None,
-            judge_reasoning: None,
+            number: iter_num, stages: mem::take(stages),
+            verdict: None, judge_reasoning: None,
         });
         run.status = PipelineStatus::Failed;
         run.error = Some("Code Fixer stage failed".to_string());
@@ -211,31 +168,22 @@ pub async fn run_review_fix_stages(
         return Ok(());
     }
     stages.push(fix_r);
-    crate::orchestrator::iteration_review::stages::append_stage_end_event(
-        run_id,
-        &PipelineStage::CodeFixer,
-        iter_num,
-        fix_seq + 1,
-        &StageEndStatus::Completed,
-        fix_duration,
+    stages::append_stage_end_event(
+        run_id, &PipelineStage::CodeFixer, iter_num, fix_seq + 1,
+        &StageEndStatus::Completed, fix_duration,
     )?;
+
     if wait_if_paused(pause_flag, cancel_flag).await {
-        push_cancel_iteration(run, iter_num, mem::take(stages));
-        return Ok(());
-    }
-    if is_cancelled(cancel_flag) {
         push_cancel_iteration(run, iter_num, mem::take(stages));
         return Ok(());
     }
 
     if let Some(question) = extract_question(&fix_out) {
         iter_ctx.fix_question = Some(question.clone());
-
         let answer = ask_user_question(
-            app, run_id, &PipelineStage::CodeFixer, iter_num, question, fix_out.clone(), false,
+            app, run_id, &PipelineStage::CodeFixer, iter_num, question, fix_out, false,
             cancel_flag, answer_sender,
-        )
-        .await?;
+        ).await?;
         if is_cancelled(cancel_flag) {
             push_cancel_iteration(run, iter_num, mem::take(stages));
             return Ok(());
@@ -247,14 +195,164 @@ pub async fn run_review_fix_stages(
         }
     }
 
-    if wait_if_paused(pause_flag, cancel_flag).await {
-        push_cancel_iteration(run, iter_num, mem::take(stages));
-        return Ok(());
-    }
-    if is_cancelled(cancel_flag) {
-        push_cancel_iteration(run, iter_num, mem::take(stages));
-        return Ok(());
+    Ok(())
+}
+
+/// Runs a single reviewer and returns its output text. Empty string on failure.
+#[allow(clippy::too_many_arguments)]
+async fn run_single_reviewer(
+    app: &AppHandle, run_id: &str, iter_num: u32,
+    slot: &ReviewerSlot, user_prompt: &str, context: &str,
+    workspace_path: &str, settings: &AppSettings,
+    cancel_flag: &Arc<AtomicBool>, session_id: &str,
+    run: &mut PipelineRun, stages: &mut Vec<StageResult>,
+) -> Result<String, String> {
+    run.current_stage = Some(PipelineStage::CodeReviewer);
+    let rev_seq = runs::next_sequence(run_id).unwrap_or(1);
+    stages::append_stage_start_event(run_id, &PipelineStage::CodeReviewer, iter_num, rev_seq)?;
+
+    let rev_r = execute_agent_stage(
+        app, run_id, iter_num, slot.stage.clone(), &slot.backend,
+        &AgentInput {
+            prompt: user_prompt.to_string(),
+            context: Some(context.to_string()),
+            workspace_path: workspace_path.to_string(),
+        },
+        settings, cancel_flag, Some(session_id),
+    ).await;
+    let rev_out = rev_r.output.clone();
+    let rev_duration = rev_r.duration_ms;
+
+    if rev_r.status != StageStatus::Failed {
+        crate::orchestrator::helpers::emit_artifact(app, run_id, "review", &rev_out, iter_num);
     }
 
-    Ok(())
+    if rev_r.status == StageStatus::Failed {
+        stages.push(rev_r);
+        stages::append_stage_end_event(
+            run_id, &PipelineStage::CodeReviewer, iter_num, rev_seq + 1,
+            &StageEndStatus::Failed, rev_duration,
+        )?;
+        run.iterations.push(Iteration {
+            number: iter_num, stages: mem::take(stages),
+            verdict: None, judge_reasoning: None,
+        });
+        run.status = PipelineStatus::Failed;
+        run.error = Some("Code Reviewer stage failed".to_string());
+        stages::update_run_summary(run_id, session_id, run)?;
+        return Ok(String::new());
+    }
+    stages.push(rev_r);
+    stages::append_stage_end_event(
+        run_id, &PipelineStage::CodeReviewer, iter_num, rev_seq + 1,
+        &StageEndStatus::Completed, rev_duration,
+    )?;
+
+    Ok(rev_out)
+}
+
+/// Runs 2-3 reviewers in parallel, then runs the Review Merger stage.
+#[allow(clippy::too_many_arguments)]
+async fn run_parallel_reviewers_and_merge(
+    app: &AppHandle, request: &PipelineRequest,
+    run_id: &str, iter_num: u32, slots: &[ReviewerSlot],
+    user_prompt: &str, context: &str,
+    settings: &AppSettings, cancel_flag: &Arc<AtomicBool>,
+    session_id: &str, meta: &PromptMeta, enhanced: &str,
+    workspace_context: &str,
+    run: &mut PipelineRun, stages: &mut Vec<StageResult>,
+    iter_ctx: &mut IterationContext,
+) -> Result<String, String> {
+    // Run all reviewers concurrently.
+    let futures: Vec<_> = slots.iter().enumerate().map(|(i, slot)| {
+        let app = app.clone();
+        let backend = slot.backend.clone();
+        let stage = slot.stage.clone();
+        let prompt = user_prompt.to_string();
+        let ctx = context.to_string();
+        let ws = request.workspace_path.clone();
+        let settings = settings.clone();
+        let cf = cancel_flag.clone();
+        let sid = session_id.to_string();
+        let rid = run_id.to_string();
+
+        async move {
+            let r = execute_agent_stage(
+                &app, &rid, iter_num, stage.clone(), &backend,
+                &AgentInput {
+                    prompt,
+                    context: Some(ctx),
+                    workspace_path: ws,
+                },
+                &settings, &cf, Some(&sid),
+            ).await;
+            (i, r)
+        }
+    }).collect();
+
+    let results = futures::future::join_all(futures).await;
+
+    let mut review_texts: Vec<(String, String)> = Vec::new();
+    for (i, r) in results {
+        let out = r.output.clone();
+        let failed = r.status == StageStatus::Failed;
+        if !failed {
+            let label = format!("Review from Reviewer {}", i + 1);
+            crate::orchestrator::helpers::emit_artifact(
+                app, run_id, &format!("review_{}", i + 1), &out, iter_num,
+            );
+            review_texts.push((label, out));
+        }
+        stages.push(r);
+    }
+
+    if review_texts.is_empty() {
+        run.iterations.push(Iteration {
+            number: iter_num, stages: mem::take(stages),
+            verdict: None, judge_reasoning: None,
+        });
+        run.status = PipelineStatus::Failed;
+        run.error = Some("All reviewer stages failed".to_string());
+        stages::update_run_summary(run_id, session_id, run)?;
+        return Ok(String::new());
+    }
+
+    // --- Review Merger stage ---
+    let merger_backend = settings.review_merger_agent.as_ref()
+        .or(settings.code_reviewer_agent.as_ref())
+        .unwrap_or(&AgentBackend::Claude);
+
+    let merger_r = execute_agent_stage(
+        app, run_id, iter_num, PipelineStage::ReviewMerge, merger_backend,
+        &AgentInput {
+            prompt: prompts::build_review_merger_user(
+                &request.prompt, enhanced, &review_texts,
+                iter_ctx.selected_plan(),
+            ),
+            context: Some(super::run_setup::compose_agent_context(
+                prompts::build_review_merger_system(meta), workspace_context,
+            )),
+            workspace_path: request.workspace_path.clone(),
+        },
+        settings, cancel_flag, Some(session_id),
+    ).await;
+    let merged_out = merger_r.output.clone();
+
+    if merger_r.status == StageStatus::Failed {
+        let err = merger_r.error.clone().unwrap_or_else(|| "Review Merger failed".into());
+        stages.push(merger_r);
+        run.iterations.push(Iteration {
+            number: iter_num, stages: mem::take(stages),
+            verdict: None, judge_reasoning: None,
+        });
+        run.status = PipelineStatus::Failed;
+        run.error = Some(err);
+        stages::update_run_summary(run_id, session_id, run)?;
+        return Ok(String::new());
+    }
+
+    crate::orchestrator::helpers::emit_artifact(app, run_id, "review", &merged_out, iter_num);
+    stages.push(merger_r);
+
+    Ok(merged_out)
 }

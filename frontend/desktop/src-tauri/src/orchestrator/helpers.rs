@@ -127,6 +127,31 @@ pub fn resolve_stage_model(stage: &PipelineStage, settings: &AppSettings) -> Str
             settings.executive_summary_agent.as_ref(),
             settings,
         ),
+        PipelineStage::Plan2 => resolve_model_with_fallback(
+            settings.planner_2_model.as_deref(),
+            settings.planner_2_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::Plan3 => resolve_model_with_fallback(
+            settings.planner_3_model.as_deref(),
+            settings.planner_3_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::CodeReviewer2 => resolve_model_with_fallback(
+            settings.code_reviewer_2_model.as_deref(),
+            settings.code_reviewer_2_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::CodeReviewer3 => resolve_model_with_fallback(
+            settings.code_reviewer_3_model.as_deref(),
+            settings.code_reviewer_3_agent.as_ref(),
+            settings,
+        ),
+        PipelineStage::ReviewMerge => resolve_model_with_fallback(
+            settings.review_merger_model.as_deref(),
+            settings.review_merger_agent.as_ref(),
+            settings,
+        ),
         PipelineStage::DiffAfterCoder | PipelineStage::DiffAfterCodeFixer | PipelineStage::DirectTask => {
             String::new()
         }

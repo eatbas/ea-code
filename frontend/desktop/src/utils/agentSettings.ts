@@ -28,31 +28,47 @@ export function hasMinimumAgentsConfigured(settings: AppSettings): boolean {
   return missingMinimumAgentLabels(settings).length === 0;
 }
 
+/** Keys for agent backend fields in AppSettings. */
+type AgentBackendKey = keyof Pick<
+  AppSettings,
+  | "promptEnhancerAgent"
+  | "skillSelectorAgent"
+  | "plannerAgent"
+  | "planner2Agent"
+  | "planner3Agent"
+  | "planAuditorAgent"
+  | "coderAgent"
+  | "codeReviewerAgent"
+  | "codeReviewer2Agent"
+  | "codeReviewer3Agent"
+  | "reviewMergerAgent"
+  | "codeFixerAgent"
+  | "finalJudgeAgent"
+  | "executiveSummaryAgent"
+>;
+
+/** Keys for per-stage model fields in AppSettings. */
+type AgentModelKey = keyof Pick<
+  AppSettings,
+  | "promptEnhancerModel"
+  | "skillSelectorModel"
+  | "plannerModel"
+  | "planner2Model"
+  | "planner3Model"
+  | "planAuditorModel"
+  | "coderModel"
+  | "codeReviewerModel"
+  | "codeReviewer2Model"
+  | "codeReviewer3Model"
+  | "reviewMergerModel"
+  | "codeFixerModel"
+  | "finalJudgeModel"
+  | "executiveSummaryModel"
+>;
+
 type AgentStageBinding = {
-  backendKey: keyof Pick<
-    AppSettings,
-    | "promptEnhancerAgent"
-    | "skillSelectorAgent"
-    | "plannerAgent"
-    | "planAuditorAgent"
-    | "coderAgent"
-    | "codeReviewerAgent"
-    | "codeFixerAgent"
-    | "finalJudgeAgent"
-    | "executiveSummaryAgent"
-  >;
-  modelKey: keyof Pick<
-    AppSettings,
-    | "promptEnhancerModel"
-    | "skillSelectorModel"
-    | "plannerModel"
-    | "planAuditorModel"
-    | "coderModel"
-    | "codeReviewerModel"
-    | "codeFixerModel"
-    | "finalJudgeModel"
-    | "executiveSummaryModel"
-  >;
+  backendKey: AgentBackendKey;
+  modelKey: AgentModelKey;
   optional: boolean;
 };
 
@@ -60,9 +76,14 @@ const AGENT_STAGE_BINDINGS: AgentStageBinding[] = [
   { backendKey: "promptEnhancerAgent", modelKey: "promptEnhancerModel", optional: false },
   { backendKey: "skillSelectorAgent", modelKey: "skillSelectorModel", optional: true },
   { backendKey: "plannerAgent", modelKey: "plannerModel", optional: true },
+  { backendKey: "planner2Agent", modelKey: "planner2Model", optional: true },
+  { backendKey: "planner3Agent", modelKey: "planner3Model", optional: true },
   { backendKey: "planAuditorAgent", modelKey: "planAuditorModel", optional: true },
   { backendKey: "coderAgent", modelKey: "coderModel", optional: false },
   { backendKey: "codeReviewerAgent", modelKey: "codeReviewerModel", optional: false },
+  { backendKey: "codeReviewer2Agent", modelKey: "codeReviewer2Model", optional: true },
+  { backendKey: "codeReviewer3Agent", modelKey: "codeReviewer3Model", optional: true },
+  { backendKey: "reviewMergerAgent", modelKey: "reviewMergerModel", optional: true },
   { backendKey: "codeFixerAgent", modelKey: "codeFixerModel", optional: false },
   { backendKey: "finalJudgeAgent", modelKey: "finalJudgeModel", optional: false },
   { backendKey: "executiveSummaryAgent", modelKey: "executiveSummaryModel", optional: false },

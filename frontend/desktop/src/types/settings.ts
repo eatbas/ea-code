@@ -14,14 +14,28 @@ export interface AppSettings {
   promptEnhancerAgent: AgentBackend | null;
   skillSelectorAgent: AgentBackend | null;
   plannerAgent: AgentBackend | null;
+  /** Planner slot 2 backend (parallel planning). */
+  planner2Agent: AgentBackend | null;
+  /** Planner slot 3 backend (parallel planning). */
+  planner3Agent: AgentBackend | null;
   planAuditorAgent: AgentBackend | null;
   coderAgent: AgentBackend | null;
   codeReviewerAgent: AgentBackend | null;
+  /** Reviewer slot 2 backend (parallel review). */
+  codeReviewer2Agent: AgentBackend | null;
+  /** Reviewer slot 3 backend (parallel review). */
+  codeReviewer3Agent: AgentBackend | null;
+  /** Review Merger agent backend. */
+  reviewMergerAgent: AgentBackend | null;
   codeFixerAgent: AgentBackend | null;
   finalJudgeAgent: AgentBackend | null;
   executiveSummaryAgent: AgentBackend | null;
   maxIterations: number;
   requireGit: boolean;
+  /** Budget mode: skip all planning, send prompt directly to coder. */
+  budgetMode: boolean;
+  /** Minimum weighted review score to pass (default 7.0). */
+  reviewPassScore: number;
   /** Pause pipeline after planning to let the user approve, revise, or skip the plan. */
   requirePlanApproval: boolean;
   /** Seconds to wait before auto-approving the plan (0 = wait indefinitely). */
@@ -52,9 +66,19 @@ export interface AppSettings {
   promptEnhancerModel: string;
   skillSelectorModel: string | null;
   plannerModel: string | null;
+  /** Model for planner slot 2. */
+  planner2Model: string | null;
+  /** Model for planner slot 3. */
+  planner3Model: string | null;
   planAuditorModel: string | null;
   coderModel: string;
   codeReviewerModel: string;
+  /** Model for reviewer slot 2. */
+  codeReviewer2Model: string | null;
+  /** Model for reviewer slot 3. */
+  codeReviewer3Model: string | null;
+  /** Model for review merger stage. */
+  reviewMergerModel: string | null;
   codeFixerModel: string;
   finalJudgeModel: string;
   executiveSummaryModel: string;
@@ -72,14 +96,21 @@ export const DEFAULT_SETTINGS: AppSettings = {
   promptEnhancerAgent: null,
   skillSelectorAgent: null,
   plannerAgent: null,
+  planner2Agent: null,
+  planner3Agent: null,
   planAuditorAgent: null,
   coderAgent: null,
   codeReviewerAgent: null,
+  codeReviewer2Agent: null,
+  codeReviewer3Agent: null,
+  reviewMergerAgent: null,
   codeFixerAgent: null,
   finalJudgeAgent: null,
   executiveSummaryAgent: null,
   maxIterations: 3,
   requireGit: true,
+  budgetMode: false,
+  reviewPassScore: 7.0,
   requirePlanApproval: false,
   planAutoApproveTimeoutSec: 45,
   maxPlanRevisions: 3,
@@ -96,9 +127,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   promptEnhancerModel: "sonnet",
   skillSelectorModel: null,
   plannerModel: null,
+  planner2Model: null,
+  planner3Model: null,
   planAuditorModel: null,
   coderModel: "sonnet",
   codeReviewerModel: "gpt-5.3-codex",
+  codeReviewer2Model: null,
+  codeReviewer3Model: null,
+  reviewMergerModel: null,
   codeFixerModel: "sonnet",
   finalJudgeModel: "gpt-5.3-codex",
   executiveSummaryModel: "gpt-5.3-codex",
