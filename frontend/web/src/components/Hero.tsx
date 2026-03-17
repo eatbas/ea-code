@@ -29,17 +29,17 @@ export function Hero() {
               {release ? `v${release.version}` : ""} — Free &amp; open-source
             </p>
             <h1 className="font-mono text-4xl leading-tight font-bold tracking-tight md:text-5xl lg:text-6xl">
-              Stop paying for
+              Put your
               <br />
-              <span className="text-accent">5 AI subscriptions</span>
+              <span className="text-accent">AI subscriptions to work</span>
               <br />
-              and only using one.
+              as one quality pipeline.
             </h1>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted md:text-xl mx-auto lg:mx-0">
               You already have Claude, Codex, Gemini, Kimi, and OpenCode.
-              EA Code wires them into one orchestrated pipeline — each agent
-              plays the role it&apos;s best at, so the result is better than
-              anything one model could produce alone.
+              EA Code orchestrates those subscriptions into one pipeline, so
+              each model can plan, code, and review where it performs best,
+              helping you ship higher-quality code than a single agent alone.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
               <a
