@@ -1,74 +1,114 @@
+<div align="center">
+
 # EA Code
 
-EA Code is a desktop control room for AI coding CLIs.
+### Stop Paying for Five AI Subscriptions and Only Using One
 
-Instead of relying on one model to plan, code, review, and judge its own work, EA Code lets you wire different agents into each stage of the job. You choose the project, assign the roles, run the pipeline, and watch the result move from prompt to reviewed output with full session history.
+You're subscribed to Claude, Gemini, Codex, Kimi, and OpenCode. But right now, you're copy-pasting between them, switching tabs, and hoping one model gets it right on the first try.
 
-Website: [ea-code.atbas.xyz](https://ea-code.atbas.xyz)
+**What if they all worked together instead?**
 
-## What It Does
+EA Code is a desktop app that wires your AI coding CLIs into a single orchestrated pipeline — where each agent plays the role it's best at, and the result is better than anything one model could produce alone.
 
-- Runs coding tasks through a multi-stage orchestration pipeline
-- Mixes and matches CLI backends per role
-- Keeps project threads, run logs, artefacts, and chat history locally
-- Lets you maintain reusable skills and MCP connections for better context
-- Supports both full review loops and quicker direct-task or budget-mode runs
+[Website](https://ea-code.atbas.xyz) &#8226; [Get Started](#getting-started) &#8226; [How It Works](#how-the-pipeline-works)
 
-Supported backends in the current desktop app:
+</div>
 
-- Claude
-- Codex
-- Gemini
-- Kimi
-- OpenCode
+---
 
-## Why EA Code
+## The Problem
 
-Most AI coding tools collapse everything into a single conversation. EA Code takes a different approach:
+You're paying for multiple AI coding subscriptions. You use Claude for planning, Gemini for quick questions, Codex for generation. But you're doing the orchestration manually — switching between tools, re-explaining context, and judging the output yourself.
 
-- one agent can sharpen the prompt
-- several agents can propose plans in parallel
-- another agent can audit the plan before code is written
-- separate reviewers can critique the implementation
-- a fixer can apply the review feedback
-- a final judge decides whether the task is complete or should loop again
+That's expensive, slow, and exhausting.
 
-That gives you a more inspectable workflow, better separation of responsibilities, and a clearer record of how a result was produced.
+## The Solution
+
+EA Code puts every AI CLI you already pay for into a structured pipeline:
+
+- **One agent sharpens your prompt** so the task is crystal clear
+- **Up to three agents plan in parallel** — you get multiple perspectives, not one guess
+- **An auditor pressure-tests the plan** before a single line is written
+- **A coder implements it**, then **up to three reviewers critique it independently**
+- **A fixer applies the feedback**, and **a judge decides if the task is done**
+- **If not? It loops automatically** — refining, regenerating, and reviewing until the job is truly complete
+
+You assign the roles. Claude plans, Codex codes, Gemini reviews — or any combination you want. Each model does what it's best at. The result is code that's been planned, written, reviewed, and approved by multiple AI agents working together.
+
+## Supported AI Backends
+
+| Backend | CLI |
+|---------|-----|
+| Claude | Claude Code |
+| Codex | GitHub Copilot CLI |
+| Gemini | Google Gemini CLI |
+| Kimi | Kimi CLI |
+| OpenCode | OpenCode CLI |
+
+Use one, use all five — assign any backend to any stage.
 
 ## How The Pipeline Works
 
-The exact path depends on settings, but a typical run looks like this:
+```
+ Your Prompt
+     |
+     v
+ [1. Prompt Enhance] -----> Clarifies and sharpens the task
+     |
+     v
+ [2. Skill Select] -------> Pulls in relevant local guidance
+     |
+     v
+ [3. Plan x3] ------------> Up to 3 agents draft plans IN PARALLEL
+     |
+     v
+ [4. Plan Audit] ----------> Pressure-tests the chosen plan
+     |
+     v
+ [5. Code] ----------------> Implements the change
+     |
+     v
+ [6. Review x3] -----------> Up to 3 agents review IN PARALLEL
+     |
+     v
+ [7. Review Merge] --------> Combines all reviewer feedback
+     |
+     v
+ [8. Fix] -----------------> Applies required changes
+     |
+     v
+ [9. Judge] -----+---------> COMPLETE? Ship it.
+                  |
+                  +---------> NOT COMPLETE? Loop back with full context.
+     |
+     v
+ [10. Executive Summary] --> Records what happened
+```
 
-1. Prompt enhancement clarifies the task.
-2. Skill selection pulls in relevant local guidance.
-3. One or more planners draft an implementation plan.
-4. A plan auditor pressure-tests that plan.
-5. The coder makes the change.
-6. Up to three reviewers inspect the result.
-7. A review merge stage combines reviewer feedback.
-8. The fixer applies the required changes.
-9. The judge decides whether the result is complete.
-10. An executive summary records what happened.
+The judge isn't the same agent that wrote the code. That's the point — no model marks its own homework.
 
-If the judge is not satisfied, EA Code can loop through another iteration with the previous context attached.
+## Why This Beats Using One Agent
+
+| Single Agent | EA Code |
+|---|---|
+| One model plans, codes, reviews, and judges its own work | Different agents specialise in each role |
+| Blind spots go unnoticed | Parallel reviewers catch what one misses |
+| You manually re-prompt when output is wrong | Auto-loops with full context until the judge approves |
+| Context gets lost between sessions | Session memory carries continuity across runs |
+| You pay for 5 subscriptions and use 1 at a time | Every subscription earns its keep |
 
 ## Desktop App Highlights
 
-- Project picker for working across multiple repositories
-- Session-based history so each task stays grouped in its own thread
-- Live run timeline with stage logs and saved artefacts
-- Agent and model assignment per stage
-- CLI health checks, version checks, and in-app update actions
-- Skill editor for reusable instructions
-- MCP configuration view for project context integrations
-- Pause, resume, cancel, and plan-approval controls during runs
-
-## Tech Stack
-
-- Desktop shell: [Tauri v2](https://tauri.app/)
-- Frontend: React 19, TypeScript, Vite, Tailwind CSS v4
-- Backend: Rust with Tokio
-- Local persistence: file-based storage under `~/.ea-code/`
+- **Project Picker** — switch between repositories instantly
+- **Session History** — every task grouped in its own thread with full traceability
+- **Live Run Timeline** — watch stages execute with real-time logs, diffs, and artefacts
+- **Agent Assignment** — configure which backend handles which stage
+- **Plan Approval Gates** — pause before execution to review, revise, or reject
+- **Pause / Resume / Cancel** — full control during runs
+- **Skill Editor** — create reusable instructions for domain-specific guidance
+- **MCP Integrations** — connect Model Context Protocol servers for external tools and context
+- **CLI Health Checks** — verify agent availability and update CLIs in-app
+- **Fully Local** — everything stored on your machine, no cloud backend required
 
 ## Getting Started
 
@@ -77,9 +117,9 @@ If the judge is not satisfied, EA Code can loop through another iteration with t
 - [Node.js](https://nodejs.org/) LTS
 - [Rust](https://www.rust-lang.org/tools/install)
 - [Tauri prerequisites](https://tauri.app/start/prerequisites/)
-- At least one supported AI CLI installed and available on your machine
+- At least one supported AI CLI installed on your machine
 
-### Run The Desktop App
+### Run
 
 ```bash
 cd frontend/desktop
@@ -87,51 +127,55 @@ npm install
 npm run tauri dev
 ```
 
-### Build A Production Desktop App
+### Build
 
 ```bash
 cd frontend/desktop
 npm run tauri build
 ```
 
+## Tech Stack
+
+- **Desktop Shell**: [Tauri v2](https://tauri.app/) (lightweight, cross-platform)
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4
+- **Backend**: Rust + Tokio async runtime
+- **Database**: SQLite (Diesel ORM)
+- **Storage**: `~/.ea-code/` — settings, skills, sessions, artefacts, and run history
+
 ## Local Data
 
-EA Code stores its local state in `~/.ea-code/`, including:
-
-- settings
-- skills
-- project and session metadata
-- run summaries, events, and artefacts
-- prompt files used during orchestration
-
-The repository does not require a hosted backend to run the desktop product.
+EA Code stores everything in `~/.ea-code/`. No hosted backend, no telemetry, no cloud dependency. Your code and context stay on your machine.
 
 ## Repo Layout
 
-```text
+```
 frontend/
-`-- desktop/
-    |-- src/          # React UI
-    `-- src-tauri/    # Rust backend and orchestration engine
-
-docs/                 # Supporting project documentation
-scripts/              # Utility scripts
+  desktop/
+    src/            # React UI
+    src-tauri/      # Rust backend and orchestration engine
+  web/              # Marketing website
 ```
 
 ## Development Checks
 
-If you change desktop code, run the matching verification step before shipping it:
-
 ```bash
 # Desktop TypeScript
-cd frontend/desktop
-npx tsc --noEmit
+cd frontend/desktop && npx tsc --noEmit
 
 # Rust backend
-cd frontend/desktop/src-tauri
-cargo check
+cd frontend/desktop/src-tauri && cargo check
 ```
 
 ## Licence
 
 MIT
+
+---
+
+<div align="center">
+
+**Stop switching tabs. Start orchestrating.**
+
+[ea-code.atbas.xyz](https://ea-code.atbas.xyz)
+
+</div>
