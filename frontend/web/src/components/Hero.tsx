@@ -26,19 +26,20 @@ export function Hero() {
           {/* Copy */}
           <div className="fade-in-up text-center lg:text-left">
             <p className="mb-4 inline-block rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 font-mono text-xs font-medium text-accent">
-              {release ? `v${release.version}` : ""} — Now with 5 AI agents
+              {release ? `v${release.version}` : ""} — Free &amp; open-source
             </p>
             <h1 className="font-mono text-4xl leading-tight font-bold tracking-tight md:text-5xl lg:text-6xl">
-              One App.
+              Stop paying for
               <br />
-              <span className="text-accent">Every AI CLI.</span>
+              <span className="text-accent">5 AI subscriptions</span>
               <br />
-              Total Control.
+              and only using one.
             </h1>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted md:text-xl mx-auto lg:mx-0">
-              Orchestrate Claude, Codex, Gemini, Kimi, and OpenCode CLIs in a
-              self-improving dev loop. Track every stage, iteration, and artefact
-              from a single desktop app.
+              You already have Claude, Codex, Gemini, Kimi, and OpenCode.
+              EA Code wires them into one orchestrated pipeline — each agent
+              plays the role it&apos;s best at, so the result is better than
+              anything one model could produce alone.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
               <a
@@ -48,10 +49,10 @@ export function Hero() {
                 Download for Free
               </a>
               <a
-                href="#pipeline"
+                href="#why"
                 className="flex items-center gap-2 rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted transition-colors duration-200 hover:border-muted hover:text-white cursor-pointer"
               >
-                See How It Works
+                Why Multiple Agents?
                 <ArrowDown className="h-4 w-4" />
               </a>
             </div>

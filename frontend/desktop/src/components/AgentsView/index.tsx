@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useState, useEffect, useRef } from "react";
 import type { AppSettings, CliHealth } from "../../types";
 import { sanitiseAgentAssignmentsForEnabledModels } from "../../utils/agentSettings";
+import { InlineStageSlot } from "./InlineStageSlot";
 import { StageCard } from "./StageCard";
 
 /** Props for the AgentsView component. */
@@ -87,6 +88,16 @@ export function AgentsView({
   }
 
   function removePlannerSlot(slot: "planner2" | "planner3"): void {
+    if (slot === "planner2" && extraSlots.planner3) {
+      setExtraSlots((s) => ({ ...s, planner3: false }));
+      update({
+        planner2Agent: draftRef.current.planner3Agent,
+        planner2Model: draftRef.current.planner3Model,
+        planner3Agent: null,
+        planner3Model: null,
+      });
+      return;
+    }
     setExtraSlots((s) => ({ ...s, [slot]: false }));
     if (slot === "planner2") update({ planner2Agent: null, planner2Model: null });
     else update({ planner3Agent: null, planner3Model: null });
@@ -98,6 +109,16 @@ export function AgentsView({
   }
 
   function removeReviewerSlot(slot: "reviewer2" | "reviewer3"): void {
+    if (slot === "reviewer2" && extraSlots.reviewer3) {
+      setExtraSlots((s) => ({ ...s, reviewer3: false }));
+      update({
+        codeReviewer2Agent: draftRef.current.codeReviewer3Agent,
+        codeReviewer2Model: draftRef.current.codeReviewer3Model,
+        codeReviewer3Agent: null,
+        codeReviewer3Model: null,
+      });
+      return;
+    }
     setExtraSlots((s) => ({ ...s, [slot]: false }));
     if (slot === "reviewer2") update({ codeReviewer2Agent: null, codeReviewer2Model: null });
     else update({ codeReviewer3Agent: null, codeReviewer3Model: null });
@@ -139,29 +160,34 @@ export function AgentsView({
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
               <StageCard label="Planner 1" tag="(optional)"
                 backendKey="plannerAgent" modelKey="plannerModel"
-                optional={true} {...cardProps} />
+                optional={true} {...cardProps}>
+                {extraSlots.planner2 && (
+                  <InlineStageSlot
+                    label="Planner 2"
+                    backendKey="planner2Agent"
+                    modelKey="planner2Model"
+                    optional={true}
+                    onRemove={() => removePlannerSlot("planner2")}
+                    {...cardProps}
+                  />
+                )}
+                {extraSlots.planner3 && (
+                  <InlineStageSlot
+                    label="Planner 3"
+                    backendKey="planner3Agent"
+                    modelKey="planner3Model"
+                    optional={true}
+                    onRemove={() => removePlannerSlot("planner3")}
+                    {...cardProps}
+                  />
+                )}
+              </StageCard>
               {plannerCount > 0 && (
                 <StageCard label="Plan Auditor" tag={plannerCount > 1 ? "(auto — merges & audits)" : "(auto — audits plan)"}
                   backendKey="planAuditorAgent" modelKey="planAuditorModel"
                   optional={true} {...cardProps} />
               )}
             </div>
-            {extraSlots.planner2 && (
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                <StageCard label="Planner 2" tag="(optional)"
-                  backendKey="planner2Agent" modelKey="planner2Model"
-                  optional={true} {...cardProps}
-                  onRemove={!extraSlots.planner3 ? () => removePlannerSlot("planner2") : undefined} />
-              </div>
-            )}
-            {extraSlots.planner3 && (
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                <StageCard label="Planner 3" tag="(optional)"
-                  backendKey="planner3Agent" modelKey="planner3Model"
-                  optional={true} {...cardProps}
-                  onRemove={() => removePlannerSlot("planner3")} />
-              </div>
-            )}
             {plannerSlotsOpen < 2 && (
               <button onClick={addPlannerSlot}
                 className="self-start rounded border border-dashed border-[#2e2e48] px-3 py-1.5 text-xs text-[#6b6b82] hover:border-[#6366f1] hover:text-[#6366f1]">
@@ -183,27 +209,32 @@ export function AgentsView({
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
               <StageCard label="Reviewer 1" tag="(required)"
                 backendKey="codeReviewerAgent" modelKey="codeReviewerModel"
-                optional={false} {...cardProps} />
+                optional={false} {...cardProps}>
+                {extraSlots.reviewer2 && (
+                  <InlineStageSlot
+                    label="Reviewer 2"
+                    backendKey="codeReviewer2Agent"
+                    modelKey="codeReviewer2Model"
+                    optional={true}
+                    onRemove={() => removeReviewerSlot("reviewer2")}
+                    {...cardProps}
+                  />
+                )}
+                {extraSlots.reviewer3 && (
+                  <InlineStageSlot
+                    label="Reviewer 3"
+                    backendKey="codeReviewer3Agent"
+                    modelKey="codeReviewer3Model"
+                    optional={true}
+                    onRemove={() => removeReviewerSlot("reviewer3")}
+                    {...cardProps}
+                  />
+                )}
+              </StageCard>
               <StageCard label="Code Fixer" tag="(required)"
                 backendKey="codeFixerAgent" modelKey="codeFixerModel"
                 optional={false} {...cardProps} />
             </div>
-            {extraSlots.reviewer2 && (
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                <StageCard label="Reviewer 2" tag="(optional)"
-                  backendKey="codeReviewer2Agent" modelKey="codeReviewer2Model"
-                  optional={true} {...cardProps}
-                  onRemove={!extraSlots.reviewer3 ? () => removeReviewerSlot("reviewer2") : undefined} />
-              </div>
-            )}
-            {extraSlots.reviewer3 && (
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                <StageCard label="Reviewer 3" tag="(optional)"
-                  backendKey="codeReviewer3Agent" modelKey="codeReviewer3Model"
-                  optional={true} {...cardProps}
-                  onRemove={() => removeReviewerSlot("reviewer3")} />
-              </div>
-            )}
             {reviewerCount >= 2 && (
               <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                 <StageCard label="Review Merger" tag="(auto — combines reviews)"

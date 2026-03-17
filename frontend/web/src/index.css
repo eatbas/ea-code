@@ -82,6 +82,7 @@ body {
 .stagger > *:nth-child(7) { animation-delay: 0.47s; }
 .stagger > *:nth-child(8) { animation-delay: 0.54s; }
 .stagger > *:nth-child(9) { animation-delay: 0.61s; }
+.stagger > *:nth-child(10) { animation-delay: 0.68s; }
 
 /* Grid dot pattern background */
 .dot-grid {

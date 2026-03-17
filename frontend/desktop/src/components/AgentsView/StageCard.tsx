@@ -8,6 +8,7 @@ export interface StageCardProps {
   tag: string;
   backendKey: keyof AppSettings;
   modelKey: keyof AppSettings;
+  children?: ReactNode;
   optional: boolean;
   draft: AppSettings;
   cliHealth: CliHealth | null;
@@ -19,7 +20,7 @@ export interface StageCardProps {
 /** A single pipeline stage agent card with optional remove button. */
 export function StageCard({
   label, tag, backendKey, modelKey, optional,
-  draft, cliHealth, cliHealthChecking, onUpdate, onRemove,
+  children, draft, cliHealth, cliHealthChecking, onUpdate, onRemove,
 }: StageCardProps): ReactNode {
   const currentBackend = draft[backendKey] as AgentBackend | null;
   const currentModel = draft[modelKey] as string | null;
@@ -59,6 +60,7 @@ export function StageCard({
           } as Partial<AppSettings>);
         }}
       />
+      {children}
     </div>
   );
 }

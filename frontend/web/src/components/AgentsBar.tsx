@@ -11,7 +11,7 @@ export function AgentsBar() {
     <section id="agents" className="border-y border-border bg-surface-elevated/50 py-10">
       <div className="mx-auto max-w-6xl px-6">
         <p className="mb-6 text-center font-mono text-xs font-medium uppercase tracking-widest text-muted">
-          Mix &amp; match the CLIs already on your machine
+          You&apos;re already paying for them — make them work together
         </p>
         <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
           {AGENTS.map((a) => (

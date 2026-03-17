@@ -36,38 +36,38 @@ const FEATURES: FeatureCardProps[] = [
     icon: <Layers className="h-5 w-5" />,
     title: "Mix & Match Agents",
     description:
-      "Assign Claude for planning, Codex for code generation, Gemini for review — use each model where it shines.",
+      "Assign Claude for planning, Codex for code generation, Gemini for review — every subscription earns its keep.",
     wide: true,
   },
   {
     icon: <RefreshCcw className="h-5 w-5" />,
     title: "Self-Improving Loop",
     description:
-      "The Judge stage decides if the task is done. If not, the pipeline loops back and iterates automatically.",
+      "The Judge decides if the task is done. If not, the pipeline loops back with full context and iterates automatically.",
   },
   {
     icon: <Activity className="h-5 w-5" />,
     title: "Real-Time Tracking",
     description:
-      "Watch every stage execute live — diffs, plans, reviews, and verdicts appear as they happen.",
+      "Watch every stage execute live — diffs, plans, reviews, and verdicts stream in as they happen.",
   },
   {
     icon: <Puzzle className="h-5 w-5" />,
     title: "Skills & MCP Servers",
     description:
-      "Create custom skills and connect MCP servers for domain-specific context, external tools, and knowledge bases.",
+      "Create reusable skills and connect MCP servers for domain-specific context, external tools, and knowledge bases.",
   },
   {
     icon: <History className="h-5 w-5" />,
     title: "Session History",
     description:
-      "Every run, iteration, artefact, and question is persisted to a local SQLite database for full traceability.",
+      "Every run, iteration, artefact, and question is persisted locally for full traceability. No cloud required.",
   },
   {
     icon: <ShieldCheck className="h-5 w-5" />,
     title: "Plan Approval Gates",
     description:
-      "Optionally pause before execution so you can review, revise, or reject the plan — human-in-the-loop when you need it.",
+      "Pause before execution to review, revise, or reject the plan — human-in-the-loop when you need it.",
   },
 ];
 
@@ -80,12 +80,12 @@ export function Features() {
             Features
           </p>
           <h2 className="font-mono text-3xl font-bold tracking-tight md:text-4xl">
-            Everything You Need in One Place
+            One Control Room for Every Agent
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-muted leading-relaxed">
-            Stop switching between terminals. EA Code gives you a unified
-            interface to configure, execute, and monitor AI-driven development
-            workflows.
+            Stop switching between terminals and re-explaining context.
+            EA Code gives you a single interface to configure, run, and
+            monitor multi-agent development workflows.
           </p>
         </div>
 

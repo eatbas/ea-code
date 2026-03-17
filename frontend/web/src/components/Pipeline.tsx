@@ -5,6 +5,7 @@ import {
   ShieldCheck,
   Code2,
   MessageSquare,
+  GitMerge,
   Wrench,
   Gavel,
   FileText,
@@ -16,9 +17,10 @@ interface StageProps {
   label: string;
   description: string;
   index: number;
+  highlight?: boolean;
 }
 
-function Stage({ icon, label, description, index }: StageProps) {
+function Stage({ icon, label, description, index, highlight }: StageProps) {
   return (
     <div className="group relative flex items-start gap-4">
       {/* Connector line */}
@@ -27,13 +29,20 @@ function Stage({ icon, label, description, index }: StageProps) {
       )}
 
       {/* Icon circle */}
-      <span className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface-elevated text-accent transition-colors duration-200 group-hover:border-accent/50 group-hover:bg-accent/10">
+      <span className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors duration-200 group-hover:border-accent/50 group-hover:bg-accent/10 ${highlight ? "border-accent/40 bg-accent/10 text-accent" : "border-border bg-surface-elevated text-accent"}`}>
         {icon}
       </span>
 
       {/* Text */}
       <div className="pb-8">
-        <h4 className="font-mono text-sm font-semibold">{label}</h4>
+        <div className="flex items-center gap-2">
+          <h4 className="font-mono text-sm font-semibold">{label}</h4>
+          {highlight && (
+            <span className="rounded-full bg-accent/15 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-accent">
+              Parallel
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-sm leading-relaxed text-muted">{description}</p>
       </div>
     </div>
@@ -41,15 +50,16 @@ function Stage({ icon, label, description, index }: StageProps) {
 }
 
 const STAGES = [
-  { icon: <Sparkles className="h-4 w-4" />, label: "Prompt Enhance", description: "Refines your natural-language prompt into a precise, context-aware instruction." },
-  { icon: <BookOpen className="h-4 w-4" />, label: "Skill Select", description: "Matches your request against a curated skills catalogue for domain-specific guidance." },
-  { icon: <ClipboardList className="h-4 w-4" />, label: "Plan", description: "Generates a step-by-step execution plan with file targets and acceptance criteria." },
-  { icon: <ShieldCheck className="h-4 w-4" />, label: "Plan Audit", description: "A second agent reviews the plan for gaps, risks, and edge cases." },
-  { icon: <Code2 className="h-4 w-4" />, label: "Generate", description: "Writes or modifies code according to the approved plan." },
-  { icon: <MessageSquare className="h-4 w-4" />, label: "Review", description: "Automated code review catches bugs, style issues, and missed requirements." },
-  { icon: <Wrench className="h-4 w-4" />, label: "Fix", description: "Applies review suggestions and resolves any flagged issues." },
-  { icon: <Gavel className="h-4 w-4" />, label: "Judge", description: "Final verdict — COMPLETE or loop back for another iteration." },
-  { icon: <FileText className="h-4 w-4" />, label: "Executive Summary", description: "Generates a concise report of everything that was done and why." },
+  { icon: <Sparkles className="h-4 w-4" />, label: "Prompt Enhance", description: "Sharpens your natural-language prompt into a precise, context-aware instruction." },
+  { icon: <BookOpen className="h-4 w-4" />, label: "Skill Select", description: "Pulls relevant guidance from your skills catalogue so agents have domain context." },
+  { icon: <ClipboardList className="h-4 w-4" />, label: "Plan x3", description: "Up to 3 agents draft implementation plans in parallel — multiple perspectives, not one guess.", highlight: true },
+  { icon: <ShieldCheck className="h-4 w-4" />, label: "Plan Audit", description: "A different agent pressure-tests the plan for gaps, risks, and edge cases before any code is written." },
+  { icon: <Code2 className="h-4 w-4" />, label: "Code", description: "Writes or modifies code according to the approved plan." },
+  { icon: <MessageSquare className="h-4 w-4" />, label: "Review x3", description: "Up to 3 agents review the code in parallel — no model marks its own homework.", highlight: true },
+  { icon: <GitMerge className="h-4 w-4" />, label: "Review Merge", description: "Combines independent reviewer findings into a single, unified set of feedback." },
+  { icon: <Wrench className="h-4 w-4" />, label: "Fix", description: "Applies all review feedback and resolves every flagged issue." },
+  { icon: <Gavel className="h-4 w-4" />, label: "Judge", description: "Final verdict — COMPLETE and ship, or loop back with full context for another iteration." },
+  { icon: <FileText className="h-4 w-4" />, label: "Executive Summary", description: "Records exactly what happened, what changed, and why." },
 ];
 
 export function Pipeline() {
@@ -63,15 +73,18 @@ export function Pipeline() {
               The Pipeline
             </p>
             <h2 className="font-mono text-3xl font-bold tracking-tight md:text-4xl">
-              A Self-Improving
+              10 Stages.
               <br />
-              Dev Loop
+              Multiple Agents.
+              <br />
+              Self-Improving.
             </h2>
             <p className="mt-4 max-w-md text-muted leading-relaxed">
-              Each run flows through up to 9 stages. If the Judge says
+              Each run flows through up to 10 stages. Planning and review
+              happen in parallel with multiple agents. If the Judge says
               &ldquo;not done,&rdquo; EA Code loops back automatically —
-              refining the prompt, regenerating code, and reviewing again until
-              your task is truly complete.
+              refining, regenerating, and reviewing until the job is truly
+              complete.
             </p>
 
             {/* Loop badge */}

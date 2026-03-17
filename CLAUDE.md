@@ -1,180 +1,160 @@
-# CLAUDE.md - EA Code Project Instructions
+# CLAUDE.md - EA Code Agent Instructions
 
-## Project Overview
+This guidance applies to any AI agent editing this repository.
 
-Tauri v2 desktop application that orchestrates Claude, Codex, and Gemini CLIs in a self-improving development loop, plus a separate marketing website.
+## Project Snapshot
 
-- **Desktop App**: React 19 + TypeScript 5.8 + Tailwind CSS v4 (Tauri v2 frontend)
-- **Website**: React 19 + TypeScript 5.8 + Tailwind CSS v4 (Vite SPA)
-- **Backend**: Rust (Tauri v2) + SQLite (Diesel ORM 2.2)
-- **Storage**: `~/.ea-code/` (JSONL-based persistence)
+- The primary product is the desktop app in `frontend/desktop/`.
+- Desktop stack: Tauri v2, React 19, TypeScript 5.8, Tailwind CSS v4, Rust backend.
+- The repo also contains the marketing site in `frontend/web/` and release scripts in `scripts/`.
+- Current persistence is file-based under `~/.ea-code/`. Older SQLite and `~/.config/ea-code/` references are legacy migration context, not the live architecture.
 
----
+## Working Scope
 
-## Scope Rules (Desktop First)
+- Default to `frontend/desktop/` unless the user explicitly asks for website work.
+- Inspect `frontend/web/` only when the request says `website`, `web`, or points to that path.
+- Ignore generated and dependency output unless the task requires it:
+  - `frontend/desktop/node_modules/`
+  - `frontend/desktop/src-tauri/target/`
+  - `frontend/desktop/src-tauri/gen/`
 
-- Default to `frontend/desktop/` for investigation and edits.
-- Do **not** inspect `frontend/web/` unless the user explicitly says `website`, `web`, or asks for work under that path.
-- If the request is not explicit, assume desktop scope.
+## Verify Before Delivering
 
----
-
-## Mandatory Build Verification
-
-### Rust Backend
-
-After **any** change to files under `frontend/desktop/src-tauri/`, run:
-
-```sh
-cd frontend/desktop/src-tauri && cargo check
-```
-
-Do **not** deliver code that fails `cargo check`. If the check fails, fix every error before presenting the result.
-
-### Desktop TypeScript Frontend
-
-After **any** change to files under `frontend/desktop/src/`, run:
+After touching desktop TypeScript or React:
 
 ```sh
 cd frontend/desktop && npx tsc --noEmit
 ```
 
-Do **not** deliver code that fails `tsc --noEmit`. If the check fails, fix every error before presenting the result.
+After touching desktop Rust or Tauri files:
 
-### Website TypeScript Frontend
+```sh
+cd frontend/desktop/src-tauri && cargo check
+```
 
-After **any** change to files under `frontend/web/src/`, run:
+After touching website TypeScript or React:
 
 ```sh
 cd frontend/web && npx tsc --noEmit
 ```
 
-Do **not** deliver code that fails `tsc --noEmit`. If the check fails, fix every error before presenting the result.
+- If you only change docs or Markdown, no build check is required.
+- Do not present code that fails the relevant verification step.
 
----
+## File Size and Structure
 
-## File Size Limit (300 Lines)
+- Keep new or substantially edited source files under 300 lines where practical.
+- If a touched file is already over the limit, split it when the edit is non-trivial.
+- Current over-limit source files are technical debt, not a pattern to copy.
+- Prefer directory modules when splitting:
+  - Rust: `feature/mod.rs` plus focused sibling modules
+  - React: `Feature/index.tsx` plus subcomponents or helpers
 
-No single source file should exceed **300 lines** of code (excluding blank lines and comments as a rough guide - use total line count in practice).
+## Reuse Before Adding
 
-When a file approaches or exceeds this limit:
+- Search for an existing pattern before creating a new file or abstraction.
+- Shared frontend UI belongs in `frontend/desktop/src/components/shared/`.
+- Shared frontend state logic belongs in `frontend/desktop/src/hooks/`.
+- Frontend types are split by domain in `frontend/desktop/src/types/` and re-exported from `index.ts`.
+- Rust agent execution helpers live in `frontend/desktop/src-tauri/src/agents/base/`.
+- Rust models are split by domain in `frontend/desktop/src-tauri/src/models/`.
+- File persistence helpers live in `frontend/desktop/src-tauri/src/storage/`.
 
-1. **Identify logical boundaries** - group related functions, types, or components.
-2. **Extract into a subfolder module** - e.g., `orchestrator.rs` -> `orchestrator/mod.rs` + `orchestrator/pipeline.rs` + `orchestrator/stages.rs`.
-3. **Re-export** the public API from `mod.rs` so callers are unaffected.
-4. **Frontend equivalent** - split large components into a folder: `Component/index.tsx` + `Component/SubPart.tsx`.
+## Current Architecture
 
----
+### Desktop Frontend
 
-## Code Reuse and DRY
+- Entry points: `frontend/desktop/src/main.tsx` and `frontend/desktop/src/App.tsx`
+- Main UI lives in `frontend/desktop/src/components/`
+- Feature folders already in use include `AgentsView/`, `CliSetupView/`, `McpView/`, and `shared/`
 
-- **Components**: Extract reusable UI elements into `frontend/desktop/src/components/shared/` or co-located files. Never duplicate JSX across views.
-- **Hooks**: Shared stateful logic belongs in `frontend/desktop/src/hooks/`. Prefer composition of small hooks over monolithic ones.
-- **Rust**: Common utilities go in dedicated modules. Agent adapters share the `AgentRunner` trait from `frontend/desktop/src-tauri/src/agents/base.rs`.
-- **Types**: Frontend types live in `frontend/desktop/src/types/` (split by domain, re-exported from `index.ts`). Rust models live in `frontend/desktop/src-tauri/src/models/` (split by domain, re-exported from `mod.rs`). Keep them in sync.
+### Desktop Backend
 
----
+- Tauri commands: `frontend/desktop/src-tauri/src/commands/`
+- Agent runners: `frontend/desktop/src-tauri/src/agents/`
+- Orchestrator pipeline: `frontend/desktop/src-tauri/src/orchestrator/`
+- File storage: `frontend/desktop/src-tauri/src/storage/`
+- Shared event payloads: `frontend/desktop/src-tauri/src/events.rs`
+- Shared Rust models: `frontend/desktop/src-tauri/src/models/`
+
+### Supported Agent Backends
+
+- `claude`
+- `codex`
+- `gemini`
+- `kimi`
+- `opencode`
+
+### Storage Layout
+
+- Base directory: `~/.ea-code/`
+- Index file: `index.json`
+- Project list: `projects.json`
+- Sessions: `projects/<project-id>/sessions/<session-id>/`
+- Runs: stored inside each session directory with `summary.json`, `events.jsonl`, git metadata, and artefacts
+- Skills: `skills/`
+- Prompt temp files: `prompts/`
+
+Use the existing migration and recovery helpers under `storage/` rather than inventing a second persistence path.
+
+## Pipeline and IPC Conventions
+
+- Frontend-to-backend calls use `invoke(...)` with camelCase argument names.
+- Tauri event names are colon-delimited and must match exactly in Rust and TypeScript:
+  - `pipeline:started`
+  - `pipeline:stage`
+  - `pipeline:log`
+  - `pipeline:artifact`
+  - `pipeline:question`
+  - `pipeline:completed`
+  - `pipeline:error`
+- Rust enums that cross IPC serialise as `snake_case`; matching TypeScript string literal unions must stay in sync.
+- Struct payloads exposed to the frontend should use `#[serde(rename_all = "camelCase")]`.
+- Timestamps are RFC 3339 strings produced via `storage::now_rfc3339()`.
+- Cancellation and pause flow use `Arc<AtomicBool>` flags stored in `commands::AppState`; preserve that pattern.
 
 ## Coding Standards
 
 ### General
 
-- **British English** in comments, documentation, and user-facing text (e.g., "optimise", "behaviour", "colour").
-- **Explicit types** - no `any` in TypeScript, no unnecessary `unwrap()` in Rust.
-- **No placeholder comments** - never write `// ... rest of code` or `// TODO: implement`.
-- **Idiomatic code** - use language-native patterns, but avoid unclear one-liners that hinder debugging.
+- Match surrounding code before introducing a new pattern.
+- Use British English in comments, docs, and user-facing text.
+- Do not leave placeholder code or TODO comments.
 
-### TypeScript / React
+### TypeScript and React
 
-- Strict mode enabled (`strict: true` in tsconfig).
-- Functional components only. Use hooks for state and side effects.
-- Props must have explicit interface definitions - no inline anonymous types.
-- Prefer named exports over default exports.
-- Use `const` by default; `let` only when reassignment is required.
+- `strict`, `noUnusedLocals`, and `noUnusedParameters` are enabled.
+- Use functional components and explicit prop interfaces.
+- Prefer named exports.
+- Use `const` by default.
+- Tailwind CSS v4 utility classes are the default styling approach.
+- Avoid inline `style={}` unless there is a concrete need.
 
 ### Rust
 
-- `#[serde(rename_all = "camelCase")]` on all structs exposed to the frontend.
-- Tauri command parameter names must match camelCase in frontend `invoke()` calls.
-- Handle errors with `Result<T, String>` for Tauri commands (or a proper error enum).
-- Use `Arc<AtomicBool>` pattern for cancellation.
+- Prefer `Result<T, String>` for Tauri commands.
+- Avoid `unwrap()` on fallible runtime paths.
+- Keep serde naming aligned with the frontend contract.
+- Use the existing modular orchestrator layout rather than rebuilding large single-file flows.
 
-### CSS / Styling
+## Do Not Touch Casually
 
-- Tailwind CSS v4 utility classes.
-- No inline `style={}` unless absolutely necessary.
+- Generated files under `frontend/desktop/src-tauri/gen/`
+- Build output under `frontend/desktop/src-tauri/target/`
+- Lockfiles unless the change genuinely requires them
+- `.claude/skills/` unless the task is specifically about repo-local skills
 
----
+## Quick Reference
 
-## Architecture Quick Reference
+- Desktop frontend: `frontend/desktop/src/`
+- Desktop backend: `frontend/desktop/src-tauri/src/`
+- Website: `frontend/web/src/`
+- Release scripts: `scripts/release.ps1`, `scripts/release.sh`
+- Root docs: `README.md`, `AGENTS.md`, `CLAUDE.md`
 
-```text
-frontend/
-|- desktop/                      # Tauri desktop app
-|  |- src/                       # React frontend (TS)
-|  |  |- components/             # UI components
-|  |  |  `- shared/              # Reusable UI pieces
-|  |  |- hooks/                  # Custom React hooks
-|  |  |- types/                  # Shared type definitions
-|  |  `- utils/                  # Pure helper functions
-|  `- src-tauri/                 # Rust backend
-|     |- src/
-|     |  |- agents/              # CLI adapters
-|     |  |- bin/mcp_server/      # MCP server binary
-|     |  |- commands/            # Tauri IPC commands
-|     |  |- db/                  # Diesel ORM layer
-|     |  |- models/              # Shared Rust types
-|     |  |- orchestrator/        # Pipeline engine
-|     |  `- schema.rs            # Diesel schema (auto-generated)
-|     `- migrations/             # Diesel SQL migrations
-`- web/                          # Marketing website (only inspect when requested)
-   `- src/
-```
+## What Not To Do
 
----
-
-## Type Synchronisation (Critical)
-
-Rust enums and TypeScript types **must stay in sync** when adding or renaming pipeline stages, agent types, or any shared enum.
-
-- Rust: `#[serde(rename_all = "snake_case")]` on enums → `PipelineStage::PromptEnhance` serialises as `"prompt_enhance"`.
-- TypeScript: Matching string literal types → `"prompt_enhance"`.
-- A mismatch silently breaks IPC at runtime. Always update both sides together.
-
-**Two model layers in Rust:**
-- `src/db/models/` — Diesel derives (`Queryable`, `Selectable`, `Insertable`). These map directly to DB rows.
-- `src/models/` — Serde derives (`Serialize`, `Deserialize`). These are the Tauri command payloads sent to the frontend.
-
----
-
-## Timestamp & Event Conventions
-
-- **Timestamps** are stored as RFC 3339 strings (e.g., `"2026-03-11T14:30:00Z"`), not integers. Use the `now_rfc3339()` helper.
-- **Event names** must be identical snake_case strings in both Rust (`app_handle.emit("pipeline_progress", ...)`) and TypeScript (`listen("pipeline_progress", ...)`).
-- **Migrations** are embedded in the binary via `embed_migrations!()` — no runtime SQL files needed.
-
----
-
-## Development Environment
-
-- Vite dev server: port **1420** (fixed in `tauri.conf.json`), HMR on port **1421**.
-- No `.env` loading — storage paths are hardcoded to `~/.ea-code/`.
-- Prompt temp files written to `~/.ea-code/prompts/` (Windows Git Bash workaround for multi-line args).
-
----
-
-## Version Control
-
-- **No commits** from agents unless the user explicitly requests one.
-- Verify that generated files (secrets, configs, data) are excluded via `.gitignore`.
-
----
-
-## Dependencies
-
-When adding or updating dependencies:
-
-- **Rust**: Add to `frontend/desktop/src-tauri/Cargo.toml`, then run `cargo check`.
-- **Desktop JS**: `cd frontend/desktop && npm install`, then run `npx tsc --noEmit`.
-- **Web JS**: `cd frontend/web && npm install`, then run `npx tsc --noEmit`.
-- Prefer well-maintained, widely-used crates/packages. Justify new dependencies.
+- Do not commit unless the user explicitly asks.
+- Do not add dependencies without justification.
+- Do not hand-edit generated output when a source file should be changed instead.
+- Do not treat old SQLite or `~/.config/ea-code/` references as the current architecture.

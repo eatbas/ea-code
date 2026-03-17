@@ -30,11 +30,13 @@ export function CTA() {
       <div className="mx-auto max-w-3xl px-6 text-center">
         <div className="fade-in-up rounded-3xl border border-border bg-surface-elevated p-10 md:p-16 shadow-2xl shadow-black/30">
           <h2 className="font-mono text-3xl font-bold tracking-tight md:text-4xl">
-            Ready to Orchestrate?
+            Stop Switching Tabs.
+            <br />
+            <span className="text-accent">Start Orchestrating.</span>
           </h2>
           <p className="mx-auto mt-4 max-w-md text-muted leading-relaxed">
-            Download EA Code and turn the AI CLIs on your machine into a
-            coordinated, self-improving development team.
+            Download EA Code and turn the AI CLIs you already pay for
+            into a coordinated, self-improving development team.
           </p>
           {version && (
             <p className="mt-2 font-mono text-xs text-accent">{version}</p>

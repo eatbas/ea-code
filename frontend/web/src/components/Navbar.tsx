@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 
 const NAV_LINKS = [
-  { label: "Agents", href: "#agents" },
+  { label: "Why", href: "#why" },
   { label: "Pipeline", href: "#pipeline" },
   { label: "Features", href: "#features" },
 ];

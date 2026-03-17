@@ -9,7 +9,7 @@ export function Footer() {
         </span>
         <div className="flex items-center gap-6">
           <a
-            href="https://github.com/ArcadeLabsInc/ea-code"
+            href="https://github.com/eatbas/ea-code"
             className="text-sm text-muted transition-colors duration-200 hover:text-white cursor-pointer"
           >
             GitHub
