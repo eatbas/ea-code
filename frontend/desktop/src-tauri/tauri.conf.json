@@ -7,7 +7,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMyN0NEQzlCRDY5MkM0NkYKUldSdnhKTFdtOXg4TXVvblRLSFpqTEpFM0ZUaXhjcnkxbENlcTB6MmpmRzhLTGpmRHhNYkU5L3MK",
       "endpoints": [
-        "https://ea-code.atbas.xyz/api/v1/updates/latest.json"
+        "https://github.com/eatbas/ea-code/releases/latest/download/latest.json"
       ]
     }
   },
