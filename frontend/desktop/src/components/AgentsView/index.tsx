@@ -231,17 +231,17 @@ export function AgentsView({
                   />
                 )}
               </StageCard>
+              {reviewerCount >= 2 && (
+                <StageCard label="Review Merger" tag="(auto — combines reviews)"
+                  backendKey="reviewMergerAgent" modelKey="reviewMergerModel"
+                  optional={true} {...cardProps} />
+              )}
+            </div>
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
               <StageCard label="Code Fixer" tag="(required)"
                 backendKey="codeFixerAgent" modelKey="codeFixerModel"
                 optional={false} {...cardProps} />
             </div>
-            {reviewerCount >= 2 && (
-              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                <StageCard label="Review Merger" tag="(auto — combines reviews)"
-                  backendKey="reviewMergerAgent" modelKey="reviewMergerModel"
-                  optional={true} {...cardProps} />
-              </div>
-            )}
             {reviewerSlotsOpen < 2 && (
               <button onClick={addReviewerSlot}
                 className="self-start rounded border border-dashed border-[#2e2e48] px-3 py-1.5 text-xs text-[#6b6b82] hover:border-[#6366f1] hover:text-[#6366f1]">
