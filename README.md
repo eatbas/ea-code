@@ -139,8 +139,7 @@ npm run tauri build
 - **Desktop Shell**: [Tauri v2](https://tauri.app/) (lightweight, cross-platform)
 - **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4
 - **Backend**: Rust + Tokio async runtime
-- **Database**: SQLite (Diesel ORM)
-- **Storage**: `~/.ea-code/` — settings, skills, sessions, artefacts, and run history
+- **Storage**: File-based (JSON/JSONL) under `~/.ea-code/` — no database required
 
 ## Local Data
 
