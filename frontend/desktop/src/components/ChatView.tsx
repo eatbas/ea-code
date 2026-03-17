@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { PipelineRun, RunOptions, CliHealth, AppSettings } from "../types";
+import type { PipelineRun, PipelineStage, RunOptions, CliHealth, AppSettings } from "../types";
 import { isActive, isTerminal, statusInfo, statusToneClasses } from "../utils/statusHelpers";
 import { resolveAuditedPlanText, resolvePlanText } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
@@ -10,6 +10,7 @@ import { ResultCard, buildStageRows, computeDuration } from "./shared/ResultCard
 import { PromptReceivedCard } from "./shared/PromptReceivedCard";
 import { StageInputOutputCard } from "./shared/StageInputOutputCard";
 import { RichStageCard } from "./shared/RichStageCard";
+import { TabbedPlanCard, isPlanStage } from "./shared/TabbedPlanCard";
 import { PromptInputBar } from "./shared/PromptInputBar";
 import { RecentTerminalPanel } from "./shared/RecentTerminalPanel";
 import { WorkspaceFooter } from "./shared/WorkspaceFooter";
@@ -25,6 +26,9 @@ const EXCLUDED_ARTIFACT_KINDS = new Set([
   "session_memory",
   "enhanced_prompt",
   "plan",
+  "plan_1",
+  "plan_2",
+  "plan_3",
   "plan_audit",
   "plan_final",
 ]);
@@ -69,9 +73,19 @@ export function ChatView({
   const planArtifact = artifacts["plan"];
   const planAuditArtifact = artifacts["plan_final"] ?? artifacts["plan_audit"];
   const planInputForAudit = resolvePlanText(planArtifact);
-  const latestCompletedPlanIndex = visibleStages.reduce((latest, stage, idx) => (stage.stage === "plan" && stage.status === "completed" ? idx : latest), -1);
   const latestCompletedPlanAuditIndex = visibleStages.reduce((latest, stage, idx) => (stage.stage === "plan_audit" && stage.status === "completed" ? idx : latest), -1);
   const otherArtifacts = Object.entries(artifacts).filter(([kind]) => !EXCLUDED_ARTIFACT_KINDS.has(kind) && !kind.startsWith("diff_"));
+
+  // Group all plan stages (plan, plan_2, plan_3) for the tabbed card.
+  const planGroupStages = visibleStages.filter((s) => isPlanStage(s.stage));
+  // Plan artifacts from parallel runs (plan_1, plan_2, plan_3) or single (plan).
+  const planArtifactMap: Record<string, string> = {};
+  if (artifacts["plan"]) planArtifactMap["plan"] = artifacts["plan"];
+  if (artifacts["plan_1"]) planArtifactMap["plan_1"] = artifacts["plan_1"];
+  if (artifacts["plan_2"]) planArtifactMap["plan_2"] = artifacts["plan_2"];
+  if (artifacts["plan_3"]) planArtifactMap["plan_3"] = artifacts["plan_3"];
+  // Track whether the plan group card has been rendered (to avoid duplication).
+  let planGroupRendered = false;
   const headerTitle = run.prompt.length > 60 ? `${run.prompt.slice(0, 60)}...` : run.prompt;
   const isPaused = run.status === "paused";
   const iterationText = `Iteration ${Math.max(1, run.currentIteration)}/${Math.max(1, run.maxIterations)}`;
@@ -104,48 +118,73 @@ export function ChatView({
             </div>
           </div>
           <PromptReceivedCard prompt={run.prompt} />
-          {visibleStages.map((stage, idx) => (
-            <div key={`${stage.stage}-${idx}`} className="flex flex-col gap-2">
-              {stage.stage === "judge" && stage.status === "completed" ? (
-                <StageInputOutputCard
-                  title="Judge"
-                  inputSections={[
-                    { label: "Original Prompt", content: run.prompt },
-                    { label: "Enhanced Prompt", content: enhancedPromptInput },
-                    { label: "Plan", content: resolveAuditedPlanText(planAuditArtifact, planArtifact) },
-                    { label: "Review Findings", content: [...visibleStages.slice(0, idx)].reverse().find((entry) => entry.stage === "code_reviewer")?.output ?? artifacts["review"] ?? "" },
-                    { label: "Fixer Output", content: [...visibleStages.slice(0, idx)].reverse().find((entry) => entry.stage === "code_fixer")?.output ?? "" },
-                  ]}
-                  outputLabel="Decision"
-                  outputContent={artifacts["judge"] ?? stage.output ?? "No judge output generated."}
-                  modelLabel={stageModelLabel("judge", settings)}
-                  durationMs={stage.durationMs}
-                  badgeClassName="bg-rose-400/25"
-                  outputClassName="border border-rose-400/20 bg-rose-400/5 text-[#e4e4ed]"
-                />
-              ) : (
-                <RichStageCard
-                  stage={stage}
-                  runPrompt={run.prompt}
-                  enhancedPromptInput={enhancedPromptInput}
-                  promptEnhanceOutput={(enhancedPrompt ?? stage.output).trim()}
-                  planOutput={resolvePlanText(planArtifact, stage.output)}
-                  planInputForAudit={planInputForAudit}
-                  auditedPlanOutput={resolveAuditedPlanText(planAuditArtifact, stage.output)}
-                  reviewOutput={artifacts["review"] ?? stage.output ?? ""}
-                  settings={settings}
-                  startedAt={
-                    run.status === "running" && run.currentStage === stage.stage && stage.status === "running"
-                      ? run.stageStartedAt
-                      : undefined
-                  }
-                  showPlanCard={idx === latestCompletedPlanIndex}
-                  showPlanAuditCard={idx === latestCompletedPlanAuditIndex}
-                />
-              )}
-            </div>
-          ))}
-          {isActive(run.status) && run.currentStage && run.currentStage !== "plan_audit" && (
+          {visibleStages.map((stage, idx) => {
+            // Group plan/plan_2/plan_3 into a single tabbed card.
+            if (isPlanStage(stage.stage)) {
+              if (planGroupRendered) return null;
+              planGroupRendered = true;
+              return (
+                <div key="plan-group" className="flex flex-col gap-2">
+                  <TabbedPlanCard
+                    planStages={planGroupStages}
+                    planArtifacts={planArtifactMap}
+                    runPrompt={run.prompt}
+                    enhancedPromptInput={enhancedPromptInput}
+                    settings={settings}
+                    startedAt={
+                      run.status === "running" && isPlanStage(run.currentStage as PipelineStage)
+                        ? run.stageStartedAt
+                        : undefined
+                    }
+                    stageLogs={stageLogs}
+                  />
+                </div>
+              );
+            }
+
+            return (
+              <div key={`${stage.stage}-${idx}`} className="flex flex-col gap-2">
+                {stage.stage === "judge" && stage.status === "completed" ? (
+                  <StageInputOutputCard
+                    title="Judge"
+                    inputSections={[
+                      { label: "Original Prompt", content: run.prompt },
+                      { label: "Enhanced Prompt", content: enhancedPromptInput },
+                      { label: "Plan", content: resolveAuditedPlanText(planAuditArtifact, planArtifact) },
+                      { label: "Review Findings", content: [...visibleStages.slice(0, idx)].reverse().find((entry) => entry.stage === "code_reviewer")?.output ?? artifacts["review"] ?? "" },
+                      { label: "Fixer Output", content: [...visibleStages.slice(0, idx)].reverse().find((entry) => entry.stage === "code_fixer")?.output ?? "" },
+                    ]}
+                    outputLabel="Decision"
+                    outputContent={artifacts["judge"] ?? stage.output ?? "No judge output generated."}
+                    modelLabel={stageModelLabel("judge", settings)}
+                    durationMs={stage.durationMs}
+                    badgeClassName="bg-rose-400/25"
+                    outputClassName="border border-rose-400/20 bg-rose-400/5 text-[#e4e4ed]"
+                  />
+                ) : (
+                  <RichStageCard
+                    stage={stage}
+                    runPrompt={run.prompt}
+                    enhancedPromptInput={enhancedPromptInput}
+                    promptEnhanceOutput={(enhancedPrompt ?? stage.output).trim()}
+                    planOutput={resolvePlanText(planArtifact, stage.output)}
+                    planInputForAudit={planInputForAudit}
+                    auditedPlanOutput={resolveAuditedPlanText(planAuditArtifact, stage.output)}
+                    reviewOutput={artifacts["review"] ?? stage.output ?? ""}
+                    settings={settings}
+                    startedAt={
+                      run.status === "running" && run.currentStage === stage.stage && stage.status === "running"
+                        ? run.stageStartedAt
+                        : undefined
+                    }
+                    showPlanCard={false}
+                    showPlanAuditCard={idx === latestCompletedPlanAuditIndex}
+                  />
+                )}
+              </div>
+            );
+          })}
+          {isActive(run.status) && run.currentStage && run.currentStage !== "plan_audit" && !isPlanStage(run.currentStage) && (
             <ThinkingIndicator stage={run.currentStage} startedAt={run.stageStartedAt} />
           )}
           {isTerminal(run.status) && (

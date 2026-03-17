@@ -9,6 +9,7 @@ import { PromptReceivedCard } from "./shared/PromptReceivedCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
 import { StageCard } from "./shared/StageCard";
 import { RichStageCard } from "./shared/RichStageCard";
+import { TabbedPlanCard, isPlanStage } from "./shared/TabbedPlanCard";
 import { ResultCard, buildStageRowsFromEvents, computeDuration } from "./shared/ResultCard";
 
 interface RunCardProps {
@@ -152,29 +153,13 @@ export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): Reac
         <>
           {/* Stage results from events */}
           {stageResults.length > 0 && (
-            <div className="flex flex-col gap-2">
-              {stageResults.map((stageResult, idx) => (
-                <RichStageCard
-                  key={`${stageResult.stage}-${idx}`}
-                  stage={stageResult}
-                  runPrompt={run.prompt}
-                  enhancedPromptInput={artifacts["enhanced_prompt"] ?? run.prompt}
-                  promptEnhanceOutput={artifacts["enhanced_prompt"] ?? ""}
-                  planOutput={artifacts["plan"] ?? ""}
-                  planInputForAudit={artifacts["plan"] ?? ""}
-                  auditedPlanOutput={artifacts["plan_audit"] ?? ""}
-                  reviewOutput={artifacts["review"] ?? ""}
-                  settings={settings}
-                  startedAt={
-                    isActiveStatus && run.currentStage === stageResult.stage
-                      ? run.startedAt
-                        ? parseUtcTimestamp(run.startedAt).getTime()
-                        : undefined
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
+            <RunStageList
+              stageResults={stageResults}
+              run={run}
+              artifacts={artifacts}
+              settings={settings}
+              isActiveStatus={isActiveStatus}
+            />
           )}
 
           {/* Currently running stage - stage badge plus animated timer */}
@@ -220,6 +205,73 @@ export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): Reac
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Stage list sub-component — groups plan stages into TabbedPlanCard
+// ---------------------------------------------------------------------------
+
+interface RunStageListProps {
+  stageResults: StageResult[];
+  run: RunSummary;
+  artifacts: Record<string, string>;
+  settings: AppSettings | null;
+  isActiveStatus: boolean;
+}
+
+function RunStageList({ stageResults, run, artifacts, settings, isActiveStatus }: RunStageListProps) {
+  const planGroupStages = stageResults.filter((s) => isPlanStage(s.stage));
+  const planArtifactMap: Record<string, string> = {};
+  if (artifacts["plan"]) planArtifactMap["plan"] = artifacts["plan"];
+  if (artifacts["plan_1"]) planArtifactMap["plan_1"] = artifacts["plan_1"];
+  if (artifacts["plan_2"]) planArtifactMap["plan_2"] = artifacts["plan_2"];
+  if (artifacts["plan_3"]) planArtifactMap["plan_3"] = artifacts["plan_3"];
+
+  let planGroupRendered = false;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {stageResults.map((stageResult, idx) => {
+        if (isPlanStage(stageResult.stage)) {
+          if (planGroupRendered) return null;
+          planGroupRendered = true;
+          return (
+            <TabbedPlanCard
+              key="plan-group"
+              planStages={planGroupStages}
+              planArtifacts={planArtifactMap}
+              runPrompt={run.prompt}
+              enhancedPromptInput={artifacts["enhanced_prompt"] ?? run.prompt}
+              settings={settings}
+            />
+          );
+        }
+
+        return (
+          <RichStageCard
+            key={`${stageResult.stage}-${idx}`}
+            stage={stageResult}
+            runPrompt={run.prompt}
+            enhancedPromptInput={artifacts["enhanced_prompt"] ?? run.prompt}
+            promptEnhanceOutput={artifacts["enhanced_prompt"] ?? ""}
+            planOutput={artifacts["plan"] ?? ""}
+            planInputForAudit={artifacts["plan"] ?? ""}
+            auditedPlanOutput={artifacts["plan_audit"] ?? ""}
+            reviewOutput={artifacts["review"] ?? ""}
+            settings={settings}
+            showPlanCard={false}
+            startedAt={
+              isActiveStatus && run.currentStage === stageResult.stage
+                ? run.startedAt
+                  ? parseUtcTimestamp(run.startedAt).getTime()
+                  : undefined
+                : undefined
+            }
+          />
+        );
+      })}
     </div>
   );
 }
