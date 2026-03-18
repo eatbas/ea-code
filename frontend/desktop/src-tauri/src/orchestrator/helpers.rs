@@ -76,13 +76,10 @@ pub async fn dispatch_agent(
     });
     let effective_input = if let Some((_, ref ws_name)) = workspace_output_file {
         let augmented_prompt = format!(
-            "PIPELINE OUTPUT FILE — You MUST write your complete output to:\n\
-             {ws_name}\n\
-             This file is in the current working directory. It is the ONLY file you may \
-             create or write to. Do NOT modify any other files.\n\
-             The pipeline reads your output exclusively from this file.\n\n\
-             ---\n\n\
-             {}",
+            "{}\n\n\
+             When you have finished, save your complete output to the file \
+             named `{ws_name}` in the current working directory. \
+             This is the only file you should create. Do not modify other files.",
             input.prompt,
         );
         AgentInput {

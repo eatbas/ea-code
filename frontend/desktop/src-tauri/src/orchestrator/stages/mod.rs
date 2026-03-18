@@ -15,9 +15,6 @@ pub use crate::orchestrator::helpers::{
     dispatch_agent, emit_stage, emit_stage_with_duration, resolve_stage_model, wait_for_cancel,
 };
 
-mod execution;
-
-
 /// Runs an agent stage with retry-on-failure support.
 ///
 /// On failure, if `settings.agent_retry_count > 0`, the stage is re-run
@@ -38,8 +35,6 @@ pub async fn execute_agent_stage(
     let max_attempts = 1 + settings.agent_retry_count;
     let start = Instant::now();
     emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num);
-
-    let stage_str = execution::stage_to_str(&stage);
     let model = resolve_stage_model(&stage, settings);
 
     let mut last_error = String::new();
@@ -125,8 +120,6 @@ pub async fn execute_agent_stage(
                     iteration_num,
                     Some(duration_ms),
                 );
-                // Append event to storage
-                execution::append_stage_end_event(run_id, &stage_str, iteration_num, duration_ms, "completed");
                 return StageResult {
                     stage,
                     status: StageStatus::Completed,
@@ -157,8 +150,6 @@ pub async fn execute_agent_stage(
         iteration_num,
         Some(duration_ms),
     );
-    // Append event to storage
-    execution::append_stage_end_event(run_id, &stage_str, iteration_num, duration_ms, "failed");
     StageResult {
         stage,
         status: StageStatus::Failed,

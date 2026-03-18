@@ -24,20 +24,26 @@ interface RunCardProps {
  *  (stage_start without a matching stage_end).
  */
 function eventsToStageResults(events: RunEvent[]): StageResult[] {
-  const stageMap = new Map<string, { stage: string; status: StageStatus; output: string; durationMs: number }>();
+  const stageMap = new Map<string, {
+    stage: string;
+    status: StageStatus;
+    output: string;
+    durationMs: number;
+    startedAt?: number;
+  }>();
 
   // First pass: collect stage_start events as "running" placeholders.
   for (const event of events) {
     if (event.type === "stage_start" && event.stage) {
       const key = `${event.stage}-${event.iteration}`;
-      if (!stageMap.has(key)) {
-        stageMap.set(key, {
-          stage: event.stage,
-          status: "running",
-          output: "",
-          durationMs: 0,
-        });
-      }
+      const existing = stageMap.get(key);
+      stageMap.set(key, {
+        stage: event.stage,
+        status: existing?.status ?? "running",
+        output: existing?.output ?? "",
+        durationMs: existing?.durationMs ?? 0,
+        startedAt: existing?.startedAt ?? parseUtcTimestamp(event.ts).getTime(),
+      });
     }
   }
 
@@ -45,11 +51,13 @@ function eventsToStageResults(events: RunEvent[]): StageResult[] {
   for (const event of events) {
     if (event.type === "stage_end" && event.stage) {
       const key = `${event.stage}-${event.iteration}`;
+      const existing = stageMap.get(key);
       stageMap.set(key, {
         stage: event.stage,
         status: event.status as StageStatus,
-        output: "",
+        output: existing?.output ?? "",
         durationMs: event.durationMs ?? 0,
+        startedAt: existing?.startedAt,
       });
     }
   }
@@ -59,6 +67,7 @@ function eventsToStageResults(events: RunEvent[]): StageResult[] {
     status: s.status,
     output: s.output,
     durationMs: s.durationMs,
+    startedAt: s.startedAt,
   }));
 }
 

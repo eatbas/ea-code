@@ -65,6 +65,7 @@ export function usePipelineEvents({
       listen<PipelineStageEvent>(PIPELINE_EVENTS.stage, (event) => {
         const { runId, stage, status, iteration, durationMs } = event.payload;
         if (!isCurrentRunEvent(runId)) return;
+        const isActiveStageStatus = status === "running" || status === "waiting_for_input";
         if (status === "running") {
           const stageLabel = stage.replace(/_/g, " ");
           const stageLine = `[system] Stage started: ${stageLabel} (iteration ${iteration})`;
@@ -78,13 +79,8 @@ export function usePipelineEvents({
         }
         setRun((prev) => {
           if (!prev) return prev;
-          const updated = { ...prev, currentStage: stage, currentIteration: iteration, stageStartedAt: Date.now() };
 
-          if (status === "waiting_for_input") {
-            updated.status = "waiting_for_input";
-          }
-
-          const iterations = [...updated.iterations];
+          const iterations = [...prev.iterations];
           while (iterations.length < iteration) {
             iterations.push({ number: iterations.length + 1, stages: [] });
           }
@@ -92,23 +88,50 @@ export function usePipelineEvents({
           const currentIter = { ...iterations[iteration - 1] };
           const stages = [...currentIter.stages];
           const existingIdx = stages.findIndex((s) => s.stage === stage);
+          const existingStage = existingIdx >= 0 ? stages[existingIdx] : undefined;
+          const startedAt = isActiveStageStatus
+            ? existingStage?.startedAt ?? Date.now()
+            : existingStage?.startedAt;
 
           const stageResult = {
             stage,
             status,
-            output: "",
-            durationMs: durationMs ?? 0,
+            output: existingStage?.output ?? "",
+            durationMs: durationMs ?? existingStage?.durationMs ?? 0,
+            startedAt,
           };
 
           if (existingIdx >= 0) {
-            stages[existingIdx] = { ...stages[existingIdx], status, durationMs: durationMs ?? stages[existingIdx].durationMs };
+            stages[existingIdx] = {
+              ...stages[existingIdx],
+              status,
+              durationMs: durationMs ?? stages[existingIdx].durationMs,
+              startedAt,
+            };
           } else {
             stages.push(stageResult);
           }
 
           currentIter.stages = stages;
           iterations[iteration - 1] = currentIter;
-          updated.iterations = iterations;
+
+          const latestActiveStage = [...stages]
+            .reverse()
+            .find((entry) => entry.status === "running" || entry.status === "waiting_for_input");
+
+          const updated: PipelineRun = {
+            ...prev,
+            currentIteration: iteration,
+            currentStage: latestActiveStage?.stage,
+            stageStartedAt: latestActiveStage?.startedAt,
+            iterations,
+          };
+
+          if (status === "waiting_for_input") {
+            updated.status = "waiting_for_input";
+          } else if (status === "running" && prev.status !== "running") {
+            updated.status = "running";
+          }
 
           return updated;
         });

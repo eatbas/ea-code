@@ -92,8 +92,8 @@ function App(): ReactNode {
           runningSessionId={run && isActive(run.status) ? run.sessionId : undefined}
           onArchiveSession={(sessionId) => {
             void deleteSession(sessionId).then(
-              () => toast.success("Session archived."),
-              () => toast.error("Failed to archive session."),
+              () => toast.success("Session deleted."),
+              () => toast.error("Failed to delete session."),
             );
             handleArchivedSession(sessionId);
           }}

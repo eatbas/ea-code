@@ -37,9 +37,7 @@ export function ThinkingIndicator({ stage, startedAt }: ThinkingIndicatorProps):
   return (
     <div className="relative overflow-hidden rounded-lg border border-[#2e2e48] bg-[#161622] px-3 py-2">
       {/* Sweep overlay */}
-      <div
-        className="thinking-sweep-overlay pointer-events-none absolute inset-0"
-      />
+      <div className="thinking-sweep-overlay pointer-events-none absolute inset-0" />
       <div className="relative z-10 flex items-center gap-2">
         <span className="text-xs font-semibold tracking-wide text-[#4ade80]">
           {STAGE_LABELS[stage] ?? stage}...

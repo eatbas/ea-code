@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useMemo } from "react";
+import { useStickyAutoScroll } from "../hooks/useStickyAutoScroll";
 
 interface LogsPanelProps {
   logs: string[];
@@ -7,15 +8,8 @@ interface LogsPanelProps {
 
 /** Scrollable monospace log output panel with auto-scroll behaviour. */
 export function LogsPanel({ logs }: LogsPanelProps): ReactNode {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll to bottom when new log lines arrive
-  useEffect(() => {
-    const el = containerRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [logs.length]);
+  const dependencyKey = useMemo(() => logs.length, [logs.length]);
+  const { scrollRef: containerRef, onScroll } = useStickyAutoScroll<HTMLDivElement>(dependencyKey);
 
   return (
     <div className="flex flex-col h-full">
@@ -24,7 +18,8 @@ export function LogsPanel({ logs }: LogsPanelProps): ReactNode {
       </div>
       <div
         ref={containerRef}
-        className="bg-[#0f0f14] font-mono text-xs text-[#e4e4ed] overflow-y-auto flex-1 p-3"
+        onScroll={onScroll}
+        className="app-scrollbar bg-[#0f0f14] font-mono text-xs text-[#e4e4ed] overflow-y-auto flex-1 p-3"
       >
         {logs.length === 0 ? (
           <span className="text-[#9898b0]">No logs yet.</span>

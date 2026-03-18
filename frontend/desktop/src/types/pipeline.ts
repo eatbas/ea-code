@@ -40,6 +40,8 @@ export interface StageResult {
   status: StageStatus;
   output: string;
   durationMs: number;
+  /** Absolute timestamp (Date.now()) when this stage entered a running state. */
+  startedAt?: number;
   error?: string;
 }
 

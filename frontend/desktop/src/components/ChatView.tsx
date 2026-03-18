@@ -238,6 +238,7 @@ export function ChatView({
             label={terminal.label}
             lines={terminal.lines}
             terminalRef={terminal.terminalRef}
+            onTerminalScroll={terminal.onTerminalScroll}
             parallelTabs={showPlanTerminalTabs ? planTerminalTabs : undefined}
           />
         )}

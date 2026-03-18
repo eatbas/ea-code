@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import type { SessionDetail, RunOptions, RunSummary, CliHealth, AppSettings } from "../types";
 import { useElapsedTimer } from "../hooks/useElapsedTimer";
 import { useRecentTerminal } from "../hooks/useRecentTerminal";
+import { useStickyAutoScroll } from "../hooks/useStickyAutoScroll";
 import { isActiveStatusValue, isLiveSessionStatus, statusToneClasses } from "../utils/statusHelpers";
 import { RunCard } from "./RunCard";
 import { AssistantMessageBubble } from "./shared/AssistantMessageBubble";
@@ -45,16 +46,11 @@ export function SessionDetailView({
   loadingMore,
   onBackToHome,
 }: SessionDetailViewProps): ReactNode {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
   const messages = sessionDetail?.messages ?? [];
   const runs = sessionDetail?.runs ?? [];
   const hasMessages = messages.length > 0;
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) { el.scrollTop = el.scrollHeight; }
-  }, [sessionDetail?.id, runs.length, messages.length]);
+  const historyDependencyKey = `${sessionDetail?.id ?? "none"}:${runs.length}:${messages.length}`;
+  const { scrollRef, onScroll } = useStickyAutoScroll<HTMLDivElement>(historyDependencyKey);
 
   // Build run lookup by ID for O(1) access from message runId
   const runById = useMemo(() => {
@@ -65,14 +61,27 @@ export function SessionDetailView({
     return map;
   }, [runs]);
 
+  const assistantLinkedRunIds = useMemo(() => {
+    return new Set(
+      messages
+        .filter((message) => message.role === "assistant" && message.runId)
+        .map((message) => message.runId as string),
+    );
+  }, [messages]);
+
+  const referencedRunIds = useMemo(() => {
+    return new Set(
+      messages
+        .filter((message) => message.runId)
+        .map((message) => message.runId as string),
+    );
+  }, [messages]);
+
   // Runs that aren't linked from any assistant message (orphan runs)
   const orphanRuns = useMemo(() => {
     if (!hasMessages) return [];
-    const linkedRunIds = new Set(
-      messages.filter((m) => m.role === "assistant" && m.runId).map((m) => m.runId),
-    );
-    return runs.filter((r) => !linkedRunIds.has(r.id));
-  }, [runs, messages, hasMessages]);
+    return runs.filter((run) => !referencedRunIds.has(run.id));
+  }, [runs, referencedRunIds, hasMessages]);
 
   const liveRun = [...runs].reverse().find((run) => isLiveSessionStatus(run.status));
 
@@ -135,7 +144,7 @@ export function SessionDetailView({
         </span>
       </div>
 
-      <div ref={scrollRef} className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-6 [scrollbar-gutter:stable_both-edges]">
+      <div ref={scrollRef} onScroll={onScroll} className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-6 [scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto max-w-2xl flex flex-col gap-6">
           {runs.length < sessionDetail.totalRuns && onLoadMore && (
             <div className="flex justify-center">
@@ -160,6 +169,7 @@ export function SessionDetailView({
               <MessageTimeline
                 messages={messages}
                 runById={runById}
+                assistantLinkedRunIds={assistantLinkedRunIds}
                 settings={settings}
               />
               {/* Render runs not linked from any assistant message */}
@@ -182,6 +192,7 @@ export function SessionDetailView({
             label={terminal.label}
             lines={terminal.lines}
             terminalRef={terminal.terminalRef}
+            onTerminalScroll={terminal.onTerminalScroll}
           />
         )}
         {liveRun ? (
@@ -219,20 +230,38 @@ export function SessionDetailView({
 interface MessageTimelineProps {
   messages: SessionDetail["messages"];
   runById: Map<string, RunSummary>;
+  assistantLinkedRunIds: Set<string>;
   settings: AppSettings | null;
 }
 
 /** Renders the conversation as a chat timeline driven by messages.jsonl. */
-function MessageTimeline({ messages, runById, settings }: MessageTimelineProps): ReactNode {
+function MessageTimeline({
+  messages,
+  runById,
+  assistantLinkedRunIds,
+  settings,
+}: MessageTimelineProps): ReactNode {
   return (
     <>
       {messages.map((msg, idx) => {
         if (msg.role === "user") {
+          const linkedRun = msg.runId ? runById.get(msg.runId) : undefined;
+          const shouldRenderRunCard = !!linkedRun && !assistantLinkedRunIds.has(linkedRun.id);
+
           return (
-            <div key={`msg-${idx}`} className="flex justify-end">
-              <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#2a2a3e] px-4 py-3 text-sm text-[#e4e4ed] whitespace-pre-wrap">
-                {msg.content}
+            <div key={`msg-${idx}`} className="flex flex-col gap-3">
+              <div className="flex justify-end">
+                <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#2a2a3e] px-4 py-3 text-sm text-[#e4e4ed] whitespace-pre-wrap">
+                  {msg.content}
+                </div>
               </div>
+              {shouldRenderRunCard && (
+                <RunCard
+                  run={linkedRun}
+                  settings={settings}
+                  hidePromptBubble
+                />
+              )}
             </div>
           );
         }

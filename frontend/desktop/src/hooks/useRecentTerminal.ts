@@ -1,7 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useMemo } from "react";
+import type { RefObject } from "react";
+import { useStickyAutoScroll } from "./useStickyAutoScroll";
 
 interface RecentTerminalResult {
-  terminalRef: React.RefObject<HTMLPreElement | null>;
+  terminalRef: RefObject<HTMLPreElement | null>;
+  onTerminalScroll: () => void;
   stage: string | undefined;
   lines: string[];
   label: string | undefined;
@@ -17,8 +20,6 @@ export function useRecentTerminal(
   allStages: { stage: string }[],
   maxLines = 160,
 ): RecentTerminalResult {
-  const terminalRef = useRef<HTMLPreElement>(null);
-
   const stage = currentStage
     ?? [...allStages]
       .reverse()
@@ -27,11 +28,8 @@ export function useRecentTerminal(
 
   const lines = stage ? (stageLogs[stage] ?? []).slice(-maxLines) : [];
   const label = stage?.replace(/_/g, " ");
+  const dependencyKey = useMemo(() => `${stage ?? "none"}:${lines.length}`, [stage, lines.length]);
+  const { scrollRef: terminalRef, onScroll: onTerminalScroll } = useStickyAutoScroll<HTMLPreElement>(dependencyKey);
 
-  useEffect(() => {
-    const el = terminalRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [stage, lines.length]);
-
-  return { terminalRef, stage, lines, label };
+  return { terminalRef, onTerminalScroll, stage, lines, label };
 }

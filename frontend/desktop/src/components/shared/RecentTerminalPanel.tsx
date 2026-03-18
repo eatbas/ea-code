@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode, RefObject } from "react";
+import { useStickyAutoScroll } from "../../hooks/useStickyAutoScroll";
 
 interface TerminalTab {
   label: string;
@@ -23,18 +24,17 @@ export function RecentTerminalPanel({
   parallelTabs,
 }: RecentTerminalPanelProps): ReactNode {
   const [activeTabIdx, setActiveTabIdx] = useState(0);
-  const parallelRef = useRef<HTMLPreElement>(null);
 
   const showTabs = parallelTabs && parallelTabs.length > 1;
   const activeTab = showTabs ? parallelTabs[activeTabIdx] : null;
   const displayLines = activeTab ? activeTab.lines : lines;
+  const parallelDependencyKey = useMemo(
+    () => `${activeTab?.label ?? "none"}:${activeTab?.lines.length ?? 0}`,
+    [activeTab?.label, activeTab?.lines.length],
+  );
+  const { scrollRef: parallelRef, onScroll: onParallelScroll } = useStickyAutoScroll<HTMLPreElement>(parallelDependencyKey);
   const displayRef = activeTab ? parallelRef : terminalRef;
-
-  // Auto-scroll parallel terminal.
-  useEffect(() => {
-    const el = parallelRef.current;
-    if (el && activeTab) el.scrollTop = el.scrollHeight;
-  }, [activeTab, activeTab?.lines.length]);
+  const handleScroll = activeTab ? onParallelScroll : onTerminalScroll;
 
   return (
     <details className="w-full rounded-xl border border-[#2e2e48] bg-[#14141e]">
@@ -64,8 +64,8 @@ export function RecentTerminalPanel({
         )}
         <pre
           ref={displayRef}
-          onScroll={onTerminalScroll}
-          className="max-h-56 overflow-auto rounded bg-[#0f0f14] p-2 text-[11px] leading-relaxed text-[#e4e4ed] whitespace-pre-wrap break-words"
+          onScroll={handleScroll}
+          className="app-scrollbar max-h-56 overflow-auto rounded bg-[#0f0f14] p-2 text-[11px] leading-relaxed text-[#e4e4ed] whitespace-pre-wrap break-words"
         >
           {displayLines.length > 0 ? displayLines.join("\n") : "Waiting for terminal output..."}
         </pre>

@@ -268,11 +268,20 @@ async fn run_parallel_reviewers_and_merge(
     run: &mut PipelineRun, stages: &mut Vec<StageResult>,
     iter_ctx: &mut IterationContext,
 ) -> Result<String, String> {
+    let base_seq = runs::next_sequence(run_id).unwrap_or(1);
+    let mut end_sequences = Vec::with_capacity(slots.len());
+    for (index, slot) in slots.iter().enumerate() {
+        let start_seq = base_seq + (index as u64 * 2);
+        stages::append_stage_start_event(run_id, &slot.stage, iter_num, start_seq)?;
+        end_sequences.push(start_seq + 1);
+    }
+
     // Run all reviewers concurrently.
     let futures: Vec<_> = slots.iter().enumerate().map(|(i, slot)| {
         let app = app.clone();
         let backend = slot.backend.clone();
         let stage = slot.stage.clone();
+        let end_seq = end_sequences[i];
         let prompt = user_prompt.to_string();
         let ctx = context.to_string();
         let ws = request.workspace_path.clone();
@@ -296,16 +305,30 @@ async fn run_parallel_reviewers_and_merge(
                 &settings, &cf, Some(&sid),
                 output_path_str.as_deref(),
             ).await;
-            (i, r)
+            (i, stage, end_seq, r)
         }
     }).collect();
 
     let results = futures::future::join_all(futures).await;
 
     let mut review_texts: Vec<(String, String)> = Vec::new();
-    for (i, r) in results {
+    for (i, stage, end_seq, r) in results {
         let out = r.output.clone();
         let failed = r.status == StageStatus::Failed;
+        let status = if failed {
+            StageEndStatus::Failed
+        } else {
+            StageEndStatus::Completed
+        };
+        stages::append_stage_end_event(
+            run_id,
+            &stage,
+            iter_num,
+            end_seq,
+            &status,
+            r.duration_ms,
+        )?;
+
         if !failed {
             let label = format!("Review from Reviewer {}", i + 1);
             crate::orchestrator::helpers::emit_artifact(
@@ -331,6 +354,9 @@ async fn run_parallel_reviewers_and_merge(
     let merger_backend = settings.review_merger_agent.as_ref()
         .or(settings.code_reviewer_agent.as_ref())
         .unwrap_or(&AgentBackend::Claude);
+    run.current_stage = Some(PipelineStage::ReviewMerge);
+    let merger_seq = runs::next_sequence(run_id).unwrap_or(1);
+    stages::append_stage_start_event(run_id, &PipelineStage::ReviewMerge, iter_num, merger_seq)?;
 
     let merger_output_path = runs::artifact_output_path(run_id, iter_num, "review").ok();
     let merger_output_path_str = merger_output_path.as_ref().map(|p| p.to_string_lossy().to_string());
@@ -354,6 +380,14 @@ async fn run_parallel_reviewers_and_merge(
 
     if merger_r.status == StageStatus::Failed {
         let err = merger_r.error.clone().unwrap_or_else(|| "Review Merger failed".into());
+        stages::append_stage_end_event(
+            run_id,
+            &PipelineStage::ReviewMerge,
+            iter_num,
+            merger_seq + 1,
+            &StageEndStatus::Failed,
+            merger_r.duration_ms,
+        )?;
         stages.push(merger_r);
         run.iterations.push(Iteration {
             number: iter_num, stages: mem::take(stages),
@@ -366,6 +400,14 @@ async fn run_parallel_reviewers_and_merge(
     }
 
     crate::orchestrator::helpers::emit_artifact(app, run_id, "review", &merged_out, iter_num);
+    stages::append_stage_end_event(
+        run_id,
+        &PipelineStage::ReviewMerge,
+        iter_num,
+        merger_seq + 1,
+        &StageEndStatus::Completed,
+        merger_r.duration_ms,
+    )?;
     stages.push(merger_r);
 
     Ok(merged_out)

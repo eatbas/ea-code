@@ -287,11 +287,20 @@ async fn run_parallel_planners(
     cancel_flag: &Arc<AtomicBool>, session_id: &str,
     stages: &mut Vec<StageResult>,
 ) -> Result<Vec<(String, String)>, String> {
+    let base_seq = runs::next_sequence(run_id).unwrap_or(1);
+    let mut end_sequences = Vec::with_capacity(slots.len());
+    for (index, slot) in slots.iter().enumerate() {
+        let start_seq = base_seq + (index as u64 * 2);
+        persistence::append_stage_start_event(run_id, &slot.stage, iter_num, start_seq)?;
+        end_sequences.push(start_seq + 1);
+    }
+
     // Build futures for each planner slot.
     let futures: Vec<_> = slots.iter().enumerate().map(|(i, slot)| {
         let app = app.clone();
         let backend = slot.backend.clone();
         let stage = slot.stage.clone();
+        let end_seq = end_sequences[i];
         let prompt = user_prompt.to_string();
         let ctx = context.to_string();
         let ws = workspace_path.to_string();
@@ -315,7 +324,7 @@ async fn run_parallel_planners(
                 &settings, &cf, Some(&sid),
                 output_path_str.as_deref(),
             ).await;
-            (i, stage, r)
+            (i, stage, end_seq, r)
         }
     }).collect();
 
@@ -323,9 +332,22 @@ async fn run_parallel_planners(
     let results = futures::future::join_all(futures).await;
 
     let mut plan_outputs = Vec::new();
-    for (i, _stage, r) in results {
+    for (i, stage, end_seq, r) in results {
         let out = r.output.clone();
         let failed = r.status == StageStatus::Failed;
+        let status = if failed {
+            StageEndStatus::Failed
+        } else {
+            StageEndStatus::Completed
+        };
+        persistence::append_stage_end_event(
+            run_id,
+            &stage,
+            iter_num,
+            end_seq,
+            &status,
+            r.duration_ms,
+        )?;
 
         if !failed {
             let label = format!("Plan from Planner {}", i + 1);

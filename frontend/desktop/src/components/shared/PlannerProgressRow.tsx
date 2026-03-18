@@ -19,13 +19,20 @@ interface PlannerProgressRowProps {
 export function PlannerProgressRow({ stages, settings }: PlannerProgressRowProps): ReactNode {
   const [, tick] = useState(0);
   const anyRunning = stages.some((s) => s.status === "running");
+  const fallbackStartTimes = useRef<Record<string, number>>({});
 
-  // Track each stage's start time independently so that completing one
-  // planner doesn't reset the others' timers.
-  const startTimes = useRef<Record<string, number>>({});
-  for (const s of stages) {
-    if (s.status === "running" && !startTimes.current[s.stage]) {
-      startTimes.current[s.stage] = Date.now();
+  for (const stage of stages) {
+    if (stage.status !== "running") {
+      continue;
+    }
+
+    if (stage.startedAt != null) {
+      fallbackStartTimes.current[stage.stage] = stage.startedAt;
+      continue;
+    }
+
+    if (fallbackStartTimes.current[stage.stage] == null) {
+      fallbackStartTimes.current[stage.stage] = Date.now();
     }
   }
 
@@ -43,10 +50,10 @@ export function PlannerProgressRow({ stages, settings }: PlannerProgressRowProps
         const isRunning = stage.status === "running";
         const isCompleted = stage.status === "completed";
         const isFailed = stage.status === "failed";
+        const resolvedStartedAt = stage.startedAt ?? fallbackStartTimes.current[stage.stage];
 
-        const stageStart = startTimes.current[stage.stage];
-        const elapsed = isRunning && stageStart
-          ? Math.max(0, Math.floor((Date.now() - stageStart) / 1000))
+        const elapsed = isRunning && resolvedStartedAt != null
+          ? Math.max(0, Math.floor((Date.now() - resolvedStartedAt) / 1000))
           : 0;
         const mins = Math.floor(elapsed / 60);
         const secs = elapsed % 60;
