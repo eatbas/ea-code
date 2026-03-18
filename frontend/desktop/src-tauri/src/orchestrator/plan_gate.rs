@@ -167,6 +167,9 @@ pub async fn run_plan_gate(
         let plan_seq = runs::next_sequence(run_id).unwrap_or(1);
         append_stage_start_event(run_id, &PipelineStage::Plan, iter_num, plan_seq)?;
 
+        let gate_output_path = runs::artifact_output_path(run_id, iter_num, "plan").ok();
+        let gate_output_path_str = gate_output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+
         let plan_r = execute_agent_stage(
             app,
             run_id,
@@ -192,6 +195,7 @@ pub async fn run_plan_gate(
             settings,
             cancel_flag,
             None,
+            gate_output_path_str.as_deref(),
         )
         .await;
 

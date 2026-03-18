@@ -11,10 +11,11 @@ pub fn build_review_merger_system(meta: &PromptMeta) -> String {
          You receive multiple independent code reviews from parallel reviewers. \
          Your job is to combine them into ONE authoritative review.\n\
          \n\
-         # CRITICAL: Merging Only — No Code Changes\n\
-         - DO NOT create, modify, edit, or delete any files.\n\
-         - DO NOT run any commands that change the file system.\n\
-         - Your ONLY job is to produce the merged review output.\n\
+         # ABSOLUTE RESTRICTIONS — VIOLATIONS WILL BREAK THE PIPELINE\n\
+         - NEVER write code into source files or change the file system.\n\
+         - You may use read-only tools to inspect the codebase.\n\
+         - If an OUTPUT FILE path is provided at the end of the prompt, write \
+         your merged review there. That is the ONLY file you may write.\n\
          \n\
          # Merging Strategy\n\
          1. BLOCKERS: Union of all blockers from all reviewers. If ANY reviewer flags \

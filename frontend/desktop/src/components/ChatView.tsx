@@ -15,6 +15,7 @@ import { PromptInputBar } from "./shared/PromptInputBar";
 import { RecentTerminalPanel } from "./shared/RecentTerminalPanel";
 import { WorkspaceFooter } from "./shared/WorkspaceFooter";
 import { PipelineControlBar } from "./shared/PipelineControlBar";
+import { PlannerProgressRow } from "./shared/PlannerProgressRow";
 
 /** Artifact kinds that are handled specially and not shown as generic artifact cards. */
 const EXCLUDED_ARTIFACT_KINDS = new Set([
@@ -44,7 +45,7 @@ interface ChatViewProps {
   onPause: () => void;
   onResume: () => void;
   onCancel: () => void;
-  onNewSession: () => void;
+  onBackToHome: () => void;
   onContinue: (options: RunOptions) => void;
 }
 
@@ -58,7 +59,7 @@ export function ChatView({
   onPause,
   onResume,
   onCancel,
-  onNewSession,
+  onBackToHome,
   onContinue,
 }: ChatViewProps): ReactNode {
   const elapsedText = useElapsedTimer(run.status, run.startedAt, run.completedAt);
@@ -86,6 +87,20 @@ export function ChatView({
   if (artifacts["plan_3"]) planArtifactMap["plan_3"] = artifacts["plan_3"];
   // Track whether the plan group card has been rendered (to avoid duplication).
   let planGroupRendered = false;
+
+  // Build parallel terminal tabs when multiple plan stages exist.
+  const planTerminalTabs = planGroupStages.length > 1
+    ? planGroupStages.map((s, i) => ({
+        label: `Plan ${i + 1}`,
+        lines: (stageLogs[s.stage] ?? []).slice(-160),
+      }))
+    : undefined;
+  // Show parallel tabs when any plan stage is running or was the most recent.
+  const showPlanTerminalTabs = planTerminalTabs && (
+    planGroupStages.some((s) => s.status === "running") ||
+    (run.currentStage != null && isPlanStage(run.currentStage))
+  );
+
   const headerTitle = run.prompt.length > 60 ? `${run.prompt.slice(0, 60)}...` : run.prompt;
   const isPaused = run.status === "paused";
   const iterationText = `Iteration ${Math.max(1, run.currentIteration)}/${Math.max(1, run.maxIterations)}`;
@@ -94,7 +109,7 @@ export function ChatView({
     <div className="flex h-full min-h-0 flex-col bg-[#0f0f14]">
       <div className="flex items-center gap-3 border-b border-[#2e2e48] px-6 py-3">
         <button
-          onClick={onNewSession}
+          onClick={onBackToHome}
           className="rounded p-1 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
           title="Back to home"
         >
@@ -123,6 +138,7 @@ export function ChatView({
             if (isPlanStage(stage.stage)) {
               if (planGroupRendered) return null;
               planGroupRendered = true;
+              const planningActive = isActive(run.status) && isPlanStage(run.currentStage as PipelineStage);
               return (
                 <div key="plan-group" className="flex flex-col gap-2">
                   <TabbedPlanCard
@@ -131,13 +147,14 @@ export function ChatView({
                     runPrompt={run.prompt}
                     enhancedPromptInput={enhancedPromptInput}
                     settings={settings}
-                    startedAt={
-                      run.status === "running" && isPlanStage(run.currentStage as PipelineStage)
-                        ? run.stageStartedAt
-                        : undefined
-                    }
-                    stageLogs={stageLogs}
+                    startedAt={planningActive ? run.stageStartedAt : undefined}
                   />
+                  {(planningActive || planGroupStages.some((s) => s.status === "running")) && (
+                    <PlannerProgressRow
+                      stages={planGroupStages}
+                      settings={settings}
+                    />
+                  )}
                 </div>
               );
             }
@@ -221,6 +238,7 @@ export function ChatView({
             label={terminal.label}
             lines={terminal.lines}
             terminalRef={terminal.terminalRef}
+            parallelTabs={showPlanTerminalTabs ? planTerminalTabs : undefined}
           />
         )}
         {(isActive(run.status) || isPaused) && (

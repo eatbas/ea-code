@@ -106,7 +106,19 @@ fn extract_claude_final_text(stream_json_output: &str) -> String {
         }
     }
 
-    last_result_text
-        .or(last_assistant_text)
-        .unwrap_or_else(|| stream_json_output.trim().to_string())
+    // Prefer whichever text is more substantial. The `result.result` field
+    // from Claude CLI can be a brief summary while the last assistant message
+    // contains the full detailed response (e.g. a complete plan).
+    match (last_result_text, last_assistant_text) {
+        (Some(result), Some(assistant)) => {
+            if assistant.len() > result.len() {
+                assistant
+            } else {
+                result
+            }
+        }
+        (Some(result), None) => result,
+        (None, Some(assistant)) => assistant,
+        (None, None) => stream_json_output.trim().to_string(),
+    }
 }

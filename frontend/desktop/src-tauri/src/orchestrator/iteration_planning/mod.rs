@@ -179,6 +179,9 @@ pub async fn run_planning_stages(
     let pa_seq = runs::next_sequence(run_id).unwrap_or(1);
     persistence::append_stage_start_event(run_id, &PipelineStage::PlanAudit, iter_num, pa_seq)?;
 
+    let pa_output_path = runs::artifact_output_path(run_id, iter_num, "plan_audit").ok();
+    let pa_output_path_str = pa_output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+
     let pa_r = execute_agent_stage(
         app, run_id, iter_num, PipelineStage::PlanAudit, auditor_backend,
         &AgentInput {
@@ -187,6 +190,7 @@ pub async fn run_planning_stages(
             workspace_path: request.workspace_path.clone(),
         },
         settings, cancel_flag, Some(session_id),
+        pa_output_path_str.as_deref(),
     ).await;
     let pa_out = pa_r.output.clone();
     let pa_duration = pa_r.duration_ms;
@@ -242,6 +246,9 @@ async fn run_single_planner(
     let seq = runs::next_sequence(run_id).unwrap_or(1);
     persistence::append_stage_start_event(run_id, &slot.stage, iter_num, seq)?;
 
+    let output_path = runs::artifact_output_path(run_id, iter_num, "plan").ok();
+    let output_path_str = output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+
     let r = execute_agent_stage(
         app, run_id, iter_num, slot.stage.clone(), &slot.backend,
         &AgentInput {
@@ -250,6 +257,7 @@ async fn run_single_planner(
             workspace_path: workspace_path.to_string(),
         },
         settings, cancel_flag, Some(session_id),
+        output_path_str.as_deref(),
     ).await;
     let out = r.output.clone();
     let dur = r.duration_ms;
@@ -292,6 +300,10 @@ async fn run_parallel_planners(
         let sid = session_id.to_string();
         let rid = run_id.to_string();
 
+        let output_kind = format!("plan_{}", i + 1);
+        let output_path = runs::artifact_output_path(&rid, iter_num, &output_kind).ok();
+        let output_path_str = output_path.map(|p| p.to_string_lossy().to_string());
+
         async move {
             let r = execute_agent_stage(
                 &app, &rid, iter_num, stage.clone(), &backend,
@@ -301,6 +313,7 @@ async fn run_parallel_planners(
                     workspace_path: ws,
                 },
                 &settings, &cf, Some(&sid),
+                output_path_str.as_deref(),
             ).await;
             (i, stage, r)
         }

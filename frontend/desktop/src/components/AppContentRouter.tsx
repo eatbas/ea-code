@@ -54,6 +54,7 @@ interface AppContentRouterProps {
   onRun: (options: RunOptions, sessionIdOverride?: string) => Promise<void>;
   onContinueRun: (options: RunOptions, sessionId?: string) => void;
   onNewSession: () => void;
+  onBackFromChat: () => void;
   onLoadMoreRuns: () => Promise<void>;
   onSelectProject: (projectPath: string) => Promise<void>;
   onAddProject: () => Promise<void>;
@@ -92,6 +93,7 @@ export function AppContentRouter({
   onRun,
   onContinueRun,
   onNewSession,
+  onBackFromChat,
   onLoadMoreRuns,
   onSelectProject,
   onAddProject,
@@ -113,7 +115,7 @@ export function AppContentRouter({
         onPause={() => { void onPausePipeline(); }}
         onResume={() => { void onResumePipeline(); }}
         onCancel={() => { void onCancelPipeline(); }}
-        onNewSession={onNewSession}
+        onBackToHome={onBackFromChat}
         onContinue={(options) => {
           onContinueRun(options, run.sessionId);
         }}

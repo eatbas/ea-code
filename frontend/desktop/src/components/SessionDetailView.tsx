@@ -65,6 +65,15 @@ export function SessionDetailView({
     return map;
   }, [runs]);
 
+  // Runs that aren't linked from any assistant message (orphan runs)
+  const orphanRuns = useMemo(() => {
+    if (!hasMessages) return [];
+    const linkedRunIds = new Set(
+      messages.filter((m) => m.role === "assistant" && m.runId).map((m) => m.runId),
+    );
+    return runs.filter((r) => !linkedRunIds.has(r.id));
+  }, [runs, messages, hasMessages]);
+
   const liveRun = [...runs].reverse().find((run) => isLiveSessionStatus(run.status));
 
   const liveStatusLabel =
@@ -147,11 +156,17 @@ export function SessionDetailView({
           )}
 
           {hasMessages ? (
-            <MessageTimeline
-              messages={messages}
-              runById={runById}
-              settings={settings}
-            />
+            <>
+              <MessageTimeline
+                messages={messages}
+                runById={runById}
+                settings={settings}
+              />
+              {/* Render runs not linked from any assistant message */}
+              {orphanRuns.map((run) => (
+                <RunCard key={run.id} run={run} settings={settings} />
+              ))}
+            </>
           ) : (
             /* Fallback: legacy sessions without messages.jsonl — render RunCards directly */
             runs.map((run) => (

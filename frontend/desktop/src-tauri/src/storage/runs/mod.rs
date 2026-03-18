@@ -213,9 +213,27 @@ fn artifacts_dir(session_id: &str, run_id: &str) -> Result<std::path::PathBuf, S
     Ok(run_dir(session_id, run_id)?.join("artifacts"))
 }
 
+/// Returns the absolute path where an agent should write its output artifact.
+///
+/// Creates the artifacts directory if needed. Returns a `.md` file path.
+/// Callers pass this path to the agent prompt so it writes directly there.
+pub fn artifact_output_path(
+    run_id: &str,
+    iteration: u32,
+    kind: &str,
+) -> Result<std::path::PathBuf, String> {
+    validate_id(run_id)?;
+    let session_id = get_session_for_run(run_id)?;
+    let dir = artifacts_dir(&session_id, run_id)?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Failed to create artifacts directory: {e}"))?;
+    let filename = format!("{iteration}_{kind}.md");
+    Ok(dir.join(filename))
+}
+
 /// Writes an artifact file to disk.
 ///
-/// File naming: `{iteration}_{kind}.txt`
+/// File naming: `{iteration}_{kind}.md`
 /// Creates the artifacts directory if it does not exist.
 pub fn write_artifact(
     run_id: &str,
@@ -229,7 +247,7 @@ pub fn write_artifact(
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("Failed to create artifacts directory: {e}"))?;
 
-    let filename = format!("{iteration}_{kind}.txt");
+    let filename = format!("{iteration}_{kind}.md");
     let path = dir.join(&filename);
     std::fs::write(&path, content)
         .map_err(|e| format!("Failed to write artifact {filename}: {e}"))?;
@@ -257,7 +275,8 @@ pub fn read_all_artifacts(run_id: &str) -> Result<std::collections::HashMap<Stri
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read artifact entry: {e}"))?;
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("txt") {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if ext != "md" && ext != "txt" {
             continue;
         }
         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {

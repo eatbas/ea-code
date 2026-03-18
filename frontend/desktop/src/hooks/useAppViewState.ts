@@ -35,6 +35,7 @@ interface UseAppViewStateReturn {
   handleContinueRun: (options: RunOptions, sessionId?: string) => void;
   handleMissingAgentSetup: () => void;
   handleNewSession: () => void;
+  handleBackFromChat: () => void;
   handleSelectSession: (sessionId: string) => Promise<void>;
   handleLoadMoreRuns: () => Promise<void>;
   handleSelectProject: (projectPath: string) => Promise<void>;
@@ -132,6 +133,33 @@ export function useAppViewState({
     }
   }, [resetRun, workspace, loadSessions]);
 
+  /** Navigate away from ChatView without destroying the run state.
+   *  Sets activeSessionId so SessionDetailView renders (which polls
+   *  for updates from disk) while the backend keeps running and
+   *  usePipelineEvents keeps receiving events in the background.
+   */
+  const handleBackFromChat = useCallback((): void => {
+    const sessionId = run?.sessionId;
+    if (sessionId) {
+      setActiveSessionId(sessionId);
+      setActiveView("home");
+      setSessionDetailLoading(true);
+      loadSessionDetail(sessionId)
+        .then((detail) => setSessionDetail(detail))
+        .catch(() => setSessionDetail(null))
+        .finally(() => setSessionDetailLoading(false));
+    } else {
+      // No session to navigate to — fall back to full reset.
+      resetRun();
+      setActiveSessionId(undefined);
+      setSessionDetail(null);
+      setActiveView("home");
+    }
+    if (workspace) {
+      void loadSessions(workspace.path);
+    }
+  }, [run, workspace, resetRun, loadSessions, loadSessionDetail]);
+
   const handleSelectSession = useCallback(async (sessionId: string): Promise<void> => {
     const isCurrentRun = run && (isRunInProgress(run) || isRunTerminalState(run)) && run.sessionId === sessionId;
     if (isCurrentRun) {
@@ -193,6 +221,7 @@ export function useAppViewState({
     handleContinueRun,
     handleMissingAgentSetup,
     handleNewSession,
+    handleBackFromChat,
     handleSelectSession,
     handleLoadMoreRuns,
     handleSelectProject,

@@ -120,7 +120,7 @@ pub struct AppSettings {
     #[serde(default = "default_agent_retry_count")]
     pub agent_retry_count: u32,
     /// Per-agent timeout in milliseconds (0 = no timeout).
-    #[serde(default)]
+    #[serde(default = "default_agent_timeout_ms")]
     pub agent_timeout_ms: u64,
     /// Maximum agentic turns per invocation for CLIs that support it.
     #[serde(default = "default_agent_max_turns")]
@@ -140,6 +140,10 @@ fn default_max_plan_revisions() -> u32 {
 
 fn default_agent_retry_count() -> u32 {
     1
+}
+
+fn default_agent_timeout_ms() -> u64 {
+    600_000 // 10 minutes
 }
 
 fn default_agent_max_turns() -> u32 {
@@ -209,7 +213,7 @@ impl Default for AppSettings {
             max_plan_revisions: 3,
             token_optimised_prompts: false,
             agent_retry_count: 1,
-            agent_timeout_ms: 0,
+            agent_timeout_ms: 600_000,
             agent_max_turns: 25,
             retention_days: 90,
             skill_selector_agent: None,

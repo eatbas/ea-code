@@ -42,6 +42,7 @@ function App(): ReactNode {
     handleContinueRun,
     handleMissingAgentSetup,
     handleNewSession,
+    handleBackFromChat,
     handleSelectSession,
     handleLoadMoreRuns,
     handleSelectProject,
@@ -130,6 +131,7 @@ function App(): ReactNode {
             onRun={handleRun}
             onContinueRun={handleContinueRun}
             onNewSession={handleNewSession}
+            onBackFromChat={handleBackFromChat}
             onLoadMoreRuns={handleLoadMoreRuns}
             onSelectProject={handleSelectProject}
             onAddProject={selectFolder}

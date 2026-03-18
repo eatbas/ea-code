@@ -64,7 +64,7 @@ pub async fn run_direct_task(
         tokio::select! {
             res = dispatch_agent(
                 backend, model, &input, settings, Some(session_id),
-                app, run_id, PipelineStage::DirectTask,
+                app, run_id, PipelineStage::DirectTask, None,
             ) => res,
             _ = wait_for_cancel(cancel_flag) => {
                 push_cancel_iteration(run, 1, Vec::new());
@@ -77,7 +77,7 @@ pub async fn run_direct_task(
                 Duration::from_millis(settings.agent_timeout_ms),
                 dispatch_agent(
                     backend, model, &input, settings, Some(session_id),
-                    app, run_id, PipelineStage::DirectTask,
+                    app, run_id, PipelineStage::DirectTask, None,
                 ),
             ) => {
                 match res {

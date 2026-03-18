@@ -34,6 +34,10 @@ pub fn stage_to_str(stage: &PipelineStage) -> String {
 }
 
 /// Dispatches to the appropriate agent runner based on the backend setting.
+///
+/// When `output_file` is provided, the agent's prompt is augmented with an
+/// instruction to write its output to that file. After the agent finishes,
+/// the file is read and its content becomes the returned `AgentOutput`.
 pub async fn dispatch_agent(
     backend: &AgentBackend,
     model: &str,
@@ -43,6 +47,7 @@ pub async fn dispatch_agent(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
+    output_file: Option<&str>,
 ) -> Result<AgentOutput, String> {
     if model.is_empty() {
         eprintln!(
@@ -50,10 +55,49 @@ pub async fn dispatch_agent(
             stage, backend,
         );
     }
-    match backend {
+
+    // For text-only stages with an output file, create a workspace-local
+    // temp file for the agent to write to (CLI agents sandbox writes to the
+    // workspace). After the agent finishes we read it and copy the content
+    // to the real artifact path.
+    //
+    // The filename is derived from the artifact path to avoid collisions
+    // when multiple agents run in parallel (e.g. plan_1, plan_2, plan_3).
+    let workspace_output_file = output_file.map(|artifact_path| {
+        let stem = std::path::Path::new(artifact_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("output");
+        let name = format!(".ea-pipeline-{stem}.md");
+        let p = std::path::Path::new(&input.workspace_path).join(&name);
+        // Remove any stale file from a previous run.
+        let _ = std::fs::remove_file(&p);
+        (p, name)
+    });
+    let effective_input = if let Some((_, ref ws_name)) = workspace_output_file {
+        let augmented_prompt = format!(
+            "PIPELINE OUTPUT FILE — You MUST write your complete output to:\n\
+             {ws_name}\n\
+             This file is in the current working directory. It is the ONLY file you may \
+             create or write to. Do NOT modify any other files.\n\
+             The pipeline reads your output exclusively from this file.\n\n\
+             ---\n\n\
+             {}",
+            input.prompt,
+        );
+        AgentInput {
+            prompt: augmented_prompt,
+            context: input.context.clone(),
+            workspace_path: input.workspace_path.clone(),
+        }
+    } else {
+        input.clone()
+    };
+
+    let result = match backend {
         AgentBackend::Claude => {
             run_claude(
-                input,
+                &effective_input,
                 &settings.claude_path,
                 model,
                 settings.agent_max_turns,
@@ -65,18 +109,39 @@ pub async fn dispatch_agent(
             .await
         }
         AgentBackend::Codex => {
-            run_codex(input, &settings.codex_path, model, session_id, app, run_id, stage).await
+            run_codex(&effective_input, &settings.codex_path, model, session_id, app, run_id, stage).await
         }
         AgentBackend::Gemini => {
-            run_gemini(input, &settings.gemini_path, model, app, run_id, stage).await
+            run_gemini(&effective_input, &settings.gemini_path, model, app, run_id, stage).await
         }
         AgentBackend::Kimi => {
-            run_kimi(input, &settings.kimi_path, model, app, run_id, stage).await
+            run_kimi(&effective_input, &settings.kimi_path, model, app, run_id, stage).await
         }
         AgentBackend::OpenCode => {
-            run_opencode(input, &settings.opencode_path, model, app, run_id, stage).await
+            run_opencode(&effective_input, &settings.opencode_path, model, app, run_id, stage).await
         }
+    }?;
+
+    // If a workspace output file was used, read it and copy the content
+    // to the real artifact path. Clean up the workspace file afterwards.
+    if let Some((ref ws_file, _)) = workspace_output_file {
+        if let Ok(content) = std::fs::read_to_string(ws_file) {
+            let trimmed = content.trim();
+            if !trimmed.is_empty() {
+                // Copy content to the real artifact location.
+                if let Some(artifact_path) = output_file {
+                    let _ = std::fs::write(artifact_path, trimmed);
+                }
+                let _ = std::fs::remove_file(ws_file);
+                return Ok(AgentOutput {
+                    raw_text: trimmed.to_string(),
+                });
+            }
+        }
+        let _ = std::fs::remove_file(ws_file);
     }
+
+    Ok(result)
 }
 
 /// Resolves the model to use for a given pipeline stage from per-stage settings.

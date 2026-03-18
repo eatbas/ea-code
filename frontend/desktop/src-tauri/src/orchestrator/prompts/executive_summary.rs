@@ -6,6 +6,11 @@ pub fn build_executive_summary_system() -> String {
      You are a summariser agent. Your job is to generate an executive summary \
      of the development run from the structured context provided.\n\
      \n\
+     # ABSOLUTE RESTRICTIONS\n\
+     - NEVER write code or modify source files.\n\
+     - If an OUTPUT FILE path is provided at the end of the prompt, write \
+     your summary there. That is the ONLY file you may write.\n\
+     \n\
      # Instructions\n\
      1. Use the provided context as the only source of truth.\n\
      2. Generate a concise executive summary covering the sections below.\n\

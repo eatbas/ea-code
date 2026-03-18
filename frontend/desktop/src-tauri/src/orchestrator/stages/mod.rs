@@ -33,6 +33,7 @@ pub async fn execute_agent_stage(
     settings: &AppSettings,
     cancel_flag: &Arc<AtomicBool>,
     session_id: Option<&str>,
+    output_file: Option<&str>,
 ) -> StageResult {
     let max_attempts = 1 + settings.agent_retry_count;
     let start = Instant::now();
@@ -77,6 +78,7 @@ pub async fn execute_agent_stage(
                     app,
                     run_id,
                     stage_for_call.clone(),
+                    output_file,
                 ) => result,
                 _ = wait_for_cancel(cancel_flag) => {
                     Err(format!("{stage_for_call:?} stage cancelled by user"))
@@ -95,6 +97,7 @@ pub async fn execute_agent_stage(
                         app,
                         run_id,
                         stage_for_call.clone(),
+                        output_file,
                     ),
                 ) => {
                     match result {
@@ -191,6 +194,7 @@ pub async fn execute_run_level_agent_stage(
             app,
             run_id,
             stage.clone(),
+            None,
         )
         .await
     } else {
@@ -205,6 +209,7 @@ pub async fn execute_run_level_agent_stage(
                 app,
                 run_id,
                 stage.clone(),
+                None,
             ),
         )
         .await

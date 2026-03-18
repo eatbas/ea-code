@@ -71,9 +71,10 @@ pub async fn run_generate_stage(
         settings,
         cancel_flag,
         Some(session_id),
+        None,
     )
     .await;
-    
+
     let gen_out = gen_r.output.clone();
     let gen_duration = gen_r.duration_ms;
     

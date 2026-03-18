@@ -147,6 +147,7 @@ pub async fn run_review_fix_stages(
             workspace_path: request.workspace_path.clone(),
         },
         settings, cancel_flag, Some(session_id),
+        None,
     ).await;
     let fix_out = fix_r.output.clone();
     let fix_duration = fix_r.duration_ms;
@@ -211,6 +212,9 @@ async fn run_single_reviewer(
     let rev_seq = runs::next_sequence(run_id).unwrap_or(1);
     stages::append_stage_start_event(run_id, &PipelineStage::CodeReviewer, iter_num, rev_seq)?;
 
+    let rev_output_path = runs::artifact_output_path(run_id, iter_num, "review").ok();
+    let rev_output_path_str = rev_output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+
     let rev_r = execute_agent_stage(
         app, run_id, iter_num, slot.stage.clone(), &slot.backend,
         &AgentInput {
@@ -219,6 +223,7 @@ async fn run_single_reviewer(
             workspace_path: workspace_path.to_string(),
         },
         settings, cancel_flag, Some(session_id),
+        rev_output_path_str.as_deref(),
     ).await;
     let rev_out = rev_r.output.clone();
     let rev_duration = rev_r.duration_ms;
@@ -276,6 +281,10 @@ async fn run_parallel_reviewers_and_merge(
         let sid = session_id.to_string();
         let rid = run_id.to_string();
 
+        let output_kind = format!("review_{}", i + 1);
+        let output_path = runs::artifact_output_path(&rid, iter_num, &output_kind).ok();
+        let output_path_str = output_path.map(|p| p.to_string_lossy().to_string());
+
         async move {
             let r = execute_agent_stage(
                 &app, &rid, iter_num, stage.clone(), &backend,
@@ -285,6 +294,7 @@ async fn run_parallel_reviewers_and_merge(
                     workspace_path: ws,
                 },
                 &settings, &cf, Some(&sid),
+                output_path_str.as_deref(),
             ).await;
             (i, r)
         }
@@ -322,6 +332,9 @@ async fn run_parallel_reviewers_and_merge(
         .or(settings.code_reviewer_agent.as_ref())
         .unwrap_or(&AgentBackend::Claude);
 
+    let merger_output_path = runs::artifact_output_path(run_id, iter_num, "review").ok();
+    let merger_output_path_str = merger_output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+
     let merger_r = execute_agent_stage(
         app, run_id, iter_num, PipelineStage::ReviewMerge, merger_backend,
         &AgentInput {
@@ -335,6 +348,7 @@ async fn run_parallel_reviewers_and_merge(
             workspace_path: request.workspace_path.clone(),
         },
         settings, cancel_flag, Some(session_id),
+        merger_output_path_str.as_deref(),
     ).await;
     let merged_out = merger_r.output.clone();
 

@@ -7,8 +7,16 @@ pub fn build_reviewer_system(meta: &PromptMeta) -> String {
         "# Role\n\
          You are the Reviewer agent in a multi-agent self-improving pipeline \
          (iteration {iter} of {max}).\n\
-         Evaluate the Generator's recent code changes against the user's \
-         original prompt.\n\
+         Evaluate the recent code changes against the user's original prompt.\n\
+         \n\
+         # ABSOLUTE RESTRICTIONS — VIOLATIONS WILL BREAK THE PIPELINE\n\
+         - NEVER fix the code yourself. You are NOT the Coder or Fixer.\n\
+         - NEVER write code into source files or execute commands that change \
+         the file system.\n\
+         - You may use read-only tools (Read, Grep, Glob, List, git diff, \
+         git status) to inspect the codebase.\n\
+         - If an OUTPUT FILE path is provided at the end of the prompt, write \
+         your review there. That is the ONLY file you may write.\n\
          \n\
          # Review Dimensions\n\
          Evaluate the diff across these dimensions:\n\

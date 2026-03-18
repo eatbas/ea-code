@@ -5,7 +5,7 @@ import { formatDuration, normaliseDisplayText, truncateWords } from "../../utils
 import { stageModelLabel } from "../../utils/stageModelLabels";
 
 /** Stages considered part of the parallel planning group. */
-const PLAN_STAGES = new Set<PipelineStage>(["plan", "plan_2", "plan_3"]);
+const PLAN_STAGES = new Set<PipelineStage>(["plan", "plan2", "plan3"]);
 
 export function isPlanStage(stage: PipelineStage): boolean {
   return PLAN_STAGES.has(stage);
@@ -16,13 +16,12 @@ interface PlanTab {
   stage: PipelineStage;
   modelLabel: string;
   status: StageResult["status"];
-  output: string;
   durationMs: number;
   error?: string;
 }
 
 interface TabbedPlanCardProps {
-  /** All plan stage results (plan, plan_2, plan_3) for this iteration. */
+  /** All plan stage results (plan, plan2, plan3) for this iteration. */
   planStages: StageResult[];
   /** Resolved plan artifacts keyed by plan_1, plan_2, plan_3 or plan. */
   planArtifacts: Record<string, string>;
@@ -33,19 +32,17 @@ interface TabbedPlanCardProps {
   settings: AppSettings | null;
   /** Absolute timestamp when the currently running stage started. */
   startedAt?: number;
-  /** Terminal log lines keyed by stage name. */
-  stageLogs?: Record<string, string[]>;
 }
 
-type ContentTab = "input" | "output" | "terminal";
+type ContentTab = "input" | "output";
 
 const PLAN_LABEL_MAP: Record<string, string> = {
   plan: "Plan 1",
-  plan_2: "Plan 2",
-  plan_3: "Plan 3",
+  plan2: "Plan 2",
+  plan3: "Plan 3",
 };
 
-/** A single planning card that groups 1-3 parallel plans with tabbed output and terminals. */
+/** A single planning card that groups 1-3 parallel plans with tabbed output. */
 export function TabbedPlanCard({
   planStages,
   planArtifacts,
@@ -53,7 +50,6 @@ export function TabbedPlanCard({
   enhancedPromptInput,
   settings,
   startedAt,
-  stageLogs,
 }: TabbedPlanCardProps): ReactNode {
   const [open, setOpen] = useState(false);
   const [contentTab, setContentTab] = useState<ContentTab>("output");
@@ -69,22 +65,16 @@ export function TabbedPlanCard({
         stage: s.stage,
         modelLabel: stageModelLabel(s.stage, settings) ?? "",
         status: s.status,
-        output:
-          planArtifacts[`plan_${planStages.indexOf(s) + 1}`] ??
-          planArtifacts["plan"] ??
-          s.output ??
-          "",
         durationMs: s.durationMs,
         error: s.error,
       })),
-    [planStages, planArtifacts, settings],
+    [planStages, settings],
   );
 
   // Resolve artifact per plan tab in order: plan_1/plan_2/plan_3, then "plan", then stage output.
   const resolvedOutputs = useMemo(() => {
     if (planStages.length === 1) {
-      const art = planArtifacts["plan"] ?? planStages[0].output ?? "";
-      return [art];
+      return [planArtifacts["plan"] ?? planStages[0].output ?? ""];
     }
     return planStages.map((s, i) => {
       const key = `plan_${i + 1}`;
@@ -130,15 +120,8 @@ export function TabbedPlanCard({
     [runPrompt, enhancedPromptInput],
   );
 
-  // Terminal lines for each plan stage.
-  const terminalLines = useMemo(() => {
-    if (!stageLogs) return planStages.map(() => [] as string[]);
-    return planStages.map((s) => stageLogs[s.stage] ?? []);
-  }, [stageLogs, planStages]);
-
   const activePlan = planTabs[activePlanIdx];
   const activeOutput = resolvedOutputs[activePlanIdx] ?? "";
-  const activeTerminal = terminalLines[activePlanIdx] ?? [];
 
   return (
     <article className="rounded-lg border border-[#2e2e48] bg-[#14141e] overflow-hidden">
@@ -182,7 +165,7 @@ export function TabbedPlanCard({
       {/* Expanded body */}
       {open && (
         <div className="px-3 pb-3">
-          {/* Content tabs: Input / Output / Terminal */}
+          {/* Content tabs: Input / Output */}
           <div className="mb-2 flex gap-1">
             <button
               type="button"
@@ -206,19 +189,6 @@ export function TabbedPlanCard({
             >
               Output
             </button>
-            {stageLogs && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setContentTab("terminal"); }}
-                className={`rounded px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider transition-colors ${
-                  contentTab === "terminal"
-                    ? "bg-[#40c4ff]/20 text-[#40c4ff]"
-                    : "text-[#9898b0] hover:text-[#c8c8d8] hover:bg-[#9898b0]/10"
-                }`}
-              >
-                Terminal
-              </button>
-            )}
           </div>
 
           {/* Input tab */}
@@ -255,24 +225,6 @@ export function TabbedPlanCard({
               )}
               <pre className="rounded border border-sky-400/20 bg-sky-400/5 px-3 py-2 text-xs text-[#e4e4ed] whitespace-pre-wrap leading-relaxed break-words">
                 {normaliseDisplayText(activeOutput) || "No valid plan output generated."}
-              </pre>
-            </div>
-          )}
-
-          {/* Terminal tab — with sub-tabs per planner when multiple */}
-          {contentTab === "terminal" && stageLogs && (
-            <div>
-              {hasMultiplePlans && (
-                <PlanSubTabs
-                  tabs={planTabs}
-                  activeIdx={activePlanIdx}
-                  onSelect={setActivePlanIdx}
-                />
-              )}
-              <pre className="max-h-56 overflow-auto rounded bg-[#0f0f14] p-2 text-[11px] leading-relaxed text-[#e4e4ed] whitespace-pre-wrap break-words">
-                {activeTerminal.length > 0
-                  ? activeTerminal.slice(-160).join("\n")
-                  : "Waiting for terminal output..."}
               </pre>
             </div>
           )}

@@ -38,7 +38,10 @@ pub async fn run_prompt_enhance_stage(
     run.current_stage = Some(PipelineStage::PromptEnhance);
     let seq_start = runs::next_sequence(run_id).unwrap_or(1);
     super::stages::append_stage_start_event(run_id, &PipelineStage::PromptEnhance, iter_num, seq_start)?;
-    
+
+    let output_path = runs::artifact_output_path(run_id, iter_num, "enhanced_prompt").ok();
+    let output_path_str = output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+
     let pe_result = execute_agent_stage(
         app,
         run_id,
@@ -54,9 +57,10 @@ pub async fn run_prompt_enhance_stage(
         settings,
         cancel_flag,
         Some(session_id),
+        output_path_str.as_deref(),
     )
     .await;
-    
+
     let enhanced = crate::orchestrator::run_setup::normalise_enhanced_prompt(&pe_result.output, &request.prompt);
     let duration_ms = pe_result.duration_ms;
 

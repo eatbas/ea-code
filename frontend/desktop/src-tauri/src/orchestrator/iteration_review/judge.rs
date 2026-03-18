@@ -48,6 +48,9 @@ pub async fn run_judge_stage(
     let judge_seq = runs::next_sequence(run_id).unwrap_or(1);
     super::stages::append_stage_start_event(run_id, &PipelineStage::Judge, iter_num, judge_seq)?;
 
+    let judge_output_path = runs::artifact_output_path(run_id, iter_num, "judge").ok();
+    let judge_output_path_str = judge_output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+
     let judge_r = execute_agent_stage(
         app,
         run_id,
@@ -72,6 +75,7 @@ pub async fn run_judge_stage(
         settings,
         cancel_flag,
         Some(session_id),
+        judge_output_path_str.as_deref(),
     )
     .await;
     let judge_out = judge_r.output.clone();

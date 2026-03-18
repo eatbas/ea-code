@@ -73,4 +73,7 @@ button {
     transparent 100%
   );
   animation: thinking-sweep 1.6s linear infinite;
+  /* Large negative delay syncs all instances to the same global clock,
+     so parallel progress bars sweep in unison regardless of mount time. */
+  animation-delay: -999999s;
 }

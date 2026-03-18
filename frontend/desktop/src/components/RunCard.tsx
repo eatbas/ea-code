@@ -20,23 +20,37 @@ interface RunCardProps {
 }
 
 /** Converts RunEvent array to StageResult array for display purposes.
- *  Only includes stages that have completed (have a stage_end event).
+ *  Includes both completed stages (stage_end) and in-progress stages
+ *  (stage_start without a matching stage_end).
  */
 function eventsToStageResults(events: RunEvent[]): StageResult[] {
   const stageMap = new Map<string, { stage: string; status: StageStatus; output: string; durationMs: number }>();
 
+  // First pass: collect stage_start events as "running" placeholders.
+  for (const event of events) {
+    if (event.type === "stage_start" && event.stage) {
+      const key = `${event.stage}-${event.iteration}`;
+      if (!stageMap.has(key)) {
+        stageMap.set(key, {
+          stage: event.stage,
+          status: "running",
+          output: "",
+          durationMs: 0,
+        });
+      }
+    }
+  }
+
+  // Second pass: overwrite with stage_end data (completed/failed).
   for (const event of events) {
     if (event.type === "stage_end" && event.stage) {
       const key = `${event.stage}-${event.iteration}`;
-      const existing = stageMap.get(key);
-      if (!existing) {
-        stageMap.set(key, {
-          stage: event.stage,
-          status: event.status as StageStatus,
-          output: "", // Output not stored in new system
-          durationMs: event.durationMs ?? 0,
-        });
-      }
+      stageMap.set(key, {
+        stage: event.stage,
+        status: event.status as StageStatus,
+        output: "",
+        durationMs: event.durationMs ?? 0,
+      });
     }
   }
 
@@ -57,8 +71,8 @@ export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): Reac
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const loadEvents = useCallback(async () => {
-    if (events || loadingEvents) return; // Already loaded or loading
+  const loadEvents = useCallback(async (force = false) => {
+    if ((!force && events) || loadingEvents) return;
     setLoadingEvents(true);
     try {
       const [runEvents, runArtifacts] = await Promise.all([
@@ -74,16 +88,23 @@ export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): Reac
     }
   }, [events, loadingEvents, run.id]);
 
-  // Load events when expanded
-  useEffect(() => {
-    if (isExpanded) {
-      loadEvents();
-    }
-  }, [isExpanded, loadEvents]);
-
   // For active runs, always show full details (events will be loaded)
   const isTerminalStatus = isTerminalStatusValue(run.status);
   const isActiveStatus = isActiveStatusValue(run.status);
+
+  // Load events when expanded
+  useEffect(() => {
+    if (isExpanded) {
+      void loadEvents();
+    }
+  }, [isExpanded, loadEvents]);
+
+  // Poll events/artifacts for active runs so new stages appear.
+  useEffect(() => {
+    if (!isActiveStatus || !isExpanded) return;
+    const interval = setInterval(() => { void loadEvents(true); }, 3000);
+    return () => clearInterval(interval);
+  }, [isActiveStatus, isExpanded, loadEvents]);
   const activeStage = run.currentStage ?? (run.status === "running" ? "prompt_enhance" : undefined);
 
   // Auto-expand active runs

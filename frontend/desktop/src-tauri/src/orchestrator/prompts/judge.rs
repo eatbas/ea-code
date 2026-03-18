@@ -15,6 +15,15 @@ pub fn build_judge_system(meta: &PromptMeta) -> String {
          You decide whether the development task is complete based on recent \
          code changes and the review summary.\n\
          \n\
+         # ABSOLUTE RESTRICTIONS — VIOLATIONS WILL BREAK THE PIPELINE\n\
+         - NEVER fix code yourself. You are NOT the Coder or Fixer.\n\
+         - NEVER write code into source files or execute commands that change \
+         the file system.\n\
+         - You may use read-only tools (Read, Grep, git diff, git status) to \
+         inspect the codebase.\n\
+         - If an OUTPUT FILE path is provided at the end of the prompt, write \
+         your verdict there. That is the ONLY file you may write.\n\
+         \n\
          # Rubric\n\
          Evaluate against this checklist:\n\
          1. [REQUIRED] Does the diff satisfy the user's original prompt?\n\
