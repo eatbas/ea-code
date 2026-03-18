@@ -12,7 +12,6 @@ interface RichStageCardProps {
   planOutput: string;
   planInputForAudit: string;
   auditedPlanOutput: string;
-  reviewOutput: string;
   settings: AppSettings | null;
   startedAt?: number;
   showPlanCard?: boolean;
@@ -28,7 +27,6 @@ export function RichStageCard({
   planOutput,
   planInputForAudit,
   auditedPlanOutput,
-  reviewOutput,
   settings,
   startedAt,
   showPlanCard = true,
@@ -74,21 +72,6 @@ export function RichStageCard({
         durationMs={stage.durationMs}
         badgeClassName="bg-amber-400/25"
         outputClassName="border border-amber-400/20 bg-amber-400/5 text-[#e4e4ed]"
-      />
-    );
-  }
-
-  if (stage.stage === "code_reviewer" && stage.status === "completed") {
-    return (
-      <StageInputOutputCard
-        title="Code Review"
-        inputSections={[{ label: "Original Prompt", content: runPrompt }, { label: "Enhanced Prompt", content: enhancedPromptInput }]}
-        outputLabel="Review Findings"
-        outputContent={reviewOutput || "No review output generated."}
-        modelLabel={stageModelLabel("code_reviewer", settings)}
-        durationMs={stage.durationMs}
-        badgeClassName="bg-orange-400/25"
-        outputClassName="border border-orange-400/20 bg-orange-400/5 text-[#e4e4ed]"
       />
     );
   }

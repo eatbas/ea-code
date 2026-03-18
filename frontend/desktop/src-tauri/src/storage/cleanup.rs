@@ -157,9 +157,17 @@ fn should_delete_run(run_path: &Path, cutoff: DateTime<Utc>) -> Result<bool, Str
 
     let timestamp = match DateTime::parse_from_rfc3339(timestamp_str) {
         Ok(t) => t.with_timezone(&Utc),
-        Err(e) => {
-            eprintln!("Warning: Failed to parse timestamp {timestamp_str}: {e}");
-            return Ok(false);
+        Err(_) => {
+            // Fallback: try parsing as Unix milliseconds (legacy format)
+            if let Ok(millis) = timestamp_str.parse::<i64>() {
+                match DateTime::from_timestamp_millis(millis) {
+                    Some(t) => t,
+                    None => return Ok(false),
+                }
+            } else {
+                eprintln!("Warning: Failed to parse timestamp {timestamp_str}");
+                return Ok(false);
+            }
         }
     };
 

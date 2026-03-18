@@ -76,6 +76,28 @@ export function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
+/** Formats a timestamp into a short relative label (e.g., "2m", "6h", "3d"). */
+export function formatRelativeTime(iso: string): string {
+  try {
+    const d = parseUtcTimestamp(iso);
+    const diffMs = Date.now() - d.getTime();
+    if (diffMs < 0) return "now";
+    const secs = Math.floor(diffMs / 1000);
+    if (secs < 60) return "now";
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months}mo`;
+    return `${Math.floor(months / 12)}y`;
+  } catch {
+    return "";
+  }
+}
+
 /** Truncates text to the first N words and appends an ellipsis when truncated. */
 export function truncateWords(text: string, maxWords: number): string {
   const words = text.trim().split(/\s+/).filter(Boolean);

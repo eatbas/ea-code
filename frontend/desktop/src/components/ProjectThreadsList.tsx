@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ProjectEntry, SessionMeta } from "../types";
-import { projectDisplayName } from "../utils/formatters";
+import { formatRelativeTime, parseUtcTimestamp, projectDisplayName } from "../utils/formatters";
 import { isActiveStatusValue } from "../utils/statusHelpers";
 
 interface ProjectThreadsListProps {
@@ -28,6 +28,17 @@ export function ProjectThreadsList({
   onArchiveSession,
 }: ProjectThreadsListProps): ReactNode {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  /** Sessions sorted most-recent first by updatedAt. */
+  const sortedSessions = useMemo(
+    () =>
+      [...sessions].sort(
+        (a, b) =>
+          parseUtcTimestamp(b.updatedAt).getTime() -
+          parseUtcTimestamp(a.updatedAt).getTime(),
+      ),
+    [sessions],
+  );
 
   function handleArchiveClick(e: React.MouseEvent, sessionId: string): void {
     e.stopPropagation();
@@ -82,7 +93,7 @@ export function ProjectThreadsList({
                       <p className="px-3 py-2 text-xs text-[#6f7086]">No threads</p>
                     ) : (
                       <div className="flex flex-col gap-0.5 py-1">
-                        {sessions.map((session) => {
+                        {sortedSessions.map((session) => {
                           const isActiveSession = session.id === activeSessionId;
                           const isRunningSession =
                             session.id === runningSessionId ||
@@ -134,20 +145,27 @@ export function ProjectThreadsList({
                                 {session.lastPrompt ?? session.title}
                               </button>
                               {onArchiveSession ? (
-                                <button
-                                  onClick={(e) => handleArchiveClick(e, session.id)}
-                                  className="shrink-0 rounded p-0.5 text-[#6f7086] opacity-0 hover:text-[#ef4444] group-hover:opacity-100 transition-all"
-                                  title="Archive session"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="3 6 5 6 21 6" />
-                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                    <path d="M10 11v6" />
-                                    <path d="M14 11v6" />
-                                  </svg>
-                                </button>
+                                <>
+                                  <span className="shrink-0 text-[10px] text-[#6f7086] group-hover:hidden">
+                                    {formatRelativeTime(session.updatedAt)}
+                                  </span>
+                                  <button
+                                    onClick={(e) => handleArchiveClick(e, session.id)}
+                                    className="hidden shrink-0 rounded p-0.5 text-[#6f7086] hover:text-[#ef4444] group-hover:block transition-all"
+                                    title="Archive session"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="3 6 5 6 21 6" />
+                                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                      <path d="M10 11v6" />
+                                      <path d="M14 11v6" />
+                                    </svg>
+                                  </button>
+                                </>
                               ) : (
-                                <span className="shrink-0 text-xs text-[#6f7086]">{session.runCount}</span>
+                                <span className="shrink-0 text-[10px] text-[#6f7086]">
+                                  {formatRelativeTime(session.updatedAt)}
+                                </span>
                               )}
                             </div>
                           );

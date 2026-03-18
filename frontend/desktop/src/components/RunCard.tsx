@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { AppSettings, RunSummary, RunEvent, PipelineStage, StageResult, StageStatus } from "../types";
+import type { AppSettings, PipelineStage, RunSummary, RunEvent, StageResult, StageStatus } from "../types";
 import { parseUtcTimestamp } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
 import { isActiveStatusValue, isTerminalStatusValue } from "../utils/statusHelpers";
@@ -10,6 +10,7 @@ import { ThinkingIndicator } from "./shared/ThinkingIndicator";
 import { StageCard } from "./shared/StageCard";
 import { RichStageCard } from "./shared/RichStageCard";
 import { TabbedPlanCard, isPlanStage } from "./shared/TabbedPlanCard";
+import { TabbedReviewCard, isReviewStage } from "./shared/TabbedReviewCard";
 import { ResultCard, buildStageRowsFromEvents, computeDuration } from "./shared/ResultCard";
 
 interface RunCardProps {
@@ -75,10 +76,12 @@ function eventsToStageResults(events: RunEvent[]): StageResult[] {
  *  Events are lazy-loaded when the card is expanded.
  */
 export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): ReactNode {
+  const isTerminalStatus = isTerminalStatusValue(run.status);
+  const isActiveStatus = isActiveStatusValue(run.status);
   const [events, setEvents] = useState<RunEvent[] | null>(null);
   const [artifacts, setArtifacts] = useState<Record<string, string>>({});
   const [loadingEvents, setLoadingEvents] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(() => isTerminalStatus || isActiveStatus);
 
   const loadEvents = useCallback(async (force = false) => {
     if ((!force && events) || loadingEvents) return;
@@ -97,10 +100,6 @@ export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): Reac
     }
   }, [events, loadingEvents, run.id]);
 
-  // For active runs, always show full details (events will be loaded)
-  const isTerminalStatus = isTerminalStatusValue(run.status);
-  const isActiveStatus = isActiveStatusValue(run.status);
-
   // Load events when expanded
   useEffect(() => {
     if (isExpanded) {
@@ -116,12 +115,12 @@ export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): Reac
   }, [isActiveStatus, isExpanded, loadEvents]);
   const activeStage = run.currentStage ?? (run.status === "running" ? "prompt_enhance" : undefined);
 
-  // Auto-expand active runs
+  // Keep run details visible when reopening a session or when a live run completes.
   useEffect(() => {
-    if (isActiveStatus) {
+    if (isActiveStatus || isTerminalStatus) {
       setIsExpanded(true);
     }
-  }, [isActiveStatus]);
+  }, [isActiveStatus, isTerminalStatus]);
 
   const stageResults = events ? eventsToStageResults(events) : [];
 
@@ -259,7 +258,15 @@ function RunStageList({ stageResults, run, artifacts, settings, isActiveStatus }
   if (artifacts["plan_2"]) planArtifactMap["plan_2"] = artifacts["plan_2"];
   if (artifacts["plan_3"]) planArtifactMap["plan_3"] = artifacts["plan_3"];
 
+  const reviewGroupStages = stageResults.filter((s) => isReviewStage(s.stage));
+  const reviewArtifactMap: Record<string, string> = {};
+  if (artifacts["review"]) reviewArtifactMap["review"] = artifacts["review"];
+  if (artifacts["review_1"]) reviewArtifactMap["review_1"] = artifacts["review_1"];
+  if (artifacts["review_2"]) reviewArtifactMap["review_2"] = artifacts["review_2"];
+  if (artifacts["review_3"]) reviewArtifactMap["review_3"] = artifacts["review_3"];
+
   let planGroupRendered = false;
+  let reviewGroupRendered = false;
 
   return (
     <div className="flex flex-col gap-2">
@@ -279,6 +286,28 @@ function RunStageList({ stageResults, run, artifacts, settings, isActiveStatus }
           );
         }
 
+        if (isReviewStage(stageResult.stage)) {
+          if (reviewGroupRendered) return null;
+          reviewGroupRendered = true;
+          return (
+            <TabbedReviewCard
+              key="review-group"
+              reviewStages={reviewGroupStages}
+              reviewArtifacts={reviewArtifactMap}
+              runPrompt={run.prompt}
+              enhancedPromptInput={artifacts["enhanced_prompt"] ?? run.prompt}
+              settings={settings}
+              startedAt={
+                isActiveStatus && run.currentStage && isReviewStage(run.currentStage as PipelineStage)
+                  ? run.startedAt
+                    ? parseUtcTimestamp(run.startedAt).getTime()
+                    : undefined
+                  : undefined
+              }
+            />
+          );
+        }
+
         return (
           <RichStageCard
             key={`${stageResult.stage}-${idx}`}
@@ -289,7 +318,6 @@ function RunStageList({ stageResults, run, artifacts, settings, isActiveStatus }
             planOutput={artifacts["plan"] ?? ""}
             planInputForAudit={artifacts["plan"] ?? ""}
             auditedPlanOutput={artifacts["plan_audit"] ?? ""}
-            reviewOutput={artifacts["review"] ?? ""}
             settings={settings}
             showPlanCard={false}
             startedAt={
