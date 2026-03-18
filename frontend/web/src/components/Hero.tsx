@@ -28,8 +28,9 @@ export function Hero() {
             <p className="mb-4 inline-block rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 font-mono text-xs font-medium text-accent">
               {release ? `v${release.version}` : ""} — Free &amp; open-source
             </p>
-            <h1 className="font-mono text-4xl leading-tight font-bold tracking-tight md:text-5xl lg:text-6xl">
-              Put your <span className="text-accent">AI subscriptions to work</span>
+            <h1 className="font-mono text-3xl leading-tight font-bold tracking-tight md:text-4xl lg:text-5xl">
+              Put your{" "}
+              <span className="text-accent whitespace-nowrap">AI subscriptions to work</span>
               <br />
               as one quality pipeline.
             </h1>
