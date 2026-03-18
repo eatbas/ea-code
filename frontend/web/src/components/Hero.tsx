@@ -5,7 +5,7 @@ import { useReleaseInfo } from "../hooks/useReleaseInfo";
 const SCREENSHOTS = ["/ss1.png", "/ss2.png"];
 
 export function Hero() {
-  const release = useReleaseInfo();
+  const { release } = useReleaseInfo();
   const [current, setCurrent] = useState(0);
   const [lightbox, setLightbox] = useState(false);
 

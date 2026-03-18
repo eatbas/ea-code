@@ -20,7 +20,7 @@ export function useUpdateCheck(updatesBlocked: boolean): UpdateCheckState {
   const lastCheckAtRef = useRef(0);
   const installingRef = useRef(false);
   const attemptedVersionRef = useRef<string | null>(null);
-  const checkFailureNotifiedRef = useRef(false);
+
   const pendingUpdateRef = useRef<Update | null>(null);
   const updatesBlockedRef = useRef(updatesBlocked);
 
@@ -89,7 +89,6 @@ export function useUpdateCheck(updatesBlocked: boolean): UpdateCheckState {
 
       void check()
         .then((update) => {
-          checkFailureNotifiedRef.current = false;
           if (!update?.available) return;
 
           const pendingVersion = pendingUpdateRef.current?.version;
@@ -111,11 +110,8 @@ export function useUpdateCheck(updatesBlocked: boolean): UpdateCheckState {
 
           installUpdate(update);
         })
-        .catch(() => {
-          if (!checkFailureNotifiedRef.current) {
-            checkFailureNotifiedRef.current = true;
-            toast.error("Failed to check for updates.");
-          }
+        .catch((err) => {
+          console.warn("Update check failed:", err);
         });
     }
 
