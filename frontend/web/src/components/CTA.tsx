@@ -20,7 +20,7 @@ function AppleIcon({ className }: { className?: string }) {
 }
 
 export function CTA() {
-  const { release, loading } = useReleaseInfo();
+  const { release } = useReleaseInfo();
   const windowsUrl = release?.assets?.windows?.download_url;
   const macosUrl = release?.assets?.macos?.download_url;
   const version = release ? `v${release.version}` : "";
@@ -42,32 +42,20 @@ export function CTA() {
             <p className="mt-2 font-mono text-xs text-accent">{version}</p>
           )}
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            {windowsUrl && (
-              <a
-                href={windowsUrl}
-                className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface transition-colors duration-200 hover:bg-accent-hover cursor-pointer"
-              >
-                <WindowsIcon className="h-4 w-4" />
-                Download for Win
-              </a>
-            )}
-            {macosUrl && (
-              <a
-                href={macosUrl}
-                className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface transition-colors duration-200 hover:bg-accent-hover cursor-pointer"
-              >
-                <AppleIcon className="h-4 w-4" />
-                Download for Mac
-              </a>
-            )}
-            {!loading && !windowsUrl && !macosUrl && (
-              <a
-                href={GITHUB_RELEASES}
-                className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface transition-colors duration-200 hover:bg-accent-hover cursor-pointer"
-              >
-                Download from GitHub
-              </a>
-            )}
+            <a
+              href={windowsUrl ?? GITHUB_RELEASES}
+              className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface transition-colors duration-200 hover:bg-accent-hover cursor-pointer"
+            >
+              <WindowsIcon className="h-4 w-4" />
+              Download for Win
+            </a>
+            <a
+              href={macosUrl ?? GITHUB_RELEASES}
+              className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface transition-colors duration-200 hover:bg-accent-hover cursor-pointer"
+            >
+              <AppleIcon className="h-4 w-4" />
+              Download for Mac
+            </a>
             <a
               href="https://github.com/eatbas/ea-code"
               className="inline-flex items-center gap-2 rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted transition-colors duration-200 hover:border-muted hover:text-white cursor-pointer"
