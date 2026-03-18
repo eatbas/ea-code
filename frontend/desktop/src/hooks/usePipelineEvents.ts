@@ -49,7 +49,7 @@ export function usePipelineEvents({
           workspacePath: payload.workspacePath,
           iterations: [],
           currentIteration: 1,
-          maxIterations: 3,
+          maxIterations: payload.maxIterations,
           startedAt: new Date().toISOString(),
         };
         runRef.current = newRun;

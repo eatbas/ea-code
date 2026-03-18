@@ -19,6 +19,7 @@ export interface PipelineStartedEvent {
   sessionId: string;
   prompt: string;
   workspacePath: string;
+  maxIterations: number;
 }
 
 /** Emitted when a pipeline stage changes status. */

@@ -18,6 +18,7 @@ pub struct PipelineStartedPayload {
     pub session_id: String,
     pub prompt: String,
     pub workspace_path: String,
+    pub max_iterations: u32,
 }
 
 /// Emitted when a pipeline stage transitions status.

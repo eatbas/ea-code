@@ -13,7 +13,6 @@ pub enum PipelineStage {
     Plan3,
     PlanAudit,
     Coder,
-    DiffAfterCoder,
     CodeReviewer,
     /// Reviewer slot 2 (parallel review).
     CodeReviewer2,
@@ -22,7 +21,6 @@ pub enum PipelineStage {
     /// Review Merger — combines findings from 2-3 reviewers.
     ReviewMerge,
     CodeFixer,
-    DiffAfterCodeFixer,
     Judge,
     ExecutiveSummary,
     DirectTask,

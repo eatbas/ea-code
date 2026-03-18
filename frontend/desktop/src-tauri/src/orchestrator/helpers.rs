@@ -214,9 +214,7 @@ pub fn resolve_stage_model(stage: &PipelineStage, settings: &AppSettings) -> Str
             settings.review_merger_agent.as_ref(),
             settings,
         ),
-        PipelineStage::DiffAfterCoder | PipelineStage::DiffAfterCodeFixer | PipelineStage::DirectTask => {
-            String::new()
-        }
+        PipelineStage::DirectTask => String::new(),
     }
 }
 

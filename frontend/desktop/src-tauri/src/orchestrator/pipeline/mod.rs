@@ -120,6 +120,7 @@ pub async fn run_pipeline(
             session_id: session_id.clone(),
             prompt: request.prompt.clone(),
             workspace_path: request.workspace_path.clone(),
+            max_iterations: settings.max_iterations,
         },
     );
 

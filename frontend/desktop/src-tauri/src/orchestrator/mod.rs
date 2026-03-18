@@ -14,6 +14,7 @@ pub mod iteration_planning;
 pub mod iteration_review;
 pub mod context_summary;
 pub mod parsing;
+pub mod parallel_stage;
 pub mod plan_gate;
 pub mod pipeline;
 pub mod prompts;

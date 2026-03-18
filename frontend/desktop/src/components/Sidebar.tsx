@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { ActiveView, ProjectEntry, SessionMeta } from "../types";
-import { ProjectThreadsList } from "./ProjectThreadsList";
+import { SidebarCollapsed } from "./SidebarCollapsed";
+import { SidebarHome } from "./SidebarHome";
+import { SidebarSettings } from "./SidebarSettings";
 
 // Re-export so existing consumers that import from Sidebar keep working.
 export type { ActiveView } from "../types";
@@ -30,7 +32,6 @@ const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[
     iconPath: '<path d="M12 3L3 7.5L12 12L21 7.5L12 3z" /><path d="M3 12l9 4.5l9-4.5" /><path d="M3 16.5L12 21l9-4.5" />',
   },
 ];
-
 
 interface SidebarProps {
   collapsed: boolean;
@@ -103,165 +104,42 @@ export function Sidebar({
 
   if (collapsed) {
     return (
-      <aside className="flex h-full w-12 shrink-0 flex-col items-center border-r border-[#2e2e48] bg-[#1a1a24] pt-8 pb-3 gap-3">
-        <button
-          onClick={onToggle}
-          className="rounded p-2 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
-          title="Expand sidebar"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <line x1="9" y1="3" x2="9" y2="21" />
-          </svg>
-        </button>
-
-        <button
-          onClick={onNewSession}
-          className="rounded p-2 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
-          title="New thread"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-        </button>
-
-        <div className="flex-1" />
-
-        <button
-          onClick={handleSettingsClick}
-          className={`rounded p-2 transition-colors ${isSettings ? "bg-[#24243a] text-[#e4e4ed]" : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"}`}
-          title="Settings"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.68a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06-.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15a1.65 1.65 0 0 0 1.51 1z" />
-          </svg>
-        </button>
-      </aside>
+      <SidebarCollapsed
+        onToggle={onToggle}
+        onNewSession={onNewSession}
+        onSettingsClick={handleSettingsClick}
+        settingsActive={isSettings}
+      />
     );
   }
 
-  // Settings mode — full sidebar becomes settings navigation
   if (isSettings) {
     return (
-      <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-[#2e2e48] bg-[#1a1a24]">
-        {/* Back to app */}
-        <div className="px-3 pt-8 pb-3">
-          <button
-            onClick={() => onNavigate("home")}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="19" y1="12" x2="5" y2="12" />
-              <polyline points="12 19 5 12 12 5" />
-            </svg>
-            Back to app
-          </button>
-        </div>
-
-        {/* Settings nav items */}
-        <div className="flex flex-col gap-1 px-3">
-          {SETTINGS_NAV_ITEMS.map(({ view, label, iconPath }) => (
-            <button
-              key={view}
-              onClick={() => onNavigate(view)}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                activeView === view
-                  ? "bg-[#24243a] text-[#e4e4ed]"
-                  : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
-              }`}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-                fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                dangerouslySetInnerHTML={{ __html: iconPath }}
-              />
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1" />
-
-        <div className="border-t border-[#2e2e48] px-3 py-3">
-          <p className="w-full text-center text-[10px] text-[#6b6b82]" title={appFooterLabel}>
-            {appFooterLabel}
-          </p>
-        </div>
-      </aside>
+      <SidebarSettings
+        activeView={activeView}
+        onNavigate={onNavigate}
+        onBackToApp={() => onNavigate("home")}
+        appFooterLabel={appFooterLabel}
+        navItems={SETTINGS_NAV_ITEMS}
+      />
     );
   }
 
-  // Default home sidebar
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-[#2e2e48] bg-[#1a1a24]">
-      {/* Top bar — sidebar toggle + compose icon */}
-      <div className="flex items-center px-3 pt-8 pb-3">
-        <button
-          onClick={onToggle}
-          className="rounded p-1.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
-          title="Collapse sidebar"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <line x1="9" y1="3" x2="9" y2="21" />
-          </svg>
-        </button>
-        <button
-          onClick={onNewSession}
-          className="ml-auto rounded p-1.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
-          title="New thread"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-        </button>
-      </div>
-
-      <ProjectThreadsList
-        projects={projects}
-        sessions={sessions}
-        activeProjectPath={activeProjectPath}
-        activeSessionId={activeSessionId}
-        runningSessionId={runningSessionId}
-        onSelectProject={onSelectProject}
-        onSelectSession={onSelectSession}
-        onArchiveSession={onArchiveSession}
-      />
-
-      <div className="px-3 pb-3">
-        <button
-          onClick={onAddProject}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v2" />
-            <path d="M3 11v6a2 2 0 0 0 2 2h6" />
-            <line x1="16" y1="17" x2="22" y2="17" />
-            <line x1="19" y1="14" x2="19" y2="20" />
-          </svg>
-          Add project
-        </button>
-      </div>
-
-      {/* Bottom — settings */}
-      <div className="border-t border-[#2e2e48] p-3">
-        <button
-          onClick={handleSettingsClick}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06-.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.68a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06-.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15a1.65 1.65 0 0 0 1.51 1z" />
-          </svg>
-          Settings
-        </button>
-        <p className="mt-2 w-full text-center text-[10px] text-[#6b6b82]" title={appFooterLabel}>
-          {appFooterLabel}
-        </p>
-      </div>
-    </aside>
+    <SidebarHome
+      onToggle={onToggle}
+      onNewSession={onNewSession}
+      onSettingsClick={handleSettingsClick}
+      appFooterLabel={appFooterLabel}
+      projects={projects}
+      activeProjectPath={activeProjectPath}
+      onSelectProject={onSelectProject}
+      onAddProject={onAddProject}
+      sessions={sessions}
+      activeSessionId={activeSessionId}
+      onSelectSession={onSelectSession}
+      runningSessionId={runningSessionId}
+      onArchiveSession={onArchiveSession}
+    />
   );
 }
