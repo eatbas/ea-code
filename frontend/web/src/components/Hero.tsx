@@ -29,9 +29,7 @@ export function Hero() {
               {release ? `v${release.version}` : ""} — Free &amp; open-source
             </p>
             <h1 className="font-mono text-4xl leading-tight font-bold tracking-tight md:text-5xl lg:text-6xl">
-              Put your
-              <br />
-              <span className="text-accent">AI subscriptions to work</span>
+              Put your <span className="text-accent">AI subscriptions to work</span>
               <br />
               as one quality pipeline.
             </h1>
