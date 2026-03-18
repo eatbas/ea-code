@@ -24,15 +24,14 @@ export function Hero() {
       <div className="relative mx-auto max-w-6xl px-6">
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
           {/* Copy */}
-          <div className="fade-in-up text-center lg:text-left">
+          <div className="fade-in-up min-w-0 text-center lg:text-left">
             <p className="mb-4 inline-block rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 font-mono text-xs font-medium text-accent">
               {release ? `v${release.version}` : ""} — Free &amp; open-source
             </p>
-            <h1 className="font-mono text-3xl leading-tight font-bold tracking-tight md:text-4xl lg:text-5xl">
+            <h1 className="font-mono text-2xl leading-tight font-bold tracking-tight md:text-3xl lg:text-3xl">
               Put your{" "}
-              <span className="text-accent whitespace-nowrap">AI subscriptions to work</span>
-              <br />
-              as one quality pipeline.
+              <span className="text-accent">AI subscriptions to work</span>
+              {" "}as one quality pipeline.
             </h1>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted md:text-xl mx-auto lg:mx-0">
               You already have Claude, Codex, Gemini, Kimi, and OpenCode.
