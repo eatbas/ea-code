@@ -99,6 +99,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          AR: ""
+          AR_aarch64_apple_darwin: ""
+          "AR_aarch64-apple-darwin": ""
+          AR_x86_64_apple_darwin: ""
+          "AR_x86_64-apple-darwin": ""
           CC: ""
           CXX: ""
         with:
