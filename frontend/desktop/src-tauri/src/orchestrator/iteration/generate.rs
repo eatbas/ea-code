@@ -10,11 +10,11 @@ use crate::agents::AgentInput;
 use crate::models::{StageEndStatus, *};
 use crate::storage::runs;
 
+use crate::orchestrator::helpers::{emit_stage, is_cancelled, push_cancel_iteration};
 use crate::orchestrator::parsing::extract_question;
 use crate::orchestrator::prompts::{self, PromptMeta};
 use crate::orchestrator::run_setup::IterationContext;
 use crate::orchestrator::stages::{execute_agent_stage, PauseHandling};
-use crate::orchestrator::helpers::{emit_stage, is_cancelled, push_cancel_iteration};
 use crate::orchestrator::user_questions::ask_user_question;
 
 /// Runs the generator/coder stage.
@@ -46,7 +46,7 @@ pub async fn run_generate_stage(
     run.current_stage = Some(PipelineStage::Coder);
     let gen_seq = runs::next_sequence(run_id).unwrap_or(1);
     super::stages::append_stage_start_event(run_id, &PipelineStage::Coder, iter_num, gen_seq)?;
-    
+
     let gen_r = execute_agent_stage(
         app,
         run_id,
@@ -79,7 +79,7 @@ pub async fn run_generate_stage(
 
     let gen_out = gen_r.output.clone();
     let gen_duration = gen_r.duration_ms;
-    
+
     if gen_r.status == StageStatus::Failed {
         stages.push(gen_r);
         super::stages::append_stage_end_event(
@@ -90,14 +90,18 @@ pub async fn run_generate_stage(
             &StageEndStatus::Failed,
             gen_duration,
         )?;
-        run.iterations
-            .push(Iteration { number: iter_num, stages: std::mem::take(stages), verdict: None, judge_reasoning: None });
+        run.iterations.push(Iteration {
+            number: iter_num,
+            stages: std::mem::take(stages),
+            verdict: None,
+            judge_reasoning: None,
+        });
         run.status = PipelineStatus::Failed;
         run.error = Some("Coder stage failed".to_string());
         super::stages::update_run_summary(run_id, session_id, run)?;
         return Err("Coder stage failed".to_string());
     }
-    
+
     stages.push(gen_r);
     super::stages::append_stage_end_event(
         run_id,
@@ -107,7 +111,7 @@ pub async fn run_generate_stage(
         &StageEndStatus::Completed,
         gen_duration,
     )?;
-    
+
     if is_cancelled(cancel_flag) {
         push_cancel_iteration(run, iter_num, std::mem::take(stages));
         super::stages::update_run_summary(run_id, session_id, run)?;
@@ -119,21 +123,34 @@ pub async fn run_generate_stage(
         iter_ctx.generate_question = Some(question.clone());
 
         let answer = ask_user_question(
-            app, run_id, &PipelineStage::Coder, iter_num, question, gen_out.clone(), false,
-            cancel_flag, answer_sender,
+            app,
+            run_id,
+            &PipelineStage::Coder,
+            iter_num,
+            question,
+            gen_out.clone(),
+            false,
+            cancel_flag,
+            answer_sender,
         )
         .await?;
-        
+
         if is_cancelled(cancel_flag) {
             push_cancel_iteration(run, iter_num, std::mem::take(stages));
             super::stages::update_run_summary(run_id, session_id, run)?;
             return Err("Cancelled".to_string());
         }
-        
+
         if let Some(ref a) = answer {
             if !a.skipped && !a.answer.is_empty() {
                 iter_ctx.generate_answer = Some(a.answer.clone());
-                emit_stage(app, run_id, &PipelineStage::Coder, &StageStatus::Completed, iter_num);
+                emit_stage(
+                    app,
+                    run_id,
+                    &PipelineStage::Coder,
+                    &StageStatus::Completed,
+                    iter_num,
+                );
             }
         }
     }

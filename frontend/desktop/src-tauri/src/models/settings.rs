@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::agents::{
-    default_executive_summary_model, default_kimi_model, default_kimi_path,
-    default_opencode_model, default_opencode_path, AgentBackend,
+    default_executive_summary_model, default_kimi_model, default_kimi_path, default_opencode_model,
+    default_opencode_path, AgentBackend,
 };
 
 pub const AI_CLI_NAMES: [&str; 5] = ["claude", "codex", "gemini", "kimi", "opencode"];
@@ -114,7 +114,6 @@ pub struct AppSettings {
     pub retention_days: u32,
 
     // --- Parametric parallel slots ---
-
     /// Extra planner slot configurations (planner 2, 3, 4, ...).
     #[serde(default)]
     pub extra_planners: Vec<ExtraSlotConfig>,
@@ -129,7 +128,6 @@ pub struct AppSettings {
     pub max_reviewers: u32,
 
     // --- Legacy fields for backward-compatible migration (read-only) ---
-
     /// Deprecated: use extra_planners[0] instead.
     #[serde(default, skip_serializing)]
     pub planner_2_agent: Option<AgentBackend>,
@@ -392,14 +390,26 @@ impl AppSettings {
     /// Returns the number of active planner slots (0 = none, 1 = primary only, etc.).
     pub fn active_planner_count(&self) -> usize {
         let primary = if self.planner_agent.is_some() { 1 } else { 0 };
-        let extras = self.extra_planners.iter().filter(|s| s.agent.is_some()).count();
+        let extras = self
+            .extra_planners
+            .iter()
+            .filter(|s| s.agent.is_some())
+            .count();
         primary + extras
     }
 
     /// Returns the number of active reviewer slots (1 = primary only, etc.).
     pub fn active_reviewer_count(&self) -> usize {
-        let primary = if self.code_reviewer_agent.is_some() { 1 } else { 0 };
-        let extras = self.extra_reviewers.iter().filter(|s| s.agent.is_some()).count();
+        let primary = if self.code_reviewer_agent.is_some() {
+            1
+        } else {
+            0
+        };
+        let extras = self
+            .extra_reviewers
+            .iter()
+            .filter(|s| s.agent.is_some())
+            .count();
         primary + extras
     }
 }

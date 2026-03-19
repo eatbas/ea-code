@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use crate::models::{GitBaseline, RunSummary, RunFileStatus};
+use crate::models::{GitBaseline, RunFileStatus, RunSummary};
 
 /// Captures the current git baseline (HEAD SHA and dirty state).
 /// Executes git commands in the specified workspace directory.
@@ -142,11 +142,7 @@ fn get_working_tree_changes(workspace: &str) -> Result<Vec<String>, String> {
 fn get_files_from_recent_commits(workspace: &str, count: usize) -> Result<Vec<String>, String> {
     let output = Command::new("git")
         .current_dir(workspace)
-        .args([
-            "diff",
-            "--name-only",
-            &format!("HEAD~{}..HEAD", count),
-        ])
+        .args(["diff", "--name-only", &format!("HEAD~{}..HEAD", count)])
         .output()
         .map_err(|e| format!("Git diff failed: {e}"))?;
 

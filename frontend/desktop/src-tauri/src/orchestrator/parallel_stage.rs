@@ -37,7 +37,14 @@ pub async fn run_parallel_stage_tasks<T, OnResult>(
     iteration: u32,
     tasks: Vec<ParallelStageTask>,
     append_stage_start_event: impl Fn(&str, &PipelineStage, u32, u64) -> Result<(), String>,
-    append_stage_end_event: impl Fn(&str, &PipelineStage, u32, u64, &StageEndStatus, u64) -> Result<(), String>,
+    append_stage_end_event: impl Fn(
+        &str,
+        &PipelineStage,
+        u32,
+        u64,
+        &StageEndStatus,
+        u64,
+    ) -> Result<(), String>,
     mut on_result: OnResult,
 ) -> Result<Vec<T>, String>
 where
@@ -74,7 +81,14 @@ where
             StageEndStatus::Completed
         };
 
-        append_stage_end_event(run_id, &stage, iteration, end_seq, &status, result.duration_ms)?;
+        append_stage_end_event(
+            run_id,
+            &stage,
+            iteration,
+            end_seq,
+            &status,
+            result.duration_ms,
+        )?;
 
         let parallel_run = ParallelStageRun {
             index,

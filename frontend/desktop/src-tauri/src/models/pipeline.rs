@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use serde::de::Deserializer;
 use serde::ser::Serializer;
+use serde::{Deserialize, Serialize};
 
 /// Execution intent for a pipeline stage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,9 +36,7 @@ impl Serialize for PipelineStage {
             PipelineStage::PromptEnhance => serializer.serialize_str("prompt_enhance"),
             PipelineStage::SkillSelect => serializer.serialize_str("skill_select"),
             PipelineStage::Plan => serializer.serialize_str("plan"),
-            PipelineStage::ExtraPlan(i) => {
-                serializer.serialize_str(&format!("plan{}", i + 2))
-            }
+            PipelineStage::ExtraPlan(i) => serializer.serialize_str(&format!("plan{}", i + 2)),
             PipelineStage::PlanAudit => serializer.serialize_str("plan_audit"),
             PipelineStage::Coder => serializer.serialize_str("coder"),
             PipelineStage::CodeReviewer => serializer.serialize_str("code_reviewer"),
@@ -89,10 +87,21 @@ impl<'de> Deserialize<'de> for PipelineStage {
                 Err(serde::de::Error::unknown_variant(
                     other,
                     &[
-                        "prompt_enhance", "skill_select", "plan", "plan2", "plan3",
-                        "plan_audit", "coder", "code_reviewer", "code_reviewer2",
-                        "code_reviewer3", "review_merge", "code_fixer", "judge",
-                        "executive_summary", "direct_task",
+                        "prompt_enhance",
+                        "skill_select",
+                        "plan",
+                        "plan2",
+                        "plan3",
+                        "plan_audit",
+                        "coder",
+                        "code_reviewer",
+                        "code_reviewer2",
+                        "code_reviewer3",
+                        "review_merge",
+                        "code_fixer",
+                        "judge",
+                        "executive_summary",
+                        "direct_task",
                     ],
                 ))
             }

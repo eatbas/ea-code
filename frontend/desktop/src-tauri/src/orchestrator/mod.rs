@@ -8,15 +8,15 @@
 //! - `run_setup` — pipeline setup, teardown, and supporting types
 //! - `pipeline` — main `run_pipeline` loop
 
+pub mod context_summary;
 pub mod helpers;
 pub mod iteration;
 pub mod iteration_planning;
 pub mod iteration_review;
-pub mod context_summary;
-pub mod parsing;
 pub mod parallel_stage;
-pub mod plan_gate;
+pub mod parsing;
 pub mod pipeline;
+pub mod plan_gate;
 pub mod prompts;
 pub mod run_setup;
 pub mod session_memory;

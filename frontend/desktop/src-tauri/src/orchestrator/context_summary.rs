@@ -30,8 +30,14 @@ async fn build_workspace_header(workspace_path: &str) -> String {
     let mut lines = vec![
         "WORKSPACE SNAPSHOT".to_string(),
         format!("Path: {workspace_path}"),
-        format!("Git repository: {}", if info.is_git_repo { "yes" } else { "no" }),
-        format!("Working tree dirty: {}", if info.is_dirty { "yes" } else { "no" }),
+        format!(
+            "Git repository: {}",
+            if info.is_git_repo { "yes" } else { "no" }
+        ),
+        format!(
+            "Working tree dirty: {}",
+            if info.is_dirty { "yes" } else { "no" }
+        ),
     ];
     if let Some(branch) = info.branch {
         lines.push(format!("Branch: {branch}"));
@@ -45,7 +51,10 @@ fn build_package_section(workspace_path: &str) -> Option<String> {
     let json = serde_json::from_str::<serde_json::Value>(&raw).ok()?;
     let obj = json.as_object()?;
 
-    let name = obj.get("name").and_then(serde_json::Value::as_str).unwrap_or("-");
+    let name = obj
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("-");
     let version = obj
         .get("version")
         .and_then(serde_json::Value::as_str)
@@ -81,7 +90,13 @@ fn build_src_tree_section(workspace_path: &str) -> Option<String> {
     Some(format!("SRC TREE (depth <= 2)\n{}", lines.join("\n")))
 }
 
-fn collect_tree_lines(root: &Path, current: &Path, depth: usize, max_depth: usize, out: &mut Vec<String>) {
+fn collect_tree_lines(
+    root: &Path,
+    current: &Path,
+    depth: usize,
+    max_depth: usize,
+    out: &mut Vec<String>,
+) {
     let mut entries = match fs::read_dir(current) {
         Ok(rd) => rd.filter_map(Result::ok).collect::<Vec<_>>(),
         Err(_) => return,

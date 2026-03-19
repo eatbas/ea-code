@@ -51,7 +51,9 @@ pub fn parse_plan_audit_output(output: &str, fallback_plan: &str) -> PlanAuditPa
         cleaned
     };
 
-    PlanAuditParsed { improved_plan: improved }
+    PlanAuditParsed {
+        improved_plan: improved,
+    }
 }
 
 /// Strips legacy APPROVED/REJECTED lines from the start of the output.
@@ -93,9 +95,7 @@ fn strip_plan_tail_noise(text: &str) -> String {
             || lower == "exec"
             || lower == "codex"
             || lower.starts_with("<image>")
-            || (trimmed.starts_with('"')
-                && lower.contains("powershell")
-                && lower.contains(".exe"))
+            || (trimmed.starts_with('"') && lower.contains("powershell") && lower.contains(".exe"))
             || lower.starts_with("succeeded in ");
 
         if is_noise_boundary {

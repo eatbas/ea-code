@@ -50,7 +50,13 @@ pub async fn run_direct_task(
     };
 
     let start = Instant::now();
-    emit_stage(app, run_id, &PipelineStage::DirectTask, &StageStatus::Running, 1);
+    emit_stage(
+        app,
+        run_id,
+        &PipelineStage::DirectTask,
+        &StageStatus::Running,
+        1,
+    );
 
     // Mark session as live while executing
     let _ = sessions::touch_session(session_id, None, Some("running"), None);
@@ -117,7 +123,13 @@ pub async fn run_direct_task(
                     push_cancel_iteration(run, 1, Vec::new());
                     return Ok(());
                 }
-                emit_stage(app, run_id, &PipelineStage::DirectTask, &StageStatus::Running, 1);
+                emit_stage(
+                    app,
+                    run_id,
+                    &PipelineStage::DirectTask,
+                    &StageStatus::Running,
+                    1,
+                );
             }
         }
     };
@@ -125,7 +137,12 @@ pub async fn run_direct_task(
     let duration_ms = start.elapsed().as_millis() as u64;
 
     let (status, output, error, verdict) = match result {
-        Ok(out) => (StageStatus::Completed, out.raw_text, None, Some(JudgeVerdict::Complete)),
+        Ok(out) => (
+            StageStatus::Completed,
+            out.raw_text,
+            None,
+            Some(JudgeVerdict::Complete),
+        ),
         Err(e) => (StageStatus::Failed, String::new(), Some(e), None),
     };
     emit_stage_with_duration(
@@ -186,5 +203,3 @@ pub async fn run_direct_task(
 
     Ok(())
 }
-
-

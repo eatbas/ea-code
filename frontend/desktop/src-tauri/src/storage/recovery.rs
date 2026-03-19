@@ -97,9 +97,7 @@ pub fn recover_run(session_id: &str, run_id: &str) -> Result<(), String> {
 }
 
 /// Extracts stage and iteration info from a run event.
-fn extract_stage_info(
-    event: &RunEvent,
-) -> (Option<crate::models::PipelineStage>, Option<u32>) {
+fn extract_stage_info(event: &RunEvent) -> (Option<crate::models::PipelineStage>, Option<u32>) {
     match event {
         RunEvent::StageStart {
             stage, iteration, ..
@@ -135,7 +133,8 @@ fn append_event_direct(session_id: &str, run_id: &str, event: &RunEvent) -> Resu
     writeln!(file, "{line}").map_err(|e| format!("Failed to append event: {e}"))?;
 
     // H11: Flush to ensure data is written to OS buffers
-    file.flush().map_err(|e| format!("Failed to flush events file: {e}"))?;
+    file.flush()
+        .map_err(|e| format!("Failed to flush events file: {e}"))?;
 
     Ok(())
 }
@@ -147,7 +146,9 @@ fn recover_empty_run(session_id: &str, run_id: &str, now: &str) -> Result<(), St
     let mut summary = match super::runs::read_summary(run_id) {
         Ok(s) => s,
         Err(_) => {
-            return Err(format!("Cannot recover run {run_id}: no summary and no events"));
+            return Err(format!(
+                "Cannot recover run {run_id}: no summary and no events"
+            ));
         }
     };
 
@@ -158,12 +159,7 @@ fn recover_empty_run(session_id: &str, run_id: &str, now: &str) -> Result<(), St
     super::runs::update_summary(run_id, &summary)?;
 
     // Update session metadata
-    sessions::touch_session(
-        session_id,
-        Some(&summary.prompt),
-        Some("crashed"),
-        None,
-    )?;
+    sessions::touch_session(session_id, Some(&summary.prompt), Some("crashed"), None)?;
 
     eprintln!("Recovered empty run {run_id} in session {session_id}");
 
@@ -197,7 +193,11 @@ pub fn migrate_config_dir() -> Result<(), String> {
     let new_dir = config_dir()?;
 
     if old_dir.exists() && !new_dir.exists() {
-        eprintln!("Migrating config from {} to {}", old_dir.display(), new_dir.display());
+        eprintln!(
+            "Migrating config from {} to {}",
+            old_dir.display(),
+            new_dir.display()
+        );
         if let Some(parent) = new_dir.parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create parent for new config dir: {e}"))?;
@@ -205,7 +205,8 @@ pub fn migrate_config_dir() -> Result<(), String> {
         std::fs::rename(&old_dir, &new_dir).map_err(|e| {
             format!(
                 "Failed to migrate config: {e}. Move {} to {} manually.",
-                old_dir.display(), new_dir.display()
+                old_dir.display(),
+                new_dir.display()
             )
         })?;
     }

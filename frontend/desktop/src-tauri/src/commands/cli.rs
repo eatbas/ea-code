@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration as StdDuration, Instant};
 
-use tauri::{AppHandle, Emitter};
 use crate::models::*;
+use tauri::{AppHandle, Emitter};
 
 /// Per-CLI health event payload.
 #[derive(Clone, Debug, serde::Serialize)]
@@ -84,13 +84,12 @@ pub async fn check_cli_health(app: AppHandle, settings: AppSettings) -> Result<(
                 } else {
                     check_single_cli(&path).await
                 };
-                let _ = app_handle.emit("cli_health_status", CliHealthEvent {
-                    cli_name,
-                    status,
-                });
+                let _ = app_handle.emit("cli_health_status", CliHealthEvent { cli_name, status });
             }));
         }
-        for h in handles { let _ = h.await; }
+        for h in handles {
+            let _ = h.await;
+        }
         let _ = app_complete.emit("cli_health_check_complete", ());
     });
 
@@ -100,11 +99,31 @@ pub async fn check_cli_health(app: AppHandle, settings: AppSettings) -> Result<(
 #[tauri::command]
 pub async fn get_cli_versions(app: AppHandle, settings: AppSettings) -> Result<(), String> {
     let cli_specs: Vec<(String, &'static str, &'static str, &'static str)> = vec![
-        (settings.claude_path.clone(), "Claude CLI", "claude", "@anthropic-ai/claude-code"),
-        (settings.codex_path.clone(), "Codex CLI", "codex", "@openai/codex"),
-        (settings.gemini_path.clone(), "Gemini CLI", "gemini", "@google/gemini-cli"),
+        (
+            settings.claude_path.clone(),
+            "Claude CLI",
+            "claude",
+            "@anthropic-ai/claude-code",
+        ),
+        (
+            settings.codex_path.clone(),
+            "Codex CLI",
+            "codex",
+            "@openai/codex",
+        ),
+        (
+            settings.gemini_path.clone(),
+            "Gemini CLI",
+            "gemini",
+            "@google/gemini-cli",
+        ),
         (settings.kimi_path.clone(), "Kimi CLI", "kimi", "kimi-cli"),
-        (settings.opencode_path.clone(), "OpenCode CLI", "opencode", "opencode-ai"),
+        (
+            settings.opencode_path.clone(),
+            "OpenCode CLI",
+            "opencode",
+            "opencode-ai",
+        ),
     ];
 
     tokio::spawn(async move {
@@ -128,7 +147,9 @@ pub async fn get_cli_versions(app: AppHandle, settings: AppSettings) -> Result<(
             }));
         }
 
-        for h in handles { let _ = h.await; }
+        for h in handles {
+            let _ = h.await;
+        }
         let _ = app_complete.emit("cli_versions_check_complete", ());
     });
 
@@ -151,7 +172,11 @@ async fn check_single_cli(path: &str) -> CliStatus {
     CliStatus {
         available,
         path: path.to_string(),
-        error: if available { None } else { Some(format!("{path} not found in PATH")) },
+        error: if available {
+            None
+        } else {
+            Some(format!("{path} not found in PATH"))
+        },
     }
 }
 pub(crate) async fn check_cli_health_inner(settings: &AppSettings) -> Result<CliHealth, String> {
@@ -164,7 +189,16 @@ pub(crate) async fn check_cli_health_inner(settings: &AppSettings) -> Result<Cli
     );
     if cfg!(target_os = "windows") && !check_binary_exists("bash").await {
         let required = Some("Git Bash is required on Windows to run agents".to_string());
-        for status in [&mut claude, &mut codex, &mut gemini, &mut kimi, &mut opencode] { status.available = false; status.error = required.clone(); }
+        for status in [
+            &mut claude,
+            &mut codex,
+            &mut gemini,
+            &mut kimi,
+            &mut opencode,
+        ] {
+            status.available = false;
+            status.error = required.clone();
+        }
     }
     Ok(CliHealth {
         claude,

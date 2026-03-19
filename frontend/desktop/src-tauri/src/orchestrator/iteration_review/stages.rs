@@ -1,6 +1,8 @@
 //! Stage helpers for iteration review.
 
-use crate::models::{JudgeVerdict, PipelineRun, PipelineStage, PipelineStatus, RunEvent, StageEndStatus};
+use crate::models::{
+    JudgeVerdict, PipelineRun, PipelineStage, PipelineStatus, RunEvent, StageEndStatus,
+};
 use crate::storage::{self, runs, sessions};
 
 /// Appends a stage_start event to the event log.

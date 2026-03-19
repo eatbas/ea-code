@@ -16,7 +16,8 @@ pub(super) fn write_prompt_temp_file(prompt: &str) -> Result<String, String> {
         .unwrap_or_default()
         .as_millis();
     let file_path = config_dir.join(format!("prompt-{stamp}.txt"));
-    std::fs::write(&file_path, prompt).map_err(|e| format!("Failed to write prompt temp file: {e}"))?;
+    std::fs::write(&file_path, prompt)
+        .map_err(|e| format!("Failed to write prompt temp file: {e}"))?;
     Ok(file_path.to_string_lossy().to_string())
 }
 
@@ -76,12 +77,17 @@ pub(super) fn build_windows_git_bash_command(
             let mut parts = vec![format!("exec '{}'", bash_single_quote_escape(binary))];
             for (i, arg) in args.iter().enumerate() {
                 if i == idx {
-                    parts.push(format!("\"$(cat '{}')\"", bash_single_quote_escape(&bash_path)));
+                    parts.push(format!(
+                        "\"$(cat '{}')\"",
+                        bash_single_quote_escape(&bash_path)
+                    ));
                 } else {
                     parts.push(format!("'{}'", bash_single_quote_escape(arg)));
                 }
             }
-            command.arg("-lc").arg(format!("{env_prefix}{}", parts.join(" ")));
+            command
+                .arg("-lc")
+                .arg(format!("{env_prefix}{}", parts.join(" ")));
         }
         _ => {
             if extra_envs.is_empty() {
@@ -95,7 +101,9 @@ pub(super) fn build_windows_git_bash_command(
                 for arg in args {
                     parts.push(format!("'{}'", bash_single_quote_escape(arg)));
                 }
-                command.arg("-lc").arg(format!("{env_prefix}{}", parts.join(" ")));
+                command
+                    .arg("-lc")
+                    .arg(format!("{env_prefix}{}", parts.join(" ")));
             }
         }
     }

@@ -40,17 +40,18 @@ pub async fn run_judge_stage(
     })?;
 
     // Use parsed findings instead of raw review output
-    let findings = iter_ctx
-        .review_findings
-        .clone()
-        .unwrap_or_else(|| parse_review_findings(&iter_ctx.review_output.clone().unwrap_or_default()));
+    let findings = iter_ctx.review_findings.clone().unwrap_or_else(|| {
+        parse_review_findings(&iter_ctx.review_output.clone().unwrap_or_default())
+    });
 
     run.current_stage = Some(PipelineStage::Judge);
     let judge_seq = runs::next_sequence(run_id).unwrap_or(1);
     super::stages::append_stage_start_event(run_id, &PipelineStage::Judge, iter_num, judge_seq)?;
 
     let judge_output_path = runs::artifact_output_path(run_id, iter_num, "judge").ok();
-    let judge_output_path_str = judge_output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+    let judge_output_path_str = judge_output_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string());
 
     let judge_r = execute_agent_stage(
         app,
@@ -154,9 +155,7 @@ pub async fn run_judge_stage(
     let handoff = prompts::parse_handoff(&judge_out)
         .unwrap_or_else(|| prompts::build_fallback_handoff(&task_brief, &judge_out, iter_num));
     *previous_judge_output = Some(prompts::render_handoff_for_prompt(&handoff));
-    *last_handoff = Some(
-        handoff,
-    );
+    *last_handoff = Some(handoff);
 
     if iter_num == settings.max_iterations {
         run.final_verdict = Some(JudgeVerdict::NotComplete);

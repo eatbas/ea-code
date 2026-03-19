@@ -48,8 +48,8 @@ pub fn read_messages(session_id: &str) -> Result<Vec<ChatMessage>, String> {
         return Ok(Vec::new());
     }
 
-    let contents = std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read messages file: {e}"))?;
+    let contents =
+        std::fs::read_to_string(&path).map_err(|e| format!("Failed to read messages file: {e}"))?;
 
     let mut messages = Vec::new();
     for (line_num, line) in contents.lines().enumerate() {
@@ -74,10 +74,7 @@ pub fn read_messages(session_id: &str) -> Result<Vec<ChatMessage>, String> {
 
 /// Reads the most recent N chat messages for a session.
 /// Useful for building session memory context without loading the full history.
-pub fn read_recent_messages(
-    session_id: &str,
-    limit: usize,
-) -> Result<Vec<ChatMessage>, String> {
+pub fn read_recent_messages(session_id: &str, limit: usize) -> Result<Vec<ChatMessage>, String> {
     let all = read_messages(session_id)?;
     let len = all.len();
     if len <= limit {

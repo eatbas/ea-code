@@ -12,8 +12,8 @@ use crate::models::{StageEndStatus, *};
 use crate::storage::{self, runs};
 
 pub use crate::orchestrator::helpers::{
-    dispatch_agent, emit_stage, emit_stage_with_duration, resolve_stage_model,
-    wait_for_interrupt, wait_if_paused, RunInterrupt,
+    dispatch_agent, emit_stage, emit_stage_with_duration, resolve_stage_model, wait_for_interrupt,
+    wait_if_paused, RunInterrupt,
 };
 
 fn validate_text_stage_output(stage: &PipelineStage, output: &str) -> Result<(), String> {
@@ -23,7 +23,9 @@ fn validate_text_stage_output(stage: &PipelineStage, output: &str) -> Result<(),
     }
 
     if looks_like_cli_result_envelope(trimmed) {
-        return Err("agent returned a CLI result envelope instead of the final artefact".to_string());
+        return Err(
+            "agent returned a CLI result envelope instead of the final artefact".to_string(),
+        );
     }
 
     if looks_like_process_preamble(trimmed) {
@@ -39,16 +41,17 @@ fn validate_text_stage_output(stage: &PipelineStage, output: &str) -> Result<(),
             }
         }
         PipelineStage::Judge => {
-            let first_non_empty = trimmed.lines().find(|line| !line.trim().is_empty()).unwrap_or("");
+            let first_non_empty = trimmed
+                .lines()
+                .find(|line| !line.trim().is_empty())
+                .unwrap_or("");
             let first_trimmed = first_non_empty.trim();
             let is_complete = first_trimmed.eq_ignore_ascii_case("COMPLETE");
             let is_not_complete = first_trimmed.eq_ignore_ascii_case("NOT COMPLETE");
-            let has_verdict_line = trimmed
-                .lines()
-                .any(|line| {
-                    let t = line.trim();
-                    t.len() >= 8 && t[..8].eq_ignore_ascii_case("VERDICT:")
-                });
+            let has_verdict_line = trimmed.lines().any(|line| {
+                let t = line.trim();
+                t.len() >= 8 && t[..8].eq_ignore_ascii_case("VERDICT:")
+            });
 
             if !is_complete && !is_not_complete && !has_verdict_line {
                 return Err("judge output did not include a parseable verdict line".to_string());
@@ -86,9 +89,15 @@ static PREAMBLE_PREFIXES: &[&str] = &[
 ];
 
 fn looks_like_process_preamble(text: &str) -> bool {
-    let first_non_empty = text.lines().find(|line| !line.trim().is_empty()).unwrap_or("").trim();
+    let first_non_empty = text
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or("")
+        .trim();
     let lower = first_non_empty.to_lowercase();
-    PREAMBLE_PREFIXES.iter().any(|prefix| lower.starts_with(prefix))
+    PREAMBLE_PREFIXES
+        .iter()
+        .any(|prefix| lower.starts_with(prefix))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -216,7 +225,9 @@ pub async fn execute_agent_stage(
         match dispatch_result {
             Ok(output) => {
                 if matches!(stage.execution_intent(), StageExecutionIntent::Text) {
-                    if let Err(validation_error) = validate_text_stage_output(&stage, &output.raw_text) {
+                    if let Err(validation_error) =
+                        validate_text_stage_output(&stage, &output.raw_text)
+                    {
                         last_error = validation_error;
                         continue;
                     }
@@ -303,18 +314,18 @@ pub async fn execute_run_level_agent_stage(
     } else {
         match tokio::time::timeout(
             Duration::from_millis(settings.agent_timeout_ms),
-                dispatch_agent(
-                    backend,
-                    &model,
-                    input,
-                    settings,
-                    session_id,
-                    app,
-                    run_id,
-                    stage.clone(),
-                    output_file,
-                ),
-            )
+            dispatch_agent(
+                backend,
+                &model,
+                input,
+                settings,
+                session_id,
+                app,
+                run_id,
+                stage.clone(),
+                output_file,
+            ),
+        )
         .await
         {
             Ok(inner) => inner,
@@ -328,7 +339,8 @@ pub async fn execute_run_level_agent_stage(
     match dispatch_result {
         Ok(output) => {
             if matches!(stage.execution_intent(), StageExecutionIntent::Text) {
-                if let Err(validation_error) = validate_text_stage_output(&stage, &output.raw_text) {
+                if let Err(validation_error) = validate_text_stage_output(&stage, &output.raw_text)
+                {
                     let duration_ms = start.elapsed().as_millis() as u64;
                     emit_stage_with_duration(
                         app,
@@ -387,12 +399,15 @@ pub async fn execute_run_level_agent_stage(
 
 #[cfg(test)]
 mod tests {
-    use super::{looks_like_cli_result_envelope, looks_like_process_preamble, validate_text_stage_output};
+    use super::{
+        looks_like_cli_result_envelope, looks_like_process_preamble, validate_text_stage_output,
+    };
     use crate::models::PipelineStage;
 
     #[test]
     fn rejects_cli_result_envelope() {
-        let raw = r#"{"type":"result","subtype":"success","result":"hello","stop_reason":"end_turn"}"#;
+        let raw =
+            r#"{"type":"result","subtype":"success","result":"hello","stop_reason":"end_turn"}"#;
         assert!(looks_like_cli_result_envelope(raw));
         assert!(validate_text_stage_output(&PipelineStage::ExtraPlan(1), raw).is_err());
     }

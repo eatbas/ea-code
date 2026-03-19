@@ -34,7 +34,8 @@ pub(crate) fn append_event_internal(
     writeln!(file, "{line}").map_err(|e| format!("Failed to append event: {e}"))?;
 
     // H11: Flush to ensure data is written to OS buffers
-    file.flush().map_err(|e| format!("Failed to flush events file: {e}"))?;
+    file.flush()
+        .map_err(|e| format!("Failed to flush events file: {e}"))?;
 
     Ok(())
 }
@@ -46,7 +47,10 @@ pub fn read_events(run_id: &str) -> Result<Vec<RunEvent>, String> {
     read_events_internal(&session_id, run_id)
 }
 
-pub(crate) fn read_events_internal(session_id: &str, run_id: &str) -> Result<Vec<RunEvent>, String> {
+pub(crate) fn read_events_internal(
+    session_id: &str,
+    run_id: &str,
+) -> Result<Vec<RunEvent>, String> {
     validate_id(session_id)?;
     validate_id(run_id)?;
     let path = events_path(session_id, run_id)?;
@@ -67,7 +71,11 @@ pub(crate) fn read_events_internal(session_id: &str, run_id: &str) -> Result<Vec
         match serde_json::from_str::<RunEvent>(line) {
             Ok(event) => events.push(event),
             Err(e) => {
-                eprintln!("Warning: Skipping malformed event at line {} in {}: {e}", line_num + 1, path.display());
+                eprintln!(
+                    "Warning: Skipping malformed event at line {} in {}: {e}",
+                    line_num + 1,
+                    path.display()
+                );
                 continue;
             }
         }

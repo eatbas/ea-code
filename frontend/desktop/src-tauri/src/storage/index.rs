@@ -73,8 +73,8 @@ fn load_unlocked() -> Result<StorageIndex, String> {
 
 fn save_unlocked(idx: &StorageIndex) -> Result<(), String> {
     let path = index_path()?;
-    let contents = serde_json::to_string_pretty(idx)
-        .map_err(|e| format!("Failed to serialise index: {e}"))?;
+    let contents =
+        serde_json::to_string_pretty(idx).map_err(|e| format!("Failed to serialise index: {e}"))?;
 
     atomic_write(&path, &contents)?;
 
@@ -87,14 +87,11 @@ fn save_unlocked(idx: &StorageIndex) -> Result<(), String> {
 }
 
 /// Migrates from the old flat `run_index.json` (run_id → session_id) to the new format.
-fn migrate_legacy_run_index(
-    legacy_path: &std::path::Path,
-) -> Result<StorageIndex, String> {
+fn migrate_legacy_run_index(legacy_path: &std::path::Path) -> Result<StorageIndex, String> {
     let contents = std::fs::read_to_string(legacy_path)
         .map_err(|e| format!("Failed to read legacy run index: {e}"))?;
 
-    let runs: HashMap<String, String> =
-        serde_json::from_str(&contents).unwrap_or_default();
+    let runs: HashMap<String, String> = serde_json::from_str(&contents).unwrap_or_default();
 
     let idx = StorageIndex {
         sessions: HashMap::new(),
@@ -163,8 +160,7 @@ pub fn remove_session_from_index(session_id: &str) -> Result<(), String> {
 pub fn add_run_to_index(run_id: &str, session_id: &str) -> Result<(), String> {
     with_index_lock(|| {
         let mut idx = load_unlocked()?;
-        idx.runs
-            .insert(run_id.to_string(), session_id.to_string());
+        idx.runs.insert(run_id.to_string(), session_id.to_string());
         save_unlocked(&idx)
     })
 }

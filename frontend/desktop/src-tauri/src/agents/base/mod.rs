@@ -1,12 +1,12 @@
-use tauri::{AppHandle, Emitter};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::time::Duration;
-#[cfg(not(target_os = "windows"))]
-use tokio::process::Command;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+use tauri::{AppHandle, Emitter};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(not(target_os = "windows"))]
+use tokio::process::Command;
+use tokio::time::Duration;
 
-use crate::events::{EVENT_PIPELINE_LOG, PipelineLogPayload};
+use crate::events::{PipelineLogPayload, EVENT_PIPELINE_LOG};
 use crate::models::PipelineStage;
 
 #[cfg(target_os = "windows")]

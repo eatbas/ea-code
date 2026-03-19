@@ -1,5 +1,5 @@
-use crate::storage;
 use crate::models::AppSettings;
+use crate::storage;
 
 /// Returns the current application settings from file storage.
 #[tauri::command]

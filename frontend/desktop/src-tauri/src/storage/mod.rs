@@ -61,8 +61,7 @@ pub fn with_skills_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Result<T, 
 
 /// Returns the config directory: `~/.ea-code/`
 pub fn config_dir() -> Result<PathBuf, String> {
-    let home =
-        dirs::home_dir().ok_or_else(|| "Unable to determine home directory".to_string())?;
+    let home = dirs::home_dir().ok_or_else(|| "Unable to determine home directory".to_string())?;
     Ok(home.join(".ea-code"))
 }
 
@@ -143,12 +142,13 @@ pub fn recover_orphaned_backups() -> Result<(), String> {
                     let target_path = path.with_extension("");
                     if !target_path.exists() {
                         // Orphaned backup - restore it
-                        std::fs::rename(&path, &target_path)
-                            .map_err(|e| format!(
+                        std::fs::rename(&path, &target_path).map_err(|e| {
+                            format!(
                                 "Failed to restore backup {} to {}: {e}",
                                 path.display(),
                                 target_path.display()
-                            ))?;
+                            )
+                        })?;
                         restored += 1;
                     } else {
                         // Target exists, backup is stale - delete it

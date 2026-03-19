@@ -13,9 +13,9 @@ pub(crate) mod settings;
 pub(crate) mod skills;
 pub(crate) mod workspace;
 
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::{collections::HashMap};
 
 use tokio::sync::Mutex;
 

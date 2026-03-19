@@ -1,11 +1,11 @@
 #[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
 use std::path::Path;
 #[cfg(target_os = "windows")]
 use std::process::{Output, Stdio};
 #[cfg(target_os = "windows")]
 use std::sync::OnceLock;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 use tokio::process::Command;
 #[cfg(target_os = "windows")]
@@ -29,9 +29,7 @@ static GIT_BASH_PATH: OnceLock<Option<String>> = OnceLock::new();
 
 #[cfg(target_os = "windows")]
 pub(crate) fn find_git_bash() -> Option<&'static str> {
-    GIT_BASH_PATH
-        .get_or_init(find_git_bash_inner)
-        .as_deref()
+    GIT_BASH_PATH.get_or_init(find_git_bash_inner).as_deref()
 }
 
 #[cfg(target_os = "windows")]
@@ -47,10 +45,7 @@ fn find_git_bash_inner() -> Option<String> {
         candidates.push(format!("{local_app_data}\\Programs\\Git\\bin\\bash.exe"));
     }
 
-    if let Some(path) = candidates
-        .into_iter()
-        .find(|path| Path::new(path).exists())
-    {
+    if let Some(path) = candidates.into_iter().find(|path| Path::new(path).exists()) {
         return Some(path);
     }
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::models::{McpConfigFile, McpServerConfig};
 use crate::models::AI_CLI_NAMES;
+use crate::models::{McpConfigFile, McpServerConfig};
 
 use super::{atomic_write, config_dir, with_mcp_lock};
 
@@ -82,7 +82,7 @@ pub fn sync_builtin_catalog() -> Result<(), String> {
 
         for spec in BUILTIN_MCP_SERVERS {
             let server_exists = config.servers.contains_key(spec.id);
-            
+
             if !server_exists {
                 // Add missing server
                 let server_config = McpServerConfig {
@@ -190,8 +190,13 @@ fn validate_cli_name(cli: &str) -> Result<(), String> {
     if cli.is_empty() {
         return Err("CLI name cannot be empty".to_string());
     }
-    if !cli.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-        return Err(format!("Invalid CLI name '{cli}': only alphanumeric, hyphens, and underscores allowed"));
+    if !cli
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(format!(
+            "Invalid CLI name '{cli}': only alphanumeric, hyphens, and underscores allowed"
+        ));
     }
     Ok(())
 }

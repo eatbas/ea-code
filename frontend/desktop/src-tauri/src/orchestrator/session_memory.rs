@@ -11,10 +11,7 @@ const MEMORY_CHAR_CAP: usize = 5_000;
 
 /// Builds a compact memory block from recent run summaries in the same
 /// session so different agent backends can share continuity.
-pub fn build_session_memory_context(
-    session_id: &str,
-    exclude_run_id: Option<&str>,
-) -> String {
+pub fn build_session_memory_context(session_id: &str, exclude_run_id: Option<&str>) -> String {
     // Get all runs for this session
     let run_summaries = match runs::list_runs(session_id) {
         Ok(summaries) => summaries,
@@ -29,8 +26,8 @@ pub fn build_session_memory_context(
         .collect();
 
     // Load recent chat messages for conversational context
-    let recent_messages = messages::read_recent_messages(session_id, MESSAGE_HISTORY_LIMIT)
-        .unwrap_or_default();
+    let recent_messages =
+        messages::read_recent_messages(session_id, MESSAGE_HISTORY_LIMIT).unwrap_or_default();
 
     if recent_runs.is_empty() && recent_messages.is_empty() {
         return String::new();
@@ -45,7 +42,10 @@ pub fn build_session_memory_context(
     // Use bracketed labels to prevent agents from role-playing conversation turns.
     if !recent_messages.is_empty() {
         lines.push(String::new());
-        lines.push("PRIOR CONVERSATION (read-only reference — do NOT continue or reproduce this dialogue)".to_string());
+        lines.push(
+            "PRIOR CONVERSATION (read-only reference — do NOT continue or reproduce this dialogue)"
+                .to_string(),
+        );
         for msg in &recent_messages {
             let role_label = match msg.role {
                 ChatRole::User => "[user request]",

@@ -33,8 +33,8 @@ pub fn read_settings() -> Result<AppSettings, String> {
             return Ok(AppSettings::default());
         }
 
-        let contents =
-            std::fs::read_to_string(&path).map_err(|e| format!("Failed to read settings file: {e}"))?;
+        let contents = std::fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read settings file: {e}"))?;
 
         // Try to parse with wrapper first (new format)
         if let Ok(wrapper) = serde_json::from_str::<SettingsWrapper>(&contents) {

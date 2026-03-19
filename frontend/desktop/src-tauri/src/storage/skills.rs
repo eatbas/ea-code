@@ -32,7 +32,10 @@ pub fn list_skills() -> Result<Vec<SkillFile>, String> {
             match std::fs::read_to_string(&path) {
                 Ok(contents) => match serde_json::from_str::<SkillFile>(&contents) {
                     Ok(skill) => skills.push(skill),
-                    Err(e) => eprintln!("Warning: Failed to parse skill file {}: {e}", path.display()),
+                    Err(e) => eprintln!(
+                        "Warning: Failed to parse skill file {}: {e}",
+                        path.display()
+                    ),
                 },
                 Err(e) => eprintln!("Warning: Failed to read skill file {}: {e}", path.display()),
             }

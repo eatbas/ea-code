@@ -35,10 +35,7 @@ pub async fn run_codex(
             args.push("--full-auto".to_string());
         }
         StageExecutionIntent::Text => {
-            args.extend([
-                "--sandbox".to_string(),
-                "read-only".to_string(),
-            ]);
+            args.extend(["--sandbox".to_string(), "read-only".to_string()]);
             if let Some(path) = output_file {
                 args.push("--output-last-message".to_string());
                 args.push(path.to_string());

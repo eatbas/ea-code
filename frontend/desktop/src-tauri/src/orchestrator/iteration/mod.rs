@@ -17,7 +17,6 @@ use crate::orchestrator::prompts::{self, PromptMeta};
 use crate::orchestrator::run_setup::IterationContext;
 use crate::orchestrator::skill_stage::run_skill_selection_stage;
 
-
 mod generate;
 mod prompt_enhance;
 pub mod stages;
@@ -66,7 +65,8 @@ pub async fn run_iteration(
         carry.last_approved_plan.as_deref(),
     );
 
-    let prior_handoff = carry.last_handoff
+    let prior_handoff = carry
+        .last_handoff
         .as_ref()
         .map(prompts::render_handoff_for_prompt);
 
@@ -81,7 +81,8 @@ pub async fn run_iteration(
     let judge_feedback = prior_handoff
         .as_deref()
         .map(|o| prompts::truncate_judge_output(o, 3000));
-    let handoff_json = carry.last_handoff
+    let handoff_json = carry
+        .last_handoff
         .as_ref()
         .and_then(|h| serde_json::to_string_pretty(h).ok());
 
@@ -93,16 +94,30 @@ pub async fn run_iteration(
     // --- 1. Prompt enhance ---
     let enhanced = if iter_num == 1 {
         match prompt_enhance::run_prompt_enhance_stage(
-            app, request, settings, cancel_flag, pause_flag, run_id, session_id, iter_num, &meta, run, &mut stages,
-        ).await {
+            app,
+            request,
+            settings,
+            cancel_flag,
+            pause_flag,
+            run_id,
+            session_id,
+            iter_num,
+            &meta,
+            run,
+            &mut stages,
+        )
+        .await
+        {
             Ok(enhanced) => enhanced,
             Err(_) => return Ok(true),
         }
     } else {
-        let seed_prompt = carry.persistent_enhanced_prompt
+        let seed_prompt = carry
+            .persistent_enhanced_prompt
             .as_deref()
             .unwrap_or(&request.prompt);
-        let (stage, prompt) = prompt_enhance::skip_prompt_enhance(app, run_id, iter_num, seed_prompt);
+        let (stage, prompt) =
+            prompt_enhance::skip_prompt_enhance(app, run_id, iter_num, seed_prompt);
         stages.push(stage);
         prompt
     };
@@ -117,9 +132,23 @@ pub async fn run_iteration(
 
     // --- 2-3. Plan + Plan Audit ---
     run_planning_stages(
-        app, request, settings, cancel_flag, pause_flag, run_id, session_id, iter_num,
-        &meta, &enhanced, judge_feedback.as_deref(), run, &mut stages, &mut iter_ctx, workspace_context,
-    ).await?;
+        app,
+        request,
+        settings,
+        cancel_flag,
+        pause_flag,
+        run_id,
+        session_id,
+        iter_num,
+        &meta,
+        &enhanced,
+        judge_feedback.as_deref(),
+        run,
+        &mut stages,
+        &mut iter_ctx,
+        workspace_context,
+    )
+    .await?;
     carry.last_approved_plan = iter_ctx.selected_plan().map(|plan| plan.to_string());
 
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
@@ -130,9 +159,21 @@ pub async fn run_iteration(
     // --- Plan gate: user approval if enabled ---
     if settings.require_plan_approval && iter_ctx.selected_plan().is_some() {
         let should_break = run_plan_gate(
-            app, settings, cancel_flag, pause_flag, answer_sender, run_id, iter_num, &meta,
-            &enhanced, workspace_context, run, &mut stages, &mut iter_ctx,
-        ).await?;
+            app,
+            settings,
+            cancel_flag,
+            pause_flag,
+            answer_sender,
+            run_id,
+            iter_num,
+            &meta,
+            &enhanced,
+            workspace_context,
+            run,
+            &mut stages,
+            &mut iter_ctx,
+        )
+        .await?;
         if should_break {
             stages::update_run_summary(run_id, session_id, run)?;
             return Ok(true);
@@ -142,9 +183,23 @@ pub async fn run_iteration(
 
     // --- 3.5 Skill selection (optional) ---
     let selected_skills_section = run_skill_selection_stage(
-        app, request, settings, cancel_flag, pause_flag, run_id, session_id, iter_num, &meta,
-        &enhanced, iter_ctx.selected_plan(), judge_feedback.as_deref(), workspace_context, run, &mut stages,
-    ).await?;
+        app,
+        request,
+        settings,
+        cancel_flag,
+        pause_flag,
+        run_id,
+        session_id,
+        iter_num,
+        &meta,
+        &enhanced,
+        iter_ctx.selected_plan(),
+        judge_feedback.as_deref(),
+        workspace_context,
+        run,
+        &mut stages,
+    )
+    .await?;
 
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         stages::update_run_summary(run_id, session_id, run)?;
@@ -163,10 +218,27 @@ pub async fn run_iteration(
 
     // --- 4. Generate ---
     if let Err(_) = generate::run_generate_stage(
-        app, request, settings, cancel_flag, pause_flag, answer_sender, run_id, session_id,
-        iter_num, &meta, &enhanced, selected_skills_section.as_deref(), judge_feedback.as_deref(),
-        handoff_json.as_deref(), run, &mut stages, &mut iter_ctx, workspace_context,
-    ).await {
+        app,
+        request,
+        settings,
+        cancel_flag,
+        pause_flag,
+        answer_sender,
+        run_id,
+        session_id,
+        iter_num,
+        &meta,
+        &enhanced,
+        selected_skills_section.as_deref(),
+        judge_feedback.as_deref(),
+        handoff_json.as_deref(),
+        run,
+        &mut stages,
+        &mut iter_ctx,
+        workspace_context,
+    )
+    .await
+    {
         return Ok(true);
     }
 
@@ -177,10 +249,26 @@ pub async fn run_iteration(
 
     // --- 5-8. Review and Fix stages (diff stages removed) ---
     run_review_fix_stages(
-        app, request, settings, cancel_flag, pause_flag, answer_sender, run_id, session_id,
-        iter_num, &meta, &enhanced, selected_skills_section.as_deref(), judge_feedback.as_deref(),
-        handoff_json.as_deref(), run, &mut stages, &mut iter_ctx, workspace_context,
-    ).await?;
+        app,
+        request,
+        settings,
+        cancel_flag,
+        pause_flag,
+        answer_sender,
+        run_id,
+        session_id,
+        iter_num,
+        &meta,
+        &enhanced,
+        selected_skills_section.as_deref(),
+        judge_feedback.as_deref(),
+        handoff_json.as_deref(),
+        run,
+        &mut stages,
+        &mut iter_ctx,
+        workspace_context,
+    )
+    .await?;
 
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         stages::update_run_summary(run_id, session_id, run)?;
@@ -189,7 +277,22 @@ pub async fn run_iteration(
 
     // --- 9. Judge ---
     run_judge_stage(
-        app, request, settings, cancel_flag, pause_flag, run_id, session_id, iter_num, &meta, &enhanced,
-        run, &mut stages, &mut iter_ctx, &mut carry.previous_judge_output, &mut carry.last_handoff, workspace_context,
-    ).await
+        app,
+        request,
+        settings,
+        cancel_flag,
+        pause_flag,
+        run_id,
+        session_id,
+        iter_num,
+        &meta,
+        &enhanced,
+        run,
+        &mut stages,
+        &mut iter_ctx,
+        &mut carry.previous_judge_output,
+        &mut carry.last_handoff,
+        workspace_context,
+    )
+    .await
 }

@@ -81,8 +81,13 @@ pub async fn run_pipeline(
     };
 
     // Create run in storage
-    if let Err(e) = runs::create_run(&run_id, &session_id, &request.prompt, settings.max_iterations, &request.workspace_path)
-    {
+    if let Err(e) = runs::create_run(
+        &run_id,
+        &session_id,
+        &request.prompt,
+        settings.max_iterations,
+        &request.workspace_path,
+    ) {
         eprintln!("Warning: Failed to create run: {e}");
     }
 

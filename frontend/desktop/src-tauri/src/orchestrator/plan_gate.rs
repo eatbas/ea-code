@@ -9,8 +9,8 @@ use tauri::AppHandle;
 use tokio::sync::Mutex;
 
 use crate::agents::AgentInput;
-use crate::models::{RunEvent, StageEndStatus};
 use crate::models::*;
+use crate::models::{RunEvent, StageEndStatus};
 use crate::storage::{self, runs};
 
 use crate::orchestrator::helpers::{is_cancelled, push_cancel_iteration, wait_if_paused};
@@ -169,7 +169,9 @@ pub async fn run_plan_gate(
         append_stage_start_event(run_id, &PipelineStage::Plan, iter_num, plan_seq)?;
 
         let gate_output_path = runs::artifact_output_path(run_id, iter_num, "plan").ok();
-        let gate_output_path_str = gate_output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+        let gate_output_path_str = gate_output_path
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string());
 
         let plan_r = execute_agent_stage(
             app,

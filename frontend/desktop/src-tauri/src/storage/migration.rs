@@ -86,7 +86,10 @@ pub fn migrate_to_project_hierarchy() -> Result<(), String> {
             &mut path_to_project,
             &mut new_index,
         ) {
-            let sid = session_path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
+            let sid = session_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("?");
             eprintln!("Warning: Failed to migrate session {sid}: {e}");
         }
     }

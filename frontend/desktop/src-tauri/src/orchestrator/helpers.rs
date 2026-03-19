@@ -123,15 +123,40 @@ pub async fn dispatch_agent(
             .await
         }
         AgentBackend::Gemini => {
-            run_gemini(input, &settings.gemini_path, model, app, run_id, stage, intent)
-                .await
+            run_gemini(
+                input,
+                &settings.gemini_path,
+                model,
+                app,
+                run_id,
+                stage,
+                intent,
+            )
+            .await
         }
         AgentBackend::Kimi => {
-            run_kimi(input, &settings.kimi_path, model, app, run_id, stage, intent).await
+            run_kimi(
+                input,
+                &settings.kimi_path,
+                model,
+                app,
+                run_id,
+                stage,
+                intent,
+            )
+            .await
         }
         AgentBackend::OpenCode => {
-            run_opencode(input, &settings.opencode_path, model, app, run_id, stage, intent)
-                .await
+            run_opencode(
+                input,
+                &settings.opencode_path,
+                model,
+                app,
+                run_id,
+                stage,
+                intent,
+            )
+            .await
         }
     }?;
 
@@ -167,7 +192,9 @@ pub async fn dispatch_agent(
         if let Some(artifact_path) = output_file {
             let _ = std::fs::write(artifact_path, &final_text);
         }
-        return Ok(AgentOutput { raw_text: final_text });
+        return Ok(AgentOutput {
+            raw_text: final_text,
+        });
     }
 
     Ok(result)
@@ -323,13 +350,7 @@ pub fn emit_stage_with_duration(
 
 /// Emits a pipeline artefact event so the frontend can display stage outputs,
 /// and persists the artefact to disk for historical viewing.
-pub fn emit_artifact(
-    app: &AppHandle,
-    run_id: &str,
-    kind: &str,
-    content: &str,
-    iteration: u32,
-) {
+pub fn emit_artifact(app: &AppHandle, run_id: &str, kind: &str, content: &str, iteration: u32) {
     let _ = app.emit(
         EVENT_PIPELINE_ARTIFACT,
         PipelineArtifactPayload {
@@ -371,10 +392,7 @@ pub async fn wait_for_interrupt(
     }
 }
 
-pub async fn wait_if_paused(
-    pause_flag: &Arc<AtomicBool>,
-    cancel_flag: &Arc<AtomicBool>,
-) -> bool {
+pub async fn wait_if_paused(pause_flag: &Arc<AtomicBool>, cancel_flag: &Arc<AtomicBool>) -> bool {
     while pause_flag.load(Ordering::SeqCst) {
         if cancel_flag.load(Ordering::SeqCst) {
             return true;

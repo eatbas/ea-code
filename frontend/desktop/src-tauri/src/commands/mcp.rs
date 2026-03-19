@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::storage;
-use crate::models::{McpConfigFile, McpServerConfig};
 use crate::models::McpServer;
+use crate::models::{McpConfigFile, McpServerConfig};
+use crate::storage;
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,7 +65,13 @@ fn normalise_json_object(raw: Option<&str>) -> Result<String, String> {
     serde_json::to_string(&parsed).map_err(|e| format!("Failed to serialise env: {e}"))
 }
 
-fn to_model(id: &str, name: &str, description: &str, config: &McpServerConfig, cli_bindings: Vec<String>) -> McpServer {
+fn to_model(
+    id: &str,
+    name: &str,
+    description: &str,
+    config: &McpServerConfig,
+    cli_bindings: Vec<String>,
+) -> McpServer {
     McpServer {
         id: id.to_string(),
         name: name.to_string(),
@@ -84,7 +90,7 @@ fn to_model(id: &str, name: &str, description: &str, config: &McpServerConfig, c
 #[tauri::command]
 pub async fn list_mcp_servers() -> Result<Vec<McpServer>, String> {
     let config = storage::mcp::read_mcp_config()?;
-    
+
     let mut servers = Vec::new();
     for (id, server_config) in &config.servers {
         let cli_bindings = config
@@ -98,10 +104,10 @@ pub async fn list_mcp_servers() -> Result<Vec<McpServer>, String> {
                 }
             })
             .collect();
-        
+
         servers.push(to_model(id, id, "", server_config, cli_bindings));
     }
-    
+
     Ok(servers)
 }
 
@@ -109,7 +115,7 @@ pub async fn list_mcp_servers() -> Result<Vec<McpServer>, String> {
 pub async fn list_mcp_capable_clis() -> Result<Vec<String>, String> {
     let settings = storage::settings::read_settings()?;
     let mut available = Vec::new();
-    
+
     for cli_name in crate::models::AI_CLI_NAMES {
         if let Some(_path) = settings.path_for_cli(cli_name) {
             // For file-based storage, we just check if the CLI is configured
@@ -117,15 +123,12 @@ pub async fn list_mcp_capable_clis() -> Result<Vec<String>, String> {
             available.push(cli_name.to_string());
         }
     }
-    
+
     Ok(available)
 }
 
 #[tauri::command]
-pub async fn set_mcp_server_enabled(
-    _server_id: String,
-    _enabled: bool,
-) -> Result<(), String> {
+pub async fn set_mcp_server_enabled(_server_id: String, _enabled: bool) -> Result<(), String> {
     // File-based storage doesn't track enabled state separately
     // Servers are always "enabled" if they exist
     Ok(())
@@ -140,9 +143,7 @@ pub async fn set_mcp_server_bindings(
 }
 
 #[tauri::command]
-pub async fn create_mcp_server(
-    payload: CreateMcpServerPayload,
-) -> Result<McpServer, String> {
+pub async fn create_mcp_server(payload: CreateMcpServerPayload) -> Result<McpServer, String> {
     let name = payload.name.trim().to_string();
     if name.is_empty() {
         return Err("MCP server name is required".to_string());
@@ -151,32 +152,30 @@ pub async fn create_mcp_server(
     if command.is_empty() {
         return Err("MCP server command is required".to_string());
     }
-    
+
     let id = normalise_id(payload.id.as_deref(), &name);
     let description = payload.description.unwrap_or_default().trim().to_string();
     let args_json = normalise_json_array(payload.args.as_deref())?;
     let env_json = normalise_json_object(payload.env.as_deref())?;
-    
-    let args: Vec<String> = serde_json::from_str(&args_json)
-        .map_err(|e| format!("Failed to parse args: {e}"))?;
-    let env: HashMap<String, String> = serde_json::from_str(&env_json)
-        .map_err(|e| format!("Failed to parse env: {e}"))?;
-    
+
+    let args: Vec<String> =
+        serde_json::from_str(&args_json).map_err(|e| format!("Failed to parse args: {e}"))?;
+    let env: HashMap<String, String> =
+        serde_json::from_str(&env_json).map_err(|e| format!("Failed to parse env: {e}"))?;
+
     let config = McpServerConfig { command, args, env };
     storage::mcp::add_server(&id, &config)?;
-    
+
     let bindings = payload.cli_bindings.unwrap_or_default();
     if !bindings.is_empty() {
         storage::mcp::set_server_bindings(&id, &bindings)?;
     }
-    
+
     Ok(to_model(&id, &name, &description, &config, bindings))
 }
 
 #[tauri::command]
-pub async fn update_mcp_server(
-    payload: UpdateMcpServerPayload,
-) -> Result<McpServer, String> {
+pub async fn update_mcp_server(payload: UpdateMcpServerPayload) -> Result<McpServer, String> {
     let id = payload.id.trim().to_string();
     if id.is_empty() {
         return Err("MCP server id is required".to_string());
@@ -189,27 +188,27 @@ pub async fn update_mcp_server(
     if command.is_empty() {
         return Err("MCP server command is required".to_string());
     }
-    
+
     let description = payload.description.unwrap_or_default().trim().to_string();
     let args_json = normalise_json_array(payload.args.as_deref())?;
     let env_json = normalise_json_object(payload.env.as_deref())?;
-    
-    let args: Vec<String> = serde_json::from_str(&args_json)
-        .map_err(|e| format!("Failed to parse args: {e}"))?;
-    let env: HashMap<String, String> = serde_json::from_str(&env_json)
-        .map_err(|e| format!("Failed to parse env: {e}"))?;
-    
+
+    let args: Vec<String> =
+        serde_json::from_str(&args_json).map_err(|e| format!("Failed to parse args: {e}"))?;
+    let env: HashMap<String, String> =
+        serde_json::from_str(&env_json).map_err(|e| format!("Failed to parse env: {e}"))?;
+
     let config = McpServerConfig { command, args, env };
-    
+
     // Remove and re-add to update
     let _ = storage::mcp::remove_server(&id);
     storage::mcp::add_server(&id, &config)?;
-    
+
     let bindings = payload.cli_bindings.unwrap_or_default();
     if !bindings.is_empty() {
         storage::mcp::set_server_bindings(&id, &bindings)?;
     }
-    
+
     Ok(to_model(&id, &name, &description, &config, bindings))
 }
 
@@ -236,12 +235,12 @@ pub async fn sync_mcp_catalog() -> Result<(), String> {
 #[tauri::command]
 pub async fn set_context7_api_key(api_key: String) -> Result<(), String> {
     let mut config = storage::mcp::read_mcp_config()?;
-    
+
     // Set the API key in the Context7 server config if it exists
     if let Some(server) = config.servers.get_mut("context7") {
         server.env.insert("CONTEXT7_API_KEY".to_string(), api_key);
         storage::mcp::write_mcp_config(&config)?;
     }
-    
+
     Ok(())
 }

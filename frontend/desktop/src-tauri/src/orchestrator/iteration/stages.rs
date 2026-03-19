@@ -71,8 +71,7 @@ pub fn update_run_summary(run_id: &str, session_id: &str, run: &PipelineRun) -> 
         crate::models::JudgeVerdict::NotComplete => "NOT COMPLETE",
     });
 
-    if let Err(_e) = sessions::touch_session(session_id, None, status_str, verdict_str)
-    {
+    if let Err(_e) = sessions::touch_session(session_id, None, status_str, verdict_str) {
         eprintln!("Warning: Failed to touch session");
     }
 

@@ -136,7 +136,10 @@ pub fn emit_final_status(app: &AppHandle, run: &PipelineRun, total_duration_ms: 
                 EVENT_PIPELINE_COMPLETED,
                 PipelineCompletedPayload {
                     run_id: run.id.clone(),
-                    verdict: run.final_verdict.clone().unwrap_or(JudgeVerdict::NotComplete),
+                    verdict: run
+                        .final_verdict
+                        .clone()
+                        .unwrap_or(JudgeVerdict::NotComplete),
                     total_iterations: run.current_iteration,
                     duration_ms: total_duration_ms,
                 },
@@ -148,7 +151,10 @@ pub fn emit_final_status(app: &AppHandle, run: &PipelineRun, total_duration_ms: 
                 PipelineErrorPayload {
                     run_id: run.id.clone(),
                     stage: None,
-                    message: run.error.clone().unwrap_or_else(|| "Unknown error".to_string()),
+                    message: run
+                        .error
+                        .clone()
+                        .unwrap_or_else(|| "Unknown error".to_string()),
                 },
             );
         }

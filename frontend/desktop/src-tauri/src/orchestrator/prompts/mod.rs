@@ -53,7 +53,10 @@ pub fn render_handoff_for_prompt(handoff: &IterationHandoff) -> String {
         format!("Goal: {}", handoff.goal.trim()),
         format!("Progress Summary: {}", handoff.changes_summary.trim()),
         format!("Open Issues: {}", handoff.open_issues.trim()),
-        format!("Required Unresolved Items: {}", handoff.judge_required_items.trim()),
+        format!(
+            "Required Unresolved Items: {}",
+            handoff.judge_required_items.trim()
+        ),
         format!("Next Actions:\n{}", handoff.next_actions.trim()),
     ]
     .join("\n")
@@ -89,7 +92,9 @@ pub fn parse_handoff(judge_output: &str) -> Option<IterationHandoff> {
     let handoff_start = judge_output.find(handoff_marker)?;
     let remainder = &judge_output[handoff_start..];
 
-    let json_start = remainder.find("```json").or_else(|| remainder.find("```"))?;
+    let json_start = remainder
+        .find("```json")
+        .or_else(|| remainder.find("```"))?;
     let after_fence = &remainder[json_start..];
     let content_start = after_fence.find('\n')? + 1;
     let content_end = after_fence[content_start..].find("```")?;

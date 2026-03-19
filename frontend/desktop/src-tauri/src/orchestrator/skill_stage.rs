@@ -102,7 +102,9 @@ pub async fn run_skill_selection_stage(
     append_stage_start_event(run_id, &PipelineStage::SkillSelect, iter_num, seq_start)?;
 
     let skill_output_path = runs::artifact_output_path(run_id, iter_num, "skills").ok();
-    let skill_output_path_str = skill_output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+    let skill_output_path_str = skill_output_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string());
 
     let result = execute_agent_stage(
         app,

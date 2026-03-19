@@ -1,7 +1,7 @@
 use crate::models::SessionMeta;
 
-use super::{atomic_write, config_dir, now_rfc3339, validate_id, with_session_lock};
 use super::index;
+use super::{atomic_write, config_dir, now_rfc3339, validate_id, with_session_lock};
 
 /// Returns the session directory path within a known project.
 /// Used during creation when the session is not yet in the index.
@@ -27,7 +27,10 @@ pub fn session_dir(id: &str) -> Result<std::path::PathBuf, String> {
 }
 
 /// Returns the session.json file path.
-fn session_path_for_project(project_id: &str, session_id: &str) -> Result<std::path::PathBuf, String> {
+fn session_path_for_project(
+    project_id: &str,
+    session_id: &str,
+) -> Result<std::path::PathBuf, String> {
     Ok(session_dir_for_project(project_id, session_id)?.join("session.json"))
 }
 

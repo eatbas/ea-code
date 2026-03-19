@@ -4,9 +4,9 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
-use crate::storage;
 use crate::events::{PipelineErrorPayload, EVENT_PIPELINE_ERROR};
 use crate::models::*;
+use crate::storage;
 
 use super::AppState;
 
@@ -29,7 +29,7 @@ pub async fn run_pipeline(
             ));
         }
     }
-    
+
     let run_id = Uuid::new_v4().to_string();
     let cancel_flag = Arc::new(AtomicBool::new(false));
     let pause_flag = Arc::new(AtomicBool::new(false));
@@ -123,9 +123,10 @@ pub async fn cancel_pipeline(state: State<'_, AppState>, run_id: String) -> Resu
         summary.status = RunFileStatus::Cancelled;
         summary.completed_at = Some(storage::now_rfc3339());
         let _ = storage::runs::update_summary(&run_id, &summary);
-        let _ = storage::sessions::touch_session(&summary.session_id, None, Some("cancelled"), None);
+        let _ =
+            storage::sessions::touch_session(&summary.session_id, None, Some("cancelled"), None);
     }
-    
+
     Ok(())
 }
 
@@ -138,14 +139,14 @@ pub async fn pause_pipeline(state: State<'_, AppState>, run_id: String) -> Resul
     if let Some(flag) = pause_flag {
         flag.store(true, Ordering::SeqCst);
     }
-    
+
     // File-based storage: update run status via summary.json
     if let Ok(mut summary) = storage::runs::read_summary(&run_id) {
         summary.status = RunFileStatus::Paused;
         let _ = storage::runs::update_summary(&run_id, &summary);
         let _ = storage::sessions::touch_session(&summary.session_id, None, Some("paused"), None);
     }
-    
+
     Ok(())
 }
 
@@ -158,14 +159,14 @@ pub async fn resume_pipeline(state: State<'_, AppState>, run_id: String) -> Resu
     if let Some(flag) = pause_flag {
         flag.store(false, Ordering::SeqCst);
     }
-    
+
     // File-based storage: update run status via summary.json
     if let Ok(mut summary) = storage::runs::read_summary(&run_id) {
         summary.status = RunFileStatus::Running;
         let _ = storage::runs::update_summary(&run_id, &summary);
         let _ = storage::sessions::touch_session(&summary.session_id, None, Some("running"), None);
     }
-    
+
     Ok(())
 }
 

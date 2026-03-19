@@ -54,8 +54,11 @@ pub async fn run_executive_summary(
     };
 
     let summary_iteration = run.current_iteration;
-    let output_path = runs::artifact_output_path(run_id, summary_iteration, "executive_summary").ok();
-    let output_path_str = output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+    let output_path =
+        runs::artifact_output_path(run_id, summary_iteration, "executive_summary").ok();
+    let output_path_str = output_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string());
     let summary_input = AgentInput {
         prompt: prompts::build_executive_summary_system(),
         context: Some(build_executive_summary_context(run)),
@@ -165,12 +168,9 @@ pub fn persist_final_run(run: &PipelineRun, session_id: &str) {
         JudgeVerdict::NotComplete => "NOT COMPLETE",
     });
 
-    if let Err(e) = sessions::touch_session(
-        session_id,
-        Some(&run.prompt),
-        Some(status_str),
-        verdict_str,
-    ) {
+    if let Err(e) =
+        sessions::touch_session(session_id, Some(&run.prompt), Some(status_str), verdict_str)
+    {
         eprintln!("Warning: Failed to update session: {e}");
     }
 }

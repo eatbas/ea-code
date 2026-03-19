@@ -129,7 +129,9 @@ pub(super) async fn build_cli_version_info(
     let up_to_date = matches!((&installed, &latest), (Some(i), Some(l)) if i == l);
     let error = match (&installed, &latest) {
         (None, None) => Some(format!("Failed to read version info for {path}")),
-        (None, Some(_)) => Some(format!("Failed to read installed version from {path} --version")),
+        (None, Some(_)) => Some(format!(
+            "Failed to read installed version from {path} --version"
+        )),
         (Some(_), None) => Some(format!("Failed to fetch latest version for {npm_package}")),
         (Some(_), Some(_)) => None,
     };
@@ -164,9 +166,12 @@ pub(super) async fn build_git_bash_version_info() -> CliVersionInfo {
         get_installed_version("git"),
         super::cli_http::get_latest_git_version_http(),
     );
-    let up_to_date = matches!((&installed, &latest), (Some(i), Some(l)) if i == l || i.starts_with(l));
+    let up_to_date =
+        matches!((&installed, &latest), (Some(i), Some(l)) if i == l || i.starts_with(l));
     let error = match (&installed, &latest) {
-        (None, None) => Some("Failed to read installed and latest version for Git Bash".to_string()),
+        (None, None) => {
+            Some("Failed to read installed and latest version for Git Bash".to_string())
+        }
         (None, Some(_)) => Some("Failed to read installed version from git --version".to_string()),
         (Some(_), None) => Some("Failed to fetch latest version for Git Bash".to_string()),
         (Some(_), Some(_)) => None,

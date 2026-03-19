@@ -42,7 +42,11 @@ pub async fn workspace_info(path: &str) -> WorkspaceInfo {
     } else {
         false
     };
-    let branch = if is_repo { git_branch(path).await } else { None };
+    let branch = if is_repo {
+        git_branch(path).await
+    } else {
+        None
+    };
 
     WorkspaceInfo {
         path: path.to_string(),

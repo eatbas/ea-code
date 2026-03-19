@@ -50,10 +50,7 @@ pub(super) fn parse_runtime_map(raw: &str) -> Option<HashMap<String, McpRuntimeS
     Some(map)
 }
 
-fn infer_status_from_json(
-    value: &serde_json::Value,
-    server_id: &str,
-) -> Option<McpRuntimeStatus> {
+fn infer_status_from_json(value: &serde_json::Value, server_id: &str) -> Option<McpRuntimeStatus> {
     match value {
         serde_json::Value::Object(obj) => {
             if let Some(direct) = obj.get(server_id) {

@@ -62,8 +62,7 @@ fn build_claude_args(spec: &McpServerSpec) -> Vec<String> {
         let env_val = serde_json::to_value(&spec.env).unwrap_or_default();
         payload.insert("env".into(), env_val);
     }
-    let json_str = serde_json::to_string(&serde_json::Value::Object(payload))
-        .unwrap_or_default();
+    let json_str = serde_json::to_string(&serde_json::Value::Object(payload)).unwrap_or_default();
 
     vec![
         "mcp".into(),
@@ -125,10 +124,7 @@ fn build_kimi_args(spec: &McpServerSpec) -> Vec<String> {
 /// Patches `~/.kimi/mcp.json` to inject env vars for a server after `kimi mcp add`.
 /// Kimi's `mcp add` does not accept `-e` for stdio servers, so we edit the config
 /// file directly. Only called when `spec.env` is non-empty.
-pub(super) fn patch_kimi_env(
-    server_id: &str,
-    env: &HashMap<String, String>,
-) -> Result<(), String> {
+pub(super) fn patch_kimi_env(server_id: &str, env: &HashMap<String, String>) -> Result<(), String> {
     if env.is_empty() {
         return Ok(());
     }
@@ -147,10 +143,7 @@ pub(super) fn patch_kimi_env(
     let mut config: serde_json::Value =
         serde_json::from_str(&raw).map_err(|e| format!("Failed to parse Kimi MCP config: {e}"))?;
 
-    if let Some(servers) = config
-        .get_mut("mcpServers")
-        .and_then(|v| v.as_object_mut())
-    {
+    if let Some(servers) = config.get_mut("mcpServers").and_then(|v| v.as_object_mut()) {
         if let Some(entry) = servers.get_mut(server_id).and_then(|v| v.as_object_mut()) {
             let env_val = serde_json::to_value(env).unwrap_or_default();
             entry.insert("env".into(), env_val);

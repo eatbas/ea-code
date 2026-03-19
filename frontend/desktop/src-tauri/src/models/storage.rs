@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use super::pipeline::{JudgeVerdict, PipelineStage, PipelineStatus};
 use super::events::RunEvent;
+use super::pipeline::{JudgeVerdict, PipelineStage, PipelineStatus};
 
 /// Run status for storage (includes both active and terminal states).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

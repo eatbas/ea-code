@@ -79,7 +79,11 @@ fn extract_claude_final_text(stream_json_output: &str) -> String {
     let mut last_result_text: Option<String> = None;
     let mut last_assistant_text: Option<String> = None;
 
-    for line in stream_json_output.lines().map(str::trim).filter(|line| !line.is_empty()) {
+    for line in stream_json_output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
         let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
             continue;
         };
@@ -142,4 +146,3 @@ fn extract_claude_final_text(stream_json_output: &str) -> String {
         (None, None) => stream_json_output.trim().to_string(),
     }
 }
-

@@ -6,12 +6,9 @@ use crate::storage;
 
 /// Builds a temporary MCP config file for a CLI from active file-backed servers.
 #[allow(dead_code)]
-pub fn build_mcp_config_for_cli(
-    cli_name: &str,
-    _session_id: Option<&str>,
-) -> Option<String> {
+pub fn build_mcp_config_for_cli(cli_name: &str, _session_id: Option<&str>) -> Option<String> {
     let mcp_config = storage::mcp::read_mcp_config().ok()?;
-    
+
     // Filter to servers that are enabled and bound to this CLI
     let active: Vec<(String, crate::models::McpServerConfig)> = mcp_config
         .servers
@@ -33,11 +30,16 @@ pub fn build_mcp_config_for_cli(
     let mut servers = BTreeMap::<String, serde_json::Value>::new();
     for (server_id, server) in active {
         let mut payload = serde_json::Map::new();
-        payload.insert("command".to_string(), serde_json::Value::String(server.command));
+        payload.insert(
+            "command".to_string(),
+            serde_json::Value::String(server.command),
+        );
         payload.insert(
             "args".to_string(),
             serde_json::Value::Array(
-                server.args.into_iter()
+                server
+                    .args
+                    .into_iter()
                     .map(serde_json::Value::String)
                     .collect(),
             ),

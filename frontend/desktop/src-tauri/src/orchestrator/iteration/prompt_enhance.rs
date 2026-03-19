@@ -27,20 +27,24 @@ pub async fn run_prompt_enhance_stage(
     run: &mut PipelineRun,
     stages: &mut Vec<StageResult>,
 ) -> Result<String, String> {
-    let prompt_enhancer_agent = settings
-        .prompt_enhancer_agent
-        .as_ref()
-        .ok_or_else(|| {
-            "Prompt Enhancer is not set. Go to Settings/Agents and configure the minimum roles."
-                .to_string()
-        })?;
+    let prompt_enhancer_agent = settings.prompt_enhancer_agent.as_ref().ok_or_else(|| {
+        "Prompt Enhancer is not set. Go to Settings/Agents and configure the minimum roles."
+            .to_string()
+    })?;
 
     run.current_stage = Some(PipelineStage::PromptEnhance);
     let seq_start = runs::next_sequence(run_id).unwrap_or(1);
-    super::stages::append_stage_start_event(run_id, &PipelineStage::PromptEnhance, iter_num, seq_start)?;
+    super::stages::append_stage_start_event(
+        run_id,
+        &PipelineStage::PromptEnhance,
+        iter_num,
+        seq_start,
+    )?;
 
     let output_path = runs::artifact_output_path(run_id, iter_num, "enhanced_prompt").ok();
-    let output_path_str = output_path.as_ref().map(|p| p.to_string_lossy().to_string());
+    let output_path_str = output_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string());
 
     let pe_result = execute_agent_stage(
         app,
@@ -63,11 +67,20 @@ pub async fn run_prompt_enhance_stage(
     )
     .await;
 
-    let enhanced = crate::orchestrator::run_setup::normalise_enhanced_prompt(&pe_result.output, &request.prompt);
+    let enhanced = crate::orchestrator::run_setup::normalise_enhanced_prompt(
+        &pe_result.output,
+        &request.prompt,
+    );
     let duration_ms = pe_result.duration_ms;
 
     if pe_result.status != StageStatus::Failed {
-        crate::orchestrator::helpers::emit_artifact(app, run_id, "enhanced_prompt", &enhanced, iter_num);
+        crate::orchestrator::helpers::emit_artifact(
+            app,
+            run_id,
+            "enhanced_prompt",
+            &enhanced,
+            iter_num,
+        );
         if let Ok(mut summary) = runs::read_summary(run_id) {
             summary.enhanced_prompt = Some(enhanced.clone());
             let _ = runs::update_summary(run_id, &summary);
@@ -84,14 +97,18 @@ pub async fn run_prompt_enhance_stage(
             &StageEndStatus::Failed,
             duration_ms,
         )?;
-        run.iterations
-            .push(Iteration { number: iter_num, stages: std::mem::take(stages), verdict: None, judge_reasoning: None });
+        run.iterations.push(Iteration {
+            number: iter_num,
+            stages: std::mem::take(stages),
+            verdict: None,
+            judge_reasoning: None,
+        });
         run.status = PipelineStatus::Failed;
         run.error = Some("Prompt Enhancer stage failed".to_string());
         super::stages::update_run_summary(run_id, session_id, run)?;
         return Err("Prompt Enhancer stage failed".to_string());
     }
-    
+
     stages.push(pe_result);
     super::stages::append_stage_end_event(
         run_id,
@@ -101,7 +118,7 @@ pub async fn run_prompt_enhance_stage(
         &StageEndStatus::Completed,
         duration_ms,
     )?;
-    
+
     Ok(enhanced)
 }
 

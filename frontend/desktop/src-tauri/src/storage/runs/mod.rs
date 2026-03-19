@@ -173,9 +173,15 @@ pub fn list_runs(session_id: &str) -> Result<Vec<RunSummary>, String> {
                 match std::fs::read_to_string(&summary_json) {
                     Ok(contents) => match serde_json::from_str::<RunSummary>(&contents) {
                         Ok(summary) => runs.push(summary),
-                        Err(e) => eprintln!("Warning: Failed to parse summary file {}: {e}", summary_json.display()),
+                        Err(e) => eprintln!(
+                            "Warning: Failed to parse summary file {}: {e}",
+                            summary_json.display()
+                        ),
                     },
-                    Err(e) => eprintln!("Warning: Failed to read summary file {}: {e}", summary_json.display()),
+                    Err(e) => eprintln!(
+                        "Warning: Failed to read summary file {}: {e}",
+                        summary_json.display()
+                    ),
                 }
             }
         }
@@ -200,7 +206,11 @@ pub fn compute_files_changed(run_id: &str) -> Result<Vec<String>, String> {
 
     let workspace_path = summary
         .workspace_path
-        .or_else(|| super::sessions::read_session(&summary.session_id).ok().map(|s| s.project_path))
+        .or_else(|| {
+            super::sessions::read_session(&summary.session_id)
+                .ok()
+                .map(|s| s.project_path)
+        })
         .ok_or_else(|| "No workspace path found for run".to_string())?;
 
     git::compute_files_changed_internal(&baseline, &workspace_path)
@@ -257,7 +267,9 @@ pub fn write_artifact(
 /// Reads all artifacts for a run, returning a map of `kind` to `content`.
 ///
 /// If multiple iterations wrote the same kind, the latest iteration wins.
-pub fn read_all_artifacts(run_id: &str) -> Result<std::collections::HashMap<String, String>, String> {
+pub fn read_all_artifacts(
+    run_id: &str,
+) -> Result<std::collections::HashMap<String, String>, String> {
     validate_id(run_id)?;
     let session_id = get_session_for_run(run_id)?;
     let dir = artifacts_dir(&session_id, run_id)?;
@@ -269,8 +281,8 @@ pub fn read_all_artifacts(run_id: &str) -> Result<std::collections::HashMap<Stri
         return Ok(artifacts);
     }
 
-    let entries = std::fs::read_dir(&dir)
-        .map_err(|e| format!("Failed to read artifacts directory: {e}"))?;
+    let entries =
+        std::fs::read_dir(&dir).map_err(|e| format!("Failed to read artifacts directory: {e}"))?;
 
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read artifact entry: {e}"))?;

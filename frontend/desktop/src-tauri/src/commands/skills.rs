@@ -1,5 +1,5 @@
-use crate::storage;
 use crate::models::SkillFile;
+use crate::storage;
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,18 +41,13 @@ pub async fn create_skill(payload: CreateSkillPayload) -> Result<SkillFile, Stri
     if name.is_empty() {
         return Err("Skill name is required".to_string());
     }
-    
+
     let id = uuid::Uuid::new_v4().to_string();
     let description = clean(&payload.description);
     let instructions = payload.instructions.trim().replace("\r\n", "\n");
-    
-    let skill = storage::skills::create_skill(
-        id,
-        name,
-        description,
-        instructions,
-    );
-    
+
+    let skill = storage::skills::create_skill(id, name, description, instructions);
+
     storage::skills::save_skill(&skill)?;
     Ok(skill)
 }
@@ -64,9 +59,9 @@ pub async fn update_skill(payload: UpdateSkillPayload) -> Result<SkillFile, Stri
     if id.is_empty() {
         return Err("Skill ID is required".to_string());
     }
-    
+
     let mut skill = storage::skills::get_skill(&id)?;
-    
+
     if let Some(name) = payload.name {
         let name = clean(&name);
         if name.is_empty() {
@@ -74,15 +69,15 @@ pub async fn update_skill(payload: UpdateSkillPayload) -> Result<SkillFile, Stri
         }
         skill.name = name;
     }
-    
+
     if let Some(description) = payload.description {
         skill.description = clean(&description);
     }
-    
+
     if let Some(instructions) = payload.instructions {
         skill.prompt = instructions.trim().replace("\r\n", "\n");
     }
-    
+
     skill.updated_at = storage::now_rfc3339();
     storage::skills::save_skill(&skill)?;
     Ok(skill)

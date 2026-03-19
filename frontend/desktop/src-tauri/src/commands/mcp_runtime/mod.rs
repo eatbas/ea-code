@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use tauri::{AppHandle, Emitter};
 
-use crate::storage;
 use crate::models::{
-    AppSettings, McpCliFixResult, McpCliRuntimeStatus, McpCliServerRuntimeStatus,
-    McpRuntimeStatus, McpVerificationConfidence, AI_CLI_NAMES,
+    AppSettings, McpCliFixResult, McpCliRuntimeStatus, McpCliServerRuntimeStatus, McpRuntimeStatus,
+    McpVerificationConfidence, AI_CLI_NAMES,
 };
+use crate::storage;
 
 mod install;
 mod native;
@@ -91,7 +91,10 @@ pub async fn run_cli_mcp_fix_with_prompt(
         return Err(format!("Unsupported CLI for MCP fix: {}", request.cli_name));
     }
     if !BUILTIN_SERVER_IDS.contains(&server_id.as_str()) {
-        return Err(format!("Unsupported MCP server for fix: {}", request.server_id));
+        return Err(format!(
+            "Unsupported MCP server for fix: {}",
+            request.server_id
+        ));
     }
 
     let settings = storage::settings::read_settings()?;
@@ -231,7 +234,10 @@ async fn verify_single_server_runtime(
     cli_installed: bool,
 ) -> (McpRuntimeStatus, McpVerificationConfidence) {
     if !cli_installed {
-        return (McpRuntimeStatus::NotInstalled, McpVerificationConfidence::None);
+        return (
+            McpRuntimeStatus::NotInstalled,
+            McpVerificationConfidence::None,
+        );
     }
     match native::fetch_native_runtime_map(cli_path).await {
         Ok(map) => (
@@ -277,4 +283,3 @@ fn build_server_spec(server_id: &str) -> Result<install::McpServerSpec, String> 
         env,
     })
 }
-

@@ -1,5 +1,5 @@
+use crate::models::{ChatMessage, RunDetail, RunEvent, SessionDetail};
 use crate::storage;
-use crate::models::{ChatMessage, SessionDetail, RunDetail, RunEvent};
 
 /// Returns recently opened projects for the sidebar.
 #[tauri::command]
@@ -10,7 +10,9 @@ pub async fn list_projects() -> Result<Vec<crate::models::ProjectEntry>, String>
 /// Returns session threads for a given project path.
 /// Resolves the filesystem path to a project_id, then lists sessions for that project.
 #[tauri::command]
-pub async fn list_sessions(project_path: String) -> Result<Vec<crate::models::SessionMeta>, String> {
+pub async fn list_sessions(
+    project_path: String,
+) -> Result<Vec<crate::models::SessionMeta>, String> {
     let project = match storage::projects::find_by_path(&project_path) {
         Some(p) => p,
         None => return Ok(Vec::new()),
@@ -44,11 +46,7 @@ pub async fn get_session_detail(
     let limit = limit.unwrap_or(20) as usize;
     let offset = offset.unwrap_or(0) as usize;
 
-    let mut paginated_runs: Vec<_> = all_runs
-        .into_iter()
-        .skip(offset)
-        .take(limit)
-        .collect();
+    let mut paginated_runs: Vec<_> = all_runs.into_iter().skip(offset).take(limit).collect();
 
     // Reverse back to chronological order (oldest first) for display
     paginated_runs.reverse();

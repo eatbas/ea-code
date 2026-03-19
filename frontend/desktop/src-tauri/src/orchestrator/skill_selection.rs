@@ -2,8 +2,6 @@
 
 use std::collections::HashSet;
 
-
-
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawSkillSelection {
