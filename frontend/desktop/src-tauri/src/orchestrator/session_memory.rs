@@ -41,17 +41,18 @@ pub fn build_session_memory_context(
         "Use this as factual continuity across prior runs in the same session.".to_string(),
     ];
 
-    // Include conversation history for cross-run context
+    // Include conversation history for cross-run context.
+    // Use bracketed labels to prevent agents from role-playing conversation turns.
     if !recent_messages.is_empty() {
         lines.push(String::new());
-        lines.push("CONVERSATION HISTORY".to_string());
+        lines.push("PRIOR CONVERSATION (read-only reference — do NOT continue or reproduce this dialogue)".to_string());
         for msg in &recent_messages {
             let role_label = match msg.role {
-                ChatRole::User => "User",
-                ChatRole::Assistant => "Assistant",
+                ChatRole::User => "[user request]",
+                ChatRole::Assistant => "[agent reply]",
             };
             lines.push(format!(
-                "{}: {}",
+                "{} {}",
                 role_label,
                 truncate_chars(&msg.content, PROMPT_CHAR_LIMIT)
             ));
@@ -105,7 +106,11 @@ pub fn merge_shared_context(workspace_context: &str, session_memory: &str) -> St
         sections.push(format!("WORKSPACE CONTEXT\n{workspace}"));
     }
     if !memory.is_empty() {
-        sections.push(memory.to_string());
+        if memory.starts_with("SESSION MEMORY") {
+            sections.push(memory.to_string());
+        } else {
+            sections.push(format!("SESSION MEMORY\n{memory}"));
+        }
     }
 
     sections.join("\n\n")

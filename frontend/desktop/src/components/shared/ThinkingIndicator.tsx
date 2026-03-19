@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useState, useEffect } from "react";
 import type { PipelineStage } from "../../types";
-import { STAGE_LABELS } from "./constants";
+import { stageLabel } from "./constants";
 
 interface ThinkingIndicatorProps {
   stage: PipelineStage;
@@ -40,7 +40,7 @@ export function ThinkingIndicator({ stage, startedAt }: ThinkingIndicatorProps):
       <div className="thinking-sweep-overlay pointer-events-none absolute inset-0" />
       <div className="relative z-10 flex items-center gap-2">
         <span className="text-xs font-semibold tracking-wide text-[#4ade80]">
-          {STAGE_LABELS[stage] ?? stage}...
+          {stageLabel(stage)}...
         </span>
         <span className="ml-auto text-[10px] tabular-nums text-[#9898b0] opacity-80">
           {timer}

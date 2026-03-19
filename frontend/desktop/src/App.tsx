@@ -35,6 +35,7 @@ function App(): ReactNode {
     activeView,
     setActiveView,
     activeSessionId,
+    chatDismissed,
     sessionDetail,
     sessionDetailLoading,
     sessionLoadingMore,
@@ -43,6 +44,7 @@ function App(): ReactNode {
     handleMissingAgentSetup,
     handleNewSession,
     handleBackFromChat,
+    handleBackFromSession,
     handleSelectSession,
     handleLoadMoreRuns,
     handleSelectProject,
@@ -102,6 +104,7 @@ function App(): ReactNode {
           <AppContentRouter
             activeView={activeView}
             activeSessionId={activeSessionId}
+            chatDismissed={chatDismissed}
             run={run}
             stageLogs={stageLogs}
             artifacts={artifacts}
@@ -130,8 +133,8 @@ function App(): ReactNode {
             onCancelPipeline={cancelPipeline}
             onRun={handleRun}
             onContinueRun={handleContinueRun}
-            onNewSession={handleNewSession}
             onBackFromChat={handleBackFromChat}
+            onBackFromSession={handleBackFromSession}
             onLoadMoreRuns={handleLoadMoreRuns}
             onSelectProject={handleSelectProject}
             onAddProject={selectFolder}

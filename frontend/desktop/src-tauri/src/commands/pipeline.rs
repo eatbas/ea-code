@@ -99,7 +99,7 @@ pub async fn run_pipeline(
     Ok(())
 }
 
-/// Signals the running pipeline to cancel at the next stage boundary.
+/// Signals the running pipeline to cancel as soon as the active stage checks interruption flags.
 #[tauri::command]
 pub async fn cancel_pipeline(state: State<'_, AppState>, run_id: String) -> Result<(), String> {
     let cancel_flag = {
@@ -123,6 +123,7 @@ pub async fn cancel_pipeline(state: State<'_, AppState>, run_id: String) -> Resu
         summary.status = RunFileStatus::Cancelled;
         summary.completed_at = Some(storage::now_rfc3339());
         let _ = storage::runs::update_summary(&run_id, &summary);
+        let _ = storage::sessions::touch_session(&summary.session_id, None, Some("cancelled"), None);
     }
     
     Ok(())
@@ -142,6 +143,7 @@ pub async fn pause_pipeline(state: State<'_, AppState>, run_id: String) -> Resul
     if let Ok(mut summary) = storage::runs::read_summary(&run_id) {
         summary.status = RunFileStatus::Paused;
         let _ = storage::runs::update_summary(&run_id, &summary);
+        let _ = storage::sessions::touch_session(&summary.session_id, None, Some("paused"), None);
     }
     
     Ok(())
@@ -161,6 +163,7 @@ pub async fn resume_pipeline(state: State<'_, AppState>, run_id: String) -> Resu
     if let Ok(mut summary) = storage::runs::read_summary(&run_id) {
         summary.status = RunFileStatus::Running;
         let _ = storage::runs::update_summary(&run_id, &summary);
+        let _ = storage::sessions::touch_session(&summary.session_id, None, Some("running"), None);
     }
     
     Ok(())

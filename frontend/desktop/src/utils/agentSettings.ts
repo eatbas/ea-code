@@ -28,38 +28,30 @@ export function hasMinimumAgentsConfigured(settings: AppSettings): boolean {
   return missingMinimumAgentLabels(settings).length === 0;
 }
 
-/** Keys for agent backend fields in AppSettings. */
+/** Keys for agent backend fields in AppSettings (primary stages only). */
 type AgentBackendKey = keyof Pick<
   AppSettings,
   | "promptEnhancerAgent"
   | "skillSelectorAgent"
   | "plannerAgent"
-  | "planner2Agent"
-  | "planner3Agent"
   | "planAuditorAgent"
   | "coderAgent"
   | "codeReviewerAgent"
-  | "codeReviewer2Agent"
-  | "codeReviewer3Agent"
   | "reviewMergerAgent"
   | "codeFixerAgent"
   | "finalJudgeAgent"
   | "executiveSummaryAgent"
 >;
 
-/** Keys for per-stage model fields in AppSettings. */
+/** Keys for per-stage model fields in AppSettings (primary stages only). */
 type AgentModelKey = keyof Pick<
   AppSettings,
   | "promptEnhancerModel"
   | "skillSelectorModel"
   | "plannerModel"
-  | "planner2Model"
-  | "planner3Model"
   | "planAuditorModel"
   | "coderModel"
   | "codeReviewerModel"
-  | "codeReviewer2Model"
-  | "codeReviewer3Model"
   | "reviewMergerModel"
   | "codeFixerModel"
   | "finalJudgeModel"
@@ -76,13 +68,9 @@ const AGENT_STAGE_BINDINGS: AgentStageBinding[] = [
   { backendKey: "promptEnhancerAgent", modelKey: "promptEnhancerModel", optional: false },
   { backendKey: "skillSelectorAgent", modelKey: "skillSelectorModel", optional: true },
   { backendKey: "plannerAgent", modelKey: "plannerModel", optional: true },
-  { backendKey: "planner2Agent", modelKey: "planner2Model", optional: true },
-  { backendKey: "planner3Agent", modelKey: "planner3Model", optional: true },
   { backendKey: "planAuditorAgent", modelKey: "planAuditorModel", optional: true },
   { backendKey: "coderAgent", modelKey: "coderModel", optional: false },
   { backendKey: "codeReviewerAgent", modelKey: "codeReviewerModel", optional: false },
-  { backendKey: "codeReviewer2Agent", modelKey: "codeReviewer2Model", optional: true },
-  { backendKey: "codeReviewer3Agent", modelKey: "codeReviewer3Model", optional: true },
   { backendKey: "reviewMergerAgent", modelKey: "reviewMergerModel", optional: true },
   { backendKey: "codeFixerAgent", modelKey: "codeFixerModel", optional: false },
   { backendKey: "finalJudgeAgent", modelKey: "finalJudgeModel", optional: false },
@@ -138,6 +126,7 @@ function setStageModel(
  * - If a stage backend has no enabled models, clear backend + model.
  * - If a stage model is no longer enabled for its backend, pick the first enabled model.
  * - If backend is unset, clear model value.
+ * - Also sanitises extra planner/reviewer arrays.
  */
 export function sanitiseAgentAssignmentsForEnabledModels(settings: AppSettings): AppSettings {
   const next: AppSettings = { ...settings };
@@ -161,7 +150,30 @@ export function sanitiseAgentAssignmentsForEnabledModels(settings: AppSettings):
     }
   }
 
+  // Sanitise extra planner/reviewer arrays.
+  next.extraPlanners = sanitiseExtraSlots(next, next.extraPlanners);
+  next.extraReviewers = sanitiseExtraSlots(next, next.extraReviewers);
+
   return next;
+}
+
+function sanitiseExtraSlots(
+  settings: AppSettings,
+  slots: AppSettings["extraPlanners"],
+): AppSettings["extraPlanners"] {
+  return slots.map((slot) => {
+    if (!slot.agent) {
+      return { agent: null, model: null };
+    }
+    const enabled = enabledModelsForBackend(settings, slot.agent);
+    if (enabled.length === 0) {
+      return { agent: null, model: null };
+    }
+    if (!slot.model || !enabled.includes(slot.model)) {
+      return { agent: slot.agent, model: enabled[0] };
+    }
+    return slot;
+  });
 }
 
 export function missingMinimumAgentModelLabels(settings: AppSettings): string[] {

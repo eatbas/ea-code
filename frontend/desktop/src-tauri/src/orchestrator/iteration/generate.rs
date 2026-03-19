@@ -13,7 +13,7 @@ use crate::storage::runs;
 use crate::orchestrator::parsing::extract_question;
 use crate::orchestrator::prompts::{self, PromptMeta};
 use crate::orchestrator::run_setup::IterationContext;
-use crate::orchestrator::stages::execute_agent_stage;
+use crate::orchestrator::stages::{execute_agent_stage, PauseHandling};
 use crate::orchestrator::helpers::{emit_stage, is_cancelled, push_cancel_iteration};
 use crate::orchestrator::user_questions::ask_user_question;
 
@@ -24,7 +24,7 @@ pub async fn run_generate_stage(
     request: &PipelineRequest,
     settings: &AppSettings,
     cancel_flag: &Arc<AtomicBool>,
-    _pause_flag: &Arc<AtomicBool>,
+    pause_flag: &Arc<AtomicBool>,
     answer_sender: &Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
     run_id: &str,
     session_id: &str,
@@ -70,6 +70,8 @@ pub async fn run_generate_stage(
         },
         settings,
         cancel_flag,
+        pause_flag,
+        PauseHandling::ResumeWithinStage,
         Some(session_id),
         None,
     )

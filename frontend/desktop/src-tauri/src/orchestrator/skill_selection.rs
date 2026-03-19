@@ -39,9 +39,7 @@ pub fn build_skill_selector_user(
             _ => "APPROVED EXECUTION PLAN:\n(No approved plan. Use the enhanced prompt as fallback context.)".to_string(),
         },
         match previous_judge_output {
-            Some(judge) if !judge.trim().is_empty() => {
-                format!("PREVIOUS JUDGE FEEDBACK:\n{}", judge.trim())
-            }
+            Some(judge) if !judge.trim().is_empty() => judge.trim().to_string(),
             _ => String::new(),
         },
         format!("SKILL CATALOG (JSON, metadata only):\n{skill_catalog_json}"),

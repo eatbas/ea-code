@@ -4,7 +4,7 @@ import type { AppSettings, CliHealth } from "../../types";
 import { sanitiseAgentAssignmentsForEnabledModels } from "../../utils/agentSettings";
 import { InlineStageSlot } from "./InlineStageSlot";
 import { StageCard } from "./StageCard";
-import { useParallelSlotGroup } from "./useParallelSlotGroup";
+import { useExtraSlots } from "./useExtraSlots";
 
 /** Props for the AgentsView component. */
 export interface AgentsViewProps {
@@ -13,20 +13,6 @@ export interface AgentsViewProps {
   cliHealth?: CliHealth | null;
   cliHealthChecking?: boolean;
 }
-
-const PLANNER_SLOT_KEYS = {
-  slot2AgentKey: "planner2Agent",
-  slot2ModelKey: "planner2Model",
-  slot3AgentKey: "planner3Agent",
-  slot3ModelKey: "planner3Model",
-} as const;
-
-const REVIEWER_SLOT_KEYS = {
-  slot2AgentKey: "codeReviewer2Agent",
-  slot2ModelKey: "codeReviewer2Model",
-  slot3AgentKey: "codeReviewer3Agent",
-  slot3ModelKey: "codeReviewer3Model",
-} as const;
 
 /** Inline view for configuring agent role assignments and pipeline parameters. */
 export function AgentsView({
@@ -51,8 +37,8 @@ export function AgentsView({
     onSave(next);
   }
 
-  const plannerSlots = useParallelSlotGroup(settings, draftRef, update, PLANNER_SLOT_KEYS);
-  const reviewerSlots = useParallelSlotGroup(settings, draftRef, update, REVIEWER_SLOT_KEYS);
+  const plannerSlots = useExtraSlots(settings, draftRef, update, "extraPlanners", "maxPlanners");
+  const reviewerSlots = useExtraSlots(settings, draftRef, update, "extraReviewers", "maxReviewers");
 
   function handleFreshStart(): void {
     const cleared: AppSettings = {
@@ -60,13 +46,9 @@ export function AgentsView({
       promptEnhancerAgent: null,
       skillSelectorAgent: null,
       plannerAgent: null,
-      planner2Agent: null,
-      planner3Agent: null,
       planAuditorAgent: null,
       coderAgent: null,
       codeReviewerAgent: null,
-      codeReviewer2Agent: null,
-      codeReviewer3Agent: null,
       reviewMergerAgent: null,
       codeFixerAgent: null,
       finalJudgeAgent: null,
@@ -74,17 +56,15 @@ export function AgentsView({
       promptEnhancerModel: "",
       skillSelectorModel: null,
       plannerModel: null,
-      planner2Model: null,
-      planner3Model: null,
       planAuditorModel: null,
       coderModel: "",
       codeReviewerModel: "",
-      codeReviewer2Model: null,
-      codeReviewer3Model: null,
       reviewMergerModel: null,
       codeFixerModel: "",
       finalJudgeModel: "",
       executiveSummaryModel: "",
+      extraPlanners: [],
+      extraReviewers: [],
     };
     draftRef.current = cleared;
     setDraft(cleared);
@@ -93,8 +73,8 @@ export function AgentsView({
 
   const health = cliHealth ?? null;
   const checking = Boolean(cliHealthChecking);
-  const plannerCount = plannerSlots.activeCount;
-  const reviewerCount = reviewerSlots.activeCount;
+  const plannerCount = plannerSlots.activeCount + (draft.plannerAgent ? 1 : 0);
+  const reviewerCount = reviewerSlots.activeCount + (draft.codeReviewerAgent ? 1 : 0);
 
   const cardProps = { draft, cliHealth: health, cliHealthChecking: checking, onUpdate: update };
 
@@ -149,26 +129,17 @@ export function AgentsView({
                 optional={true}
                 {...cardProps}
               >
-                {plannerSlots.extraSlots.slot2 && (
+                {Array.from({ length: plannerSlots.openCount }, (_, i) => (
                   <InlineStageSlot
-                    label="Planner 2"
-                    backendKey="planner2Agent"
-                    modelKey="planner2Model"
-                    optional={true}
-                    onRemove={() => plannerSlots.removeSlot("slot2")}
+                    key={`planner-${i + 2}`}
+                    label={`Planner ${i + 2}`}
+                    backend={draft.extraPlanners[i]?.agent ?? null}
+                    model={draft.extraPlanners[i]?.model ?? null}
+                    onChange={(b, m) => plannerSlots.updateSlot(i, b, m)}
+                    onRemove={() => plannerSlots.removeSlot(i)}
                     {...cardProps}
                   />
-                )}
-                {plannerSlots.extraSlots.slot3 && (
-                  <InlineStageSlot
-                    label="Planner 3"
-                    backendKey="planner3Agent"
-                    modelKey="planner3Model"
-                    optional={true}
-                    onRemove={() => plannerSlots.removeSlot("slot3")}
-                    {...cardProps}
-                  />
-                )}
+                ))}
               </StageCard>
               {plannerCount > 0 && (
                 <StageCard
@@ -181,7 +152,7 @@ export function AgentsView({
                 />
               )}
             </div>
-            {plannerSlots.openCount < 2 && (
+            {plannerSlots.openCount < plannerSlots.maxExtra && (
               <button
                 type="button"
                 onClick={plannerSlots.addSlot}
@@ -216,26 +187,17 @@ export function AgentsView({
                 optional={false}
                 {...cardProps}
               >
-                {reviewerSlots.extraSlots.slot2 && (
+                {Array.from({ length: reviewerSlots.openCount }, (_, i) => (
                   <InlineStageSlot
-                    label="Reviewer 2"
-                    backendKey="codeReviewer2Agent"
-                    modelKey="codeReviewer2Model"
-                    optional={true}
-                    onRemove={() => reviewerSlots.removeSlot("slot2")}
+                    key={`reviewer-${i + 2}`}
+                    label={`Reviewer ${i + 2}`}
+                    backend={draft.extraReviewers[i]?.agent ?? null}
+                    model={draft.extraReviewers[i]?.model ?? null}
+                    onChange={(b, m) => reviewerSlots.updateSlot(i, b, m)}
+                    onRemove={() => reviewerSlots.removeSlot(i)}
                     {...cardProps}
                   />
-                )}
-                {reviewerSlots.extraSlots.slot3 && (
-                  <InlineStageSlot
-                    label="Reviewer 3"
-                    backendKey="codeReviewer3Agent"
-                    modelKey="codeReviewer3Model"
-                    optional={true}
-                    onRemove={() => reviewerSlots.removeSlot("slot3")}
-                    {...cardProps}
-                  />
-                )}
+                ))}
               </StageCard>
               {reviewerCount >= 2 && (
                 <StageCard
@@ -258,7 +220,7 @@ export function AgentsView({
                 {...cardProps}
               />
             </div>
-            {reviewerSlots.openCount < 2 && (
+            {reviewerSlots.openCount < reviewerSlots.maxExtra && (
               <button
                 type="button"
                 onClick={reviewerSlots.addSlot}
@@ -290,7 +252,7 @@ export function AgentsView({
 
           <div className="flex flex-col gap-3 border-t border-[#2e2e48] pt-4">
             <span className="text-sm font-medium text-[#e4e4ed]">Pipeline</span>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-[#9898b0]">Max Iterations</span>
                 <input
@@ -299,6 +261,28 @@ export function AgentsView({
                   max={10}
                   value={draft.maxIterations}
                   onChange={(e) => update({ maxIterations: Math.max(1, Math.min(10, Number(e.target.value))) })}
+                  className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-[#9898b0]">Max Planners</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={draft.maxPlanners}
+                  onChange={(e) => update({ maxPlanners: Math.max(1, Math.min(10, Number(e.target.value))) })}
+                  className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-[#9898b0]">Max Reviewers</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={draft.maxReviewers}
+                  onChange={(e) => update({ maxReviewers: Math.max(1, Math.min(10, Number(e.target.value))) })}
                   className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
                 />
               </label>

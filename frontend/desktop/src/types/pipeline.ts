@@ -3,13 +3,11 @@ export type PipelineStage =
   | "prompt_enhance"
   | "skill_select"
   | "plan"
-  | "plan2"
-  | "plan3"
+  | `plan${number}`
   | "plan_audit"
   | "coder"
   | "code_reviewer"
-  | "code_reviewer2"
-  | "code_reviewer3"
+  | `code_reviewer${number}`
   | "review_merge"
   | "code_fixer"
   | "judge"

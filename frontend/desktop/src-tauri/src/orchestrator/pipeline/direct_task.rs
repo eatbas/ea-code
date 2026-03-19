@@ -14,8 +14,8 @@ use crate::storage::runs;
 use crate::storage::sessions;
 
 use crate::orchestrator::helpers::{
-    dispatch_agent, emit_stage, emit_stage_with_duration, is_cancelled, push_cancel_iteration, wait_for_cancel,
-    wait_if_paused,
+    dispatch_agent, emit_stage, emit_stage_with_duration, is_cancelled, push_cancel_iteration,
+    wait_for_interrupt, wait_if_paused, RunInterrupt,
 };
 
 /// Executes a single agent call directly, bypassing the full pipeline.
@@ -60,27 +60,38 @@ pub async fn run_direct_task(
         return Ok(());
     }
 
-    let result = if settings.agent_timeout_ms == 0 {
-        tokio::select! {
-            res = dispatch_agent(
-                backend, model, &input, settings, Some(session_id),
-                app, run_id, PipelineStage::DirectTask, None,
-            ) => res,
-            _ = wait_for_cancel(cancel_flag) => {
-                push_cancel_iteration(run, 1, Vec::new());
-                return Ok(());
-            }
-        }
-    } else {
-        tokio::select! {
-            res = tokio::time::timeout(
-                Duration::from_millis(settings.agent_timeout_ms),
+    let result = loop {
+        let dispatch_future = async {
+            if settings.agent_timeout_ms == 0 {
                 dispatch_agent(
-                    backend, model, &input, settings, Some(session_id),
-                    app, run_id, PipelineStage::DirectTask, None,
-                ),
-            ) => {
-                match res {
+                    backend,
+                    model,
+                    &input,
+                    settings,
+                    Some(session_id),
+                    app,
+                    run_id,
+                    PipelineStage::DirectTask,
+                    None,
+                )
+                .await
+            } else {
+                match tokio::time::timeout(
+                    Duration::from_millis(settings.agent_timeout_ms),
+                    dispatch_agent(
+                        backend,
+                        model,
+                        &input,
+                        settings,
+                        Some(session_id),
+                        app,
+                        run_id,
+                        PipelineStage::DirectTask,
+                        None,
+                    ),
+                )
+                .await
+                {
                     Ok(inner) => inner,
                     Err(_) => Err(format!(
                         "DirectTask stage timed out after {} ms",
@@ -88,9 +99,25 @@ pub async fn run_direct_task(
                     )),
                 }
             }
-            _ = wait_for_cancel(cancel_flag) => {
+        };
+
+        let outcome = tokio::select! {
+            res = dispatch_future => Ok(res),
+            interrupt = wait_for_interrupt(pause_flag, cancel_flag) => Err(interrupt),
+        };
+
+        match outcome {
+            Ok(res) => break res,
+            Err(RunInterrupt::Cancel) => {
                 push_cancel_iteration(run, 1, Vec::new());
                 return Ok(());
+            }
+            Err(RunInterrupt::Pause) => {
+                if wait_if_paused(pause_flag, cancel_flag).await {
+                    push_cancel_iteration(run, 1, Vec::new());
+                    return Ok(());
+                }
+                emit_stage(app, run_id, &PipelineStage::DirectTask, &StageStatus::Running, 1);
             }
         }
     };
@@ -133,7 +160,6 @@ pub async fn run_direct_task(
             StageEndStatus::Failed
         },
         duration_ms,
-        audit_verdict: None,
         verdict: verdict.clone(),
     };
     let _ = runs::append_event(run_id, stage_end);

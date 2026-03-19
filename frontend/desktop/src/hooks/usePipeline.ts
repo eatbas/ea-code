@@ -1,12 +1,15 @@
 import { useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useToast } from "../components/shared/Toast";
+import { isPlanStage } from "../components/shared/TabbedPlanCard";
+import { isReviewStage } from "../components/shared/TabbedReviewCard";
 import { usePipelineEvents } from "./usePipelineEvents";
 import type {
   PipelineRun,
   PipelineRequest,
   PipelineQuestionEvent,
   PipelineAnswer,
+  PipelineStage,
 } from "../types";
 
 interface UsePipelineReturn {
@@ -21,6 +24,40 @@ interface UsePipelineReturn {
   cancelPipeline: (runId?: string) => Promise<void>;
   answerQuestion: (answer: PipelineAnswer) => Promise<void>;
   resetRun: () => void;
+}
+
+/** Returns a predicate matching stages that should be removed when the given stage is paused. */
+function stageResetPredicate(stage: PipelineStage | undefined): (s: PipelineStage) => boolean {
+  if (!stage) return () => false;
+  if (isPlanStage(stage)) return isPlanStage;
+  if (isReviewStage(stage)) return isReviewStage;
+  return (s) => s === stage;
+}
+
+function pruneArtifactsForPausedStage(
+  artifacts: Record<string, string>,
+  stage: PipelineStage | undefined,
+): Record<string, string> {
+  if (!stage) return artifacts;
+
+  const next = { ...artifacts };
+  if (isPlanStage(stage)) {
+    for (const key of Object.keys(next)) {
+      if (key === "plan" || /^plan_\d+$/.test(key)) {
+        delete next[key];
+      }
+    }
+    return next;
+  }
+  if (isReviewStage(stage)) {
+    for (const key of Object.keys(next)) {
+      if (key === "review" || /^review_\d+$/.test(key)) {
+        delete next[key];
+      }
+    }
+    return next;
+  }
+  return next;
 }
 
 /** Hook managing the full pipeline lifecycle including Tauri event listeners. */
@@ -55,9 +92,20 @@ export function usePipeline(): UsePipelineReturn {
     if (!targetRunId) return;
     try {
       await invoke("pause_pipeline", { runId: targetRunId });
+      const activeStage = runRef.current?.currentStage;
+      const shouldReset = stageResetPredicate(activeStage);
+      setArtifacts((prev) => pruneArtifactsForPausedStage(prev, activeStage));
       setRun((prev) => {
         if (!prev || prev.id !== targetRunId) return prev;
-        return { ...prev, status: "paused", stageStartedAt: undefined };
+        const currentIterationIndex = Math.max(0, prev.currentIteration - 1);
+        const iterations = prev.iterations.map((iteration, index) => {
+          if (index !== currentIterationIndex) return iteration;
+          return {
+            ...iteration,
+            stages: iteration.stages.filter((entry) => !shouldReset(entry.stage)),
+          };
+        });
+        return { ...prev, status: "paused", stageStartedAt: undefined, iterations };
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

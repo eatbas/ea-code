@@ -2,14 +2,17 @@ import type { ReactNode } from "react";
 import type { AppSettings, PipelineStage, StageResult } from "../../types";
 import { TabbedParallelStageCard, type ParallelStageCardConfig } from "./TabbedParallelStageCard";
 
-/** Stages considered part of the parallel review group. */
-const REVIEW_STAGES = new Set<PipelineStage>(["code_reviewer", "code_reviewer2", "code_reviewer3"]);
+/** Returns true if a stage identifier belongs to the parallel review group. */
+export function isReviewStage(stage: PipelineStage): boolean {
+  return stage === "code_reviewer" || /^code_reviewer\d+$/.test(stage);
+}
 
-const REVIEW_LABEL_MAP: Record<string, string> = {
-  code_reviewer: "Review 1",
-  code_reviewer2: "Review 2",
-  code_reviewer3: "Review 3",
-};
+/** Derives a human-readable label from a review stage identifier. */
+function reviewStageLabel(stage: string): string {
+  if (stage === "code_reviewer") return "R1";
+  const m = /^code_reviewer(\d+)$/.exec(stage);
+  return m ? `R${m[1]}` : stage;
+}
 
 const REVIEW_CARD_CONFIG: ParallelStageCardConfig = {
   heading: "Code Review",
@@ -17,7 +20,7 @@ const REVIEW_CARD_CONFIG: ParallelStageCardConfig = {
   countNoun: "reviewers",
   outputLabel: "Review",
   outputEmptyText: "No review output generated.",
-  stageLabelMap: REVIEW_LABEL_MAP,
+  stageLabelFn: reviewStageLabel,
   singleArtifactKey: "review",
   artifactKeyPrefix: "review",
   activeSubTabBackgroundClassName: "bg-[#ffb432]/15",
@@ -27,14 +30,10 @@ const REVIEW_CARD_CONFIG: ParallelStageCardConfig = {
   outputBackgroundClassName: "bg-orange-400/5",
 };
 
-export function isReviewStage(stage: PipelineStage): boolean {
-  return REVIEW_STAGES.has(stage);
-}
-
 interface TabbedReviewCardProps {
-  /** All review stage results (code_reviewer, code_reviewer2, code_reviewer3) for this iteration. */
+  /** All review stage results for this iteration. */
   reviewStages: StageResult[];
-  /** Resolved review artifacts keyed by review_1, review_2, review_3 or review. */
+  /** Resolved review artifacts keyed by review_1, review_2, etc. or review. */
   reviewArtifacts: Record<string, string>;
   /** Original user prompt. */
   runPrompt: string;
@@ -43,6 +42,7 @@ interface TabbedReviewCardProps {
   settings: AppSettings | null;
   /** Absolute timestamp when the currently running stage started. */
   startedAt?: number;
+  runStatus?: string;
 }
 
 export function TabbedReviewCard({
@@ -52,6 +52,7 @@ export function TabbedReviewCard({
   enhancedPromptInput,
   settings,
   startedAt,
+  runStatus,
 }: TabbedReviewCardProps): ReactNode {
   return (
     <TabbedParallelStageCard
@@ -61,6 +62,7 @@ export function TabbedReviewCard({
       enhancedPromptInput={enhancedPromptInput}
       settings={settings}
       startedAt={startedAt}
+      runStatus={runStatus}
       config={REVIEW_CARD_CONFIG}
     />
   );

@@ -220,8 +220,12 @@ export interface ReviewFindings {
   nits: string[];
   /** Whether tests were run during the review. */
   testsRun: boolean;
+  /** Commands the reviewer observed or ran for verification. */
+  testCommands: string[];
   /** Test results summary lines (e.g., "5 passed, 1 failed"). */
   testResults: string[];
+  /** Missing coverage or reasons tests were not run. */
+  testGaps: string[];
   /** The reviewer's overall verdict (PASS or FAIL). */
   verdict: "PASS" | "FAIL";
 }

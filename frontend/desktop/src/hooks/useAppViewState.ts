@@ -28,6 +28,7 @@ interface UseAppViewStateReturn {
   activeView: ActiveView;
   setActiveView: (view: ActiveView) => void;
   activeSessionId: string | undefined;
+  chatDismissed: boolean;
   sessionDetail: SessionDetail | null;
   sessionDetailLoading: boolean;
   sessionLoadingMore: boolean;
@@ -36,6 +37,7 @@ interface UseAppViewStateReturn {
   handleMissingAgentSetup: () => void;
   handleNewSession: () => void;
   handleBackFromChat: () => void;
+  handleBackFromSession: () => void;
   handleSelectSession: (sessionId: string) => Promise<void>;
   handleLoadMoreRuns: () => Promise<void>;
   handleSelectProject: (projectPath: string) => Promise<void>;
@@ -58,6 +60,7 @@ export function useAppViewState({
 }: UseAppViewStateArgs): UseAppViewStateReturn {
   const [activeView, setActiveView] = useState<ActiveView>("home");
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
+  const [chatDismissed, setChatDismissed] = useState(false);
   const [sessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
   const [sessionDetailLoading, setSessionDetailLoading] = useState(false);
   const [sessionLoadingMore, setSessionLoadingMore] = useState(false);
@@ -100,6 +103,7 @@ export function useAppViewState({
 
   const handleRun = useCallback(async (options: RunOptions, sessionIdOverride?: string): Promise<void> => {
     if (!workspace) return;
+    setChatDismissed(false);
     const request: PipelineRequest = {
       prompt: options.prompt,
       workspacePath: workspace.path,
@@ -125,6 +129,7 @@ export function useAppViewState({
 
   const handleNewSession = useCallback((): void => {
     resetRun();
+    setChatDismissed(false);
     setActiveSessionId(undefined);
     setSessionDetail(null);
     setActiveView("home");
@@ -134,35 +139,36 @@ export function useAppViewState({
   }, [resetRun, workspace, loadSessions]);
 
   /** Navigate away from ChatView without destroying the run state.
-   *  Sets activeSessionId so SessionDetailView renders (which polls
-   *  for updates from disk) while the backend keeps running and
-   *  usePipelineEvents keeps receiving events in the background.
+   *  Marks the chat as dismissed so IdleView shows instead, while the
+   *  backend pipeline keeps running.  Clicking the running session in the
+   *  sidebar will un-dismiss and show ChatView again.
    */
   const handleBackFromChat = useCallback((): void => {
-    const sessionId = run?.sessionId;
-    if (sessionId) {
-      setActiveSessionId(sessionId);
-      setActiveView("home");
-      setSessionDetailLoading(true);
-      loadSessionDetail(sessionId)
-        .then((detail) => setSessionDetail(detail))
-        .catch(() => setSessionDetail(null))
-        .finally(() => setSessionDetailLoading(false));
-    } else {
-      // No session to navigate to — fall back to full reset.
-      resetRun();
-      setActiveSessionId(undefined);
-      setSessionDetail(null);
-      setActiveView("home");
-    }
+    setChatDismissed(true);
+    setActiveView("home");
     if (workspace) {
       void loadSessions(workspace.path);
     }
-  }, [run, workspace, resetRun, loadSessions, loadSessionDetail]);
+  }, [workspace, loadSessions]);
+
+  /** Navigate back from SessionDetailView without destroying run state.
+   *  If a pipeline is still active, the router will show ChatView;
+   *  otherwise IdleView renders.
+   */
+  const handleBackFromSession = useCallback((): void => {
+    setChatDismissed(false);
+    setActiveSessionId(undefined);
+    setSessionDetail(null);
+    setActiveView("home");
+    if (workspace) {
+      void loadSessions(workspace.path);
+    }
+  }, [workspace, loadSessions]);
 
   const handleSelectSession = useCallback(async (sessionId: string): Promise<void> => {
     const isCurrentRun = run && (isRunInProgress(run) || isRunTerminalState(run)) && run.sessionId === sessionId;
     if (isCurrentRun) {
+      setChatDismissed(false);
       setActiveSessionId(undefined);
       setSessionDetail(null);
       setActiveView("home");
@@ -214,6 +220,7 @@ export function useAppViewState({
     activeView,
     setActiveView,
     activeSessionId,
+    chatDismissed,
     sessionDetail,
     sessionDetailLoading,
     sessionLoadingMore,
@@ -222,6 +229,7 @@ export function useAppViewState({
     handleMissingAgentSetup,
     handleNewSession,
     handleBackFromChat,
+    handleBackFromSession,
     handleSelectSession,
     handleLoadMoreRuns,
     handleSelectProject,

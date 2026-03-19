@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { StageResult, PipelineStage, StageStatus } from "../types";
-import { STAGE_LABELS } from "./shared/constants";
+import { stageLabel } from "./shared/constants";
 
 interface RunTimelineProps {
   stages: StageResult[];
@@ -169,7 +169,7 @@ export function RunTimeline({ stages, currentStage, iteration }: RunTimelineProp
               <div className="flex items-center gap-1.5 mb-1">
                 <StageIcon status={status} />
                 <span className="text-xs font-medium text-[#e4e4ed] truncate">
-                  {STAGE_LABELS[stage]}
+                  {stageLabel(stage)}
                 </span>
               </div>
               {duration !== undefined && (

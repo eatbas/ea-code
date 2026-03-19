@@ -37,46 +37,6 @@ pub fn append_stage_end_event(
         iteration,
         status: status.clone(),
         duration_ms,
-        audit_verdict: None,
-        verdict: None,
-    };
-    runs::append_event(run_id, event)
-}
-
-/// Appends a stage_end event with audit verdict to the event log.
-pub fn append_stage_end_event_with_audit(
-    run_id: &str,
-    stage: &PipelineStage,
-    iteration: u32,
-    seq: u64,
-    status: &StageEndStatus,
-    duration_ms: u64,
-    audit_output: &str,
-) -> Result<(), String> {
-    // Parse verdict from first line
-    let audit_verdict_str = audit_output
-        .lines()
-        .next()
-        .map(|s| s.trim().to_string())
-        .filter(|s| s == "APPROVED" || s == "REJECTED");
-    
-    let audit_verdict = audit_verdict_str.map(|s| {
-        if s == "APPROVED" {
-            crate::models::PlanAuditVerdict::Approved
-        } else {
-            crate::models::PlanAuditVerdict::Rejected
-        }
-    });
-
-    let event = RunEvent::StageEnd {
-        v: 1,
-        seq,
-        ts: storage::now_rfc3339(),
-        stage: stage.clone(),
-        iteration,
-        status: status.clone(),
-        duration_ms,
-        audit_verdict,
         verdict: None,
     };
     runs::append_event(run_id, event)

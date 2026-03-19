@@ -17,6 +17,7 @@ use crate::orchestrator::helpers::{is_cancelled, push_cancel_iteration, wait_if_
 use crate::orchestrator::prompts::{self, PromptMeta};
 use crate::orchestrator::run_setup::{compose_agent_context, IterationContext};
 use crate::orchestrator::stages::execute_agent_stage;
+use crate::orchestrator::stages::PauseHandling;
 use crate::orchestrator::user_questions::{ask_user_question, ask_user_question_with_timeout};
 
 /// Runs the plan gate. Returns `true` if the iteration loop should break
@@ -194,6 +195,8 @@ pub async fn run_plan_gate(
             },
             settings,
             cancel_flag,
+            pause_flag,
+            PauseHandling::ResumeWithinStage,
             None,
             gate_output_path_str.as_deref(),
         )
@@ -275,7 +278,6 @@ fn append_stage_end_event(
         iteration,
         status: status.clone(),
         duration_ms,
-        audit_verdict: None,
         verdict: None,
     };
     runs::append_event(run_id, event)

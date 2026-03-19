@@ -2,14 +2,17 @@ import type { ReactNode } from "react";
 import type { AppSettings, PipelineStage, StageResult } from "../../types";
 import { TabbedParallelStageCard, type ParallelStageCardConfig } from "./TabbedParallelStageCard";
 
-/** Stages considered part of the parallel planning group. */
-const PLAN_STAGES = new Set<PipelineStage>(["plan", "plan2", "plan3"]);
+/** Returns true if a stage identifier belongs to the parallel planning group. */
+export function isPlanStage(stage: PipelineStage): boolean {
+  return stage === "plan" || /^plan\d+$/.test(stage);
+}
 
-const PLAN_LABEL_MAP: Record<string, string> = {
-  plan: "Plan 1",
-  plan2: "Plan 2",
-  plan3: "Plan 3",
-};
+/** Derives a human-readable label from a plan stage identifier. */
+function planStageLabel(stage: string): string {
+  if (stage === "plan") return "P1";
+  const m = /^plan(\d+)$/.exec(stage);
+  return m ? `P${m[1]}` : stage;
+}
 
 const PLAN_CARD_CONFIG: ParallelStageCardConfig = {
   heading: "Planning",
@@ -17,7 +20,7 @@ const PLAN_CARD_CONFIG: ParallelStageCardConfig = {
   countNoun: "planners",
   outputLabel: "Plan",
   outputEmptyText: "No valid plan output generated.",
-  stageLabelMap: PLAN_LABEL_MAP,
+  stageLabelFn: planStageLabel,
   singleArtifactKey: "plan",
   artifactKeyPrefix: "plan",
   activeSubTabBackgroundClassName: "bg-[#40c4ff]/15",
@@ -27,14 +30,10 @@ const PLAN_CARD_CONFIG: ParallelStageCardConfig = {
   outputBackgroundClassName: "bg-sky-400/5",
 };
 
-export function isPlanStage(stage: PipelineStage): boolean {
-  return PLAN_STAGES.has(stage);
-}
-
 interface TabbedPlanCardProps {
-  /** All plan stage results (plan, plan2, plan3) for this iteration. */
+  /** All plan stage results for this iteration. */
   planStages: StageResult[];
-  /** Resolved plan artifacts keyed by plan_1, plan_2, plan_3 or plan. */
+  /** Resolved plan artifacts keyed by plan_1, plan_2, etc. or plan. */
   planArtifacts: Record<string, string>;
   /** Original user prompt. */
   runPrompt: string;
@@ -43,6 +42,7 @@ interface TabbedPlanCardProps {
   settings: AppSettings | null;
   /** Absolute timestamp when the currently running stage started. */
   startedAt?: number;
+  runStatus?: string;
 }
 
 export function TabbedPlanCard({
@@ -52,6 +52,7 @@ export function TabbedPlanCard({
   enhancedPromptInput,
   settings,
   startedAt,
+  runStatus,
 }: TabbedPlanCardProps): ReactNode {
   return (
     <TabbedParallelStageCard
@@ -61,6 +62,7 @@ export function TabbedPlanCard({
       enhancedPromptInput={enhancedPromptInput}
       settings={settings}
       startedAt={startedAt}
+      runStatus={runStatus}
       config={PLAN_CARD_CONFIG}
     />
   );

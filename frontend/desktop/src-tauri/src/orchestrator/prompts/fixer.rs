@@ -67,7 +67,7 @@ pub fn build_fixer_user(
     }
     parts.push(format!("--- Review Output ---\n{review_output}"));
     if let Some(feedback) = judge_feedback {
-        parts.push(format!("PRIOR JUDGE FEEDBACK:\n{feedback}"));
+        parts.push(feedback.to_string());
     }
     if let Some(handoff) = handoff_json {
         parts.push(format!("ITERATION HANDOFF:\n{handoff}"));

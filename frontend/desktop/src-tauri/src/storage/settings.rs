@@ -38,12 +38,15 @@ pub fn read_settings() -> Result<AppSettings, String> {
 
         // Try to parse with wrapper first (new format)
         if let Ok(wrapper) = serde_json::from_str::<SettingsWrapper>(&contents) {
-            return Ok(wrapper.settings);
+            let mut settings = wrapper.settings;
+            settings.normalize();
+            return Ok(settings);
         }
 
         // Fall back to direct AppSettings parsing (for compatibility)
-        let settings: AppSettings = serde_json::from_str(&contents)
+        let mut settings: AppSettings = serde_json::from_str(&contents)
             .map_err(|e| format!("Failed to parse settings file: {e}"))?;
+        settings.normalize();
 
         Ok(settings)
     })

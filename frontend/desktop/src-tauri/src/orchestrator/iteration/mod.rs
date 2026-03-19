@@ -22,7 +22,24 @@ mod generate;
 mod prompt_enhance;
 pub mod stages;
 
-// Stages are used internally, not re-exported
+/// Mutable state carried across iterations (judge feedback, enhanced prompt, etc.).
+pub struct IterationCarryover {
+    pub previous_judge_output: Option<String>,
+    pub last_handoff: Option<prompts::IterationHandoff>,
+    pub persistent_enhanced_prompt: Option<String>,
+    pub last_approved_plan: Option<String>,
+}
+
+impl IterationCarryover {
+    pub fn new() -> Self {
+        Self {
+            previous_judge_output: None,
+            last_handoff: None,
+            persistent_enhanced_prompt: None,
+            last_approved_plan: None,
+        }
+    }
+}
 
 /// Runs a single iteration of the pipeline. Returns `true` if the loop
 /// should break (completion, failure, or cancellation).
@@ -38,26 +55,33 @@ pub async fn run_iteration(
     session_id: &str,
     iter_num: u32,
     run: &mut PipelineRun,
-    previous_judge_output: &mut Option<String>,
-    last_handoff: &mut Option<prompts::IterationHandoff>,
+    carry: &mut IterationCarryover,
     workspace_context: &str,
 ) -> Result<bool, String> {
     run.current_iteration = iter_num;
     let mut stages: Vec<StageResult> = Vec::new();
     let mut iter_ctx = IterationContext::new(request.prompt.clone());
+    iter_ctx.seed_prior_context(
+        carry.persistent_enhanced_prompt.as_deref(),
+        carry.last_approved_plan.as_deref(),
+    );
+
+    let prior_handoff = carry.last_handoff
+        .as_ref()
+        .map(prompts::render_handoff_for_prompt);
 
     let meta = PromptMeta {
         iteration: iter_num,
         max_iterations: settings.max_iterations,
-        previous_judge_output: previous_judge_output
+        previous_judge_output: prior_handoff
             .as_deref()
             .map(|o| prompts::truncate_judge_output(o, 3000)),
     };
 
-    let judge_feedback = previous_judge_output
+    let judge_feedback = prior_handoff
         .as_deref()
         .map(|o| prompts::truncate_judge_output(o, 3000));
-    let handoff_json = last_handoff
+    let handoff_json = carry.last_handoff
         .as_ref()
         .and_then(|h| serde_json::to_string_pretty(h).ok());
 
@@ -75,11 +99,15 @@ pub async fn run_iteration(
             Err(_) => return Ok(true),
         }
     } else {
-        let (stage, prompt) = prompt_enhance::skip_prompt_enhance(app, run_id, iter_num, &request.prompt);
+        let seed_prompt = carry.persistent_enhanced_prompt
+            .as_deref()
+            .unwrap_or(&request.prompt);
+        let (stage, prompt) = prompt_enhance::skip_prompt_enhance(app, run_id, iter_num, seed_prompt);
         stages.push(stage);
         prompt
     };
     iter_ctx.enhanced_prompt = enhanced.clone();
+    carry.persistent_enhanced_prompt = Some(enhanced.clone());
 
     if is_cancelled(cancel_flag) {
         push_cancel_iteration(run, iter_num, stages);
@@ -92,7 +120,8 @@ pub async fn run_iteration(
         app, request, settings, cancel_flag, pause_flag, run_id, session_id, iter_num,
         &meta, &enhanced, judge_feedback.as_deref(), run, &mut stages, &mut iter_ctx, workspace_context,
     ).await?;
-    
+    carry.last_approved_plan = iter_ctx.selected_plan().map(|plan| plan.to_string());
+
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         stages::update_run_summary(run_id, session_id, run)?;
         return Ok(true);
@@ -108,14 +137,15 @@ pub async fn run_iteration(
             stages::update_run_summary(run_id, session_id, run)?;
             return Ok(true);
         }
+        carry.last_approved_plan = iter_ctx.selected_plan().map(|plan| plan.to_string());
     }
 
     // --- 3.5 Skill selection (optional) ---
     let selected_skills_section = run_skill_selection_stage(
-        app, request, settings, cancel_flag, run_id, session_id, iter_num, &meta,
+        app, request, settings, cancel_flag, pause_flag, run_id, session_id, iter_num, &meta,
         &enhanced, iter_ctx.selected_plan(), judge_feedback.as_deref(), workspace_context, run, &mut stages,
     ).await?;
-    
+
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         stages::update_run_summary(run_id, session_id, run)?;
         return Ok(true);
@@ -151,7 +181,7 @@ pub async fn run_iteration(
         iter_num, &meta, &enhanced, selected_skills_section.as_deref(), judge_feedback.as_deref(),
         handoff_json.as_deref(), run, &mut stages, &mut iter_ctx, workspace_context,
     ).await?;
-    
+
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         stages::update_run_summary(run_id, session_id, run)?;
         return Ok(true);
@@ -159,7 +189,7 @@ pub async fn run_iteration(
 
     // --- 9. Judge ---
     run_judge_stage(
-        app, request, settings, cancel_flag, run_id, session_id, iter_num, &meta, &enhanced,
-        run, &mut stages, &mut iter_ctx, previous_judge_output, last_handoff, workspace_context,
+        app, request, settings, cancel_flag, pause_flag, run_id, session_id, iter_num, &meta, &enhanced,
+        run, &mut stages, &mut iter_ctx, &mut carry.previous_judge_output, &mut carry.last_handoff, workspace_context,
     ).await
 }

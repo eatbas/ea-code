@@ -77,3 +77,29 @@ button {
      so parallel progress bars sweep in unison regardless of mount time. */
   animation-delay: -999999s;
 }
+
+/* Synced ping animation — identical to Tailwind animate-ping but locked
+   to a global clock so parallel dots pulse in unison. */
+@keyframes synced-ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.synced-ping {
+  animation: synced-ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+  animation-delay: -999999s;
+}
+
+/* Synced pulse animation — identical to Tailwind animate-pulse but locked
+   to a global clock so parallel dots pulse in unison. */
+@keyframes synced-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.synced-pulse {
+  animation: synced-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation-delay: -999999s;
+}

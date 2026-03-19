@@ -1,6 +1,7 @@
 use tauri::AppHandle;
 
-use crate::models::PipelineStage;
+use crate::models::{PipelineStage, StageExecutionIntent};
+use crate::orchestrator::helpers::looks_like_output_file_instruction;
 
 use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
 
@@ -22,6 +23,7 @@ pub async fn run_claude(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
+    intent: StageExecutionIntent,
 ) -> Result<AgentOutput, String> {
     let full_prompt = build_full_prompt(input);
 
@@ -32,8 +34,21 @@ pub async fn run_claude(
         args.push("--model".to_string());
         args.push(model.to_string());
     }
+    // All pipeline stages are non-interactive, so permission prompts cannot
+    // be answered. Skip them for every intent.
+    args.push("--dangerously-skip-permissions".to_string());
+
+    // Text-intent stages (planners, reviewers, judge) must not modify files.
+    // Remove write tools entirely so the model cannot code even if it tries.
+    // Also disallow Agent to prevent Opus from spawning sub-agents that
+    // inherit the same restrictions and get stuck in a loop.
+    if matches!(intent, StageExecutionIntent::Text) {
+        for tool in &["Edit", "Write", "Bash", "NotebookEdit", "Agent"] {
+            args.push("--disallowedTools".to_string());
+            args.push(tool.to_string());
+        }
+    }
     args.extend([
-        "--dangerously-skip-permissions".to_string(),
         "--max-turns".to_string(),
         agent_max_turns.to_string(),
         "--output-format".to_string(),
@@ -106,10 +121,15 @@ fn extract_claude_final_text(stream_json_output: &str) -> String {
         }
     }
 
+    // Discard texts that are just file-write instructions (e.g. Claude Code
+    // telling the model to write to PLAN.md). These are not real output.
+    let result_text = last_result_text.filter(|t| !looks_like_output_file_instruction(t));
+    let assistant_text = last_assistant_text.filter(|t| !looks_like_output_file_instruction(t));
+
     // Prefer whichever text is more substantial. The `result.result` field
     // from Claude CLI can be a brief summary while the last assistant message
     // contains the full detailed response (e.g. a complete plan).
-    match (last_result_text, last_assistant_text) {
+    match (result_text, assistant_text) {
         (Some(result), Some(assistant)) => {
             if assistant.len() > result.len() {
                 assistant
@@ -122,3 +142,4 @@ fn extract_claude_final_text(stream_json_output: &str) -> String {
         (None, None) => stream_json_output.trim().to_string(),
     }
 }
+

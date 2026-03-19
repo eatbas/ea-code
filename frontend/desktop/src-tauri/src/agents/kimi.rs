@@ -1,6 +1,6 @@
 use tauri::AppHandle;
 
-use crate::models::PipelineStage;
+use crate::models::{PipelineStage, StageExecutionIntent};
 
 use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
 
@@ -20,6 +20,7 @@ pub async fn run_kimi(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
+    intent: StageExecutionIntent,
 ) -> Result<AgentOutput, String> {
     let full_prompt = build_full_prompt(input);
 
@@ -32,6 +33,7 @@ pub async fn run_kimi(
         app,
         run_id,
         stage.clone(),
+        intent,
     )
     .await?;
 
@@ -54,6 +56,7 @@ pub async fn run_kimi(
             app,
             run_id,
             stage,
+            intent,
         )
         .await;
     }
@@ -69,6 +72,7 @@ async fn run_kimi_once(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
+    _intent: StageExecutionIntent,
 ) -> Result<AgentOutput, String> {
     let mut args = vec![
         "--print".to_string(),

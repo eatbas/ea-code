@@ -16,6 +16,7 @@ use crate::orchestrator::skill_selection::{
 };
 use crate::orchestrator::stages::execute_agent_stage;
 use crate::orchestrator::stages::execute_skipped_stage;
+use crate::orchestrator::stages::PauseHandling;
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,6 +33,7 @@ pub async fn run_skill_selection_stage(
     request: &PipelineRequest,
     settings: &AppSettings,
     cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pause_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>,
     run_id: &str,
     session_id: &str,
     iter_num: u32,
@@ -124,6 +126,8 @@ pub async fn run_skill_selection_stage(
         },
         settings,
         cancel_flag,
+        pause_flag,
+        PauseHandling::ResumeWithinStage,
         Some(session_id),
         skill_output_path_str.as_deref(),
     )
@@ -222,7 +226,6 @@ fn append_stage_end_event(
         iteration,
         status: status.clone(),
         duration_ms,
-        audit_verdict: None,
         verdict: None,
     };
     runs::append_event(run_id, event)

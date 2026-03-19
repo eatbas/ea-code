@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { PipelineQuestionEvent, PipelineAnswer } from "../types";
-import { STAGE_LABELS } from "./shared/constants";
+import { stageLabel } from "./shared/constants";
 
 interface QuestionDialogProps {
   question: PipelineQuestionEvent;
@@ -38,7 +38,7 @@ export function QuestionDialog({ question, onAnswer }: QuestionDialogProps): Rea
     }
   }
 
-  const stageLabel = STAGE_LABELS[question.stage] ?? question.stage;
+  const stageName = stageLabel(question.stage);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -50,7 +50,7 @@ export function QuestionDialog({ question, onAnswer }: QuestionDialogProps): Rea
               AWAITING INPUT
             </span>
             <span className="text-sm font-medium text-[#e4e4ed]">
-              {stageLabel} Stage
+              {stageName} Stage
             </span>
           </div>
           <span className="text-xs text-[#9898b0]">

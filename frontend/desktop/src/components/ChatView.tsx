@@ -29,14 +29,8 @@ const EXCLUDED_ARTIFACT_KINDS = new Set([
   "session_memory",
   "enhanced_prompt",
   "plan",
-  "plan_1",
-  "plan_2",
-  "plan_3",
   "plan_audit",
   "plan_final",
-  "review_1",
-  "review_2",
-  "review_3",
 ]);
 
 interface ChatViewProps {
@@ -80,26 +74,29 @@ export function ChatView({
   const planAuditArtifact = artifacts["plan_final"] ?? artifacts["plan_audit"];
   const planInputForAudit = resolvePlanText(planArtifact);
   const latestCompletedPlanAuditIndex = visibleStages.reduce((latest, stage, idx) => (stage.stage === "plan_audit" && stage.status === "completed" ? idx : latest), -1);
-  const otherArtifacts = Object.entries(artifacts).filter(([kind]) => !EXCLUDED_ARTIFACT_KINDS.has(kind) && !kind.startsWith("diff_"));
+  const otherArtifacts = Object.entries(artifacts).filter(
+    ([kind]) => !EXCLUDED_ARTIFACT_KINDS.has(kind) && !kind.startsWith("diff_") && !kind.startsWith("plan_") && !kind.startsWith("review_"),
+  );
 
-  // Group all plan stages (plan, plan_2, plan_3) for the tabbed card.
+  // Group all plan stages for the tabbed card.
   const planGroupStages = visibleStages.filter((s) => isPlanStage(s.stage));
-  // Plan artifacts from parallel runs (plan_1, plan_2, plan_3) or single (plan).
+  // Collect plan artifacts dynamically (plan, plan_1, plan_2, ...).
   const planArtifactMap: Record<string, string> = {};
-  if (artifacts["plan"]) planArtifactMap["plan"] = artifacts["plan"];
-  if (artifacts["plan_1"]) planArtifactMap["plan_1"] = artifacts["plan_1"];
-  if (artifacts["plan_2"]) planArtifactMap["plan_2"] = artifacts["plan_2"];
-  if (artifacts["plan_3"]) planArtifactMap["plan_3"] = artifacts["plan_3"];
-  // Track whether the plan group card has been rendered (to avoid duplication).
+  for (const [key, value] of Object.entries(artifacts)) {
+    if (key === "plan" || /^plan_\d+$/.test(key)) {
+      planArtifactMap[key] = value;
+    }
+  }
   let planGroupRendered = false;
 
-  // Group all review stages (code_reviewer, code_reviewer2, code_reviewer3) for the tabbed card.
+  // Group all review stages for the tabbed card.
   const reviewGroupStages = visibleStages.filter((s) => isReviewStage(s.stage));
   const reviewArtifactMap: Record<string, string> = {};
-  if (artifacts["review"]) reviewArtifactMap["review"] = artifacts["review"];
-  if (artifacts["review_1"]) reviewArtifactMap["review_1"] = artifacts["review_1"];
-  if (artifacts["review_2"]) reviewArtifactMap["review_2"] = artifacts["review_2"];
-  if (artifacts["review_3"]) reviewArtifactMap["review_3"] = artifacts["review_3"];
+  for (const [key, value] of Object.entries(artifacts)) {
+    if (key === "review" || /^review_\d+$/.test(key)) {
+      reviewArtifactMap[key] = value;
+    }
+  }
   let reviewGroupRendered = false;
 
   // Build parallel terminal tabs when multiple plan stages exist.
@@ -107,6 +104,7 @@ export function ChatView({
     ? planGroupStages.map((s, i) => ({
         label: `Plan ${i + 1}`,
         lines: (stageLogs[s.stage] ?? []).slice(-160),
+        totalLines: stageLogs[s.stage]?.length ?? 0,
       }))
     : undefined;
   // Show parallel tabs when any plan stage is running or was the most recent.
@@ -120,6 +118,7 @@ export function ChatView({
     ? reviewGroupStages.map((s, i) => ({
         label: `Review ${i + 1}`,
         lines: (stageLogs[s.stage] ?? []).slice(-160),
+        totalLines: stageLogs[s.stage]?.length ?? 0,
       }))
     : undefined;
   const showReviewTerminalTabs = reviewTerminalTabs && (
@@ -174,11 +173,13 @@ export function ChatView({
                     enhancedPromptInput={enhancedPromptInput}
                     settings={settings}
                     startedAt={planningActive ? run.stageStartedAt : undefined}
+                    runStatus={run.status}
                   />
                   {(planningActive || planGroupStages.some((s) => s.status === "running")) && (
                     <PlannerProgressRow
                       stages={planGroupStages}
                       settings={settings}
+                      isPaused={isPaused}
                     />
                   )}
                 </div>
@@ -199,11 +200,13 @@ export function ChatView({
                     enhancedPromptInput={enhancedPromptInput}
                     settings={settings}
                     startedAt={reviewingActive ? run.stageStartedAt : undefined}
+                    runStatus={run.status}
                   />
                   {(reviewingActive || reviewGroupStages.some((s) => s.status === "running")) && (
                     <ReviewerProgressRow
                       stages={reviewGroupStages}
                       settings={settings}
+                      isPaused={isPaused}
                     />
                   )}
                 </div>
@@ -251,7 +254,7 @@ export function ChatView({
               </div>
             );
           })}
-          {isActive(run.status) && run.currentStage && run.currentStage !== "plan_audit" && !isPlanStage(run.currentStage) && !isReviewStage(run.currentStage) && (
+          {isActive(run.status) && run.currentStage && !isPlanStage(run.currentStage) && !isReviewStage(run.currentStage) && (
             <ThinkingIndicator stage={run.currentStage} startedAt={run.stageStartedAt} />
           )}
           {isTerminal(run.status) && (
@@ -264,6 +267,7 @@ export function ChatView({
               executiveSummary={artifacts["executive_summary"]}
               error={run.error}
               stageRows={buildStageRows(allStages)}
+              judgeReasoning={artifacts["judge"]}
             />
           )}
           {otherArtifacts.length > 0 && (

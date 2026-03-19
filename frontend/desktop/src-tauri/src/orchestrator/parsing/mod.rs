@@ -15,14 +15,27 @@ pub use reviewer::parse_review_findings;
 /// 2. Checklist heuristic (unchecked REQUIRED items)
 /// 3. Keyword heuristic (fail-safe to NOT COMPLETE)
 pub fn parse_judge_verdict(output: &str) -> (JudgeVerdict, String) {
-    let first_line = output.lines().next().unwrap_or("").trim();
-    let reasoning = output.lines().skip(1).collect::<Vec<_>>().join("\n");
+    let lines: Vec<&str> = output.lines().collect();
+    let verdict_line_idx = lines.iter().position(|line| {
+        let trimmed = line.trim();
+        trimmed == "COMPLETE"
+            || trimmed == "NOT COMPLETE"
+            || trimmed.eq_ignore_ascii_case("VERDICT: COMPLETE")
+            || trimmed.eq_ignore_ascii_case("VERDICT: NOT COMPLETE")
+    });
+    let first_line = verdict_line_idx
+        .and_then(|idx| lines.get(idx))
+        .map(|line| line.trim())
+        .unwrap_or_else(|| lines.first().copied().unwrap_or("").trim());
+    let reasoning = verdict_line_idx
+        .map(|idx| lines[idx + 1..].join("\n"))
+        .unwrap_or_else(|| lines.iter().skip(1).copied().collect::<Vec<_>>().join("\n"));
 
     // Tier 1: Exact first-line match
-    if first_line == "COMPLETE" {
+    if first_line == "COMPLETE" || first_line.eq_ignore_ascii_case("VERDICT: COMPLETE") {
         return (JudgeVerdict::Complete, reasoning);
     }
-    if first_line == "NOT COMPLETE" {
+    if first_line == "NOT COMPLETE" || first_line.eq_ignore_ascii_case("VERDICT: NOT COMPLETE") {
         return (JudgeVerdict::NotComplete, reasoning);
     }
 
@@ -83,27 +96,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_plan_audit_approved_with_improved_plan() {
-        let raw = "APPROVED\nLooks good.\n--- Improved Plan ---\n1. Do A\n2. Do B";
+    fn parse_plan_audit_clean_plan_output() {
+        let raw = "1. Do A\n2. Do B";
         let parsed = parse_plan_audit_output(raw, "fallback");
-        assert_eq!(parsed.verdict, "APPROVED");
         assert_eq!(parsed.improved_plan, "1. Do A\n2. Do B");
     }
 
     #[test]
-    fn parse_plan_audit_rejected_with_rewrite_continues() {
+    fn parse_plan_audit_strips_legacy_approved_prefix() {
+        let raw = "APPROVED\nLooks good.\n--- Improved Plan ---\n1. Do A\n2. Do B";
+        let parsed = parse_plan_audit_output(raw, "fallback");
+        assert_eq!(parsed.improved_plan, "1. Do A\n2. Do B");
+    }
+
+    #[test]
+    fn parse_plan_audit_strips_legacy_rejected_prefix() {
         let raw = "REJECTED\nMissing checks.\n--- Improved Plan ---\n1. Add checks";
         let parsed = parse_plan_audit_output(raw, "fallback");
-        assert_eq!(parsed.verdict, "REJECTED");
         assert_eq!(parsed.improved_plan, "1. Add checks");
     }
 
     #[test]
-    fn parse_plan_audit_rejected_without_rewrite_uses_fallback() {
+    fn parse_plan_audit_fallback_when_empty_after_stripping() {
         let raw = "REJECTED\nNo rewrite provided.";
         let parsed = parse_plan_audit_output(raw, "fallback plan");
-        assert_eq!(parsed.verdict, "REJECTED");
-        assert_eq!(parsed.improved_plan, "fallback plan");
+        assert_eq!(parsed.improved_plan, "No rewrite provided.");
     }
 
     #[test]
@@ -119,18 +136,16 @@ REJECTED\n\
 tokens used\n\
 27,719";
         let parsed = parse_plan_audit_output(raw, "fallback");
-        assert_eq!(parsed.verdict, "REJECTED");
         assert_eq!(parsed.improved_plan, "1. Update parsing.\n2. Add tests.");
     }
 
     #[test]
-    fn parse_plan_audit_verdict_not_first_line_is_detected() {
+    fn parse_plan_audit_with_marker_extracts_plan() {
         let raw = "codex\n\
 REJECTED\n\
 --- Improved Plan ---\n\
 1. Rewrite for clarity.";
         let parsed = parse_plan_audit_output(raw, "fallback");
-        assert_eq!(parsed.verdict, "REJECTED");
         assert_eq!(parsed.improved_plan, "1. Rewrite for clarity.");
     }
 
@@ -148,19 +163,17 @@ REJECTED\n\
 --- Workspace Context ---\n\
 WORKSPACE SNAPSHOT";
         let parsed = parse_plan_audit_output(raw, "fallback plan");
-        assert_eq!(parsed.verdict, "REJECTED");
         assert_eq!(parsed.improved_plan, "fallback plan");
     }
 
     #[test]
-    fn parse_plan_audit_marker_before_verdict_is_ignored() {
+    fn parse_plan_audit_marker_before_verdict_picks_last_marker() {
         let raw = "--- Improved Plan ---\n\
 # Inputs\n\
 REJECTED\n\
 --- Improved Plan ---\n\
 1. Correct final plan.";
         let parsed = parse_plan_audit_output(raw, "fallback plan");
-        assert_eq!(parsed.verdict, "REJECTED");
         assert_eq!(parsed.improved_plan, "1. Correct final plan.");
     }
 
@@ -190,8 +203,14 @@ REJECTED\n\
     }
 
     #[test]
+    fn parse_judge_verdict_from_explicit_marker() {
+        let (v, _) = parse_judge_verdict("codex\nVERDICT: COMPLETE\n## Checklist\n- [x] [REQUIRED] Prompt");
+        assert_eq!(v, JudgeVerdict::Complete);
+    }
+
+    #[test]
     fn parse_review_findings_extracts_blockers() {
-        let raw = "BLOCKER: Missing input validation on line 45\nSome other text\nBLOCKER: No error handling for null pointer";
+        let raw = "## BLOCKERS\n- Missing input validation on line 45\n- No error handling for null pointer\n\n## WARNINGS\n- None\n\n## NITS\n- None\n\n## TESTS\nStatus: run\nCommands:\n- cargo check\n\n## TEST RESULTS\n- 5 passed\n\n## TEST GAPS\n- None\n\n## ACTION ITEMS\n- [ ] Add validation\n\n## SUMMARY\nVerdict: FAIL";
         let findings = parse_review_findings(raw);
         assert_eq!(findings.blockers.len(), 2);
         assert!(findings.blockers[0].contains("input validation"));
@@ -200,7 +219,7 @@ REJECTED\n\
 
     #[test]
     fn parse_review_findings_extracts_warnings() {
-        let raw = "WARNING: Token expiry hardcoded\nWARNING: Variable name unclear";
+        let raw = "## BLOCKERS\n- None\n\n## WARNINGS\n- Token expiry hardcoded\n- Variable name unclear\n\n## NITS\n- None\n\n## TESTS\nStatus: not run\nCommands:\n- None\n\n## TEST RESULTS\n- None\n\n## TEST GAPS\n- Coverage missing\n\n## ACTION ITEMS\n- [ ] Add tests\n\n## SUMMARY\nVerdict: FAIL";
         let findings = parse_review_findings(raw);
         assert_eq!(findings.warnings.len(), 2);
         assert!(findings.warnings[0].contains("expiry"));
@@ -208,22 +227,23 @@ REJECTED\n\
 
     #[test]
     fn parse_review_findings_extracts_tests_and_verdict() {
-        let raw = "BLOCKER: Issue found\nTESTS: run\nVERDICT: PASS";
+        let raw = "## BLOCKERS\n- None\n\n## WARNINGS\n- None\n\n## NITS\n- None\n\n## TESTS\nStatus: run\nCommands:\n- cargo check\n- npx tsc --noEmit\n\n## TEST RESULTS\n- cargo check passed\n\n## TEST GAPS\n- None\n\n## ACTION ITEMS\n- [ ] None\n\n## SUMMARY\nVerdict: PASS";
         let findings = parse_review_findings(raw);
         assert!(findings.tests_run);
+        assert_eq!(findings.test_commands.len(), 2);
         assert_eq!(findings.verdict, "PASS");
     }
 
     #[test]
     fn parse_review_findings_infer_fail_from_blockers() {
-        let raw = "BLOCKER: Critical issue found\nSome other text";
+        let raw = "## BLOCKERS\n- Critical issue found\n\n## WARNINGS\n- None\n\n## NITS\n- None\n\n## TESTS\nStatus: not run\nCommands:\n- None\n\n## TEST RESULTS\n- None\n\n## TEST GAPS\n- Missing regression coverage\n\n## ACTION ITEMS\n- [ ] Add tests\n\n## SUMMARY\nVerdict: FAIL";
         let findings = parse_review_findings(raw);
         assert_eq!(findings.verdict, "FAIL");
     }
 
     #[test]
     fn parse_review_findings_infer_pass_when_no_blockers() {
-        let raw = "LGTM! Looks good to me. No blockers found.";
+        let raw = "## BLOCKERS\n- None\n\n## WARNINGS\n- None\n\n## NITS\n- None\n\n## TESTS\nStatus: run\nCommands:\n- cargo check\n\n## TEST RESULTS\n- cargo check passed\n\n## TEST GAPS\n- None\n\n## ACTION ITEMS\n- [ ] None\n\n## SUMMARY\nVerdict: PASS";
         let findings = parse_review_findings(raw);
         assert!(findings.blockers.is_empty());
         assert_eq!(findings.verdict, "PASS");

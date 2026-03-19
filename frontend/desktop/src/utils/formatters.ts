@@ -48,6 +48,29 @@ export function formatTimestamp(iso: string): string {
   }
 }
 
+/** Formats a timestamp for compact UI labels while preserving the start time/date. */
+export function formatCompactTimestamp(iso: string): string {
+  try {
+    const d = parseUtcTimestamp(iso);
+    const now = new Date();
+    const sameDay =
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate();
+
+    if (sameDay) {
+      return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    }
+
+    const sameYear = d.getFullYear() === now.getFullYear();
+    return d.toLocaleDateString(undefined, sameYear
+      ? { month: "short", day: "numeric" }
+      : { year: "2-digit", month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
 /** Formats milliseconds into human-readable duration (e.g., "1.3s", "2m 5s", "1h 23m 5s"). */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;

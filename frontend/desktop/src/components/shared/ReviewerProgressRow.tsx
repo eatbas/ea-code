@@ -4,21 +4,23 @@ import type { StageResult, AppSettings } from "../../types";
 import { formatDuration } from "../../utils/formatters";
 import { stageModelLabel } from "../../utils/stageModelLabels";
 
-const REVIEW_INDEX_LABELS: Record<string, string> = {
-  code_reviewer: "Review 1",
-  code_reviewer2: "Review 2",
-  code_reviewer3: "Review 3",
-};
+function reviewLabel(stage: string): string {
+  if (stage === "code_reviewer") return "R1";
+  const m = /^code_reviewer(\d+)$/.exec(stage);
+  return m ? `R${m[1]}` : stage;
+}
 
 interface ReviewerProgressRowProps {
   stages: StageResult[];
   settings: AppSettings | null;
+  isPaused?: boolean;
 }
 
 /** Shows a row of mini progress bars, one per reviewer. */
-export function ReviewerProgressRow({ stages, settings }: ReviewerProgressRowProps): ReactNode {
+export function ReviewerProgressRow({ stages, settings, isPaused = false }: ReviewerProgressRowProps): ReactNode {
   const [, tick] = useState(0);
-  const anyRunning = stages.some((s) => s.status === "running");
+  const anyRunning = !isPaused && stages.some((s) => s.status === "running");
+  const nowMs = Date.now();
   const fallbackStartTimes = useRef<Record<string, number>>({});
 
   for (const stage of stages) {
@@ -45,15 +47,16 @@ export function ReviewerProgressRow({ stages, settings }: ReviewerProgressRowPro
   return (
     <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${stages.length}, 1fr)` }}>
       {stages.map((stage) => {
-        const label = REVIEW_INDEX_LABELS[stage.stage] ?? stage.stage;
+        const label = reviewLabel(stage.stage);
         const model = stageModelLabel(stage.stage, settings);
-        const isRunning = stage.status === "running";
+        const stageIsRunning = stage.status === "running";
+        const isRunning = stageIsRunning && !isPaused;
         const isCompleted = stage.status === "completed";
         const isFailed = stage.status === "failed";
         const resolvedStartedAt = stage.startedAt ?? fallbackStartTimes.current[stage.stage];
 
-        const elapsed = isRunning && resolvedStartedAt != null
-          ? Math.max(0, Math.floor((Date.now() - resolvedStartedAt) / 1000))
+        const elapsed = stageIsRunning && resolvedStartedAt != null
+          ? Math.max(0, Math.floor((nowMs - resolvedStartedAt) / 1000))
           : 0;
         const mins = Math.floor(elapsed / 60);
         const secs = elapsed % 60;
@@ -81,12 +84,12 @@ export function ReviewerProgressRow({ stages, settings }: ReviewerProgressRowPro
               )}
               {isRunning && (
                 <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#ffb432] opacity-75" />
+                  <span className="synced-ping absolute inline-flex h-full w-full rounded-full bg-[#ffb432] opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-[#ffb432]" />
                 </span>
               )}
 
-              <span className={`text-[10px] font-semibold tracking-wide truncate ${
+              <span className={`text-[10px] font-semibold tracking-wide shrink-0 ${
                 isCompleted ? "text-[#22c55e]" : isRunning ? "text-[#ffb432]" : isFailed ? "text-[#ef4444]" : "text-[#9898b0]"
               }`}>
                 {label}
@@ -95,7 +98,7 @@ export function ReviewerProgressRow({ stages, settings }: ReviewerProgressRowPro
                 <span className="hidden sm:inline text-[8px] text-[#9898b0] opacity-60 truncate">{model}</span>
               )}
               <span className="ml-auto text-[9px] tabular-nums text-[#9898b0] opacity-80 shrink-0">
-                {isRunning ? timer : isCompleted || isFailed ? formatDuration(stage.durationMs) : ""}
+                {stageIsRunning ? timer : isCompleted || isFailed ? formatDuration(stage.durationMs) : ""}
               </span>
             </div>
           </div>

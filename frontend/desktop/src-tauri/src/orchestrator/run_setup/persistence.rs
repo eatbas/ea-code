@@ -54,6 +54,8 @@ pub async fn run_executive_summary(
     };
 
     let summary_iteration = run.current_iteration;
+    let output_path = runs::artifact_output_path(run_id, summary_iteration, "executive_summary").ok();
+    let output_path_str = output_path.as_ref().map(|p| p.to_string_lossy().to_string());
     let summary_input = AgentInput {
         prompt: prompts::build_executive_summary_system(),
         context: Some(build_executive_summary_context(run)),
@@ -68,6 +70,7 @@ pub async fn run_executive_summary(
         &summary_input,
         settings,
         Some(session_id),
+        output_path_str.as_deref(),
     )
     .await;
 

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { PipelineStage } from "../../types";
 import { formatDuration, formatTimestamp, normaliseDisplayText, parseUtcTimestamp } from "../../utils/formatters";
 import { statusToneClasses } from "../../utils/statusHelpers";
-import { STAGE_LABELS } from "./constants";
+import { stageLabel } from "./constants";
 
 interface ResultCardProps {
   /** Run status - "completed", "failed", "cancelled", etc. */
@@ -32,6 +32,16 @@ export function ResultCard({
   judgeReasoning,
 }: ResultCardProps): ReactNode {
   const statusClasses = statusToneClasses(status);
+  const unresolvedRequired = finalVerdict === "NOT COMPLETE"
+    ? extractJudgeSection(judgeReasoning, "Checklist")
+        ?.split("\n")
+        .filter((line) => line.includes("[ ]") && line.includes("[REQUIRED]"))
+        .join("\n")
+    : null;
+  const testAssessment = extractJudgeSection(judgeReasoning, "Test Assessment");
+  const nextSteps = finalVerdict === "NOT COMPLETE"
+    ? extractJudgeSection(judgeReasoning, "Next Steps")
+    : null;
 
   return (
     <div className={`rounded-lg border px-3 py-2 ${statusClasses.cardBg} ${statusClasses.cardBorder}`}>
@@ -67,6 +77,36 @@ export function ResultCard({
       )}
       {error && (
         <p className="mt-1.5 text-xs text-[#ef4444]">{error}</p>
+      )}
+      {unresolvedRequired && (
+        <div className="mt-2 rounded border border-amber-400/20 bg-amber-400/5 p-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300">
+            Unresolved Required Items
+          </p>
+          <pre className="mt-1 whitespace-pre-wrap break-words text-[11px] text-[#e4e4ed]">
+            {normaliseDisplayText(unresolvedRequired)}
+          </pre>
+        </div>
+      )}
+      {testAssessment && (
+        <div className="mt-2 rounded border border-[#2e2e48] bg-[#0f0f14] p-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9898b0]">
+            Test Assessment
+          </p>
+          <pre className="mt-1 whitespace-pre-wrap break-words text-[11px] text-[#c4c4d4]">
+            {normaliseDisplayText(testAssessment)}
+          </pre>
+        </div>
+      )}
+      {nextSteps && (
+        <div className="mt-2 rounded border border-rose-400/20 bg-rose-400/5 p-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-300">
+            Next Steps
+          </p>
+          <pre className="mt-1 whitespace-pre-wrap break-words text-[11px] text-[#e4e4ed]">
+            {normaliseDisplayText(nextSteps)}
+          </pre>
+        </div>
       )}
 
       {/* Judge reasoning */}
@@ -127,7 +167,7 @@ export function buildStageRowsFromEvents(
   return Array.from(stageDurations.entries())
     .filter(([, durationMs]) => durationMs > 0)
     .map(([stage, durationMs]) => ({
-      name: STAGE_LABELS[stage as PipelineStage] ?? stage,
+      name: stageLabel(stage as PipelineStage),
       durationMs,
     }));
 }
@@ -141,7 +181,7 @@ export function buildStageRows(
   return stages
     .filter((s) => s.durationMs > 0)
     .map((s) => ({
-      name: STAGE_LABELS[s.stage as PipelineStage] ?? s.stage,
+      name: stageLabel(s.stage as PipelineStage),
       durationMs: s.durationMs,
     }));
 }
@@ -154,4 +194,14 @@ export function computeDuration(startedAt?: string, completedAt?: string): numbe
   const end = parseUtcTimestamp(completedAt).getTime();
   if (isNaN(start) || isNaN(end)) return undefined;
   return end - start;
+}
+
+function extractJudgeSection(text: string | undefined, heading: string): string | null {
+  if (!text) return null;
+  const marker = `## ${heading}`;
+  const start = text.indexOf(marker);
+  if (start === -1) return null;
+  const after = text.slice(start + marker.length);
+  const next = after.search(/\n##\s+/);
+  return (next === -1 ? after : after.slice(0, next)).trim() || null;
 }

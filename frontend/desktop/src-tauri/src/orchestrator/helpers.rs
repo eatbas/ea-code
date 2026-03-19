@@ -33,6 +33,18 @@ pub fn stage_to_str(stage: &PipelineStage) -> String {
         .unwrap_or_else(|| format!("{stage:?}"))
 }
 
+/// Detects output that is a file-write instruction rather than real content.
+///
+/// Some CLIs (notably Claude Code) may instruct the model to write plans to
+/// `PLAN.md` rather than returning the text inline. When that happens the
+/// captured stdout contains only a short directive like:
+///   `--- OUTPUT FILE ---\nWrite your plan to this file: …\PLAN.md`
+pub(crate) fn looks_like_output_file_instruction(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    (lower.contains("--- output file ---") || lower.contains("write your plan to this file"))
+        && lower.contains("plan.md")
+}
+
 /// Dispatches to the appropriate agent runner based on the backend setting.
 ///
 /// When `output_file` is provided, the agent's prompt is augmented with an
@@ -56,13 +68,16 @@ pub async fn dispatch_agent(
         );
     }
 
-    // For text-only stages with an output file, create a workspace-local
-    // temp file for the agent to write to (CLI agents sandbox writes to the
-    // workspace). After the agent finishes we read it and copy the content
-    // to the real artifact path.
-    //
-    // The filename is derived from the artifact path to avoid collisions
-    // when multiple agents run in parallel (e.g. plan_1, plan_2, plan_3).
+    let intent = stage.execution_intent();
+    if stage.requires_output_file() && output_file.is_none() {
+        return Err(format!(
+            "{stage:?} is a text stage and requires an output artifact path"
+        ));
+    }
+
+    // For text-only stages, derive a workspace-local temp file path so CLIs
+    // with native file-output support can write there safely. We no longer ask
+    // the model itself to create the file.
     let workspace_output_file = output_file.map(|artifact_path| {
         let stem = std::path::Path::new(artifact_path)
             .file_stem()
@@ -74,27 +89,14 @@ pub async fn dispatch_agent(
         let _ = std::fs::remove_file(&p);
         (p, name)
     });
-    let effective_input = if let Some((_, ref ws_name)) = workspace_output_file {
-        let augmented_prompt = format!(
-            "{}\n\n\
-             When you have finished, save your complete output to the file \
-             named `{ws_name}` in the current working directory. \
-             This is the only file you should create. Do not modify other files.",
-            input.prompt,
-        );
-        AgentInput {
-            prompt: augmented_prompt,
-            context: input.context.clone(),
-            workspace_path: input.workspace_path.clone(),
-        }
-    } else {
-        input.clone()
-    };
+    let workspace_output_file_str = workspace_output_file
+        .as_ref()
+        .map(|(path, _)| path.to_string_lossy().to_string());
 
     let result = match backend {
         AgentBackend::Claude => {
             run_claude(
-                &effective_input,
+                input,
                 &settings.claude_path,
                 model,
                 settings.agent_max_turns,
@@ -102,40 +104,70 @@ pub async fn dispatch_agent(
                 app,
                 run_id,
                 stage,
+                intent,
             )
             .await
         }
         AgentBackend::Codex => {
-            run_codex(&effective_input, &settings.codex_path, model, session_id, app, run_id, stage).await
+            run_codex(
+                input,
+                &settings.codex_path,
+                model,
+                session_id,
+                app,
+                run_id,
+                stage,
+                intent,
+                workspace_output_file_str.as_deref(),
+            )
+            .await
         }
         AgentBackend::Gemini => {
-            run_gemini(&effective_input, &settings.gemini_path, model, app, run_id, stage).await
+            run_gemini(input, &settings.gemini_path, model, app, run_id, stage, intent)
+                .await
         }
         AgentBackend::Kimi => {
-            run_kimi(&effective_input, &settings.kimi_path, model, app, run_id, stage).await
+            run_kimi(input, &settings.kimi_path, model, app, run_id, stage, intent).await
         }
         AgentBackend::OpenCode => {
-            run_opencode(&effective_input, &settings.opencode_path, model, app, run_id, stage).await
+            run_opencode(input, &settings.opencode_path, model, app, run_id, stage, intent)
+                .await
         }
     }?;
 
-    // If a workspace output file was used, read it and copy the content
-    // to the real artifact path. Clean up the workspace file afterwards.
-    if let Some((ref ws_file, _)) = workspace_output_file {
-        if let Ok(content) = std::fs::read_to_string(ws_file) {
-            let trimmed = content.trim();
-            if !trimmed.is_empty() {
-                // Copy content to the real artifact location.
-                if let Some(artifact_path) = output_file {
-                    let _ = std::fs::write(artifact_path, trimmed);
+    // For text stages, persist the final textual artifact even when the CLI
+    // only emitted to stdout. Native file-output is preferred when available.
+    if matches!(intent, StageExecutionIntent::Text) {
+        let mut final_text = result.raw_text.trim().to_string();
+        if let Some((ref ws_file, _)) = workspace_output_file {
+            if let Ok(content) = std::fs::read_to_string(ws_file) {
+                let trimmed = content.trim();
+                if !trimmed.is_empty() {
+                    final_text = trimmed.to_string();
                 }
-                let _ = std::fs::remove_file(ws_file);
-                return Ok(AgentOutput {
-                    raw_text: trimmed.to_string(),
-                });
+            }
+            let _ = std::fs::remove_file(ws_file);
+        }
+
+        // Fallback: some CLIs (e.g. Claude Code) may write to PLAN.md in the
+        // workspace instead of returning the plan inline. If the captured output
+        // looks like a file-write instruction rather than real content, try
+        // reading PLAN.md from the workspace.
+        if looks_like_output_file_instruction(&final_text) || final_text.is_empty() {
+            let plan_md = std::path::Path::new(&input.workspace_path).join("PLAN.md");
+            if let Ok(content) = std::fs::read_to_string(&plan_md) {
+                let trimmed = content.trim();
+                if !trimmed.is_empty() {
+                    final_text = trimmed.to_string();
+                    let _ = std::fs::remove_file(&plan_md);
+                }
             }
         }
-        let _ = std::fs::remove_file(ws_file);
+
+        if let Some(artifact_path) = output_file {
+            let _ = std::fs::write(artifact_path, &final_text);
+        }
+        return Ok(AgentOutput { raw_text: final_text });
     }
 
     Ok(result)
@@ -189,26 +221,22 @@ pub fn resolve_stage_model(stage: &PipelineStage, settings: &AppSettings) -> Str
             settings.executive_summary_agent.as_ref(),
             settings,
         ),
-        PipelineStage::Plan2 => resolve_model_with_fallback(
-            settings.planner_2_model.as_deref(),
-            settings.planner_2_agent.as_ref(),
-            settings,
-        ),
-        PipelineStage::Plan3 => resolve_model_with_fallback(
-            settings.planner_3_model.as_deref(),
-            settings.planner_3_agent.as_ref(),
-            settings,
-        ),
-        PipelineStage::CodeReviewer2 => resolve_model_with_fallback(
-            settings.code_reviewer_2_model.as_deref(),
-            settings.code_reviewer_2_agent.as_ref(),
-            settings,
-        ),
-        PipelineStage::CodeReviewer3 => resolve_model_with_fallback(
-            settings.code_reviewer_3_model.as_deref(),
-            settings.code_reviewer_3_agent.as_ref(),
-            settings,
-        ),
+        PipelineStage::ExtraPlan(i) => {
+            let slot = settings.extra_planners.get(*i as usize);
+            resolve_model_with_fallback(
+                slot.and_then(|s| s.model.as_deref()),
+                slot.and_then(|s| s.agent.as_ref()),
+                settings,
+            )
+        }
+        PipelineStage::ExtraReviewer(i) => {
+            let slot = settings.extra_reviewers.get(*i as usize);
+            resolve_model_with_fallback(
+                slot.and_then(|s| s.model.as_deref()),
+                slot.and_then(|s| s.agent.as_ref()),
+                settings,
+            )
+        }
         PipelineStage::ReviewMerge => resolve_model_with_fallback(
             settings.review_merger_model.as_deref(),
             settings.review_merger_agent.as_ref(),
@@ -320,6 +348,27 @@ pub fn emit_artifact(
 
 pub fn is_cancelled(cancel_flag: &Arc<AtomicBool>) -> bool {
     cancel_flag.load(Ordering::SeqCst)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunInterrupt {
+    Pause,
+    Cancel,
+}
+
+pub async fn wait_for_interrupt(
+    pause_flag: &Arc<AtomicBool>,
+    cancel_flag: &Arc<AtomicBool>,
+) -> RunInterrupt {
+    loop {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return RunInterrupt::Cancel;
+        }
+        if pause_flag.load(Ordering::SeqCst) {
+            return RunInterrupt::Pause;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
 }
 
 pub async fn wait_if_paused(

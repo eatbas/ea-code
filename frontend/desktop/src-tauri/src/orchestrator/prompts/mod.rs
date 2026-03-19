@@ -46,6 +46,32 @@ pub struct IterationHandoff {
     pub judge_required_items: String,
 }
 
+/// Renders a compact handoff block suitable for injection into later stages.
+pub fn render_handoff_for_prompt(handoff: &IterationHandoff) -> String {
+    [
+        "PRIOR ITERATION HANDOFF:".to_string(),
+        format!("Goal: {}", handoff.goal.trim()),
+        format!("Progress Summary: {}", handoff.changes_summary.trim()),
+        format!("Open Issues: {}", handoff.open_issues.trim()),
+        format!("Required Unresolved Items: {}", handoff.judge_required_items.trim()),
+        format!("Next Actions:\n{}", handoff.next_actions.trim()),
+    ]
+    .join("\n")
+}
+
+/// Formats a list of items as indented bullet lines, or "None" if empty.
+pub fn format_indented_bullet_list(items: &[String]) -> String {
+    if items.is_empty() {
+        "  - None".to_string()
+    } else {
+        items
+            .iter()
+            .map(|item| format!("  - {item}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+
 /// Truncates the previous judge output to a reasonable size for injection.
 pub fn truncate_judge_output(output: &str, max_chars: usize) -> String {
     if output.len() <= max_chars {

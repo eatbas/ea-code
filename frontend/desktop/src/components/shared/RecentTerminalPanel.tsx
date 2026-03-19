@@ -5,6 +5,7 @@ import { useStickyAutoScroll } from "../../hooks/useStickyAutoScroll";
 interface TerminalTab {
   label: string;
   lines: string[];
+  totalLines?: number;
 }
 
 interface RecentTerminalPanelProps {
@@ -29,8 +30,8 @@ export function RecentTerminalPanel({
   const activeTab = showTabs ? parallelTabs[activeTabIdx] : null;
   const displayLines = activeTab ? activeTab.lines : lines;
   const parallelDependencyKey = useMemo(
-    () => `${activeTab?.label ?? "none"}:${activeTab?.lines.length ?? 0}`,
-    [activeTab?.label, activeTab?.lines.length],
+    () => `${activeTab?.label ?? "none"}:${activeTab?.totalLines ?? activeTab?.lines.length ?? 0}`,
+    [activeTab?.label, activeTab?.lines.length, activeTab?.totalLines],
   );
   const { scrollRef: parallelRef, onScroll: onParallelScroll } = useStickyAutoScroll<HTMLPreElement>(parallelDependencyKey);
   const displayRef = activeTab ? parallelRef : terminalRef;

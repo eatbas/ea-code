@@ -11,8 +11,6 @@ pub struct IterationContext {
     pub original_prompt: String,
     pub enhanced_prompt: String,
     pub planner_plan: Option<String>,
-    pub audit_verdict: Option<String>,
-    pub audit_reasoning: Option<String>,
     pub audited_plan: Option<String>,
     pub review_output: Option<String>,
     pub review_findings: Option<ReviewFindings>,
@@ -31,8 +29,6 @@ impl IterationContext {
             original_prompt: original_prompt.clone(),
             enhanced_prompt: original_prompt,
             planner_plan: None,
-            audit_verdict: None,
-            audit_reasoning: None,
             audited_plan: None,
             review_output: None,
             review_findings: None,
@@ -43,6 +39,19 @@ impl IterationContext {
             generate_answer: None,
             fix_question: None,
             fix_answer: None,
+        }
+    }
+
+    pub fn seed_prior_context(
+        &mut self,
+        enhanced_prompt: Option<&str>,
+        approved_plan: Option<&str>,
+    ) {
+        if let Some(prompt) = enhanced_prompt.filter(|value| !value.trim().is_empty()) {
+            self.enhanced_prompt = prompt.to_string();
+        }
+        if let Some(plan) = approved_plan.filter(|value| !value.trim().is_empty()) {
+            self.audited_plan = Some(plan.to_string());
         }
     }
 

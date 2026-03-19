@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { StageResult } from "../../types";
 import { formatDuration, normaliseDisplayText } from "../../utils/formatters";
-import { STAGE_BADGE_CLASSES, STAGE_LABELS } from "./constants";
+import { stageBadgeClass, stageLabel } from "./constants";
 
 interface StageCardProps {
   stage: StageResult;
@@ -15,8 +15,8 @@ export function StageCard({ stage, modelLabel, startedAt }: StageCardProps): Rea
   const [open, setOpen] = useState(false);
   const [, tick] = useState(0);
 
-  const label = STAGE_LABELS[stage.stage] ?? stage.stage;
-  const badgeClass = STAGE_BADGE_CLASSES[stage.stage] ?? "bg-[#969696]/20";
+  const label = stageLabel(stage.stage);
+  const badgeClass = stageBadgeClass(stage.stage);
   const isFailed = stage.status === "failed";
   const isCompleted = stage.status === "completed";
   const isSkipped = stage.status === "skipped";

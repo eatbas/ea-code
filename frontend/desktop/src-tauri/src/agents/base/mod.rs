@@ -1,5 +1,6 @@
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::time::Duration;
 #[cfg(not(target_os = "windows"))]
 use tokio::process::Command;
 #[cfg(target_os = "windows")]
@@ -226,20 +227,46 @@ pub async fn run_cli_agent(
         let _ = handle.await;
     }
 
-    let stdout_lines = stdout_handle
-        .await
-        .map_err(|e| format!("stdout reader task failed: {e}"))?;
-    let stderr_lines = stderr_handle
-        .await
-        .map_err(|e| format!("stderr reader task failed: {e}"))?;
-
-    let stdout_output = stdout_lines.join("\n");
-    let stderr_output = stderr_lines.join("\n");
-
+    // Wait for the process to exit first.  On Windows (Git Bash) the pipe
+    // handles may not close cleanly even after the child exits, causing the
+    // BufReader tasks to block on EOF indefinitely.  By waiting for the
+    // process first and then giving the readers a bounded grace period we
+    // avoid the deadlock.
     let status = child
         .wait()
         .await
         .map_err(|e| format!("Failed to wait for {binary}: {e}"))?;
+
+    // Give reader tasks up to 5 seconds to drain remaining buffered output
+    // after the process exits.  If the pipes are truly stuck (Windows edge
+    // case), abort the readers and use whatever was collected so far.
+    let drain_timeout = Duration::from_secs(5);
+
+    let stdout_lines = match tokio::time::timeout(drain_timeout, stdout_handle).await {
+        Ok(Ok(lines)) => lines,
+        Ok(Err(e)) => {
+            eprintln!("stdout reader task failed: {e}");
+            Vec::new()
+        }
+        Err(_) => {
+            eprintln!("{binary}: stdout reader did not finish within drain timeout; proceeding with partial output");
+            Vec::new()
+        }
+    };
+    let stderr_lines = match tokio::time::timeout(drain_timeout, stderr_handle).await {
+        Ok(Ok(lines)) => lines,
+        Ok(Err(e)) => {
+            eprintln!("stderr reader task failed: {e}");
+            Vec::new()
+        }
+        Err(_) => {
+            eprintln!("{binary}: stderr reader did not finish within drain timeout; proceeding with partial output");
+            Vec::new()
+        }
+    };
+
+    let stdout_output = stdout_lines.join("\n");
+    let stderr_output = stderr_lines.join("\n");
 
     #[cfg(target_os = "windows")]
     if let Some(ref pf) = prompt_file {

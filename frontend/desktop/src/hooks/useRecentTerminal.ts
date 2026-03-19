@@ -28,7 +28,11 @@ export function useRecentTerminal(
 
   const lines = stage ? (stageLogs[stage] ?? []).slice(-maxLines) : [];
   const label = stage?.replace(/_/g, " ");
-  const dependencyKey = useMemo(() => `${stage ?? "none"}:${lines.length}`, [stage, lines.length]);
+  const totalLines = stage ? (stageLogs[stage]?.length ?? 0) : 0;
+  const dependencyKey = useMemo(
+    () => `${stage ?? "none"}:${totalLines}`,
+    [stage, totalLines],
+  );
   const { scrollRef: terminalRef, onScroll: onTerminalScroll } = useStickyAutoScroll<HTMLPreElement>(dependencyKey);
 
   return { terminalRef, onTerminalScroll, stage, lines, label };

@@ -7,7 +7,7 @@ pub fn build_reviewer_system(meta: &PromptMeta) -> String {
         "# Role\n\
          You are the Reviewer agent in a multi-agent self-improving pipeline \
          (iteration {iter} of {max}).\n\
-         Evaluate the recent code changes against the user's original prompt.\n\
+         Evaluate the recent code changes against the user's original prompt and plan.\n\
          \n\
          # ABSOLUTE RESTRICTIONS — VIOLATIONS WILL BREAK THE PIPELINE\n\
          - NEVER fix the code yourself. You are NOT the Coder or Fixer.\n\
@@ -29,21 +29,31 @@ pub fn build_reviewer_system(meta: &PromptMeta) -> String {
          # Output Format\n\
          Use this exact structure:\n\
          \n\
-         ## BLOCKER (must fix before merge)\n\
-         - [B1] Description of the issue and affected file/line.\n\
+         ## BLOCKERS\n\
+         - Description of the blocker and affected file/line.\n\
          \n\
-         ## WARNING (should fix)\n\
-         - [W1] Description of the issue.\n\
+         ## WARNINGS\n\
+         - Description of the warning.\n\
          \n\
-         ## NIT (optional improvement)\n\
-         - [N1] Description.\n\
+         ## NITS\n\
+         - Optional improvement.\n\
          \n\
-         ## Action Items\n\
-         - [ ] Concrete action 1 (addresses B1)\n\
-         - [ ] Concrete action 2 (addresses W1)\n\
+         ## TESTS\n\
+         Status: run | not run | not feasible\n\
+         Commands:\n\
+         - test command 1\n\
          \n\
-         ## Summary\n\
-         Verdict: PASS (no blockers) or FAIL (blockers found).\n\
+         ## TEST RESULTS\n\
+         - Result summary\n\
+         \n\
+         ## TEST GAPS\n\
+         - Missing coverage or reason tests were not run\n\
+         \n\
+         ## ACTION ITEMS\n\
+         - [ ] Concrete action 1\n\
+         \n\
+         ## SUMMARY\n\
+         Verdict: PASS or FAIL.\n\
          \n\
          # Git Inspection\n\
          - Prefer inspecting recent changes directly via git before writing \
@@ -53,8 +63,6 @@ pub fn build_reviewer_system(meta: &PromptMeta) -> String {
          - Run: git diff --no-ext-diff --\n\
          - Run: git ls-files --others --exclude-standard\n\
          - For each untracked file: git diff --no-index -- /dev/null <file-path>\n\
-         - If a [GIT DIFF] section is provided, use it as authoritative input \
-         when command execution is unavailable.\n\
          \n\
          # Context7 — Documentation Lookup\n\
          - When reviewing code that uses libraries, frameworks, or APIs, use the \
@@ -87,9 +95,7 @@ pub fn build_reviewer_user(
         parts.push(format!("--- Approved Plan ---\n{p}"));
     }
     if let Some(feedback) = judge_feedback {
-        parts.push(format!(
-            "--- Judge Feedback From Previous Iteration ---\n{feedback}"
-        ));
+        parts.push(feedback.to_string());
     }
     parts.push(
         "Inspect the repository state yourself using tools \

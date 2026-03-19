@@ -1,5 +1,5 @@
 //! Review, fix, and judge sub-stages for a single iteration.
-//! Supports 1-3 parallel reviewers with optional Review Merger.
+//! Supports 1-N parallel reviewers with optional Review Merger.
 
 use std::mem;
 use std::sync::atomic::AtomicBool;
@@ -18,7 +18,7 @@ use crate::orchestrator::parallel_stage::{
 };
 use crate::orchestrator::prompts::{self, PromptMeta};
 use crate::orchestrator::run_setup::IterationContext;
-use crate::orchestrator::stages::execute_agent_stage;
+use crate::orchestrator::stages::{execute_agent_stage, PauseHandling};
 use crate::orchestrator::helpers::{is_cancelled, push_cancel_iteration, wait_if_paused};
 use crate::orchestrator::user_questions::ask_user_question;
 
@@ -33,16 +33,29 @@ fn active_reviewer_slots(settings: &AppSettings) -> Vec<ParallelStageSlot> {
     if let Some(b) = &settings.code_reviewer_agent {
         slots.push(ParallelStageSlot { backend: b.clone(), stage: PipelineStage::CodeReviewer });
     }
-    if let Some(b) = &settings.code_reviewer_2_agent {
-        slots.push(ParallelStageSlot { backend: b.clone(), stage: PipelineStage::CodeReviewer2 });
-    }
-    if let Some(b) = &settings.code_reviewer_3_agent {
-        slots.push(ParallelStageSlot { backend: b.clone(), stage: PipelineStage::CodeReviewer3 });
+    for (i, slot) in settings.extra_reviewers.iter().enumerate() {
+        if let Some(b) = &slot.agent {
+            slots.push(ParallelStageSlot {
+                backend: b.clone(),
+                stage: PipelineStage::ExtraReviewer(i as u8),
+            });
+        }
     }
     slots
 }
 
-/// Review + Fix stages (supports 1-3 parallel reviewers + optional merger).
+fn stage_failed_due_to_pause(result: &StageResult) -> bool {
+    if result.status != StageStatus::Failed {
+        return false;
+    }
+    result
+        .error
+        .as_ref()
+        .map(|err| err.to_ascii_lowercase().contains("paused by user"))
+        .unwrap_or(false)
+}
+
+/// Review + Fix stages (supports 1-N parallel reviewers + optional merger).
 #[allow(clippy::too_many_arguments)]
 pub async fn run_review_fix_stages(
     app: &AppHandle,
@@ -85,7 +98,7 @@ pub async fn run_review_fix_stages(
         return Ok(());
     }
 
-    // --- Run reviewers (1 sequential, 2-3 parallel) ---
+    // --- Run reviewers (1 sequential, 2+ parallel) ---
     let reviewer_user_prompt = prompts::build_reviewer_user(
         &request.prompt, enhanced, iter_ctx.selected_plan(), judge_feedback,
     );
@@ -97,15 +110,20 @@ pub async fn run_review_fix_stages(
         run_single_reviewer(
             app, run_id, iter_num, &reviewer_slots[0], &reviewer_user_prompt,
             &reviewer_context, &request.workspace_path, settings, cancel_flag,
-            session_id, run, stages,
+            pause_flag, session_id, run, stages,
         ).await?
     } else {
         run_parallel_reviewers_and_merge(
             app, request, run_id, iter_num, &reviewer_slots, &reviewer_user_prompt,
-            &reviewer_context, settings, cancel_flag, session_id, meta,
+            &reviewer_context, settings, cancel_flag, pause_flag, session_id, meta,
             enhanced, workspace_context, run, stages, iter_ctx,
         ).await?
     };
+
+    if is_cancelled(cancel_flag) {
+        push_cancel_iteration(run, iter_num, mem::take(stages));
+        return Ok(());
+    }
 
     // Empty means all reviewers failed or merger failed.
     if rev_out.is_empty() {
@@ -143,7 +161,8 @@ pub async fn run_review_fix_stages(
             )),
             workspace_path: request.workspace_path.clone(),
         },
-        settings, cancel_flag, Some(session_id),
+        settings, cancel_flag, pause_flag, PauseHandling::ResumeWithinStage,
+        Some(session_id),
         None,
     ).await;
     let fix_out = fix_r.output.clone();
@@ -202,7 +221,7 @@ async fn run_single_reviewer(
     app: &AppHandle, run_id: &str, iter_num: u32,
     slot: &ParallelStageSlot, user_prompt: &str, context: &str,
     workspace_path: &str, settings: &AppSettings,
-    cancel_flag: &Arc<AtomicBool>, session_id: &str,
+    cancel_flag: &Arc<AtomicBool>, pause_flag: &Arc<AtomicBool>, session_id: &str,
     run: &mut PipelineRun, stages: &mut Vec<StageResult>,
 ) -> Result<String, String> {
     run.current_stage = Some(PipelineStage::CodeReviewer);
@@ -219,7 +238,8 @@ async fn run_single_reviewer(
             context: Some(context.to_string()),
             workspace_path: workspace_path.to_string(),
         },
-        settings, cancel_flag, Some(session_id),
+        settings, cancel_flag, pause_flag, PauseHandling::ResumeWithinStage,
+        Some(session_id),
         rev_output_path_str.as_deref(),
     ).await;
     let rev_out = rev_r.output.clone();
@@ -253,80 +273,108 @@ async fn run_single_reviewer(
     Ok(rev_out)
 }
 
-/// Runs 2-3 reviewers in parallel, then runs the Review Merger stage.
+/// Runs 2+ reviewers in parallel, then runs the Review Merger stage.
 #[allow(clippy::too_many_arguments)]
 async fn run_parallel_reviewers_and_merge(
     app: &AppHandle, request: &PipelineRequest,
     run_id: &str, iter_num: u32, slots: &[ParallelStageSlot],
     user_prompt: &str, context: &str,
-    settings: &AppSettings, cancel_flag: &Arc<AtomicBool>,
+    settings: &AppSettings, cancel_flag: &Arc<AtomicBool>, pause_flag: &Arc<AtomicBool>,
     session_id: &str, meta: &PromptMeta, enhanced: &str,
     workspace_context: &str,
     run: &mut PipelineRun, stages: &mut Vec<StageResult>,
     iter_ctx: &mut IterationContext,
 ) -> Result<String, String> {
-    let tasks: Vec<ParallelStageTask> = slots.iter().enumerate().map(|(i, slot)| {
-        let app = app.clone();
-        let backend = slot.backend.clone();
-        let task_stage = slot.stage.clone();
-        let future_stage = task_stage.clone();
-        let prompt = user_prompt.to_string();
-        let ctx = context.to_string();
-        let ws = request.workspace_path.clone();
-        let settings = settings.clone();
-        let cf = cancel_flag.clone();
-        let sid = session_id.to_string();
-        let rid = run_id.to_string();
+    let review_texts = loop {
+        let tasks: Vec<ParallelStageTask> = slots.iter().enumerate().map(|(i, slot)| {
+            let app = app.clone();
+            let backend = slot.backend.clone();
+            let task_stage = slot.stage.clone();
+            let future_stage = task_stage.clone();
+            let prompt = user_prompt.to_string();
+            let ctx = context.to_string();
+            let ws = request.workspace_path.clone();
+            let settings = settings.clone();
+            let cf = cancel_flag.clone();
+            let pf = pause_flag.clone();
+            let sid = session_id.to_string();
+            let rid = run_id.to_string();
 
-        let output_kind = format!("review_{}", i + 1);
-        let output_path = runs::artifact_output_path(&rid, iter_num, &output_kind).ok();
-        let output_path_str = output_path.map(|p| p.to_string_lossy().to_string());
+            let output_kind = format!("review_{}", i + 1);
+            let output_path = runs::artifact_output_path(&rid, iter_num, &output_kind).ok();
+            let output_path_str = output_path.map(|p| p.to_string_lossy().to_string());
 
-        ParallelStageTask {
-            stage: task_stage,
-            output_kind,
-            future: Box::pin(async move {
-                execute_agent_stage(
-                    &app, &rid, iter_num, future_stage, &backend,
-                    &AgentInput {
-                        prompt,
-                        context: Some(ctx),
-                        workspace_path: ws,
-                    },
-                    &settings, &cf, Some(&sid),
-                    output_path_str.as_deref(),
-                ).await
-            }),
-        }
-    }).collect();
-
-    let review_texts = run_parallel_stage_tasks(
-        run_id,
-        iter_num,
-        tasks,
-        stages::append_stage_start_event,
-        stages::append_stage_end_event,
-        |parallel_run| {
-            let ParallelStageRun {
-                index,
+            ParallelStageTask {
+                stage: task_stage,
                 output_kind,
-                result,
-                ..
-            } = parallel_run;
-            let failed = result.status == StageStatus::Failed;
-            let output = result.output.clone();
-            stages.push(result);
-
-            if failed {
-                None
-            } else {
-                crate::orchestrator::helpers::emit_artifact(
-                    app, run_id, &output_kind, &output, iter_num,
-                );
-                Some((format!("Review from Reviewer {}", index + 1), output))
+                future: Box::pin(async move {
+                    execute_agent_stage(
+                        &app, &rid, iter_num, future_stage, &backend,
+                        &AgentInput {
+                            prompt,
+                            context: Some(ctx),
+                            workspace_path: ws,
+                        },
+                        &settings, &cf, &pf, PauseHandling::ReturnPausedError,
+                        Some(&sid),
+                        output_path_str.as_deref(),
+                    ).await
+                }),
             }
-        },
-    ).await?;
+        }).collect();
+
+        let stage_checkpoint = stages.len();
+        let mut pause_retry_requested = false;
+        let successful = run_parallel_stage_tasks(
+            run_id,
+            iter_num,
+            tasks,
+            stages::append_stage_start_event,
+            stages::append_stage_end_event,
+            |parallel_run| {
+                let ParallelStageRun {
+                    index,
+                    output_kind,
+                    result,
+                    ..
+                } = parallel_run;
+                let paused = stage_failed_due_to_pause(&result);
+                let failed = result.status == StageStatus::Failed;
+                let output = result.output.clone();
+                if paused {
+                    pause_retry_requested = true;
+                }
+                stages.push(result);
+
+                if failed {
+                    None
+                } else {
+                    Some((format!("Review from Reviewer {}", index + 1), output_kind, output))
+                }
+            },
+        ).await?;
+
+        if pause_retry_requested {
+            stages.truncate(stage_checkpoint);
+            for idx in 0..slots.len() {
+                let kind = format!("review_{}", idx + 1);
+                if let Ok(path) = runs::artifact_output_path(run_id, iter_num, &kind) {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+            if wait_if_paused(pause_flag, cancel_flag).await {
+                return Ok(String::new());
+            }
+            continue;
+        }
+
+        let mut merged_review_texts = Vec::new();
+        for (title, output_kind, output) in successful {
+            crate::orchestrator::helpers::emit_artifact(app, run_id, &output_kind, &output, iter_num);
+            merged_review_texts.push((title, output));
+        }
+        break merged_review_texts;
+    };
 
     if review_texts.is_empty() {
         run.iterations.push(Iteration {
@@ -362,7 +410,8 @@ async fn run_parallel_reviewers_and_merge(
             )),
             workspace_path: request.workspace_path.clone(),
         },
-        settings, cancel_flag, Some(session_id),
+        settings, cancel_flag, pause_flag, PauseHandling::ResumeWithinStage,
+        Some(session_id),
         merger_output_path_str.as_deref(),
     ).await;
     let merged_out = merger_r.output.clone();

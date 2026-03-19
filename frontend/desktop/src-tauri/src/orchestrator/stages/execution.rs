@@ -46,7 +46,6 @@ pub fn append_stage_end_event(
         iteration,
         status: stage_end_status,
         duration_ms,
-        audit_verdict: None,
         verdict: None,
     };
 

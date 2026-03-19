@@ -30,26 +30,31 @@ pub fn build_review_merger_system(meta: &PromptMeta) -> String {
          # Output Format\n\
          Use this exact structure:\n\
          \n\
-         BLOCKERS (must fix):\n\
+         ## BLOCKERS\n\
          - [N/N agree] Description of the issue and affected file/line.\n\
          \n\
-         WARNINGS (should fix):\n\
+         ## WARNINGS\n\
          - [N/N agree] Description of the issue.\n\
          \n\
-         NITS (optional):\n\
+         ## NITS\n\
          - Description.\n\
          \n\
-         SCORES:\n\
-           Correctness: X.X/10\n\
-           Security: X.X/10\n\
-           Quality: X.X/10\n\
-           Test Coverage: X.X/10\n\
+         ## TESTS\n\
+         Status: run | not run | not feasible\n\
+         Commands:\n\
+         - test command\n\
          \n\
-         ACTION ITEMS:\n\
+         ## TEST RESULTS\n\
+         - Result summary\n\
+         \n\
+         ## TEST GAPS\n\
+         - Missing coverage or reason tests were not run\n\
+         \n\
+         ## ACTION ITEMS\n\
          - [ ] Concrete action 1\n\
-         - [ ] Concrete action 2\n\
          \n\
-         VERDICT: PASS or FAIL\n\
+         ## SUMMARY\n\
+         Verdict: PASS or FAIL\n\
          \n\
          # Constraints\n\
          - Be concise. Deduplicate similar findings.\n\
@@ -80,7 +85,8 @@ pub fn build_review_merger_user(
     }
     parts.push(
         "Merge the above reviews into a single authoritative review using the \
-         required output format. Deduplicate findings and average scores."
+         required output format. Deduplicate findings and preserve the exact \
+         section headings."
             .to_string(),
     );
     parts.join("\n\n")

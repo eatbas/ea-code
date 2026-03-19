@@ -3,36 +3,25 @@
 /// Parsed result from plan auditor output.
 #[derive(Clone, Debug)]
 pub struct PlanAuditParsed {
-    pub verdict: String,
-    pub reasoning: String,
     pub improved_plan: String,
 }
 
 /// Parses plan auditor output.
-/// Expected shape: line 1 = APPROVED or REJECTED, then optional
-/// reasoning and `--- Improved Plan ---` section.
+///
+/// The auditor now outputs the merged/improved plan directly without any
+/// verdict prefix. This parser strips CLI noise and extracts the plan text.
+/// If the output contains an `--- Improved Plan ---` marker (legacy format),
+/// we extract the plan from after that marker.
 pub fn parse_plan_audit_output(output: &str, fallback_plan: &str) -> PlanAuditParsed {
     let normalised = output.replace("\r\n", "\n");
-    let lines: Vec<&str> = normalised.lines().collect();
 
-    let mut verdict = "INVALID".to_string();
-    let mut verdict_line_idx: Option<usize> = None;
-    for (idx, line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-        if trimmed == "APPROVED" || trimmed == "REJECTED" {
-            verdict = trimmed.to_string();
-            verdict_line_idx = Some(idx);
-        }
-    }
+    // Strip any legacy verdict lines that agents might still emit.
+    let stripped = strip_legacy_verdict_prefix(&normalised);
 
+    // Check for an explicit plan marker (legacy or edge-case).
     let marker = "--- Improved Plan ---";
     let alt_marker = "--- Rewritten Plan ---";
-    let after_verdict = if let Some(v_idx) = verdict_line_idx {
-        lines[v_idx + 1..].join("\n")
-    } else {
-        normalised.clone()
-    };
-    let marker_pos = match (after_verdict.rfind(marker), after_verdict.rfind(alt_marker)) {
+    let marker_pos = match (stripped.rfind(marker), stripped.rfind(alt_marker)) {
         (Some(a), Some(b)) => {
             if a >= b {
                 Some((a, marker.len()))
@@ -45,51 +34,50 @@ pub fn parse_plan_audit_output(output: &str, fallback_plan: &str) -> PlanAuditPa
         (None, None) => None,
     };
 
-    let reasoning_raw = if let Some((idx, _)) = marker_pos {
-        after_verdict[..idx].trim().to_string()
-    } else if verdict == "REJECTED" {
-        after_verdict.trim().to_string()
-    } else {
-        String::new()
-    };
-
     let plan_candidate = if let Some((idx, marker_len)) = marker_pos {
-        after_verdict[idx + marker_len..].trim().to_string()
-    } else if verdict == "REJECTED" {
-        String::new()
-    } else if let Some(v_idx) = verdict_line_idx {
-        lines[v_idx + 1..].join("\n").trim().to_string()
+        stripped[idx + marker_len..].trim().to_string()
     } else {
-        normalised.trim().to_string()
+        stripped.trim().to_string()
     };
 
-    let mut cleaned_plan = strip_plan_tail_noise(&plan_candidate);
-    if looks_like_template_noise(&cleaned_plan) {
-        cleaned_plan.clear();
+    let mut cleaned = strip_plan_tail_noise(&plan_candidate);
+    if looks_like_template_noise(&cleaned) {
+        cleaned.clear();
     }
-    let improved = if cleaned_plan.trim().is_empty() {
-        if verdict == "REJECTED" {
-            fallback_plan.to_string()
-        } else if verdict == "INVALID" {
-            fallback_plan.to_string()
-        } else if !plan_candidate.trim().is_empty() {
-            plan_candidate.trim().to_string()
-        } else {
-            fallback_plan.to_string()
+
+    let improved = if cleaned.trim().is_empty() {
+        fallback_plan.to_string()
+    } else {
+        cleaned
+    };
+
+    PlanAuditParsed { improved_plan: improved }
+}
+
+/// Strips legacy APPROVED/REJECTED lines from the start of the output.
+fn strip_legacy_verdict_prefix(text: &str) -> String {
+    let mut lines = text.lines().peekable();
+    // Skip leading noise lines (codex preamble, blank lines, verdict lines).
+    let mut skipped_verdict = false;
+    let mut kept: Vec<&str> = Vec::new();
+    for line in lines.by_ref() {
+        let trimmed = line.trim();
+        if !skipped_verdict {
+            if trimmed.is_empty()
+                || trimmed == "APPROVED"
+                || trimmed == "REJECTED"
+                || trimmed == "codex"
+                || trimmed == "exec"
+            {
+                skipped_verdict = trimmed == "APPROVED" || trimmed == "REJECTED";
+                continue;
+            }
+            // First non-noise line — start keeping.
+            skipped_verdict = true;
         }
-    } else {
-        cleaned_plan
-    };
-
-    if verdict == "INVALID" && improved.trim().is_empty() {
-        verdict = "REJECTED".to_string();
+        kept.push(line);
     }
-
-    PlanAuditParsed {
-        verdict,
-        reasoning: reasoning_raw,
-        improved_plan: improved,
-    }
+    kept.join("\n")
 }
 
 fn strip_plan_tail_noise(text: &str) -> String {

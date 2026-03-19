@@ -21,17 +21,6 @@ pub enum StageEndStatus {
     Skipped,
 }
 
-/// Plan audit verdict variants.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub enum PlanAuditVerdict {
-    #[serde(rename = "APPROVED")]
-    Approved,
-    #[serde(rename = "REJECTED")]
-    Rejected,
-    #[serde(rename = "NEEDS_REVISION")]
-    NeedsRevision,
-}
-
 /// Individual run event for events.jsonl.
 ///
 /// Every event includes:
@@ -74,9 +63,6 @@ pub enum RunEvent {
         status: StageEndStatus,
         /// Duration in milliseconds.
         duration_ms: u64,
-        /// Plan audit verdict, if this was a plan_audit stage.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        audit_verdict: Option<PlanAuditVerdict>,
         /// Judge verdict, if this was a judge stage.
         #[serde(skip_serializing_if = "Option::is_none")]
         verdict: Option<JudgeVerdict>,

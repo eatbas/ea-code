@@ -1,7 +1,12 @@
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import type { ProjectEntry, SessionMeta } from "../types";
-import { formatRelativeTime, parseUtcTimestamp, projectDisplayName } from "../utils/formatters";
+import {
+  formatCompactTimestamp,
+  formatTimestamp,
+  parseUtcTimestamp,
+  projectDisplayName,
+} from "../utils/formatters";
 import { isActiveStatusValue } from "../utils/statusHelpers";
 
 interface ProjectThreadsListProps {
@@ -146,8 +151,11 @@ export function ProjectThreadsList({
                               </button>
                               {onArchiveSession ? (
                                 <>
-                                  <span className="shrink-0 text-[10px] text-[#6f7086] group-hover:hidden">
-                                    {formatRelativeTime(session.updatedAt)}
+                                  <span
+                                    className="shrink-0 text-[10px] text-[#6f7086] group-hover:hidden"
+                                    title={`Started ${formatTimestamp(session.createdAt)}`}
+                                  >
+                                    {formatCompactTimestamp(session.createdAt)}
                                   </span>
                                   <button
                                     onClick={(e) => handleArchiveClick(e, session.id)}
@@ -163,8 +171,11 @@ export function ProjectThreadsList({
                                   </button>
                                 </>
                               ) : (
-                                <span className="shrink-0 text-[10px] text-[#6f7086]">
-                                  {formatRelativeTime(session.updatedAt)}
+                                <span
+                                  className="shrink-0 text-[10px] text-[#6f7086]"
+                                  title={`Started ${formatTimestamp(session.createdAt)}`}
+                                >
+                                  {formatCompactTimestamp(session.createdAt)}
                                 </span>
                               )}
                             </div>

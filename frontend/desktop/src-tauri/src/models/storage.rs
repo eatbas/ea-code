@@ -167,7 +167,11 @@ pub struct ReviewFindings {
     #[serde(default)]
     pub tests_run: bool,
     #[serde(default)]
+    pub test_commands: Vec<String>,
+    #[serde(default)]
     pub test_results: Vec<String>,
+    #[serde(default)]
+    pub test_gaps: Vec<String>,
     /// Reviewer verdict: "PASS" or "FAIL".
     pub verdict: String,
 }

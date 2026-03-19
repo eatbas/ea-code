@@ -19,7 +19,7 @@ export interface ParallelStageCardConfig {
   countNoun: string;
   outputLabel: string;
   outputEmptyText: string;
-  stageLabelMap: Record<string, string>;
+  stageLabelFn: (stage: string) => string;
   singleArtifactKey: string;
   artifactKeyPrefix: string;
   activeSubTabBackgroundClassName: string;
@@ -36,6 +36,7 @@ interface TabbedParallelStageCardProps {
   enhancedPromptInput: string;
   settings: AppSettings | null;
   startedAt?: number;
+  runStatus?: string;
   config: ParallelStageCardConfig;
 }
 
@@ -47,11 +48,13 @@ const STATUS_BADGES = {
   completed: { text: "Completed", cls: "text-[#22c55e] bg-[#22c55e]/10" },
   failed: { text: "Failed", cls: "text-[#ef4444] bg-[#ef4444]/10" },
   skipped: { text: "Skipped", cls: "text-[#9898b0] bg-[#9898b0]/10" },
+  paused: { text: "Paused", cls: "text-[#60a5fa] bg-[#60a5fa]/10" },
   running: { text: "Running", cls: "text-[#40c4ff] bg-[#40c4ff]/10" },
   pending: { text: "Pending", cls: "text-[#9898b0] bg-[#9898b0]/10" },
 } as const;
+const WAITING_FOR_CLI_TEXT = "Waiting for CLI response...";
 
-function resolveStatusBadge(stages: StageResult[]) {
+function resolveStatusBadge(stages: StageResult[], isPaused: boolean) {
   const allCompleted = stages.every((stage) => stage.status === "completed");
   const anyFailed = stages.some((stage) => stage.status === "failed");
   const allSkipped = stages.every((stage) => stage.status === "skipped");
@@ -60,6 +63,7 @@ function resolveStatusBadge(stages: StageResult[]) {
   if (allCompleted) return STATUS_BADGES.completed;
   if (anyFailed) return STATUS_BADGES.failed;
   if (allSkipped) return STATUS_BADGES.skipped;
+  if (isPaused && anyRunning) return STATUS_BADGES.paused;
   if (anyRunning) return STATUS_BADGES.running;
   return STATUS_BADGES.pending;
 }
@@ -80,9 +84,9 @@ function resolveOutputs(
   });
 }
 
-function buildTabs(stages: StageResult[], settings: AppSettings | null, labelMap: Record<string, string>): ParallelStageTab[] {
+function buildTabs(stages: StageResult[], settings: AppSettings | null, labelFn: (stage: string) => string): ParallelStageTab[] {
   return stages.map((stage) => ({
-    label: labelMap[stage.stage] ?? stage.stage,
+    label: labelFn(stage.stage),
     stage: stage.stage,
     modelLabel: stageModelLabel(stage.stage, settings) ?? "",
     status: stage.status,
@@ -91,10 +95,10 @@ function buildTabs(stages: StageResult[], settings: AppSettings | null, labelMap
   }));
 }
 
-function getStatusDotClass(status: StageResult["status"], activeDotClassName: string): string {
+function getStatusDotClass(status: StageResult["status"], activeDotClassName: string, isPaused: boolean): string {
   if (status === "completed") return "bg-[#22c55e]";
   if (status === "failed") return "bg-[#ef4444]";
-  if (status === "running") return `${activeDotClassName} animate-pulse`;
+  if (status === "running") return isPaused ? activeDotClassName : `${activeDotClassName} synced-pulse`;
   return INACTIVE_SUBTAB_DOT_CLASS;
 }
 
@@ -105,6 +109,7 @@ function ParallelStageSubTabs({
   activeSubTabBackgroundClassName,
   activeSubTabTextClassName,
   activeSubTabDotClassName,
+  isPaused,
 }: {
   tabs: ParallelStageTab[];
   activeIdx: number;
@@ -112,12 +117,13 @@ function ParallelStageSubTabs({
   activeSubTabBackgroundClassName: string;
   activeSubTabTextClassName: string;
   activeSubTabDotClassName: string;
+  isPaused: boolean;
 }): ReactNode {
   return (
     <div className="mb-2 flex gap-1">
       {tabs.map((tab, idx) => {
         const isActive = idx === activeIdx;
-        const statusDot = getStatusDotClass(tab.status, activeSubTabDotClassName);
+        const statusDot = getStatusDotClass(tab.status, activeSubTabDotClassName, isPaused);
 
         return (
           <button
@@ -148,6 +154,7 @@ export function TabbedParallelStageCard({
   enhancedPromptInput,
   settings,
   startedAt,
+  runStatus,
   config,
 }: TabbedParallelStageCardProps): ReactNode {
   const [open, setOpen] = useState(false);
@@ -156,10 +163,11 @@ export function TabbedParallelStageCard({
   const [, tick] = useState(0);
 
   const hasMultipleStages = stages.length > 1;
+  const isPaused = runStatus === "paused";
 
   const tabs = useMemo(
-    () => buildTabs(stages, settings, config.stageLabelMap),
-    [config.stageLabelMap, settings, stages],
+    () => buildTabs(stages, settings, config.stageLabelFn),
+    [config.stageLabelFn, settings, stages],
   );
   const resolvedOutputs = useMemo(
     () => resolveOutputs(stages, artifacts, config.singleArtifactKey, config.artifactKeyPrefix),
@@ -167,16 +175,17 @@ export function TabbedParallelStageCard({
   );
 
   const anyRunning = stages.some((stage) => stage.status === "running");
+  const hasActiveRunning = anyRunning && !isPaused;
   useEffect(() => {
-    if (!anyRunning) return;
+    if (!hasActiveRunning) return;
     const interval = window.setInterval(() => tick((value) => value + 1), 1000);
     return () => window.clearInterval(interval);
-  }, [anyRunning]);
+  }, [hasActiveRunning]);
 
   const totalDuration = stages.reduce((sum, stage) => Math.max(sum, stage.durationMs), 0);
   const effectiveDuration =
-    anyRunning && startedAt != null ? Math.max(totalDuration, Date.now() - startedAt) : totalDuration;
-  const statusBadge = resolveStatusBadge(stages);
+    hasActiveRunning && startedAt != null ? Math.max(totalDuration, Date.now() - startedAt) : totalDuration;
+  const statusBadge = resolveStatusBadge(stages, isPaused);
 
   const truncatedInputs = useMemo(
     () =>
@@ -191,6 +200,9 @@ export function TabbedParallelStageCard({
 
   const activeTab = tabs[activeTabIdx];
   const activeOutput = resolvedOutputs[activeTabIdx] ?? "";
+  const normalisedOutput = normaliseDisplayText(activeOutput);
+  const activeTabWaiting = activeTab != null && (activeTab.status === "running" || activeTab.status === "pending");
+  const outputText = normalisedOutput || (activeTabWaiting ? WAITING_FOR_CLI_TEXT : config.outputEmptyText);
 
   return (
     <article className="overflow-hidden rounded-lg border border-[#2e2e48] bg-[#14141e]">
@@ -282,6 +294,7 @@ export function TabbedParallelStageCard({
                   activeSubTabBackgroundClassName={config.activeSubTabBackgroundClassName}
                   activeSubTabTextClassName={config.activeSubTabTextClassName}
                   activeSubTabDotClassName={config.activeSubTabDotClassName}
+                  isPaused={isPaused}
                 />
               )}
               <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-[#9898b0]">
@@ -289,7 +302,7 @@ export function TabbedParallelStageCard({
               </span>
               {activeTab?.error && <p className="mb-1 text-xs text-[#ef4444]">{activeTab.error}</p>}
               <pre className={`whitespace-pre-wrap break-words rounded border px-3 py-2 text-xs leading-relaxed text-[#e4e4ed] ${config.outputBorderClassName} ${config.outputBackgroundClassName}`}>
-                {normaliseDisplayText(activeOutput) || config.outputEmptyText}
+                {outputText}
               </pre>
             </div>
           )}

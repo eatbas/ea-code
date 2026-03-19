@@ -208,7 +208,7 @@ export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): Reac
                     : undefined)
                   : undefined}
               />
-              {run.status === "running" && activeStage !== "plan_audit" && (
+              {run.status === "running" && (
                 <ThinkingIndicator
                   stage={activeStage as PipelineStage}
                   startedAt={run.startedAt
@@ -230,6 +230,7 @@ export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): Reac
               executiveSummary={run.executiveSummary ?? artifacts["executive_summary"]}
               error={run.error}
               stageRows={buildStageRowsFromEvents(events)}
+              judgeReasoning={artifacts["judge"]}
             />
           )}
         </>
@@ -253,17 +254,19 @@ interface RunStageListProps {
 function RunStageList({ stageResults, run, artifacts, settings, isActiveStatus }: RunStageListProps) {
   const planGroupStages = stageResults.filter((s) => isPlanStage(s.stage));
   const planArtifactMap: Record<string, string> = {};
-  if (artifacts["plan"]) planArtifactMap["plan"] = artifacts["plan"];
-  if (artifacts["plan_1"]) planArtifactMap["plan_1"] = artifacts["plan_1"];
-  if (artifacts["plan_2"]) planArtifactMap["plan_2"] = artifacts["plan_2"];
-  if (artifacts["plan_3"]) planArtifactMap["plan_3"] = artifacts["plan_3"];
+  for (const [key, value] of Object.entries(artifacts)) {
+    if (key === "plan" || /^plan_\d+$/.test(key)) {
+      planArtifactMap[key] = value;
+    }
+  }
 
   const reviewGroupStages = stageResults.filter((s) => isReviewStage(s.stage));
   const reviewArtifactMap: Record<string, string> = {};
-  if (artifacts["review"]) reviewArtifactMap["review"] = artifacts["review"];
-  if (artifacts["review_1"]) reviewArtifactMap["review_1"] = artifacts["review_1"];
-  if (artifacts["review_2"]) reviewArtifactMap["review_2"] = artifacts["review_2"];
-  if (artifacts["review_3"]) reviewArtifactMap["review_3"] = artifacts["review_3"];
+  for (const [key, value] of Object.entries(artifacts)) {
+    if (key === "review" || /^review_\d+$/.test(key)) {
+      reviewArtifactMap[key] = value;
+    }
+  }
 
   let planGroupRendered = false;
   let reviewGroupRendered = false;
@@ -282,6 +285,7 @@ function RunStageList({ stageResults, run, artifacts, settings, isActiveStatus }
               runPrompt={run.prompt}
               enhancedPromptInput={artifacts["enhanced_prompt"] ?? run.prompt}
               settings={settings}
+              runStatus={run.status}
             />
           );
         }
@@ -297,6 +301,7 @@ function RunStageList({ stageResults, run, artifacts, settings, isActiveStatus }
               runPrompt={run.prompt}
               enhancedPromptInput={artifacts["enhanced_prompt"] ?? run.prompt}
               settings={settings}
+              runStatus={run.status}
               startedAt={
                 isActiveStatus && run.currentStage && isReviewStage(run.currentStage as PipelineStage)
                   ? run.startedAt

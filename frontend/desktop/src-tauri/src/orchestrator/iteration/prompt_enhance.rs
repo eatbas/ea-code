@@ -10,7 +10,7 @@ use crate::models::{StageEndStatus, *};
 use crate::storage::runs;
 
 use crate::orchestrator::prompts::{self, PromptMeta};
-use crate::orchestrator::stages::{execute_agent_stage, execute_skipped_stage};
+use crate::orchestrator::stages::{execute_agent_stage, execute_skipped_stage, PauseHandling};
 
 /// Runs the prompt enhancement stage for iteration 1.
 /// Returns the enhanced prompt or error.
@@ -19,7 +19,7 @@ pub async fn run_prompt_enhance_stage(
     request: &PipelineRequest,
     settings: &AppSettings,
     cancel_flag: &Arc<AtomicBool>,
-    _pause_flag: &Arc<AtomicBool>,
+    pause_flag: &Arc<AtomicBool>,
     run_id: &str,
     session_id: &str,
     iter_num: u32,
@@ -56,6 +56,8 @@ pub async fn run_prompt_enhance_stage(
         },
         settings,
         cancel_flag,
+        pause_flag,
+        PauseHandling::ResumeWithinStage,
         Some(session_id),
         output_path_str.as_deref(),
     )
@@ -66,6 +68,10 @@ pub async fn run_prompt_enhance_stage(
 
     if pe_result.status != StageStatus::Failed {
         crate::orchestrator::helpers::emit_artifact(app, run_id, "enhanced_prompt", &enhanced, iter_num);
+        if let Ok(mut summary) = runs::read_summary(run_id) {
+            summary.enhanced_prompt = Some(enhanced.clone());
+            let _ = runs::update_summary(run_id, &summary);
+        }
     }
 
     if pe_result.status == StageStatus::Failed {

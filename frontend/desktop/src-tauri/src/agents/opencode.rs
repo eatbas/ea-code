@@ -1,6 +1,6 @@
 use tauri::AppHandle;
 
-use crate::models::PipelineStage;
+use crate::models::{PipelineStage, StageExecutionIntent};
 
 use super::base::{build_full_prompt, run_cli_agent, AgentInput, AgentOutput};
 
@@ -18,6 +18,7 @@ pub async fn run_opencode(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
+    _intent: StageExecutionIntent,
 ) -> Result<AgentOutput, String> {
     let full_prompt = build_full_prompt(input);
     let mut args: Vec<String> = Vec::new();

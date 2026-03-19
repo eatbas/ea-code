@@ -2,7 +2,7 @@
 
 use crate::models::ReviewFindings;
 
-use super::PromptMeta;
+use super::{format_indented_bullet_list, PromptMeta};
 
 pub fn build_judge_system(meta: &PromptMeta) -> String {
     let is_final = meta.iteration == meta.max_iterations;
@@ -44,7 +44,7 @@ pub fn build_judge_system(meta: &PromptMeta) -> String {
         parts.push(
             "\n# Progress Awareness\n\
              You have judged a previous iteration. Your prior verdict is \
-             included in the prompt as PREVIOUS JUDGE VERDICT.\n\
+             included in the prompt as PRIOR ITERATION HANDOFF.\n\
              - Focus on verifying whether previously flagged issues have \
              actually been fixed in the current code.\n\
              - Re-check each unchecked REQUIRED item from your prior verdict \
@@ -97,10 +97,15 @@ pub fn build_judge_system(meta: &PromptMeta) -> String {
          \n\
          NOT COMPLETE\n\
          \n\
-         Then provide:\n\
+          Then provide:\n\
+          \n\
+          ## Checklist\n\
+         - [x] [REQUIRED] or [ ] [REQUIRED] for each required rubric item\n\
+         - [x] [RECOMMENDED] or [ ] [RECOMMENDED] for each recommended rubric item\n\
          \n\
-         ## Checklist\n\
-         - [x] or [ ] for each rubric item above\n\
+         ## Test Assessment\n\
+         - State whether tests were run, which commands were run, what passed/failed, \
+         and whether missing tests should block completion.\n\
          \n\
          ## Next Steps (only if NOT COMPLETE)\n\
          1. Exact step to resolve the issue.\n\
@@ -153,29 +158,12 @@ pub fn build_judge_user(
     }
 
     // Format compact findings block
-    let blockers_text = if findings.blockers.is_empty() {
-        "None".to_string()
-    } else {
-        findings
-            .blockers
-            .iter()
-            .map(|b| format!("  - {b}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-
-    let warnings_text = if findings.warnings.is_empty() {
-        "None".to_string()
-    } else {
-        findings
-            .warnings
-            .iter()
-            .map(|w| format!("  - {w}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-
+    let blockers_text = format_indented_bullet_list(&findings.blockers);
+    let warnings_text = format_indented_bullet_list(&findings.warnings);
     let tests_str = if findings.tests_run { "run" } else { "not run" };
+    let commands_text = format_indented_bullet_list(&findings.test_commands);
+    let results_text = format_indented_bullet_list(&findings.test_results);
+    let gaps_text = format_indented_bullet_list(&findings.test_gaps);
 
     parts.push(format!(
         "--- Review Findings ---\n\
@@ -184,17 +172,26 @@ pub fn build_judge_user(
          WARNINGS: {}\n\
          {}\n\
          TESTS: {}\n\
+         TEST COMMANDS:\n\
+         {}\n\
+         TEST RESULTS:\n\
+         {}\n\
+         TEST GAPS:\n\
+         {}\n\
          VERDICT: {}",
         findings.blockers.len(),
         blockers_text,
         findings.warnings.len(),
         warnings_text,
         tests_str,
+        commands_text,
+        results_text,
+        gaps_text,
         findings.verdict
     ));
 
     if let Some(prev) = previous_judge {
-        parts.push(format!("PREVIOUS JUDGE VERDICT:\n{prev}"));
+        parts.push(prev.to_string());
     }
 
     parts.push(
@@ -242,7 +239,9 @@ mod tests {
             warnings: vec![],
             nits: vec![],
             tests_run: true,
+            test_commands: vec!["cargo check".to_string()],
             test_results: vec![],
+            test_gaps: vec![],
             verdict: "FAIL".to_string(),
         };
         let user = build_judge_user(
@@ -250,9 +249,9 @@ mod tests {
             "enhanced",
             None,
             &findings,
-            Some("NOT COMPLETE\n## Checklist\n- [ ] blockers"),
+            Some("PRIOR ITERATION HANDOFF:\nOpen Issues: blockers"),
         );
-        assert!(user.contains("PREVIOUS JUDGE VERDICT"));
+        assert!(user.contains("PRIOR ITERATION HANDOFF"));
         assert!(user.contains("blockers"));
     }
 
@@ -263,7 +262,9 @@ mod tests {
             warnings: vec!["Naming could improve".to_string()],
             nits: vec![],
             tests_run: false,
+            test_commands: vec![],
             test_results: vec![],
+            test_gaps: vec!["Validation path is untested".to_string()],
             verdict: "FAIL".to_string(),
         };
         let user = build_judge_user("task", "enhanced", None, &findings, None);
@@ -273,6 +274,7 @@ mod tests {
         assert!(user.contains("WARNINGS: 1"));
         assert!(user.contains("Naming could improve"));
         assert!(user.contains("TESTS: not run"));
+        assert!(user.contains("TEST GAPS"));
         assert!(user.contains("VERDICT: FAIL"));
     }
 
@@ -283,7 +285,9 @@ mod tests {
             warnings: vec![],
             nits: vec![],
             tests_run: true,
+            test_commands: vec![],
             test_results: vec![],
+            test_gaps: vec![],
             verdict: "PASS".to_string(),
         };
         let user = build_judge_user("task", "enhanced", None, &findings, None);

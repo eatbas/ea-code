@@ -37,7 +37,6 @@ pub fn append_stage_end_event(
         iteration,
         status: status.clone(),
         duration_ms,
-        audit_verdict: None,
         verdict: None,
     };
     runs::append_event(run_id, event)

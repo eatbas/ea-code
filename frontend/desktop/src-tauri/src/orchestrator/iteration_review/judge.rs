@@ -13,7 +13,7 @@ use crate::storage::runs;
 use crate::orchestrator::parsing::{parse_judge_verdict, parse_review_findings};
 use crate::orchestrator::prompts::{self, PromptMeta};
 use crate::orchestrator::run_setup::IterationContext;
-use crate::orchestrator::stages::execute_agent_stage;
+use crate::orchestrator::stages::{execute_agent_stage, PauseHandling};
 
 /// Judge stage: evaluate completion and parse handoff.
 #[allow(clippy::too_many_arguments)]
@@ -22,6 +22,7 @@ pub async fn run_judge_stage(
     request: &PipelineRequest,
     settings: &AppSettings,
     cancel_flag: &Arc<AtomicBool>,
+    pause_flag: &Arc<AtomicBool>,
     run_id: &str,
     session_id: &str,
     iter_num: u32,
@@ -74,6 +75,8 @@ pub async fn run_judge_stage(
         },
         settings,
         cancel_flag,
+        pause_flag,
+        PauseHandling::ResumeWithinStage,
         Some(session_id),
         judge_output_path_str.as_deref(),
     )
@@ -147,11 +150,12 @@ pub async fn run_judge_stage(
         return Ok(true);
     }
 
-    *previous_judge_output = Some(judge_out.clone());
     let task_brief: String = request.prompt.chars().take(200).collect();
+    let handoff = prompts::parse_handoff(&judge_out)
+        .unwrap_or_else(|| prompts::build_fallback_handoff(&task_brief, &judge_out, iter_num));
+    *previous_judge_output = Some(prompts::render_handoff_for_prompt(&handoff));
     *last_handoff = Some(
-        prompts::parse_handoff(&judge_out)
-            .unwrap_or_else(|| prompts::build_fallback_handoff(&task_brief, &judge_out, iter_num)),
+        handoff,
     );
 
     if iter_num == settings.max_iterations {

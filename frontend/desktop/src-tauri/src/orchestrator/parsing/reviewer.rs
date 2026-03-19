@@ -2,105 +2,102 @@
 
 use crate::models::ReviewFindings;
 
-/// Parses reviewer output into compact structured review findings.
-///
-/// Extracts:
-/// - BLOCKER lines (lines starting with "BLOCKER:" or "BLOCKER ")
-/// - WARNING lines (lines starting with "WARNING:" or "WARNING ")
-/// - Tests run status (looks for "TESTS: run" or "TESTS: not run")
-/// - Verdict (looks for "VERDICT: PASS" or "VERDICT: FAIL")
+/// Parses reviewer or review-merger markdown output into structured findings.
 pub fn parse_review_findings(reviewer_output: &str) -> ReviewFindings {
-    let mut blockers: Vec<String> = Vec::new();
-    let mut warnings: Vec<String> = Vec::new();
+    let mut blockers = Vec::new();
+    let mut warnings = Vec::new();
+    let mut nits = Vec::new();
     let mut tests_run = false;
+    let mut test_commands = Vec::new();
+    let mut test_results = Vec::new();
+    let mut test_gaps = Vec::new();
     let mut verdict = "FAIL".to_string();
+    let mut section = String::new();
+    let mut in_test_commands = false;
 
-    for line in reviewer_output.lines() {
-        let trimmed = line.trim();
+    for raw_line in reviewer_output.lines() {
+        let trimmed = raw_line.trim();
         let lower = trimmed.to_ascii_lowercase();
 
-        // Parse BLOCKER lines
-        if lower.starts_with("blocker:") || lower.starts_with("blocker ") {
-            let content = trimmed
-                .trim_start_matches("BLOCKER:")
-                .trim_start_matches("BLOCKER")
-                .trim_start_matches(':')
-                .trim();
-            if !content.is_empty() {
-                blockers.push(content.to_string());
-            }
+        if lower.starts_with("## ") {
+            section = lower.trim_start_matches("## ").trim().to_string();
+            in_test_commands = false;
+            continue;
         }
 
-        // Parse WARNING lines
-        if lower.starts_with("warning:") || lower.starts_with("warning ") {
-            let content = trimmed
-                .trim_start_matches("WARNING:")
-                .trim_start_matches("WARNING")
-                .trim_start_matches(':')
-                .trim();
-            if !content.is_empty() {
-                warnings.push(content.to_string());
+        match section.as_str() {
+            "blockers" => {
+                let _ = push_bullet(trimmed, &mut blockers);
             }
-        }
-
-        // Parse TESTS line
-        if lower.starts_with("tests:") {
-            let content = trimmed
-                .trim_start_matches("TESTS:")
-                .trim_start_matches("tests:")
-                .trim()
-                .to_ascii_lowercase();
-            tests_run = content.starts_with("run") || content.starts_with("yes");
-        }
-
-        // Parse VERDICT line
-        if lower.starts_with("verdict:") {
-            let content = trimmed
-                .trim_start_matches("VERDICT:")
-                .trim_start_matches("verdict:")
-                .trim()
-                .to_ascii_uppercase();
-            if content.starts_with("PASS") || content.starts_with("APPROVED") {
-                verdict = "PASS".to_string();
-            } else {
-                verdict = "FAIL".to_string();
+            "warnings" => {
+                let _ = push_bullet(trimmed, &mut warnings);
             }
+            "nits" => {
+                let _ = push_bullet(trimmed, &mut nits);
+            }
+            "tests" => {
+                if lower.starts_with("status:") {
+                    let status = trimmed
+                        .trim_start_matches("Status:")
+                        .trim_start_matches("status:")
+                        .trim()
+                        .to_ascii_lowercase();
+                    tests_run = status.starts_with("run");
+                    in_test_commands = false;
+                } else if lower == "commands:" {
+                    in_test_commands = true;
+                } else if in_test_commands {
+                    if !push_bullet(trimmed, &mut test_commands) && !trimmed.is_empty() {
+                        in_test_commands = false;
+                    }
+                }
+            }
+            "test results" => {
+                push_bullet(trimmed, &mut test_results);
+            }
+            "test gaps" => {
+                push_bullet(trimmed, &mut test_gaps);
+            }
+            "summary" => {
+                if lower.starts_with("verdict:") {
+                    let content = trimmed
+                        .trim_start_matches("Verdict:")
+                        .trim_start_matches("verdict:")
+                        .trim()
+                        .to_ascii_uppercase();
+                    verdict = if content.starts_with("PASS") {
+                        "PASS".to_string()
+                    } else {
+                        "FAIL".to_string()
+                    };
+                }
+            }
+            _ => {}
         }
     }
 
-    // If no explicit verdict found, infer from blockers
-    if verdict == "FAIL" && blockers.is_empty() {
-        // Check if there are any blocking keywords in the output
-        let lower_output = reviewer_output.to_ascii_lowercase();
-        if !lower_output.contains("verdict:")
-            && !lower_output.contains("all good")
-            && !lower_output.contains("no issues")
-        {
-            // Default to FAIL if we see blockers mentioned anywhere
-            if lower_output.contains("blocker") || lower_output.contains("critical") {
-                verdict = "FAIL".to_string();
-            }
-        }
-    }
-
-    // If we have no blockers and the output looks positive, assume PASS
-    if blockers.is_empty() && verdict == "FAIL" {
-        let lower_output = reviewer_output.to_ascii_lowercase();
-        if lower_output.contains("lgtm")
-            || lower_output.contains("looks good")
-            || lower_output.contains("no blockers")
-            || lower_output.contains("all checks passed")
-        {
-            verdict = "PASS".to_string();
-        }
+    if verdict == "FAIL" && blockers.is_empty() && reviewer_output.to_ascii_lowercase().contains("verdict: pass") {
+        verdict = "PASS".to_string();
     }
 
     ReviewFindings {
         blockers,
         warnings,
+        nits,
         tests_run,
+        test_commands,
+        test_results,
+        test_gaps,
         verdict,
-        nits: Vec::new(),
-        test_results: Vec::new(),
     }
+}
+
+fn push_bullet(line: &str, target: &mut Vec<String>) -> bool {
+    let Some(item) = line.strip_prefix("- ") else {
+        return false;
+    };
+    if !item.is_empty() && !item.eq_ignore_ascii_case("none") {
+        target.push(item.to_string());
+    }
+    true
 }

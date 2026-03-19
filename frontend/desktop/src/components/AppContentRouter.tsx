@@ -25,6 +25,7 @@ import { McpView } from "./McpView";
 interface AppContentRouterProps {
   activeView: ActiveView;
   activeSessionId: string | undefined;
+  chatDismissed: boolean;
   run: PipelineRun | null;
   stageLogs: Record<string, string[]>;
   artifacts: Record<string, string>;
@@ -53,8 +54,8 @@ interface AppContentRouterProps {
   onCancelPipeline: (runId?: string) => Promise<void>;
   onRun: (options: RunOptions, sessionIdOverride?: string) => Promise<void>;
   onContinueRun: (options: RunOptions, sessionId?: string) => void;
-  onNewSession: () => void;
   onBackFromChat: () => void;
+  onBackFromSession: () => void;
   onLoadMoreRuns: () => Promise<void>;
   onSelectProject: (projectPath: string) => Promise<void>;
   onAddProject: () => Promise<void>;
@@ -64,6 +65,7 @@ interface AppContentRouterProps {
 export function AppContentRouter({
   activeView,
   activeSessionId,
+  chatDismissed,
   run,
   stageLogs,
   artifacts,
@@ -92,8 +94,8 @@ export function AppContentRouter({
   onCancelPipeline,
   onRun,
   onContinueRun,
-  onNewSession,
   onBackFromChat,
+  onBackFromSession,
   onLoadMoreRuns,
   onSelectProject,
   onAddProject,
@@ -101,7 +103,7 @@ export function AppContentRouter({
   const pipelineActive = isRunInProgress(run);
   const pipelineTerminal = isRunTerminalState(run);
   const isHomeRootView = activeView === "home" && !activeSessionId;
-  const showChat = isHomeRootView && (pipelineActive || pipelineTerminal);
+  const showChat = isHomeRootView && (pipelineActive || pipelineTerminal) && !chatDismissed;
 
   if (run && showChat) {
     return (
@@ -178,7 +180,7 @@ export function AppContentRouter({
         onCancelRun={(runId) => { void onCancelPipeline(runId); }}
         onLoadMore={() => { void onLoadMoreRuns(); }}
         loadingMore={sessionLoadingMore}
-        onBackToHome={onNewSession}
+        onBackToHome={onBackFromSession}
       />
     );
   }

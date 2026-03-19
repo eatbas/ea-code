@@ -16,8 +16,7 @@ use crate::models::*;
 use crate::storage::{cleanup, messages, projects, runs, sessions};
 
 use super::helpers::*;
-use super::iteration::run_iteration;
-use super::prompts;
+use super::iteration::{run_iteration, IterationCarryover};
 use super::run_setup::*;
 use super::session_memory::{build_session_memory_context, merge_shared_context};
 
@@ -154,8 +153,7 @@ pub async fn run_pipeline(
         )
         .await?;
     } else {
-        let mut previous_judge_output: Option<String> = None;
-        let mut last_handoff: Option<prompts::IterationHandoff> = None;
+        let mut carry = IterationCarryover::new();
 
         for iter_num in 1..=settings.max_iterations {
             if wait_if_paused(&pause_flag, &cancel_flag).await {
@@ -178,8 +176,7 @@ pub async fn run_pipeline(
                 &session_id,
                 iter_num,
                 &mut run,
-                &mut previous_judge_output,
-                &mut last_handoff,
+                &mut carry,
                 &shared_context,
             )
             .await?;

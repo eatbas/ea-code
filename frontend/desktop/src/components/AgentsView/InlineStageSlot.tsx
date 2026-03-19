@@ -4,31 +4,29 @@ import { CascadingSelect } from "./CascadingSelect";
 
 export interface InlineStageSlotProps {
   label: string;
-  backendKey: keyof AppSettings;
-  modelKey: keyof AppSettings;
-  optional: boolean;
+  /** Direct backend value (for array-based extra slots). */
+  backend: AgentBackend | null;
+  /** Direct model value (for array-based extra slots). */
+  model: string | null;
   draft: AppSettings;
   cliHealth: CliHealth | null;
   cliHealthChecking: boolean;
-  onUpdate: (patch: Partial<AppSettings>) => void;
+  /** Called when the user selects a new backend + model. */
+  onChange: (backend: AgentBackend | null, model: string | null) => void;
   onRemove: () => void;
 }
 
 /** Additional stage selector rendered inline within a parent card. */
 export function InlineStageSlot({
   label,
-  backendKey,
-  modelKey,
-  optional,
+  backend,
+  model,
   draft,
   cliHealth,
   cliHealthChecking,
-  onUpdate,
+  onChange,
   onRemove,
 }: InlineStageSlotProps): ReactNode {
-  const currentBackend = draft[backendKey] as AgentBackend | null;
-  const currentModel = draft[modelKey] as string | null;
-
   return (
     <div className="flex flex-col gap-2 border-t border-[#2e2e48] pt-3">
       <div className="flex items-center justify-between">
@@ -46,18 +44,13 @@ export function InlineStageSlot({
         </button>
       </div>
       <CascadingSelect
-        backend={currentBackend}
-        model={currentModel}
+        backend={backend}
+        model={model}
         settings={draft}
-        optional={optional}
+        optional={true}
         cliHealth={cliHealth}
         cliHealthChecking={cliHealthChecking}
-        onChange={(newBackend, newModel) => {
-          onUpdate({
-            [backendKey]: newBackend,
-            [modelKey]: newModel ?? "",
-          } as Partial<AppSettings>);
-        }}
+        onChange={onChange}
       />
     </div>
   );

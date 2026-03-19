@@ -151,8 +151,6 @@ export interface StageEndEvent extends RunEventBase {
   durationMs: number;
   /** Judge verdict (only for judge stage). */
   verdict?: JudgeVerdict;
-  /** Plan audit verdict (only for plan_audit stage). */
-  auditVerdict?: "APPROVED" | "REJECTED" | "NEEDS_REVISION";
 }
 
 /** An iteration loop completes with judge verdict. */

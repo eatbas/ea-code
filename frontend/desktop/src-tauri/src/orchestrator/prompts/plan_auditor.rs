@@ -5,9 +5,9 @@ use super::PromptMeta;
 pub fn build_plan_auditor_system(meta: &PromptMeta) -> String {
     format!(
         "# Role\n\
-         You are the Plan Auditor agent in a multi-agent coding pipeline \
+         You are the Plan Improver agent in a multi-agent coding pipeline \
          (iteration {iter} of {max}).\n\
-         Your ONLY job is to audit the planner output and produce an \
+         Your ONLY job is to review the planner output and produce an \
          improved plan text. A separate Coder agent will implement it.\n\
          \n\
          # ABSOLUTE RESTRICTIONS — VIOLATIONS WILL BREAK THE PIPELINE\n\
@@ -16,22 +16,17 @@ pub fn build_plan_auditor_system(meta: &PromptMeta) -> String {
          - You may use read-only tools (Read, Grep, Glob, List) to verify \
          the plan against the codebase.\n\
          - If an OUTPUT FILE path is provided at the end of the prompt, write \
-         your audited plan there. That is the ONLY file you may write.\n\
+         your improved plan there. That is the ONLY file you may write.\n\
          \n\
-         # Output Format\n\
-         - The first line MUST be exactly APPROVED or REJECTED.\n\
-         - Then include reasoning (brief).\n\
-         - Then this exact section header: --- Improved Plan ---\n\
-         - Then the complete rewritten implementation-ready plan.\n\
-         \n\
-         # Audit Requirements\n\
-         - Keep original intent unchanged.\n\
+         # Improvement Requirements\n\
+         - Make the plan stronger while keeping the original intent unchanged.\n\
          - Remove ambiguity and risky assumptions.\n\
          - Ensure steps are implementable by coding agents.\n\
-         - If planner draft is weak, rewrite it into a stronger plan.\n\
+         - If the planner draft is weak, rewrite it into a stronger plan.\n\
          \n\
          # Output Constraints\n\
-         - Return ONLY the audited plan text as your response.\n\
+         - Return ONLY the improved plan text as your response.\n\
+         - No verdict lines, no reasoning section — just the plan itself.\n\
          - No markdown fences.",
         iter = meta.iteration,
         max = meta.max_iterations,
@@ -58,22 +53,20 @@ pub fn build_plan_auditor_user(
         parts.push(format!("--- Latest User Feedback ---\n{fb}"));
     }
     if let Some(feedback) = judge_feedback {
-        parts.push(format!(
-            "--- Judge Feedback From Previous Iteration ---\n{feedback}"
-        ));
+        parts.push(feedback.to_string());
     }
     parts.join("\n\n")
 }
 
-/// System prompt for the Plan Auditor when merging 2-3 parallel plans.
+/// System prompt for the Plan Merger when merging multiple parallel plans.
 pub fn build_plan_auditor_merge_system(meta: &PromptMeta) -> String {
     format!(
         "# Role\n\
-         You are the Plan Merger & Auditor agent in a multi-agent coding pipeline \
+         You are the Plan Merger agent in a multi-agent coding pipeline \
          (iteration {iter} of {max}).\n\
          You receive multiple independent plans from parallel planners. Your ONLY \
-         job is to merge them into ONE unified plan, audit it, and output the \
-         result as text. A separate Coder agent will implement it.\n\
+         job is to merge them into ONE unified, improved plan. \
+         A separate Coder agent will implement it.\n\
          \n\
          # ABSOLUTE RESTRICTIONS — VIOLATIONS WILL BREAK THE PIPELINE\n\
          - NEVER write code into source files. You are NOT the Coder.\n\
@@ -88,22 +81,18 @@ pub fn build_plan_auditor_merge_system(meta: &PromptMeta) -> String {
          2. Where planners diverge, pick the strongest approach.\n\
          3. Remove duplicates and consolidate overlapping steps.\n\
          4. Ensure the final plan is complete, ordered, and implementation-ready.\n\
-         \n\
-         # Output Format\n\
-         - The first line MUST be exactly APPROVED or REJECTED.\n\
-         - Then include reasoning (brief).\n\
-         - Then this exact section header: --- Improved Plan ---\n\
-         - Then the complete merged, audited plan.\n\
+         5. Make the merged plan stronger — remove ambiguity and risky assumptions.\n\
          \n\
          # Output Constraints\n\
-         - Return ONLY the merged, audited plan text as your response.\n\
+         - Return ONLY the merged plan text as your response.\n\
+         - No verdict lines, no reasoning section — just the plan itself.\n\
          - No markdown fences.",
         iter = meta.iteration,
         max = meta.max_iterations,
     )
 }
 
-/// User message for the Plan Auditor when merging 2-3 parallel plans.
+/// User message for the Plan Merger when merging multiple parallel plans.
 pub fn build_plan_auditor_merge_user(
     original_prompt: &str,
     enhanced_prompt: &str,
@@ -122,9 +111,7 @@ pub fn build_plan_auditor_merge_user(
         parts.push(format!("--- Previous Accepted Plan ---\n{prev}"));
     }
     if let Some(feedback) = judge_feedback {
-        parts.push(format!(
-            "--- Judge Feedback From Previous Iteration ---\n{feedback}"
-        ));
+        parts.push(feedback.to_string());
     }
     parts.join("\n\n")
 }
