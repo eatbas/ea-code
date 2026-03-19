@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { PipelineRun, PipelineStage, RunOptions, CliHealth, AppSettings } from "../types";
+import type { PipelineRun, PipelineStage, RunOptions, CliHealth, AppSettings, StageResult } from "../types";
 import { isActive, isTerminal, statusInfo, statusToneClasses } from "../utils/statusHelpers";
 import { resolveAuditedPlanText, resolvePlanText } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
@@ -48,6 +48,27 @@ interface ChatViewProps {
   onContinue: (options: RunOptions) => void;
 }
 
+/** Pre-computed data for a single iteration. */
+interface IterationGroup {
+  iterNum: number;
+  stages: StageResult[];
+  planStages: StageResult[];
+  reviewStages: StageResult[];
+  isLatest: boolean;
+}
+
+/** Collects per-iteration plan/review groups. */
+function buildIterationGroups(run: PipelineRun): IterationGroup[] {
+  const lastIdx = run.iterations.length - 1;
+  return run.iterations.map((iter, idx) => ({
+    iterNum: iter.number,
+    stages: iter.stages,
+    planStages: iter.stages.filter((s) => isPlanStage(s.stage)),
+    reviewStages: iter.stages.filter((s) => isReviewStage(s.stage)),
+    isLatest: idx === lastIdx,
+  }));
+}
+
 export function ChatView({
   run,
   stageLogs,
@@ -65,64 +86,58 @@ export function ChatView({
   const { label: statusLabel } = statusInfo(run.status);
   const statusClasses = statusToneClasses(run.status);
   const allStages = run.iterations.flatMap((iter) => iter.stages);
-  const visibleStages = allStages;
   const terminal = useRecentTerminal(stageLogs, run.currentStage, allStages);
+  const iterationGroups = buildIterationGroups(run);
 
   const enhancedPrompt = artifacts["enhanced_prompt"];
   const enhancedPromptInput = (enhancedPrompt ?? run.prompt).trim();
   const planArtifact = artifacts["plan"];
   const planAuditArtifact = artifacts["plan_final"] ?? artifacts["plan_audit"];
   const planInputForAudit = resolvePlanText(planArtifact);
-  const latestCompletedPlanAuditIndex = visibleStages.reduce((latest, stage, idx) => (stage.stage === "plan_audit" && stage.status === "completed" ? idx : latest), -1);
   const otherArtifacts = Object.entries(artifacts).filter(
     ([kind]) => !EXCLUDED_ARTIFACT_KINDS.has(kind) && !kind.startsWith("diff_") && !kind.startsWith("plan_") && !kind.startsWith("review_"),
   );
 
-  // Group all plan stages for the tabbed card.
-  const planGroupStages = visibleStages.filter((s) => isPlanStage(s.stage));
-  // Collect plan artifacts dynamically (plan, plan_1, plan_2, ...).
+  // Collect plan/review artifacts (only relevant for the latest iteration).
   const planArtifactMap: Record<string, string> = {};
   for (const [key, value] of Object.entries(artifacts)) {
     if (key === "plan" || /^plan_\d+$/.test(key)) {
       planArtifactMap[key] = value;
     }
   }
-  let planGroupRendered = false;
-
-  // Group all review stages for the tabbed card.
-  const reviewGroupStages = visibleStages.filter((s) => isReviewStage(s.stage));
   const reviewArtifactMap: Record<string, string> = {};
   for (const [key, value] of Object.entries(artifacts)) {
     if (key === "review" || /^review_\d+$/.test(key)) {
       reviewArtifactMap[key] = value;
     }
   }
-  let reviewGroupRendered = false;
 
-  // Build parallel terminal tabs when multiple plan stages exist.
-  const planTerminalTabs = planGroupStages.length > 1
-    ? planGroupStages.map((s, i) => ({
+  // Terminal tabs: use only the latest iteration's plan/review stages.
+  const latestGroup = iterationGroups[iterationGroups.length - 1];
+  const latestPlanStages = latestGroup?.planStages ?? [];
+  const latestReviewStages = latestGroup?.reviewStages ?? [];
+
+  const planTerminalTabs = latestPlanStages.length > 1
+    ? latestPlanStages.map((s, i) => ({
         label: `Plan ${i + 1}`,
         lines: (stageLogs[s.stage] ?? []).slice(-160),
         totalLines: stageLogs[s.stage]?.length ?? 0,
       }))
     : undefined;
-  // Show parallel tabs when any plan stage is running or was the most recent.
   const showPlanTerminalTabs = planTerminalTabs && (
-    planGroupStages.some((s) => s.status === "running") ||
+    latestPlanStages.some((s) => s.status === "running") ||
     (run.currentStage != null && isPlanStage(run.currentStage))
   );
 
-  // Build parallel terminal tabs when multiple review stages exist.
-  const reviewTerminalTabs = reviewGroupStages.length > 1
-    ? reviewGroupStages.map((s, i) => ({
+  const reviewTerminalTabs = latestReviewStages.length > 1
+    ? latestReviewStages.map((s, i) => ({
         label: `Review ${i + 1}`,
         lines: (stageLogs[s.stage] ?? []).slice(-160),
         totalLines: stageLogs[s.stage]?.length ?? 0,
       }))
     : undefined;
   const showReviewTerminalTabs = reviewTerminalTabs && (
-    reviewGroupStages.some((s) => s.status === "running") ||
+    latestReviewStages.some((s) => s.status === "running") ||
     (run.currentStage != null && isReviewStage(run.currentStage))
   );
 
@@ -158,102 +173,22 @@ export function ChatView({
             </div>
           </div>
           <PromptReceivedCard prompt={run.prompt} />
-          {visibleStages.map((stage, idx) => {
-            // Group plan/plan_2/plan_3 into a single tabbed card.
-            if (isPlanStage(stage.stage)) {
-              if (planGroupRendered) return null;
-              planGroupRendered = true;
-              const planningActive = isActive(run.status) && isPlanStage(run.currentStage as PipelineStage);
-              return (
-                <div key="plan-group" className="flex flex-col gap-2">
-                  <TabbedPlanCard
-                    planStages={planGroupStages}
-                    planArtifacts={planArtifactMap}
-                    runPrompt={run.prompt}
-                    enhancedPromptInput={enhancedPromptInput}
-                    settings={settings}
-                    startedAt={planningActive ? run.stageStartedAt : undefined}
-                    runStatus={run.status}
-                  />
-                  {(planningActive || planGroupStages.some((s) => s.status === "running")) && (
-                    <PlannerProgressRow
-                      stages={planGroupStages}
-                      settings={settings}
-                      isPaused={isPaused}
-                    />
-                  )}
-                </div>
-              );
-            }
-
-            // Group code_reviewer/code_reviewer2/code_reviewer3 into a single tabbed card.
-            if (isReviewStage(stage.stage)) {
-              if (reviewGroupRendered) return null;
-              reviewGroupRendered = true;
-              const reviewingActive = isActive(run.status) && isReviewStage(run.currentStage as PipelineStage);
-              return (
-                <div key="review-group" className="flex flex-col gap-2">
-                  <TabbedReviewCard
-                    reviewStages={reviewGroupStages}
-                    reviewArtifacts={reviewArtifactMap}
-                    runPrompt={run.prompt}
-                    enhancedPromptInput={enhancedPromptInput}
-                    settings={settings}
-                    startedAt={reviewingActive ? run.stageStartedAt : undefined}
-                    runStatus={run.status}
-                  />
-                  {(reviewingActive || reviewGroupStages.some((s) => s.status === "running")) && (
-                    <ReviewerProgressRow
-                      stages={reviewGroupStages}
-                      settings={settings}
-                      isPaused={isPaused}
-                    />
-                  )}
-                </div>
-              );
-            }
-
-            return (
-              <div key={`${stage.stage}-${idx}`} className="flex flex-col gap-2">
-                {stage.stage === "judge" && stage.status === "completed" ? (
-                  <StageInputOutputCard
-                    title="Judge"
-                    inputSections={[
-                      { label: "Original Prompt", content: run.prompt },
-                      { label: "Enhanced Prompt", content: enhancedPromptInput },
-                      { label: "Plan", content: resolveAuditedPlanText(planAuditArtifact, planArtifact) },
-                      { label: "Review Findings", content: [...visibleStages.slice(0, idx)].reverse().find((entry) => entry.stage === "code_reviewer")?.output ?? artifacts["review"] ?? "" },
-                      { label: "Fixer Output", content: [...visibleStages.slice(0, idx)].reverse().find((entry) => entry.stage === "code_fixer")?.output ?? "" },
-                    ]}
-                    outputLabel="Decision"
-                    outputContent={artifacts["judge"] ?? stage.output ?? "No judge output generated."}
-                    modelLabel={stageModelLabel("judge", settings)}
-                    durationMs={stage.durationMs}
-                    badgeClassName="bg-rose-400/25"
-                    outputClassName="border border-rose-400/20 bg-rose-400/5 text-[#e4e4ed]"
-                  />
-                ) : (
-                  <RichStageCard
-                    stage={stage}
-                    runPrompt={run.prompt}
-                    enhancedPromptInput={enhancedPromptInput}
-                    promptEnhanceOutput={(enhancedPrompt ?? stage.output).trim()}
-                    planOutput={resolvePlanText(planArtifact, stage.output)}
-                    planInputForAudit={planInputForAudit}
-                    auditedPlanOutput={resolveAuditedPlanText(planAuditArtifact, stage.output)}
-                    settings={settings}
-                    startedAt={
-                      run.status === "running" && run.currentStage === stage.stage && stage.status === "running"
-                        ? run.stageStartedAt
-                        : undefined
-                    }
-                    showPlanCard={false}
-                    showPlanAuditCard={idx === latestCompletedPlanAuditIndex}
-                  />
-                )}
-              </div>
-            );
-          })}
+          {iterationGroups.map((group) => (
+            <IterationStages
+              key={`iter-${group.iterNum}`}
+              group={group}
+              run={run}
+              artifacts={artifacts}
+              planArtifactMap={group.isLatest ? planArtifactMap : {}}
+              reviewArtifactMap={group.isLatest ? reviewArtifactMap : {}}
+              enhancedPromptInput={enhancedPromptInput}
+              planArtifact={planArtifact}
+              planAuditArtifact={planAuditArtifact}
+              planInputForAudit={planInputForAudit}
+              settings={settings}
+              isPaused={isPaused}
+            />
+          ))}
           {isActive(run.status) && run.currentStage && !isPlanStage(run.currentStage) && !isReviewStage(run.currentStage) && (
             <ThinkingIndicator stage={run.currentStage} startedAt={run.stageStartedAt} />
           )}
@@ -294,6 +229,7 @@ export function ChatView({
             terminalRef={terminal.terminalRef}
             onTerminalScroll={terminal.onTerminalScroll}
             parallelTabs={showPlanTerminalTabs ? planTerminalTabs : showReviewTerminalTabs ? reviewTerminalTabs : undefined}
+            parallelTabNoun={showPlanTerminalTabs ? "planners" : showReviewTerminalTabs ? "reviewers" : undefined}
           />
         )}
         {(isActive(run.status) || isPaused) && (
@@ -322,5 +258,148 @@ export function ChatView({
         <WorkspaceFooter path={run.workspacePath} />
       </div>
     </div>
+  );
+}
+
+/** Renders the stages of a single iteration with per-iteration plan/review grouping. */
+function IterationStages({
+  group,
+  run,
+  artifacts,
+  planArtifactMap,
+  reviewArtifactMap,
+  enhancedPromptInput,
+  planArtifact,
+  planAuditArtifact,
+  planInputForAudit,
+  settings,
+  isPaused,
+}: {
+  group: IterationGroup;
+  run: PipelineRun;
+  artifacts: Record<string, string>;
+  planArtifactMap: Record<string, string>;
+  reviewArtifactMap: Record<string, string>;
+  enhancedPromptInput: string;
+  planArtifact: string | undefined;
+  planAuditArtifact: string | undefined;
+  planInputForAudit: string;
+  settings: AppSettings | null;
+  isPaused: boolean;
+}): ReactNode {
+  const { stages, planStages, reviewStages, isLatest, iterNum } = group;
+
+  // For the latest iteration, use live artifacts. For past iterations, use stage output.
+  const iterPlanAuditArtifact = isLatest ? planAuditArtifact : undefined;
+  const iterPlanArtifact = isLatest ? planArtifact : undefined;
+  const iterPlanInputForAudit = isLatest ? planInputForAudit : "";
+
+  // Find the last completed plan_audit within THIS iteration.
+  const lastCompletedPlanAuditIdx = stages.reduce(
+    (latest, stage, idx) => (stage.stage === "plan_audit" && stage.status === "completed" ? idx : latest), -1,
+  );
+
+  let planGroupRendered = false;
+  let reviewGroupRendered = false;
+
+  return (
+    <>
+      {stages.map((stage, stageIdx) => {
+        // Group plan stages into a single tabbed card per iteration.
+        if (isPlanStage(stage.stage)) {
+          if (planGroupRendered) return null;
+          planGroupRendered = true;
+          const planningActive = isActive(run.status) && isLatest && isPlanStage(run.currentStage as PipelineStage);
+          return (
+            <div key={`plan-group-${iterNum}`} className="flex flex-col gap-2">
+              <TabbedPlanCard
+                planStages={planStages}
+                planArtifacts={planArtifactMap}
+                runPrompt={run.prompt}
+                enhancedPromptInput={enhancedPromptInput}
+                settings={settings}
+                startedAt={planningActive ? run.stageStartedAt : undefined}
+                runStatus={run.status}
+              />
+              {(planningActive || planStages.some((s) => s.status === "running")) && (
+                <PlannerProgressRow
+                  stages={planStages}
+                  settings={settings}
+                  isPaused={isPaused}
+                />
+              )}
+            </div>
+          );
+        }
+
+        // Group review stages into a single tabbed card per iteration.
+        if (isReviewStage(stage.stage)) {
+          if (reviewGroupRendered) return null;
+          reviewGroupRendered = true;
+          const reviewingActive = isActive(run.status) && isLatest && isReviewStage(run.currentStage as PipelineStage);
+          return (
+            <div key={`review-group-${iterNum}`} className="flex flex-col gap-2">
+              <TabbedReviewCard
+                reviewStages={reviewStages}
+                reviewArtifacts={reviewArtifactMap}
+                runPrompt={run.prompt}
+                enhancedPromptInput={enhancedPromptInput}
+                settings={settings}
+                startedAt={reviewingActive ? run.stageStartedAt : undefined}
+                runStatus={run.status}
+              />
+              {(reviewingActive || reviewStages.some((s) => s.status === "running")) && (
+                <ReviewerProgressRow
+                  stages={reviewStages}
+                  settings={settings}
+                  isPaused={isPaused}
+                />
+              )}
+            </div>
+          );
+        }
+
+        return (
+          <div key={`${stage.stage}-${iterNum}-${stageIdx}`} className="flex flex-col gap-2">
+            {stage.stage === "judge" && stage.status === "completed" ? (
+              <StageInputOutputCard
+                title="Judge"
+                inputSections={[
+                  { label: "Original Prompt", content: run.prompt },
+                  { label: "Enhanced Prompt", content: enhancedPromptInput },
+                  { label: "Plan", content: resolveAuditedPlanText(iterPlanAuditArtifact, iterPlanArtifact) },
+                  { label: "Review Findings", content: [...stages.slice(0, stageIdx)].reverse().find((entry) => entry.stage === "code_reviewer")?.output ?? artifacts["review"] ?? "" },
+                  { label: "Fixer Output", content: [...stages.slice(0, stageIdx)].reverse().find((entry) => entry.stage === "code_fixer")?.output ?? "" },
+                ]}
+                outputLabel="Decision"
+                outputContent={isLatest ? (artifacts["judge"] ?? stage.output ?? "No judge output generated.") : (stage.output || "No judge output generated.")}
+                modelLabel={stageModelLabel("judge", settings)}
+                durationMs={stage.durationMs}
+                badgeClassName="bg-rose-400/25"
+                outputClassName="border border-rose-400/20 bg-rose-400/5 text-[#e4e4ed]"
+              />
+            ) : (
+              <RichStageCard
+                stage={stage}
+                runPrompt={run.prompt}
+                enhancedPromptInput={enhancedPromptInput}
+                promptEnhanceOutput={(isLatest ? (artifacts["enhanced_prompt"] ?? stage.output) : stage.output).trim()}
+                planOutput={resolvePlanText(iterPlanArtifact, stage.output)}
+                planInputForAudit={iterPlanInputForAudit}
+                auditedPlanOutput={resolveAuditedPlanText(iterPlanAuditArtifact, stage.output)}
+                settings={settings}
+                startedAt={
+                  run.status === "running" && isLatest && run.currentStage === stage.stage && stage.status === "running"
+                    ? run.stageStartedAt
+                    : undefined
+                }
+                showPlanCard={false}
+                showPlanAuditCard={stageIdx === lastCompletedPlanAuditIdx}
+              />
+            )}
+          </div>
+        );
+      })}
+    </>
   );
 }

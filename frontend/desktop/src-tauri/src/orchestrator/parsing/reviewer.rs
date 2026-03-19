@@ -1,5 +1,7 @@
 //! Reviewer output parsing.
 
+use std::collections::HashSet;
+
 use crate::models::ReviewFindings;
 
 /// Parses reviewer or review-merger markdown output into structured findings.
@@ -76,9 +78,16 @@ pub fn parse_review_findings(reviewer_output: &str) -> ReviewFindings {
         }
     }
 
-    if verdict == "FAIL" && blockers.is_empty() && reviewer_output.to_ascii_lowercase().contains("verdict: pass") {
+    if verdict == "FAIL"
+        && blockers.is_empty()
+        && reviewer_output
+            .to_ascii_lowercase()
+            .contains("verdict: pass")
+    {
         verdict = "PASS".to_string();
     }
+
+    normalise_findings(&mut blockers, &mut warnings);
 
     ReviewFindings {
         blockers,
@@ -96,8 +105,79 @@ fn push_bullet(line: &str, target: &mut Vec<String>) -> bool {
     let Some(item) = line.strip_prefix("- ") else {
         return false;
     };
-    if !item.is_empty() && !item.eq_ignore_ascii_case("none") {
+    let item = item.trim();
+    if !item.is_empty() && !is_placeholder_item(item) {
         target.push(item.to_string());
     }
     true
+}
+
+fn is_placeholder_item(item: &str) -> bool {
+    let normalised = item
+        .trim()
+        .trim_end_matches('.')
+        .trim()
+        .to_ascii_lowercase();
+    matches!(
+        normalised.as_str(),
+        "none" | "n/a" | "na" | "no blockers" | "no warnings" | "no nits"
+    )
+}
+
+fn normalise_findings(blockers: &mut Vec<String>, warnings: &mut Vec<String>) {
+    let mut kept_blockers = Vec::new();
+    let mut demoted_warnings = Vec::new();
+
+    for blocker in blockers.drain(..) {
+        if let Some((agree, total)) = parse_consensus_marker(&blocker) {
+            // Prevent single-reviewer or split opinions from forcing a hard blocker.
+            if total > 1 && agree.saturating_mul(2) <= total {
+                demoted_warnings.push(format!(
+                    "{blocker} (demoted: no majority reviewer consensus)"
+                ));
+                continue;
+            }
+        }
+        kept_blockers.push(blocker);
+    }
+
+    warnings.extend(demoted_warnings);
+    *blockers = dedupe_preserve_order(kept_blockers);
+    *warnings = dedupe_preserve_order(std::mem::take(warnings));
+}
+
+fn dedupe_preserve_order(items: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut deduped = Vec::new();
+
+    for item in items {
+        let key = item.to_ascii_lowercase();
+        if seen.insert(key) {
+            deduped.push(item);
+        }
+    }
+
+    deduped
+}
+
+fn parse_consensus_marker(item: &str) -> Option<(u32, u32)> {
+    let trimmed = item.trim_start();
+    if !trimmed.starts_with('[') {
+        return None;
+    }
+    let marker_end = trimmed.find(']')?;
+    if marker_end <= 1 {
+        return None;
+    }
+    let marker = trimmed.get(1..marker_end)?.trim();
+    let ratio_token = marker.split_whitespace().next()?;
+    let (agree_raw, total_raw) = ratio_token.split_once('/')?;
+    let agree = agree_raw.parse::<u32>().ok()?;
+    let total = total_raw.parse::<u32>().ok()?;
+
+    if total == 0 || agree > total {
+        return None;
+    }
+
+    Some((agree, total))
 }

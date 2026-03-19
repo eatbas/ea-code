@@ -204,7 +204,8 @@ REJECTED\n\
 
     #[test]
     fn parse_judge_verdict_from_explicit_marker() {
-        let (v, _) = parse_judge_verdict("codex\nVERDICT: COMPLETE\n## Checklist\n- [x] [REQUIRED] Prompt");
+        let (v, _) =
+            parse_judge_verdict("codex\nVERDICT: COMPLETE\n## Checklist\n- [x] [REQUIRED] Prompt");
         assert_eq!(v, JudgeVerdict::Complete);
     }
 
@@ -247,5 +248,25 @@ REJECTED\n\
         let findings = parse_review_findings(raw);
         assert!(findings.blockers.is_empty());
         assert_eq!(findings.verdict, "PASS");
+    }
+
+    #[test]
+    fn parse_review_findings_ignores_placeholder_with_period() {
+        let raw = "## BLOCKERS\n- None.\n\n## WARNINGS\n- None.\n\n## NITS\n- None.\n\n## TESTS\nStatus: run\nCommands:\n- cargo check\n\n## TEST RESULTS\n- cargo check passed\n\n## TEST GAPS\n- None.\n\n## SUMMARY\nVerdict: PASS";
+        let findings = parse_review_findings(raw);
+        assert!(findings.blockers.is_empty());
+        assert!(findings.warnings.is_empty());
+    }
+
+    #[test]
+    fn parse_review_findings_demotes_low_consensus_blockers() {
+        let raw = "## BLOCKERS\n- [1/2 agree] Locale file is corrupted\n- [2/3 agree] Countdown text is hardcoded\n\n## WARNINGS\n- Minor naming issue\n\n## NITS\n- None\n\n## TESTS\nStatus: not run\nCommands:\n- None\n\n## TEST RESULTS\n- Not run\n\n## TEST GAPS\n- Missing localisation coverage\n\n## SUMMARY\nVerdict: FAIL";
+        let findings = parse_review_findings(raw);
+        assert_eq!(findings.blockers.len(), 1);
+        assert!(findings.blockers[0].contains("[2/3 agree]"));
+        assert!(findings
+            .warnings
+            .iter()
+            .any(|w| w.contains("[1/2 agree]") && w.contains("demoted")));
     }
 }

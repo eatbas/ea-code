@@ -15,6 +15,8 @@ interface RecentTerminalPanelProps {
   onTerminalScroll?: () => void;
   /** Optional parallel terminal tabs (e.g., Plan 1, Plan 2, Plan 3). */
   parallelTabs?: TerminalTab[];
+  /** Noun shown in the summary label (e.g. "planners", "reviewers"). */
+  parallelTabNoun?: string;
 }
 
 export function RecentTerminalPanel({
@@ -23,6 +25,7 @@ export function RecentTerminalPanel({
   terminalRef,
   onTerminalScroll,
   parallelTabs,
+  parallelTabNoun = "planners",
 }: RecentTerminalPanelProps): ReactNode {
   const [activeTabIdx, setActiveTabIdx] = useState(0);
 
@@ -41,7 +44,7 @@ export function RecentTerminalPanel({
     <details className="w-full rounded-xl border border-[#2e2e48] bg-[#14141e]">
       <summary className="cursor-pointer select-none px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-[#9898b0] hover:text-[#e4e4ed] transition-colors">
         Recent Terminal{label && !showTabs ? ` - ${label}` : ""}
-        {showTabs ? ` - ${parallelTabs.length} planners` : ""}
+        {showTabs ? ` - ${parallelTabs.length} ${parallelTabNoun}` : ""}
       </summary>
       <div className="border-t border-[#2e2e48] p-3">
         {/* Parallel tabs */}

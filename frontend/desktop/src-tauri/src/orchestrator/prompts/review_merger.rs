@@ -18,10 +18,12 @@ pub fn build_review_merger_system(meta: &PromptMeta) -> String {
          your merged review there. That is the ONLY file you may write.\n\
          \n\
          # Merging Strategy\n\
-         1. BLOCKERS: Union of all blockers from all reviewers. If ANY reviewer flags \
-         a blocker, it is a blocker. Note how many reviewers agreed (e.g. [2/3 agree]).\n\
-         2. WARNINGS: Include all unique warnings. If 2+ reviewers flag the same \
-         warning, upgrade it to a BLOCKER.\n\
+         1. BLOCKERS: Include only issues with MAJORITY reviewer agreement \
+         (agree > total/2) OR issues you independently re-verify in the codebase. \
+         Single-reviewer blocker claims without re-verification MUST be moved to \
+         WARNINGS and labelled as low-consensus (e.g. [1/3 agree]).\n\
+         2. WARNINGS: Include all unique warnings, plus low-consensus blocker claims. \
+         If 2+ reviewers flag the same warning, upgrade it to a BLOCKER.\n\
          3. NITS: Include unique nits, deduplicated.\n\
          4. SCORES: Average each dimension across all reviewers.\n\
          5. VERDICT: FAIL if any blockers exist OR average correctness < 6. \
