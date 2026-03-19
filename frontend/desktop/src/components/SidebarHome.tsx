@@ -14,7 +14,7 @@ interface SidebarHomeProps {
   sessions: SessionMeta[];
   activeSessionId?: string;
   onSelectSession: (sessionId: string) => void;
-  runningSessionId?: string;
+  runningSessionIds: Set<string>;
   onArchiveSession?: (sessionId: string) => void;
 }
 
@@ -30,7 +30,7 @@ export function SidebarHome({
   sessions,
   activeSessionId,
   onSelectSession,
-  runningSessionId,
+  runningSessionIds,
   onArchiveSession,
 }: SidebarHomeProps): ReactNode {
   return (
@@ -65,7 +65,7 @@ export function SidebarHome({
         sessions={sessions}
         activeProjectPath={activeProjectPath}
         activeSessionId={activeSessionId}
-        runningSessionId={runningSessionId}
+        runningSessionIds={runningSessionIds}
         onSelectProject={onSelectProject}
         onSelectSession={onSelectSession}
         onArchiveSession={onArchiveSession}

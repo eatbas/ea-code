@@ -46,8 +46,8 @@ interface SidebarProps {
   sessions: SessionMeta[];
   activeSessionId?: string;
   onSelectSession: (sessionId: string) => void;
-  /** Session ID of the currently running pipeline (shows spinner on that session). */
-  runningSessionId?: string;
+  /** Session IDs of all currently running pipelines (shows spinner on each). */
+  runningSessionIds: Set<string>;
   /** Archive (delete) a session by ID. */
   onArchiveSession?: (sessionId: string) => void;
 }
@@ -66,7 +66,7 @@ export function Sidebar({
   sessions,
   activeSessionId,
   onSelectSession,
-  runningSessionId,
+  runningSessionIds,
   onArchiveSession,
 }: SidebarProps): ReactNode {
   const isSettings = activeView === "agents" || activeView === "cli-setup" || activeView === "skills" || activeView === "mcp";
@@ -138,7 +138,7 @@ export function Sidebar({
       sessions={sessions}
       activeSessionId={activeSessionId}
       onSelectSession={onSelectSession}
-      runningSessionId={runningSessionId}
+      runningSessionIds={runningSessionIds}
       onArchiveSession={onArchiveSession}
     />
   );

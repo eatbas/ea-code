@@ -72,12 +72,16 @@ export function usePipeline(): UsePipelineReturn {
   const runRef = useRef<PipelineRun | null>(null);
   runRef.current = run;
 
-  usePipelineEvents({ runRef, setRun, setLogs, setStageLogs, setArtifacts, setPendingQuestion });
+  const expectingStartRef = useRef(false);
+
+  usePipelineEvents({ runRef, expectingStartRef, setRun, setLogs, setStageLogs, setArtifacts, setPendingQuestion });
 
   const startPipeline = useCallback(async (request: PipelineRequest): Promise<void> => {
     try {
+      expectingStartRef.current = true;
       await invoke("run_pipeline", { request });
     } catch (err) {
+      expectingStartRef.current = false;
       const message = err instanceof Error ? err.message : String(err);
       setRun((prev) => {
         if (!prev) return prev;

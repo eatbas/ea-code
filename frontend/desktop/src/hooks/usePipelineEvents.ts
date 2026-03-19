@@ -15,6 +15,7 @@ import type {
 
 interface PipelineStateSetters {
   runRef: MutableRefObject<PipelineRun | null>;
+  expectingStartRef: MutableRefObject<boolean>;
   setRun: Dispatch<SetStateAction<PipelineRun | null>>;
   setLogs: Dispatch<SetStateAction<string[]>>;
   setStageLogs: Dispatch<SetStateAction<Record<string, string[]>>>;
@@ -25,6 +26,7 @@ interface PipelineStateSetters {
 /** Subscribes to all Tauri pipeline events and updates the provided state. */
 export function usePipelineEvents({
   runRef,
+  expectingStartRef,
   setRun,
   setLogs,
   setStageLogs,
@@ -40,6 +42,24 @@ export function usePipelineEvents({
 
     unlisteners.push(
       listen<PipelineStartedEvent>(PIPELINE_EVENTS.started, (event) => {
+        const currentRun = runRef.current;
+        const currentIsActive =
+          currentRun != null &&
+          (currentRun.status === "running" ||
+            currentRun.status === "waiting_for_input" ||
+            currentRun.status === "paused");
+
+        // Only adopt this run as the foreground run if the user explicitly
+        // started it from the current view, or no foreground run is active.
+        const intentional = expectingStartRef.current;
+        if (intentional) {
+          expectingStartRef.current = false;
+        }
+
+        if (currentIsActive && !intentional) {
+          return; // let this run proceed in the background
+        }
+
         const payload = event.payload;
         const newRun: PipelineRun = {
           id: payload.runId,
@@ -163,7 +183,8 @@ export function usePipelineEvents({
 
     unlisteners.push(
       listen<PipelineQuestionEvent>(PIPELINE_EVENTS.question, (event) => {
-        if (!isCurrentRunEvent(event.payload.runId)) return;
+        // Accept questions from any running pipeline so background runs
+        // can prompt the user instead of hanging silently.
         setPendingQuestion(event.payload);
       }),
     );
@@ -215,5 +236,5 @@ export function usePipelineEvents({
         promise.then((unlisten) => unlisten());
       });
     };
-  }, [runRef, setRun, setLogs, setStageLogs, setArtifacts, setPendingQuestion]);
+  }, [runRef, expectingStartRef, setRun, setLogs, setStageLogs, setArtifacts, setPendingQuestion]);
 }

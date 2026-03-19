@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useToast } from "./components/shared/Toast";
 import { useSettings } from "./hooks/useSettings";
 import { useWorkspace } from "./hooks/useWorkspace";
@@ -11,7 +11,7 @@ import { useSkills } from "./hooks/useSkills";
 import { useLiveSessionStatus } from "./hooks/useLiveSessionStatus";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { useAppViewState } from "./hooks/useAppViewState";
-import { isActive } from "./utils/statusHelpers";
+import { isActive, isLiveSessionStatus } from "./utils/statusHelpers";
 import { Sidebar } from "./components/Sidebar";
 import { AppContentRouter } from "./components/AppContentRouter";
 import { QuestionDialog } from "./components/QuestionDialog";
@@ -68,6 +68,19 @@ function App(): ReactNode {
     checkHealth(settings);
   }, [settings, checkHealth]);
 
+  const runningSessionIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (run && isActive(run.status) && run.sessionId) {
+      ids.add(run.sessionId);
+    }
+    for (const s of sessions) {
+      if (isLiveSessionStatus(s.lastStatus)) {
+        ids.add(s.id);
+      }
+    }
+    return ids;
+  }, [run, sessions]);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-[#0f0f14]">
@@ -91,7 +104,7 @@ function App(): ReactNode {
           sessions={sessions}
           activeSessionId={activeSessionId}
           onSelectSession={handleSelectSession}
-          runningSessionId={run && isActive(run.status) ? run.sessionId : undefined}
+          runningSessionIds={runningSessionIds}
           onArchiveSession={(sessionId) => {
             void deleteSession(sessionId).then(
               () => toast.success("Session deleted."),

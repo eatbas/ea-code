@@ -7,15 +7,15 @@ import {
   parseUtcTimestamp,
   projectDisplayName,
 } from "../utils/formatters";
-import { isActiveStatusValue } from "../utils/statusHelpers";
+import { isLiveSessionStatus } from "../utils/statusHelpers";
 
 interface ProjectThreadsListProps {
   projects: ProjectEntry[];
   sessions: SessionMeta[];
   activeProjectPath?: string;
   activeSessionId?: string;
-  /** Session ID of the currently running pipeline (shows spinner). */
-  runningSessionId?: string;
+  /** Session IDs of all currently running pipelines (shows spinner on each). */
+  runningSessionIds: Set<string>;
   onSelectProject: (projectPath: string) => void | Promise<void>;
   onSelectSession: (sessionId: string) => void;
   onArchiveSession?: (sessionId: string) => void;
@@ -27,7 +27,7 @@ export function ProjectThreadsList({
   sessions,
   activeProjectPath,
   activeSessionId,
-  runningSessionId,
+  runningSessionIds,
   onSelectProject,
   onSelectSession,
   onArchiveSession,
@@ -101,8 +101,8 @@ export function ProjectThreadsList({
                         {sortedSessions.map((session) => {
                           const isActiveSession = session.id === activeSessionId;
                           const isRunningSession =
-                            session.id === runningSessionId ||
-                            isActiveStatusValue(session.lastStatus);
+                            runningSessionIds.has(session.id) ||
+                            isLiveSessionStatus(session.lastStatus);
                           const isConfirming = confirmingId === session.id;
 
                           if (isConfirming) {
