@@ -113,6 +113,14 @@ pub struct AppSettings {
     #[serde(default = "default_retention_days")]
     pub retention_days: u32,
 
+    // --- hive-api sidecar ---
+    /// Port for the hive-api sidecar (0 = use default 8719).
+    #[serde(default)]
+    pub hive_api_port: u16,
+    /// Python interpreter path override for the sidecar (empty = auto-detect).
+    #[serde(default)]
+    pub python_path: String,
+
     // --- Parametric parallel slots ---
     /// Extra planner slot configurations (planner 2, 3, 4, ...).
     #[serde(default)]
@@ -241,6 +249,8 @@ impl Default for AppSettings {
             agent_max_turns: 25,
             retention_days: 90,
             skill_selector_agent: None,
+            hive_api_port: 0,
+            python_path: String::new(),
             extra_planners: Vec::new(),
             extra_reviewers: Vec::new(),
             max_planners: 4,

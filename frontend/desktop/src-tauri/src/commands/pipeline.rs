@@ -118,6 +118,18 @@ pub async fn cancel_pipeline(state: State<'_, AppState>, run_id: String) -> Resu
         flag.store(false, Ordering::SeqCst);
     }
 
+    // Also cancel the active hive-api job for immediate stop
+    {
+        let jobs = state.active_jobs.lock().await;
+        if let Some(job_id) = jobs.get(&run_id) {
+            let base_url = state.sidecar.base_url().await;
+            let job_id = job_id.clone();
+            tokio::spawn(async move {
+                let _ = crate::agents::api_client::cancel_api_job(&base_url, &job_id).await;
+            });
+        }
+    }
+
     // File-based storage: update run status via summary.json
     if let Ok(mut summary) = storage::runs::read_summary(&run_id) {
         summary.status = RunFileStatus::Cancelled;

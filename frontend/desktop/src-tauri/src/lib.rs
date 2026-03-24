@@ -4,9 +4,11 @@ mod events;
 mod git;
 mod models;
 mod orchestrator;
+pub mod sidecar;
 pub mod storage;
 
 use commands::AppState;
+use sidecar::SidecarManager;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -73,6 +75,20 @@ pub fn run() {
         }));
     }
 
+    // Resolve hive-api directory and read configured port from settings
+    let hive_api_port = storage::settings::read_settings()
+        .map(|s| s.hive_api_port)
+        .unwrap_or(0);
+    let sidecar = match sidecar::find_hive_dir() {
+        Ok(hive_dir) => SidecarManager::new(hive_dir, hive_api_port),
+        Err(e) => {
+            eprintln!("Warning: {e} — hive-api sidecar will not auto-start");
+            // Create a dummy manager pointing at a non-existent dir;
+            // ensure_running() will fail gracefully at pipeline time.
+            SidecarManager::new(std::path::PathBuf::from("hive-api"), hive_api_port)
+        }
+    };
+
     let app = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -83,6 +99,8 @@ pub fn run() {
             cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             pause_flags: Arc::new(Mutex::new(HashMap::new())),
             answer_senders: Arc::new(Mutex::new(HashMap::new())),
+            sidecar: sidecar.clone(),
+            active_jobs: Arc::new(Mutex::new(HashMap::new())),
         })
         .invoke_handler(tauri::generate_handler![
             commands::app::has_live_sessions,
@@ -119,11 +137,15 @@ pub fn run() {
             commands::mcp::set_context7_api_key,
             commands::mcp_runtime::get_mcp_cli_runtime_statuses,
             commands::mcp_runtime::run_cli_mcp_fix_with_prompt,
-            // CLI health & version commands
+            // CLI health & version commands (legacy — to be removed)
             commands::cli::check_cli_health,
             commands::cli::get_cli_versions,
             commands::cli::update_cli,
             commands::cli::invalidate_cli_cache,
+            // hive-api health & provider commands
+            commands::api_health::check_api_health,
+            commands::api_health::get_api_providers,
+            commands::api_health::get_api_cli_versions,
             // History / session commands
             commands::history::list_projects,
             commands::history::list_sessions,
@@ -138,9 +160,26 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");
 
-    app.run(|_app_handle, event| {
+    // Start the hive-api sidecar in the background (non-blocking)
+    let sidecar_for_startup = sidecar.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = sidecar_for_startup.start().await {
+            eprintln!("Warning: failed to start hive-api sidecar: {e}");
+            return;
+        }
+        if let Err(e) = sidecar_for_startup.wait_until_healthy().await {
+            eprintln!("Warning: hive-api sidecar not healthy: {e}");
+        }
+    });
+
+    app.run(move |_app_handle, event| {
         if let tauri::RunEvent::ExitRequested { .. } = event {
-            // Clean up can be done here if needed
+            let sc = sidecar.clone();
+            tauri::async_runtime::block_on(async move {
+                if let Err(e) = sc.stop().await {
+                    eprintln!("Warning: failed to stop hive-api sidecar: {e}");
+                }
+            });
         }
     });
 }

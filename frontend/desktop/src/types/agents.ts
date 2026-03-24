@@ -49,3 +49,30 @@ export interface AllCliVersions {
   opencode: CliVersionInfo;
   gitBash?: CliVersionInfo;
 }
+
+// ── hive-api types ─────────────────────────────────────────────────
+
+/** hive-api connection health status. */
+export interface ApiHealth {
+  connected: boolean;
+  url: string;
+  status?: string;
+  droneCount?: number;
+  error?: string;
+}
+
+/** Provider availability from hive-api. */
+export interface ProviderInfo {
+  name: string;
+  available: boolean;
+  models: string[];
+}
+
+/** CLI version info from hive-api. */
+export interface ApiCliVersionInfo {
+  provider: string;
+  installedVersion?: string;
+  latestVersion?: string;
+  upToDate: boolean;
+  available: boolean;
+}

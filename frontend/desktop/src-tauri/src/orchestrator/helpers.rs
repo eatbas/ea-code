@@ -6,9 +6,11 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter};
 
-use crate::agents::{
-    run_claude, run_codex, run_gemini, run_kimi, run_opencode, AgentInput, AgentOutput,
-};
+use tauri::Manager;
+
+use crate::agents::api_client;
+use crate::agents::{AgentInput, AgentOutput};
+use crate::commands::AppState;
 use crate::events::*;
 use crate::models::*;
 use crate::storage::runs;
@@ -54,8 +56,8 @@ pub async fn dispatch_agent(
     backend: &AgentBackend,
     model: &str,
     input: &AgentInput,
-    settings: &AppSettings,
-    session_id: Option<&str>,
+    _settings: &AppSettings,
+    _session_id: Option<&str>,
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
@@ -89,76 +91,43 @@ pub async fn dispatch_agent(
         let _ = std::fs::remove_file(&p);
         (p, name)
     });
-    let workspace_output_file_str = workspace_output_file
+    let _workspace_output_file_str = workspace_output_file
         .as_ref()
         .map(|(path, _)| path.to_string_lossy().to_string());
 
-    let result = match backend {
-        AgentBackend::Claude => {
-            run_claude(
-                input,
-                &settings.claude_path,
-                model,
-                settings.agent_max_turns,
-                session_id,
-                app,
-                run_id,
-                stage,
-                intent,
-            )
-            .await
+    // Ensure the hive-api sidecar is running before dispatching.
+    let app_state = app.state::<AppState>();
+    app_state.sidecar.ensure_running().await?;
+    let base_url = app_state.sidecar.base_url().await;
+
+    let provider = backend_to_provider_str(backend);
+
+    let api_result = api_client::run_api_agent(
+        &base_url,
+        input,
+        provider,
+        model,
+        app,
+        run_id,
+        stage.clone(),
+    )
+    .await;
+
+    // Track or clear the active job_id for cancellation support.
+    match &api_result {
+        Ok(r) if !r.job_id.is_empty() => {
+            app_state
+                .active_jobs
+                .lock()
+                .await
+                .insert(run_id.to_string(), r.job_id.clone());
         }
-        AgentBackend::Codex => {
-            run_codex(
-                input,
-                &settings.codex_path,
-                model,
-                session_id,
-                app,
-                run_id,
-                stage,
-                intent,
-                workspace_output_file_str.as_deref(),
-            )
-            .await
+        _ => {
+            app_state.active_jobs.lock().await.remove(run_id);
         }
-        AgentBackend::Gemini => {
-            run_gemini(
-                input,
-                &settings.gemini_path,
-                model,
-                app,
-                run_id,
-                stage,
-                intent,
-            )
-            .await
-        }
-        AgentBackend::Kimi => {
-            run_kimi(
-                input,
-                &settings.kimi_path,
-                model,
-                app,
-                run_id,
-                stage,
-                intent,
-            )
-            .await
-        }
-        AgentBackend::OpenCode => {
-            run_opencode(
-                input,
-                &settings.opencode_path,
-                model,
-                app,
-                run_id,
-                stage,
-                intent,
-            )
-            .await
-        }
-    }?;
+    }
+
+    let result = api_result.map(|r| r.output)?;
 
     // For text stages, persist the final textual artifact even when the CLI
     // only emitted to stdout. Native file-output is preferred when available.
@@ -421,8 +390,8 @@ pub fn push_cancel_iteration(run: &mut PipelineRun, iter_num: u32, stages: Vec<S
     run.status = PipelineStatus::Cancelled;
 }
 
-#[allow(dead_code)]
-pub fn backend_to_db_str(backend: &AgentBackend) -> &'static str {
+/// Maps an AgentBackend to the hive-api provider string.
+pub fn backend_to_provider_str(backend: &AgentBackend) -> &'static str {
     match backend {
         AgentBackend::Claude => "claude",
         AgentBackend::Codex => "codex",
@@ -430,4 +399,9 @@ pub fn backend_to_db_str(backend: &AgentBackend) -> &'static str {
         AgentBackend::Kimi => "kimi",
         AgentBackend::OpenCode => "opencode",
     }
+}
+
+#[allow(dead_code)]
+pub fn backend_to_db_str(backend: &AgentBackend) -> &'static str {
+    backend_to_provider_str(backend)
 }

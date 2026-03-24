@@ -6,6 +6,7 @@ import { useWorkspace } from "./hooks/useWorkspace";
 import { usePipeline } from "./hooks/usePipeline";
 import { useCliVersions } from "./hooks/useCliVersions";
 import { useCliHealth } from "./hooks/useCliHealth";
+import { useApiHealth } from "./hooks/useApiHealth";
 import { useHistory } from "./hooks/useHistory";
 import { useSkills } from "./hooks/useSkills";
 import { useLiveSessionStatus } from "./hooks/useLiveSessionStatus";
@@ -25,6 +26,7 @@ function App(): ReactNode {
   const { run, stageLogs, artifacts, pendingQuestion, startPipeline, pausePipeline, resumePipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
   const { versions, loading: versionsLoading, updating: versionsUpdating, fetchVersions, updateCli } = useCliVersions();
   const { health: cliHealth, checking: cliHealthChecking, checkHealth } = useCliHealth();
+  const { health: _apiHealth, providers: _apiProviders, checking: _apiChecking, checkHealth: checkApiHealth } = useApiHealth();
   const { projects, sessions, loadSessions, loadProjects, loadSessionDetail, loadMoreRuns, deleteSession } = useHistory();
   const { skills, loading: skillsLoading, createSkill, updateSkill, deleteSkill } = useSkills();
   const hasLiveSessions = useLiveSessionStatus();
@@ -66,7 +68,8 @@ function App(): ReactNode {
   useEffect(() => {
     if (!settings) return;
     checkHealth(settings);
-  }, [settings, checkHealth]);
+    checkApiHealth();
+  }, [settings, checkHealth, checkApiHealth]);
 
   const runningSessionIds = useMemo(() => {
     const ids = new Set<string>();

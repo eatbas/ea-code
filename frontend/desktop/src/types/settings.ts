@@ -80,6 +80,10 @@ export interface AppSettings {
   maxPlanners: number;
   /** Maximum total reviewer slots (1 = primary only, 2+ = primary + extras). */
   maxReviewers: number;
+  /** Port for the hive-api sidecar (0 = default 8719). */
+  hiveApiPort: number;
+  /** Python interpreter path override for the sidecar (empty = auto-detect). */
+  pythonPath: string;
 }
 
 /** Default settings values. */
@@ -132,6 +136,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   extraReviewers: [],
   maxPlanners: 4,
   maxReviewers: 4,
+  hiveApiPort: 0,
+  pythonPath: "",
 };
 
 /** Known model options per CLI, keyed by CLI name. */

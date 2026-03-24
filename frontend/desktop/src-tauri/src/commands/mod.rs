@@ -1,3 +1,4 @@
+pub(crate) mod api_health;
 pub(crate) mod app;
 pub(crate) mod cli;
 pub(crate) mod cli_http;
@@ -20,6 +21,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::models::PipelineAnswer;
+use crate::sidecar::SidecarManager;
 
 pub type RunCancelFlag = Arc<AtomicBool>;
 pub type RunPauseFlag = Arc<AtomicBool>;
@@ -27,10 +29,12 @@ pub type PipelineAnswerSender = tokio::sync::oneshot::Sender<PipelineAnswer>;
 pub type RunAnswerSender = Arc<Mutex<Option<PipelineAnswerSender>>>;
 
 /// Shared application state, holding per-run cancel/pause flags,
-/// per-run answer channels. Database pool has been removed in favour
-/// of file-based storage.
+/// per-run answer channels, and the hive-api sidecar manager.
 pub struct AppState {
     pub cancel_flags: Arc<Mutex<HashMap<String, RunCancelFlag>>>,
     pub pause_flags: Arc<Mutex<HashMap<String, RunPauseFlag>>>,
     pub answer_senders: Arc<Mutex<HashMap<String, RunAnswerSender>>>,
+    pub sidecar: SidecarManager,
+    /// Maps run_id → active hive-api job_id for in-flight stages.
+    pub active_jobs: Arc<Mutex<HashMap<String, String>>>,
 }
