@@ -28,8 +28,15 @@ fn validate_text_stage_output(stage: &PipelineStage, output: &str) -> Result<(),
         );
     }
 
-    if looks_like_process_preamble(trimmed) {
-        return Err("agent returned a process preamble instead of the final artefact".to_string());
+    // Skip the preamble check for planning stages — planners naturally
+    // narrate their exploration/reasoning process ("I'll start by…")
+    // before producing the plan, so the check causes false-positive retries.
+    if !matches!(stage, PipelineStage::Plan | PipelineStage::ExtraPlan(_)) {
+        if looks_like_process_preamble(trimmed) {
+            return Err(
+                "agent returned a process preamble instead of the final artefact".to_string(),
+            );
+        }
     }
 
     match stage {
@@ -435,10 +442,21 @@ mod tests {
     }
 
     #[test]
-    fn rejects_process_preamble() {
+    fn rejects_process_preamble_for_non_planner_stages() {
         let raw = "I'll start by exploring the codebase to understand its structure.";
         assert!(looks_like_process_preamble(raw));
-        assert!(validate_text_stage_output(&PipelineStage::Plan, raw).is_err());
+        // Non-planner stages should still reject preamble output.
+        assert!(validate_text_stage_output(&PipelineStage::Coder, raw).is_err());
+    }
+
+    #[test]
+    fn accepts_process_preamble_for_planner_stages() {
+        let raw = "I'll start by exploring the codebase to understand its structure.\n\nHere is the plan...";
+        assert!(looks_like_process_preamble(raw));
+        // Planner stages naturally narrate their process — preamble is acceptable.
+        assert!(validate_text_stage_output(&PipelineStage::Plan, raw).is_ok());
+        assert!(validate_text_stage_output(&PipelineStage::ExtraPlan(0), raw).is_ok());
+        assert!(validate_text_stage_output(&PipelineStage::ExtraPlan(1), raw).is_ok());
     }
 
     #[test]

@@ -2,9 +2,14 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::time::Duration;
 
 use crate::models::{PipelineStage, StageEndStatus, StageResult, StageStatus};
 use crate::storage::runs;
+
+/// Delay between launching each parallel task to reduce pressure on the sidecar.
+/// The first task starts immediately; subsequent tasks are staggered by this interval.
+const PARALLEL_STAGGER_MS: u64 = 300;
 
 /// A configured parallel stage slot.
 #[derive(Clone)]
@@ -65,7 +70,19 @@ where
 
     let stages: Vec<PipelineStage> = tasks.iter().map(|task| task.stage.clone()).collect();
     let output_kinds: Vec<String> = tasks.iter().map(|task| task.output_kind.clone()).collect();
-    let results = futures::future::join_all(tasks.into_iter().map(|task| task.future)).await;
+
+    // Stagger task launches so they don't all hit the sidecar simultaneously,
+    // which can cause the single-worker uvicorn process to crash under load.
+    let results = futures::future::join_all(tasks.into_iter().enumerate().map(|(i, task)| {
+        let delay = Duration::from_millis(PARALLEL_STAGGER_MS * i as u64);
+        async move {
+            if i > 0 {
+                tokio::time::sleep(delay).await;
+            }
+            task.future.await
+        }
+    }))
+    .await;
 
     let mut successful = Vec::new();
     for (index, ((stage, output_kind), result)) in stages
