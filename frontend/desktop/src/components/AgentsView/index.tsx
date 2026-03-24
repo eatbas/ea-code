@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import type { AppSettings, CliHealth } from "../../types";
+import type { AppSettings, ProviderInfo } from "../../types";
 import { sanitiseAgentAssignmentsForEnabledModels } from "../../utils/agentSettings";
 import { InlineStageSlot } from "./InlineStageSlot";
 import { StageCard } from "./StageCard";
@@ -10,16 +10,16 @@ import { useExtraSlots } from "./useExtraSlots";
 export interface AgentsViewProps {
   settings: AppSettings;
   onSave: (s: AppSettings) => void;
-  cliHealth?: CliHealth | null;
-  cliHealthChecking?: boolean;
+  providers: ProviderInfo[];
+  providersLoading?: boolean;
 }
 
 /** Inline view for configuring agent role assignments and pipeline parameters. */
 export function AgentsView({
   settings,
   onSave,
-  cliHealth,
-  cliHealthChecking,
+  providers,
+  providersLoading,
 }: AgentsViewProps): ReactNode {
   const [draft, setDraft] = useState<AppSettings>(settings);
   const draftRef = useRef<AppSettings>(settings);
@@ -71,12 +71,12 @@ export function AgentsView({
     onSave(cleared);
   }
 
-  const health = cliHealth ?? null;
-  const checking = Boolean(cliHealthChecking);
+  const providerList = providers;
+  const loading = Boolean(providersLoading);
   const plannerCount = plannerSlots.activeCount + (draft.plannerAgent ? 1 : 0);
   const reviewerCount = reviewerSlots.activeCount + (draft.codeReviewerAgent ? 1 : 0);
 
-  const cardProps = { draft, cliHealth: health, cliHealthChecking: checking, onUpdate: update };
+  const cardProps = { draft, providers: providerList, providersLoading: loading, onUpdate: update };
 
   return (
     <div className="flex h-full flex-col bg-[#0f0f14]">

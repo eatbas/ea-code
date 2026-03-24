@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-import type { SessionDetail, RunOptions, RunSummary, CliHealth, AppSettings } from "../types";
+import type { SessionDetail, RunOptions, RunSummary, ProviderInfo, AppSettings } from "../types";
 import { useElapsedTimer } from "../hooks/useElapsedTimer";
 import { useRecentTerminal } from "../hooks/useRecentTerminal";
 import { useStickyAutoScroll } from "../hooks/useStickyAutoScroll";
@@ -17,7 +17,7 @@ interface SessionDetailViewProps {
   loading: boolean;
   stageLogs: Record<string, string[]>;
   activeRunId?: string;
-  cliHealth: CliHealth | null;
+  providers: ProviderInfo[];
   settings: AppSettings | null;
   onMissingAgentSetup: () => void;
   onRun: (options: RunOptions) => void;
@@ -35,7 +35,7 @@ export function SessionDetailView({
   loading,
   stageLogs,
   activeRunId,
-  cliHealth,
+  providers,
   settings,
   onMissingAgentSetup,
   onRun,
@@ -211,7 +211,7 @@ export function SessionDetailView({
         ) : (
           <PromptInputBar
             placeholder="Continue this session..."
-            cliHealth={cliHealth}
+            providers={providers}
             settings={settings}
             onMissingAgentSetup={onMissingAgentSetup}
             onSubmit={onRun}

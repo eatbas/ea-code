@@ -1,4 +1,4 @@
-import type { AgentBackend, AppSettings } from "../types";
+import type { AppSettings } from "../types";
 
 export const MINIMUM_AGENT_FIELDS = [
   "promptEnhancerAgent",
@@ -84,21 +84,24 @@ function parseEnabledModels(csv: string): string[] {
     .filter(Boolean);
 }
 
-function enabledModelsForBackend(settings: AppSettings, backend: AgentBackend): string[] {
-  switch (backend) {
-    case "claude":
-      return parseEnabledModels(settings.claudeModel);
-    case "codex":
-      return parseEnabledModels(settings.codexModel);
-    case "gemini":
-      return parseEnabledModels(settings.geminiModel);
-    case "kimi":
-      return parseEnabledModels(settings.kimiModel);
-    case "opencode":
-      return parseEnabledModels(settings.opencodeModel);
-    default:
-      return [];
-  }
+/** Legacy per-CLI model CSV field mapping. */
+const LEGACY_MODEL_CSV_KEY: Record<string, keyof AppSettings> = {
+  claude: "claudeModel",
+  codex: "codexModel",
+  gemini: "geminiModel",
+  kimi: "kimiModel",
+  opencode: "opencodeModel",
+};
+
+/** Returns enabled models for a backend, checking providerModels first then legacy fields. */
+function enabledModelsForBackend(settings: AppSettings, backend: string): string[] {
+  // Dynamic providerModels takes precedence.
+  const dynamic = settings.providerModels?.[backend];
+  if (dynamic !== undefined) return parseEnabledModels(dynamic);
+  // Fall back to legacy per-CLI fields.
+  const legacyKey = LEGACY_MODEL_CSV_KEY[backend];
+  if (legacyKey) return parseEnabledModels(settings[legacyKey] as string);
+  return [];
 }
 
 function clearStageAssignment(
@@ -132,7 +135,7 @@ export function sanitiseAgentAssignmentsForEnabledModels(settings: AppSettings):
   const next: AppSettings = { ...settings };
 
   for (const binding of AGENT_STAGE_BINDINGS) {
-    const backend = next[binding.backendKey] as AgentBackend | null;
+    const backend = next[binding.backendKey] as string | null;
     if (!backend) {
       setStageModel(next, binding, null);
       continue;

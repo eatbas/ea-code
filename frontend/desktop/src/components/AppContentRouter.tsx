@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import type {
   ActiveView,
-  AllCliVersions,
+  ApiCliVersionInfo,
+  ApiHealth,
   AppSettings,
   CliHealth,
   CreateSkillPayload,
   PipelineRun,
+  ProviderInfo,
   RunOptions,
   SessionDetail,
   Skill,
@@ -34,17 +36,20 @@ interface AppContentRouterProps {
   sessionDetail: SessionDetail | null;
   sessionDetailLoading: boolean;
   sessionLoadingMore: boolean;
-  versions: AllCliVersions | null;
-  versionsLoading: boolean;
-  versionsUpdating: string | null;
+  providers: ProviderInfo[];
+  providersLoading: boolean;
+  apiVersions: ApiCliVersionInfo[];
+  apiVersionsLoading: boolean;
+  apiVersionsUpdating: string | null;
+  apiHealth: ApiHealth | null;
   cliHealth: CliHealth | null;
-  cliHealthChecking: boolean;
   settings: AppSettings | null;
   skills: Skill[];
   skillsLoading: boolean;
   onSaveSettings: (settings: AppSettings) => void | Promise<void>;
-  onFetchVersions: (settings: AppSettings) => void;
-  onUpdateCli: (cliName: string, settings: AppSettings) => Promise<void>;
+  onFetchApiVersions: () => void;
+  onRefreshProviders: () => void;
+  onUpdateApiCli: (provider: string) => Promise<void>;
   onCreateSkill: (payload: CreateSkillPayload) => Promise<void>;
   onUpdateSkill: (payload: UpdateSkillPayload) => Promise<void>;
   onDeleteSkill: (id: string) => Promise<void>;
@@ -74,17 +79,20 @@ export function AppContentRouter({
   sessionDetail,
   sessionDetailLoading,
   sessionLoadingMore,
-  versions,
-  versionsLoading,
-  versionsUpdating,
+  providers,
+  providersLoading,
+  apiVersions,
+  apiVersionsLoading,
+  apiVersionsUpdating,
+  apiHealth,
   cliHealth,
-  cliHealthChecking,
   settings,
   skills,
   skillsLoading,
   onSaveSettings,
-  onFetchVersions,
-  onUpdateCli,
+  onFetchApiVersions,
+  onRefreshProviders,
+  onUpdateApiCli,
   onCreateSkill,
   onUpdateSkill,
   onDeleteSkill,
@@ -111,7 +119,7 @@ export function AppContentRouter({
         run={run}
         stageLogs={stageLogs}
         artifacts={artifacts}
-        cliHealth={cliHealth}
+        providers={providers}
         settings={settings}
         onMissingAgentSetup={onMissingAgentSetup}
         onPause={() => { void onPausePipeline(); }}
@@ -130,8 +138,8 @@ export function AppContentRouter({
       <AgentsView
         settings={settings}
         onSave={onSaveSettings}
-        cliHealth={cliHealth}
-        cliHealthChecking={cliHealthChecking}
+        providers={providers}
+        providersLoading={providersLoading}
       />
     );
   }
@@ -140,11 +148,14 @@ export function AppContentRouter({
     return (
       <CliSetupView
         settings={settings}
-        versions={versions}
-        loading={versionsLoading}
-        updating={versionsUpdating}
-        onFetchVersions={onFetchVersions}
-        onUpdateCli={onUpdateCli}
+        apiHealth={apiHealth}
+        providers={providers}
+        apiVersions={apiVersions}
+        versionsLoading={apiVersionsLoading}
+        updating={apiVersionsUpdating}
+        onFetchVersions={onFetchApiVersions}
+        onRefreshProviders={onRefreshProviders}
+        onUpdateCli={onUpdateApiCli}
         onSave={onSaveSettings}
       />
     );
@@ -171,7 +182,7 @@ export function AppContentRouter({
         loading={sessionDetailLoading}
         stageLogs={stageLogs}
         activeRunId={run?.id}
-        cliHealth={cliHealth}
+        providers={providers}
         settings={settings}
         onMissingAgentSetup={onMissingAgentSetup}
         onRun={onRun}
@@ -190,7 +201,7 @@ export function AppContentRouter({
       workspace={workspace}
       workspacePath={workspace?.path}
       projects={projects}
-      cliHealth={cliHealth}
+      providers={providers}
       settings={settings}
       onMissingAgentSetup={onMissingAgentSetup}
       onSelectProject={onSelectProject}

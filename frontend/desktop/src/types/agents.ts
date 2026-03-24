@@ -9,8 +9,8 @@ export type AgentRole =
   | "judge"
   | "executive_summary";
 
-/** Supported CLI agent backends. */
-export type AgentBackend = "claude" | "codex" | "gemini" | "kimi" | "opencode";
+/** Supported CLI agent backends (dynamic — any provider name from hive-api). */
+export type AgentBackend = string;
 
 /** CLI health check result returned from the backend. */
 export interface CliHealth {

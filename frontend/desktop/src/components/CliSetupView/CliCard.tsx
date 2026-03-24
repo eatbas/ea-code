@@ -1,15 +1,24 @@
 import type { ReactNode } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { CliVersionInfo } from "../../types";
+import type { ProviderInfo, ApiCliVersionInfo } from "../../types";
+import { providerDisplayName, modelOptionsFromProvider } from "../shared/constants";
 import { useToast } from "../shared/Toast";
 
 function buildGoogleInstallSearchUrl(name: string): string {
-  const query = encodeURIComponent(`install ${name}`);
+  const query = encodeURIComponent(`install ${name} CLI`);
   return `https://www.google.com/search?q=${query}`;
 }
 
-/** Version/install status badge for a CLI tool. */
-function StatusBadge({ info, loading }: { info: CliVersionInfo; loading: boolean }): ReactNode {
+/** Version/install status badge. */
+function StatusBadge({
+  provider,
+  version,
+  loading,
+}: {
+  provider: ProviderInfo;
+  version: ApiCliVersionInfo | undefined;
+  loading: boolean;
+}): ReactNode {
   if (loading) {
     return (
       <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#64748b]/15 px-2.5 py-0.5 text-xs font-medium text-[#94a3b8]">
@@ -17,21 +26,21 @@ function StatusBadge({ info, loading }: { info: CliVersionInfo; loading: boolean
       </span>
     );
   }
-  if (!info.available) {
+  if (!provider.available) {
     return (
       <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#ef4444]/15 px-2.5 py-0.5 text-xs font-medium text-[#ef4444]">
         Not Installed
       </span>
     );
   }
-  if (!info.latestVersion) {
+  if (!version?.latestVersion) {
     return (
       <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#64748b]/15 px-2.5 py-0.5 text-xs font-medium text-[#94a3b8]">
         Installed
       </span>
     );
   }
-  if (info.upToDate) {
+  if (version.upToDate) {
     return (
       <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#22c55e]/15 px-2.5 py-0.5 text-xs font-medium text-[#22c55e]">
         Up to Date
@@ -46,39 +55,41 @@ function StatusBadge({ info, loading }: { info: CliVersionInfo; loading: boolean
 }
 
 interface CliCardProps {
-  info: CliVersionInfo;
+  provider: ProviderInfo;
+  version: ApiCliVersionInfo | undefined;
   loading: boolean;
   updating: boolean;
   actionsDisabled: boolean;
   enabledModels: Set<string>;
-  modelOptions: { value: string; label: string }[];
   onToggleModel: (value: string) => void;
   onUpdate: () => void;
 }
 
-/** Card displaying a single CLI tool's version, models, and actions. */
+/** Card displaying a single CLI provider's version, models, and actions. */
 export function CliCard({
-  info,
+  provider,
+  version,
   loading,
   updating,
   actionsDisabled,
   enabledModels,
-  modelOptions,
   onToggleModel,
   onUpdate,
 }: CliCardProps): ReactNode {
   const toast = useToast();
-  const modelControlsDisabled = actionsDisabled || !info.available;
+  const displayName = providerDisplayName(provider.name) + " CLI";
+  const modelOptions = modelOptionsFromProvider(provider);
+  const modelControlsDisabled = actionsDisabled || !provider.available;
   const showUpdate =
-    !loading && info.available && !info.upToDate && info.updateCommand.trim().length > 0;
-  const showInstall = !loading && !info.available;
-  const installSearchUrl = buildGoogleInstallSearchUrl(info.name);
+    !loading && provider.available && version && !version.upToDate;
+  const showInstall = !loading && !provider.available;
+  const installSearchUrl = buildGoogleInstallSearchUrl(displayName);
 
   return (
     <div className="rounded-lg border border-[#2e2e48] bg-[#1a1a24] p-5">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[#e4e4ed]">{info.name}</h3>
-        <StatusBadge info={info} loading={loading} />
+        <h3 className="text-sm font-semibold text-[#e4e4ed]">{displayName}</h3>
+        <StatusBadge provider={provider} version={version} loading={loading} />
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-md bg-[#0f0f14] px-3 py-2">
@@ -89,7 +100,7 @@ export function CliCard({
             <div className="mt-1 h-4 w-20 animate-pulse rounded bg-[#24243a]" />
           ) : (
             <p className="mt-0.5 text-sm font-mono text-[#e4e4ed]">
-              {info.installedVersion ?? "N/A"}
+              {version?.installedVersion ?? "N/A"}
             </p>
           )}
         </div>
@@ -101,7 +112,7 @@ export function CliCard({
             <div className="mt-1 h-4 w-20 animate-pulse rounded bg-[#24243a]" />
           ) : (
             <p className="mt-0.5 text-sm font-mono text-[#e4e4ed]">
-              {info.latestVersion ?? "N/A"}
+              {version?.latestVersion ?? "N/A"}
             </p>
           )}
         </div>
@@ -156,18 +167,20 @@ export function CliCard({
           </div>
         </div>
       )}
-      {!loading && !info.available && modelOptions.length > 0 && (
+      {!loading && !provider.available && modelOptions.length > 0 && (
         <p className="mt-4 text-xs text-[#6b6b80]">
           Install this CLI to enable model selection.
         </p>
       )}
-      {!loading && info.error && <p className="mt-3 text-xs text-[#ef4444]">{info.error}</p>}
+      {!loading && !provider.available && (
+        <p className="mt-3 text-xs text-[#ef4444]">{provider.name} not found in PATH</p>
+      )}
       {showInstall && (
         <button
           type="button"
           onClick={() => {
             void openUrl(installSearchUrl).catch(() => {
-              toast.error(`Could not open install page for ${info.name}.`);
+              toast.error(`Could not open install page for ${displayName}.`);
             });
           }}
           disabled={actionsDisabled}
@@ -183,11 +196,7 @@ export function CliCard({
           disabled={updating || actionsDisabled}
           className="mt-4 w-full rounded-md bg-[#e4e4ed] px-4 py-2 text-sm font-medium text-[#0f0f14] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {updating
-            ? "Updating..."
-            : info.cliName === "gitBash"
-              ? "Download Update"
-              : "Update"}
+          {updating ? "Updating..." : "Update"}
         </button>
       )}
     </div>

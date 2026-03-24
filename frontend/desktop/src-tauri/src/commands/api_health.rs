@@ -57,23 +57,17 @@ struct HealthResponse {
 
 #[derive(Deserialize)]
 struct ProviderCapability {
-    name: String,
+    provider: String,
     available: bool,
-    models: Vec<ModelDetail>,
-}
-
-#[derive(Deserialize)]
-struct ModelDetail {
-    model: String,
+    models: Vec<String>,
 }
 
 #[derive(Deserialize)]
 struct CliVersionResponse {
     provider: String,
-    installed_version: Option<String>,
+    current_version: Option<String>,
     latest_version: Option<String>,
-    up_to_date: bool,
-    available: bool,
+    needs_update: bool,
 }
 
 // ── Tauri commands ───────────────────────────────────────────────────
@@ -135,15 +129,15 @@ pub async fn get_api_providers(app: AppHandle, state: State<'_, AppState>) -> Re
         .build()
         .map_err(|e| format!("HTTP client error: {e}"))?;
 
-    let url = format!("{base_url}/v1/providers");
+    let url = format!("{base_url}/v1/providers?all=true");
     match client.get(&url).send().await {
         Ok(resp) if resp.status().is_success() => {
             if let Ok(providers) = resp.json::<Vec<ProviderCapability>>().await {
                 for p in &providers {
                     let info = ProviderInfo {
-                        name: p.name.clone(),
+                        name: p.provider.clone(),
                         available: p.available,
-                        models: p.models.iter().map(|m| m.model.clone()).collect(),
+                        models: p.models.clone(),
                     };
                     let _ = app.emit(EVENT_API_PROVIDER, &info);
                 }
@@ -181,10 +175,10 @@ pub async fn get_api_cli_versions(
                 for v in &versions {
                     let info = ApiCliVersionInfo {
                         provider: v.provider.clone(),
-                        installed_version: v.installed_version.clone(),
+                        installed_version: v.current_version.clone(),
                         latest_version: v.latest_version.clone(),
-                        up_to_date: v.up_to_date,
-                        available: v.available,
+                        up_to_date: !v.needs_update,
+                        available: true,
                     };
                     let _ = app.emit(EVENT_API_CLI_VERSION, &info);
                 }
@@ -202,5 +196,45 @@ pub async fn get_api_cli_versions(
     }
 
     let _ = app.emit(EVENT_API_CLI_VERSIONS_DONE, ());
+    Ok(())
+}
+
+/// Triggers a CLI update for a single provider via hive-api.
+/// Emits `api_cli_version_info` with the updated version info.
+#[tauri::command]
+pub async fn update_api_cli(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    provider: String,
+) -> Result<(), String> {
+    let base_url = state.sidecar.base_url().await;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))?;
+
+    let url = format!("{base_url}/v1/cli-versions/{provider}/update");
+    match client.post(&url).send().await {
+        Ok(resp) if resp.status().is_success() => {
+            if let Ok(v) = resp.json::<CliVersionResponse>().await {
+                let info = ApiCliVersionInfo {
+                    provider: v.provider,
+                    installed_version: v.current_version,
+                    latest_version: v.latest_version,
+                    up_to_date: !v.needs_update,
+                    available: true,
+                };
+                let _ = app.emit(EVENT_API_CLI_VERSION, &info);
+            }
+        }
+        Ok(resp) => {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Update failed for {provider}: HTTP {status} — {body}"));
+        }
+        Err(e) => {
+            return Err(format!("Update request failed for {provider}: {e}"));
+        }
+    }
     Ok(())
 }

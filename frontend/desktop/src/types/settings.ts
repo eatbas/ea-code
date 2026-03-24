@@ -80,6 +80,8 @@ export interface AppSettings {
   maxPlanners: number;
   /** Maximum total reviewer slots (1 = primary only, 2+ = primary + extras). */
   maxReviewers: number;
+  /** Per-provider enabled models (e.g. { copilot: "claude-sonnet-4.6,gpt-5.4" }). */
+  providerModels: Record<string, string>;
   /** Port for the hive-api sidecar (0 = default 8719). */
   hiveApiPort: number;
   /** Python interpreter path override for the sidecar (empty = auto-detect). */
@@ -136,30 +138,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   extraReviewers: [],
   maxPlanners: 4,
   maxReviewers: 4,
+  providerModels: {},
   hiveApiPort: 0,
   pythonPath: "",
 };
 
-/** Known model options per CLI, keyed by CLI name. */
-export const CLI_MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
-  claude: [
-    { value: "sonnet", label: "Sonnet" },
-    { value: "opus", label: "Opus" },
-    { value: "haiku", label: "Haiku" },
-  ],
-  codex: [
-    { value: "gpt-5.3-codex", label: "GPT-5.3 Codex" },
-    { value: "gpt-5.4", label: "GPT-5.4" },
-  ],
-  gemini: [
-    { value: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
-    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
-  ],
-  kimi: [
-    { value: "kimi-code/kimi-for-coding", label: "Kimi Code" },
-  ],
-  opencode: [
-    { value: "opencode/glm-5", label: "GLM 5" },
-    { value: "opencode/glm-4.7", label: "GLM 4.7" },
-  ],
-};

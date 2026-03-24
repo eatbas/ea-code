@@ -20,11 +20,11 @@ pub enum AgentRole {
 #[serde(rename_all = "lowercase")]
 pub enum AgentBackend {
     Claude,
-    #[serde(alias = "copilot")]
     Codex,
     Gemini,
     Kimi,
     OpenCode,
+    Copilot,
 }
 
 pub(crate) fn default_executive_summary_model() -> String {

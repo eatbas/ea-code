@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { PipelineRun, PipelineStage, RunOptions, CliHealth, AppSettings, StageResult } from "../types";
+import type { PipelineRun, PipelineStage, RunOptions, ProviderInfo, AppSettings, StageResult } from "../types";
 import { isActive, isTerminal, statusInfo, statusToneClasses } from "../utils/statusHelpers";
 import { resolveAuditedPlanText, resolvePlanText } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
@@ -38,7 +38,7 @@ interface ChatViewProps {
   stageLogs: Record<string, string[]>;
   /** Artifacts from live pipeline (only available during active run). */
   artifacts: Record<string, string>;
-  cliHealth: CliHealth | null;
+  providers: ProviderInfo[];
   settings: AppSettings | null;
   onMissingAgentSetup: () => void;
   onPause: () => void;
@@ -73,7 +73,7 @@ export function ChatView({
   run,
   stageLogs,
   artifacts,
-  cliHealth,
+  providers,
   settings,
   onMissingAgentSetup,
   onPause,
@@ -249,7 +249,7 @@ export function ChatView({
         {isTerminal(run.status) && (
           <PromptInputBar
             placeholder="Continue this session..."
-            cliHealth={cliHealth}
+            providers={providers}
             settings={settings}
             onMissingAgentSetup={onMissingAgentSetup}
             onSubmit={onContinue}

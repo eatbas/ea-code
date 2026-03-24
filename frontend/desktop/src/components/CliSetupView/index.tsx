@@ -1,80 +1,19 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect } from "react";
-import type { AppSettings, CliVersionInfo, AllCliVersions } from "../../types";
-import { CLI_MODEL_OPTIONS } from "../../types";
+import type { ApiHealth, AppSettings, ProviderInfo, ApiCliVersionInfo } from "../../types";
 import { sanitiseAgentAssignmentsForEnabledModels } from "../../utils/agentSettings";
+import { providerDisplayName } from "../shared/constants";
 import { useToast } from "../shared/Toast";
 import { CliCard } from "./CliCard";
 
-type ModelSettingsKey =
-  | "claudeModel"
-  | "codexModel"
-  | "geminiModel"
-  | "kimiModel"
-  | "opencodeModel";
-
-const MODEL_KEY_MAP: Record<string, ModelSettingsKey> = {
+/** Legacy per-CLI model CSV settings keys. */
+const LEGACY_MODEL_KEY: Record<string, keyof AppSettings> = {
   claude: "claudeModel",
   codex: "codexModel",
   gemini: "geminiModel",
   kimi: "kimiModel",
   opencode: "opencodeModel",
 };
-
-const FALLBACK_CLI_ENTRIES: CliVersionInfo[] = [
-  {
-    name: "Claude CLI",
-    cliName: "claude",
-    upToDate: false,
-    updateCommand: "",
-    available: true,
-  },
-  {
-    name: "Codex CLI",
-    cliName: "codex",
-    upToDate: false,
-    updateCommand: "",
-    available: true,
-  },
-  {
-    name: "Gemini CLI",
-    cliName: "gemini",
-    upToDate: false,
-    updateCommand: "",
-    available: true,
-  },
-  {
-    name: "Kimi CLI",
-    cliName: "kimi",
-    upToDate: false,
-    updateCommand: "",
-    available: true,
-  },
-  {
-    name: "OpenCode CLI",
-    cliName: "opencode",
-    upToDate: false,
-    updateCommand: "",
-    available: true,
-  },
-  {
-    name: "Git Bash CLI",
-    cliName: "gitBash",
-    upToDate: false,
-    updateCommand: "",
-    available: true,
-  },
-];
-
-interface CliSetupViewProps {
-  settings: AppSettings;
-  versions: AllCliVersions | null;
-  loading: boolean;
-  updating: string | null;
-  onFetchVersions: (settings: AppSettings) => void;
-  onUpdateCli: (cliName: string, settings: AppSettings) => Promise<void>;
-  onSave: (settings: AppSettings) => void;
-}
 
 function parseEnabledModels(csv: string): Set<string> {
   return new Set(csv.split(",").map((s) => s.trim()).filter(Boolean));
@@ -84,73 +23,95 @@ function serialiseEnabledModels(models: Set<string>): string {
   return Array.from(models).join(",");
 }
 
+interface CliSetupViewProps {
+  settings: AppSettings;
+  apiHealth: ApiHealth | null;
+  providers: ProviderInfo[];
+  apiVersions: ApiCliVersionInfo[];
+  versionsLoading: boolean;
+  updating: string | null;
+  onFetchVersions: () => void;
+  onRefreshProviders: () => void;
+  onUpdateCli: (provider: string) => Promise<void>;
+  onSave: (settings: AppSettings) => void;
+}
+
 export function CliSetupView({
   settings,
-  versions,
-  loading,
+  apiHealth,
+  providers,
+  apiVersions,
+  versionsLoading,
   updating,
   onFetchVersions,
+  onRefreshProviders,
   onUpdateCli,
   onSave,
 }: CliSetupViewProps): ReactNode {
   const toast = useToast();
-  const actionsDisabled = loading || updating !== null;
+  const actionsDisabled = versionsLoading || updating !== null;
 
-  const cliEntries: CliVersionInfo[] = versions
-    ? [
-        versions.claude,
-        versions.codex,
-        versions.gemini,
-        versions.kimi,
-        versions.opencode,
-        ...(versions.gitBash ? [versions.gitBash] : []),
-      ]
-    : FALLBACK_CLI_ENTRIES;
-
-  const refreshVersions = useCallback((targetSettings: AppSettings, showSuccessToast: boolean): void => {
-    onFetchVersions(targetSettings);
+  const refreshAll = useCallback((showSuccessToast: boolean): void => {
+    onRefreshProviders();
+    onFetchVersions();
     if (showSuccessToast) {
       toast.success("CLI version check started.");
     }
-  }, [onFetchVersions, toast]);
+  }, [onFetchVersions, onRefreshProviders, toast]);
 
   useEffect(() => {
-    refreshVersions(settings, false);
-  }, [
-    refreshVersions,
-    settings.claudePath,
-    settings.codexPath,
-    settings.geminiPath,
-    settings.kimiPath,
-    settings.opencodePath,
-  ]);
+    refreshAll(false);
+  }, [refreshAll]);
 
-  function getEnabledModels(cliName: string): Set<string> {
-    const key = MODEL_KEY_MAP[cliName];
-    if (!key) return new Set();
-    return parseEnabledModels(settings[key]);
+  function getEnabledModels(providerName: string): Set<string> {
+    // Check providerModels first, then legacy fields.
+    const dynamic = settings.providerModels?.[providerName];
+    if (dynamic !== undefined) return parseEnabledModels(dynamic);
+    const legacyKey = LEGACY_MODEL_KEY[providerName];
+    if (legacyKey) return parseEnabledModels(settings[legacyKey] as string);
+    return new Set();
   }
 
-  function handleToggleModel(cliName: string, model: string): void {
+  function handleToggleModel(providerName: string, model: string): void {
     if (actionsDisabled) return;
-    const key = MODEL_KEY_MAP[cliName];
-    if (!key) return;
-    const cliInfo = versions?.[cliName as keyof AllCliVersions];
-    if (cliInfo && !cliInfo.available) return;
-    const current = parseEnabledModels(settings[key]);
+    const provider = providers.find((p) => p.name === providerName);
+    if (provider && !provider.available) return;
+
+    const current = getEnabledModels(providerName);
     if (current.has(model)) {
       current.delete(model);
     } else {
       current.add(model);
     }
-    const updated = { ...settings, [key]: serialiseEnabledModels(current) };
+
+    const csv = serialiseEnabledModels(current);
+    const legacyKey = LEGACY_MODEL_KEY[providerName];
+
+    let updated: AppSettings;
+    if (legacyKey) {
+      // Write to both legacy field and providerModels for consistency.
+      updated = {
+        ...settings,
+        [legacyKey]: csv,
+        providerModels: { ...settings.providerModels, [providerName]: csv },
+      };
+    } else {
+      updated = {
+        ...settings,
+        providerModels: { ...settings.providerModels, [providerName]: csv },
+      };
+    }
     onSave(sanitiseAgentAssignmentsForEnabledModels(updated));
   }
 
-  async function handleUpdateCli(cliName: string, cliDisplayName: string): Promise<void> {
+  async function handleUpdateCli(providerName: string): Promise<void> {
     if (actionsDisabled) return;
-    await onUpdateCli(cliName, settings);
-    toast.success(`${cliDisplayName} update completed.`);
+    await onUpdateCli(providerName);
+    toast.success(`${providerDisplayName(providerName)} CLI update completed.`);
+  }
+
+  function versionForProvider(providerName: string): ApiCliVersionInfo | undefined {
+    return apiVersions.find((v) => v.provider === providerName);
   }
 
   return (
@@ -166,33 +127,59 @@ export function CliSetupView({
             </div>
             <button
               type="button"
-              onClick={() => refreshVersions(settings, true)}
+              onClick={() => refreshAll(true)}
               disabled={actionsDisabled}
               className="rounded-md border border-[#2e2e48] bg-[#24243a] px-4 py-2 text-sm font-medium text-[#9898b0] transition-colors hover:bg-[#2e2e48] hover:text-[#e4e4ed] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Checking..." : updating ? "Updating..." : "Refresh"}
+              {versionsLoading ? "Checking..." : updating ? "Updating..." : "Refresh"}
             </button>
           </div>
-          {cliEntries.length > 0 && (
+          {/* Hive-API status */}
+          <div className="flex items-center gap-3 rounded-lg border border-[#2e2e48] bg-[#1a1a24] px-4 py-3">
+            <span
+              className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+                apiHealth?.connected ? "bg-[#22c55e]" : "bg-[#ef4444]"
+              }`}
+            />
+            <div className="flex flex-1 items-center justify-between">
+              <div>
+                <span className="text-sm font-medium text-[#e4e4ed]">Hive API</span>
+                <span className="ml-2 text-xs text-[#6b6b80]">
+                  {apiHealth?.connected
+                    ? `Connected${apiHealth.droneCount != null ? ` · ${apiHealth.droneCount} drone${apiHealth.droneCount !== 1 ? "s" : ""}` : ""}`
+                    : apiHealth?.error ?? "Not connected"}
+                </span>
+              </div>
+              {apiHealth?.connected && apiHealth.url && (
+                <span className="text-xs font-mono text-[#6b6b80]">{apiHealth.url}</span>
+              )}
+            </div>
+          </div>
+
+          {providers.length > 0 && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {cliEntries.map((info) => (
+              {providers.map((p) => (
                 <CliCard
-                  key={info.cliName}
-                  info={info}
-                  loading={loading || updating === info.cliName}
-                  updating={updating === info.cliName}
+                  key={p.name}
+                  provider={p}
+                  version={versionForProvider(p.name)}
+                  loading={versionsLoading || updating === p.name}
+                  updating={updating === p.name}
                   actionsDisabled={actionsDisabled}
-                  enabledModels={getEnabledModels(info.cliName)}
-                  modelOptions={CLI_MODEL_OPTIONS[info.cliName] ?? []}
-                  onToggleModel={(model) => handleToggleModel(info.cliName, model)}
-                  onUpdate={() => void handleUpdateCli(info.cliName, info.name)}
+                  enabledModels={getEnabledModels(p.name)}
+                  onToggleModel={(model) => handleToggleModel(p.name, model)}
+                  onUpdate={() => void handleUpdateCli(p.name)}
                 />
               ))}
             </div>
           )}
+          {providers.length === 0 && !versionsLoading && (
+            <p className="text-sm text-[#6b6b80]">
+              No providers detected. Ensure the hive-api sidecar is running.
+            </p>
+          )}
         </div>
       </div>
-
     </div>
   );
 }

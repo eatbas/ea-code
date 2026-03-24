@@ -1,18 +1,18 @@
 import type { ReactNode } from "react";
-import type { AgentBackend, AppSettings, CliHealth } from "../../types";
+import type { AppSettings, ProviderInfo } from "../../types";
 import { CascadingSelect } from "./CascadingSelect";
 
 export interface InlineStageSlotProps {
   label: string;
   /** Direct backend value (for array-based extra slots). */
-  backend: AgentBackend | null;
+  backend: string | null;
   /** Direct model value (for array-based extra slots). */
   model: string | null;
   draft: AppSettings;
-  cliHealth: CliHealth | null;
-  cliHealthChecking: boolean;
+  providers: ProviderInfo[];
+  providersLoading: boolean;
   /** Called when the user selects a new backend + model. */
-  onChange: (backend: AgentBackend | null, model: string | null) => void;
+  onChange: (backend: string | null, model: string | null) => void;
   onRemove: () => void;
 }
 
@@ -22,8 +22,8 @@ export function InlineStageSlot({
   backend,
   model,
   draft,
-  cliHealth,
-  cliHealthChecking,
+  providers,
+  providersLoading,
   onChange,
   onRemove,
 }: InlineStageSlotProps): ReactNode {
@@ -48,8 +48,8 @@ export function InlineStageSlot({
         model={model}
         settings={draft}
         optional={true}
-        cliHealth={cliHealth}
-        cliHealthChecking={cliHealthChecking}
+        providers={providers}
+        providersLoading={providersLoading}
         onChange={onChange}
       />
     </div>

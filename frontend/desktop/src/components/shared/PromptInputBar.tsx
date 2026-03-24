@@ -1,18 +1,20 @@
 import type { ReactNode } from "react";
 import { useState, useRef, useEffect } from "react";
-import type { AgentBackend, RunOptions, CliHealth, AppSettings } from "../../types";
-import { CLI_MODEL_OPTIONS } from "../../types";
+import type { RunOptions, AppSettings, ProviderInfo } from "../../types";
 import {
   hasMinimumAgentsConfigured,
   missingMinimumAgentModelLabels,
 } from "../../utils/agentSettings";
-import { BACKEND_OPTIONS } from "./constants";
+import {
+  backendOptionsFromProviders,
+  modelOptionsFromProvider,
+} from "./constants";
 import { PopoverSelect } from "./PopoverSelect";
 import { useToast } from "./Toast";
 
 interface PromptInputBarProps {
   placeholder?: string;
-  cliHealth: CliHealth | null;
+  providers: ProviderInfo[];
   settings: AppSettings | null;
   hasProjectSelected?: boolean;
   onMissingAgentSetup?: () => void;
@@ -22,7 +24,7 @@ interface PromptInputBarProps {
 /** Shared prompt input bar with textarea, direct task checkbox, and agent/model selectors. */
 export function PromptInputBar({
   placeholder,
-  cliHealth,
+  providers,
   settings,
   hasProjectSelected = true,
   onMissingAgentSetup,
@@ -32,12 +34,13 @@ export function PromptInputBar({
   const [prompt, setPrompt] = useState<string>("");
   const [directTask, setDirectTask] = useState(false);
   const [noPlan, setNoPlan] = useState(false);
-  const [directAgent, setDirectAgent] = useState<AgentBackend>("claude");
+  const [directAgent, setDirectAgent] = useState<string>("claude");
   const [directModel, setDirectModel] = useState<string>("sonnet");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const availableBackends = BACKEND_OPTIONS.filter(
-    (opt) => cliHealth?.[opt.value]?.available,
+  const providerList = providers ?? [];
+  const availableBackends = backendOptionsFromProviders(
+    providerList.filter((p) => p.available),
   );
 
   const hasPrompt = prompt.trim().length > 0;
@@ -107,6 +110,11 @@ export function PromptInputBar({
     }
   }
 
+  function getModelOptionsForAgent(agent: string): { value: string; label: string }[] {
+    const provider = providerList.find((p) => p.name === agent);
+    return modelOptionsFromProvider(provider);
+  }
+
   return (
     <div className="flex w-full flex-col rounded-xl border border-[#2e2e48] bg-[#1a1a24] px-4 py-3 gap-2">
       {/* Top row: textarea + submit */}
@@ -150,8 +158,8 @@ export function PromptInputBar({
               if (checked && availableBackends.length > 0) {
                 const first = availableBackends[0].value;
                 setDirectAgent(first);
-                const opts = CLI_MODEL_OPTIONS[first];
-                if (opts && opts.length > 0) setDirectModel(opts[0].value);
+                const opts = getModelOptionsForAgent(first);
+                if (opts.length > 0) setDirectModel(opts[0].value);
               }
             }}
             className="h-3.5 w-3.5 rounded border-[#2e2e48] bg-[#1a1a24] accent-[#6366f1]"
@@ -176,15 +184,14 @@ export function PromptInputBar({
               direction="up"
               align="left"
               onChange={(val) => {
-                const backend = val as AgentBackend;
-                setDirectAgent(backend);
-                const opts = CLI_MODEL_OPTIONS[backend];
-                if (opts && opts.length > 0) setDirectModel(opts[0].value);
+                setDirectAgent(val);
+                const opts = getModelOptionsForAgent(val);
+                if (opts.length > 0) setDirectModel(opts[0].value);
               }}
             />
             <PopoverSelect
               value={directModel}
-              options={CLI_MODEL_OPTIONS[directAgent] ?? []}
+              options={getModelOptionsForAgent(directAgent)}
               direction="up"
               align="right"
               onChange={setDirectModel}

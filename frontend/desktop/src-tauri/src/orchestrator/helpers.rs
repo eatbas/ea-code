@@ -266,14 +266,18 @@ fn first_enabled_model_for_backend(
     backend: Option<&AgentBackend>,
     settings: &AppSettings,
 ) -> String {
-    let csv = match backend {
-        Some(AgentBackend::Claude) => &settings.claude_model,
-        Some(AgentBackend::Codex) => &settings.codex_model,
-        Some(AgentBackend::Gemini) => &settings.gemini_model,
-        Some(AgentBackend::Kimi) => &settings.kimi_model,
-        Some(AgentBackend::OpenCode) => &settings.opencode_model,
+    let backend = match backend {
+        Some(b) => b,
         None => return String::new(),
     };
+    let provider_str = backend_to_provider_str(backend);
+    // Check dynamic provider_models first, then fall back to legacy fields.
+    let csv = settings
+        .provider_models
+        .get(provider_str)
+        .map(|s| s.as_str())
+        .or_else(|| settings.model_csv_for_cli(provider_str))
+        .unwrap_or("");
     csv.split(',').next().unwrap_or("").trim().to_string()
 }
 
@@ -398,6 +402,7 @@ pub fn backend_to_provider_str(backend: &AgentBackend) -> &'static str {
         AgentBackend::Gemini => "gemini",
         AgentBackend::Kimi => "kimi",
         AgentBackend::OpenCode => "opencode",
+        AgentBackend::Copilot => "copilot",
     }
 }
 

@@ -146,6 +146,7 @@ pub fn run() {
             commands::api_health::check_api_health,
             commands::api_health::get_api_providers,
             commands::api_health::get_api_cli_versions,
+            commands::api_health::update_api_cli,
             // History / session commands
             commands::history::list_projects,
             commands::history::list_sessions,

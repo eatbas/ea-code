@@ -1,19 +1,19 @@
 import type { ReactNode } from "react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useClickOutside } from "../../hooks/useClickOutside";
-import type { AgentBackend, AppSettings, CliHealth } from "../../types";
-import { BACKEND_OPTIONS } from "../shared/constants";
+import type { AppSettings, ProviderInfo } from "../../types";
+import { backendOptionsFromProviders } from "../shared/constants";
 import { backendLabel, modelLabel, getModelOptionsForBackend } from "./agentHelpers";
 
 /** Props for the CascadingSelect component. */
 export interface CascadingSelectProps {
-  backend: AgentBackend | null;
+  backend: string | null;
   model: string | null;
   settings: AppSettings;
   optional?: boolean;
-  cliHealth: CliHealth | null;
-  cliHealthChecking: boolean;
-  onChange: (backend: AgentBackend | null, model: string | null) => void;
+  providers: ProviderInfo[];
+  providersLoading: boolean;
+  onChange: (backend: string | null, model: string | null) => void;
 }
 
 /** Two-level hover dropdown (backend then models). */
@@ -22,21 +22,21 @@ export function CascadingSelect({
   model,
   settings,
   optional,
-  cliHealth,
-  cliHealthChecking,
+  providers,
+  providersLoading,
   onChange,
 }: CascadingSelectProps): ReactNode {
   const [open, setOpen] = useState(false);
-  const [hoveredBackend, setHoveredBackend] = useState<AgentBackend | null>(null);
+  const [hoveredBackend, setHoveredBackend] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const closeMenu = useCallback(() => setOpen(false), []);
   useClickOutside(containerRef, closeMenu, open);
 
-  const backendOptions = cliHealth
-    ? BACKEND_OPTIONS.filter((opt) => cliHealth[opt.value].available)
-    : [];
+  const backendOptions = backendOptionsFromProviders(
+    providers.filter((p) => p.available),
+  );
   const hasSelectableBackends = backendOptions.length > 0;
-  const triggerDisabled = cliHealthChecking || (!optional && !hasSelectableBackends);
+  const triggerDisabled = providersLoading || (!optional && !hasSelectableBackends);
 
   // Ensure disabled state closes the dropdown immediately.
   useEffect(() => {
@@ -48,11 +48,11 @@ export function CascadingSelect({
 
   const isSkipped = !backend;
   const clearLabel = optional ? "Skip" : "Not selected";
-  const displayText = cliHealthChecking && !cliHealth
-    ? "Checking installed CLIs..."
+  const displayText = providersLoading && providers.length === 0
+    ? "Loading providers..."
     : isSkipped
       ? clearLabel
-      : `${backendLabel(backend)} · ${modelLabel(backend, model)}`;
+      : `${backendLabel(backend)} · ${modelLabel(backend, model, providers)}`;
 
   return (
     <div ref={containerRef} className="relative">
@@ -139,7 +139,7 @@ export function CascadingSelect({
             })}
             {backendOptions.length === 0 && (
               <span className="block px-3 py-1.5 text-xs text-[#6b6b80]">
-                No installed CLIs
+                No available providers
               </span>
             )}
           </div>
@@ -148,7 +148,7 @@ export function CascadingSelect({
           {hoveredBackend && (
             <div className="min-w-[150px] rounded-r border border-l-0 border-[#2e2e48] bg-[#1a1a2e] py-1 shadow-lg">
               {(() => {
-                const models = getModelOptionsForBackend(hoveredBackend, settings);
+                const models = getModelOptionsForBackend(hoveredBackend, settings, providers);
                 if (models.length === 0) {
                   return (
                     <span className="block px-3 py-1.5 text-xs text-[#6b6b80]">

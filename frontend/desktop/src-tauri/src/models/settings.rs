@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use super::agents::{
@@ -5,7 +7,7 @@ use super::agents::{
     default_opencode_path, AgentBackend,
 };
 
-pub const AI_CLI_NAMES: [&str; 5] = ["claude", "codex", "gemini", "kimi", "opencode"];
+pub const AI_CLI_NAMES: [&str; 6] = ["claude", "codex", "gemini", "kimi", "opencode", "copilot"];
 
 /// Configuration for an extra parallel planner or reviewer slot.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -120,6 +122,12 @@ pub struct AppSettings {
     /// Python interpreter path override for the sidecar (empty = auto-detect).
     #[serde(default)]
     pub python_path: String,
+
+    // --- Dynamic provider models ---
+    /// Per-provider enabled models (e.g. {"copilot": "claude-sonnet-4.6,gpt-5.4"}).
+    /// Supplements legacy per-CLI model fields for new providers.
+    #[serde(default)]
+    pub provider_models: HashMap<String, String>,
 
     // --- Parametric parallel slots ---
     /// Extra planner slot configurations (planner 2, 3, 4, ...).
@@ -251,6 +259,7 @@ impl Default for AppSettings {
             skill_selector_agent: None,
             hive_api_port: 0,
             python_path: String::new(),
+            provider_models: HashMap::new(),
             extra_planners: Vec::new(),
             extra_reviewers: Vec::new(),
             max_planners: 4,
@@ -336,6 +345,7 @@ impl AppSettings {
             "gemini" => Some(self.gemini_path.as_str()),
             "kimi" => Some(self.kimi_path.as_str()),
             "opencode" => Some(self.opencode_path.as_str()),
+            "copilot" => Some("copilot"),
             _ => None,
         }
     }
@@ -347,7 +357,7 @@ impl AppSettings {
             "gemini" => Some(self.gemini_model.as_str()),
             "kimi" => Some(self.kimi_model.as_str()),
             "opencode" => Some(self.opencode_model.as_str()),
-            _ => None,
+            other => self.provider_models.get(other).map(|s| s.as_str()),
         }
     }
 
@@ -368,6 +378,7 @@ impl AppSettings {
             "gemini" => Some("gemini-3-flash-preview"),
             "kimi" => Some("kimi-code"),
             "opencode" => Some("opencode/glm-5"),
+            "copilot" => Some("claude-sonnet-4.6"),
             _ => None,
         }
     }

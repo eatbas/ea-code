@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { AppSettings, AgentBackend, CliHealth } from "../../types";
+import type { AppSettings, ProviderInfo } from "../../types";
 import { CascadingSelect } from "./CascadingSelect";
 
 /** Props for a single stage card. */
@@ -11,8 +11,8 @@ export interface StageCardProps {
   children?: ReactNode;
   optional: boolean;
   draft: AppSettings;
-  cliHealth: CliHealth | null;
-  cliHealthChecking: boolean;
+  providers: ProviderInfo[];
+  providersLoading: boolean;
   onUpdate: (patch: Partial<AppSettings>) => void;
   onRemove?: () => void;
 }
@@ -20,9 +20,9 @@ export interface StageCardProps {
 /** A single pipeline stage agent card with optional remove button. */
 export function StageCard({
   label, tag, backendKey, modelKey, optional,
-  children, draft, cliHealth, cliHealthChecking, onUpdate, onRemove,
+  children, draft, providers, providersLoading, onUpdate, onRemove,
 }: StageCardProps): ReactNode {
-  const currentBackend = draft[backendKey] as AgentBackend | null;
+  const currentBackend = draft[backendKey] as string | null;
   const currentModel = draft[modelKey] as string | null;
   const isMandatoryUnconfigured = !optional && (!currentBackend || !currentModel);
 
@@ -51,8 +51,8 @@ export function StageCard({
         model={currentModel}
         settings={draft}
         optional={optional}
-        cliHealth={cliHealth}
-        cliHealthChecking={cliHealthChecking}
+        providers={providers}
+        providersLoading={providersLoading}
         onChange={(newBackend, newModel) => {
           onUpdate({
             [backendKey]: newBackend,

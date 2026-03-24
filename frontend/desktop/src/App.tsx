@@ -4,9 +4,9 @@ import { useToast } from "./components/shared/Toast";
 import { useSettings } from "./hooks/useSettings";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { usePipeline } from "./hooks/usePipeline";
-import { useCliVersions } from "./hooks/useCliVersions";
 import { useCliHealth } from "./hooks/useCliHealth";
 import { useApiHealth } from "./hooks/useApiHealth";
+import { useApiCliVersions } from "./hooks/useApiCliVersions";
 import { useHistory } from "./hooks/useHistory";
 import { useSkills } from "./hooks/useSkills";
 import { useLiveSessionStatus } from "./hooks/useLiveSessionStatus";
@@ -24,9 +24,9 @@ function App(): ReactNode {
   const { workspace, openingWorkspace, openWorkspace, selectFolder } = useWorkspace();
   const { settings, loading, saveSettings } = useSettings();
   const { run, stageLogs, artifacts, pendingQuestion, startPipeline, pausePipeline, resumePipeline, cancelPipeline, answerQuestion, resetRun } = usePipeline();
-  const { versions, loading: versionsLoading, updating: versionsUpdating, fetchVersions, updateCli } = useCliVersions();
-  const { health: cliHealth, checking: cliHealthChecking, checkHealth } = useCliHealth();
-  const { health: _apiHealth, providers: _apiProviders, checking: _apiChecking, checkHealth: checkApiHealth } = useApiHealth();
+  const { health: cliHealth, checking: _cliHealthChecking, checkHealth } = useCliHealth();
+  const { health: apiHealth, providers, checking: providersLoading, checkHealth: checkApiHealth } = useApiHealth();
+  const { versions: apiVersions, loading: apiVersionsLoading, updating: apiVersionsUpdating, fetchVersions: fetchApiVersions, updateCli: updateApiCli } = useApiCliVersions();
   const { projects, sessions, loadSessions, loadProjects, loadSessionDetail, loadMoreRuns, deleteSession } = useHistory();
   const { skills, loading: skillsLoading, createSkill, updateSkill, deleteSkill } = useSkills();
   const hasLiveSessions = useLiveSessionStatus();
@@ -129,17 +129,20 @@ function App(): ReactNode {
             sessionDetail={sessionDetail}
             sessionDetailLoading={sessionDetailLoading}
             sessionLoadingMore={sessionLoadingMore}
-            versions={versions}
-            versionsLoading={versionsLoading}
-            versionsUpdating={versionsUpdating}
+            providers={providers}
+            providersLoading={providersLoading}
+            apiVersions={apiVersions}
+            apiVersionsLoading={apiVersionsLoading}
+            apiVersionsUpdating={apiVersionsUpdating}
+            apiHealth={apiHealth}
             cliHealth={cliHealth}
-            cliHealthChecking={cliHealthChecking}
             settings={settings}
             skills={skills}
             skillsLoading={skillsLoading}
             onSaveSettings={saveSettings}
-            onFetchVersions={fetchVersions}
-            onUpdateCli={updateCli}
+            onFetchApiVersions={fetchApiVersions}
+            onRefreshProviders={checkApiHealth}
+            onUpdateApiCli={updateApiCli}
             onCreateSkill={createSkill}
             onUpdateSkill={updateSkill}
             onDeleteSkill={deleteSkill}
