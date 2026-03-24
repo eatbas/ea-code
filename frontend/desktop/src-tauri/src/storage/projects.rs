@@ -125,7 +125,8 @@ pub fn add_project(entry: &ProjectEntry) -> Result<(), String> {
     })
 }
 
-/// Removes a project by its path, deleting the entire project directory.
+/// Removes a project by its path, deleting the entire project directory
+/// and cleaning up session/run index entries.
 /// H8: Protected by file lock for concurrent access.
 pub fn remove_project(path: &str) -> Result<(), String> {
     with_projects_lock(|| {
@@ -135,6 +136,9 @@ pub fn remove_project(path: &str) -> Result<(), String> {
             .find(|p| p.path == path)
             .ok_or_else(|| format!("Project not found: {path}"))?;
 
+        // Clean up index entries for all sessions belonging to this project.
+        remove_project_from_index(&entry.id);
+
         let dir = project_dir(&entry.id)?;
         if dir.exists() {
             std::fs::remove_dir_all(&dir)
@@ -143,6 +147,43 @@ pub fn remove_project(path: &str) -> Result<(), String> {
 
         Ok(())
     })
+}
+
+/// Removes all index entries (sessions and runs) belonging to a project.
+fn remove_project_from_index(project_id: &str) {
+    if let Ok(idx) = super::index::load() {
+        let session_ids: Vec<String> = idx
+            .sessions
+            .iter()
+            .filter(|(_sid, pid)| *pid == project_id)
+            .map(|(sid, _)| sid.clone())
+            .collect();
+        for sid in session_ids {
+            let _ = super::index::remove_session_from_index(&sid);
+        }
+    }
+}
+
+/// Removes projects whose filesystem path no longer exists on disk.
+/// Called during startup to keep the project list clean.
+pub fn cleanup_missing_projects() -> Result<(), String> {
+    let projects = read_projects()?;
+    for project in &projects {
+        let path = std::path::Path::new(&project.path);
+        if !path.exists() {
+            eprintln!(
+                "Removing stale project (folder missing): {} → {}",
+                project.name, project.path
+            );
+            // Clean up index entries first, then delete project directory.
+            remove_project_from_index(&project.id);
+            let dir = project_dir(&project.id)?;
+            if dir.exists() {
+                let _ = std::fs::remove_dir_all(&dir);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Creates a new project entry with the current timestamp.

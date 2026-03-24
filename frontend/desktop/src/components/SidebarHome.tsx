@@ -16,6 +16,7 @@ interface SidebarHomeProps {
   onSelectSession: (sessionId: string) => void;
   runningSessionIds: Set<string>;
   onArchiveSession?: (sessionId: string) => void;
+  onRemoveProject?: (projectPath: string) => void;
 }
 
 export function SidebarHome({
@@ -32,6 +33,7 @@ export function SidebarHome({
   onSelectSession,
   runningSessionIds,
   onArchiveSession,
+  onRemoveProject,
 }: SidebarHomeProps): ReactNode {
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-[#2e2e48] bg-[#1a1a24]">
@@ -69,6 +71,7 @@ export function SidebarHome({
         onSelectProject={onSelectProject}
         onSelectSession={onSelectSession}
         onArchiveSession={onArchiveSession}
+        onRemoveProject={onRemoveProject}
       />
 
       <div className="px-3 pb-3">

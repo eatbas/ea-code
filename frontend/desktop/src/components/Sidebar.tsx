@@ -50,6 +50,8 @@ interface SidebarProps {
   runningSessionIds: Set<string>;
   /** Archive (delete) a session by ID. */
   onArchiveSession?: (sessionId: string) => void;
+  /** Remove a project by its filesystem path. */
+  onRemoveProject?: (projectPath: string) => void;
 }
 
 /** Collapsible left sidebar with new thread and settings sub-navigation. */
@@ -68,6 +70,7 @@ export function Sidebar({
   onSelectSession,
   runningSessionIds,
   onArchiveSession,
+  onRemoveProject,
 }: SidebarProps): ReactNode {
   const isSettings = activeView === "agents" || activeView === "cli-setup" || activeView === "skills" || activeView === "mcp";
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -140,6 +143,7 @@ export function Sidebar({
       onSelectSession={onSelectSession}
       runningSessionIds={runningSessionIds}
       onArchiveSession={onArchiveSession}
+      onRemoveProject={onRemoveProject}
     />
   );
 }

@@ -60,6 +60,11 @@ pub fn run() {
         eprintln!("Warning: startup temp file cleanup failed: {e}");
     }
 
+    // Remove projects whose workspace folder no longer exists on disk
+    if let Err(e) = storage::projects::cleanup_missing_projects() {
+        eprintln!("Warning: stale project cleanup failed: {e}");
+    }
+
     // Sync built-in MCP catalog
     if let Err(e) = storage::mcp::sync_builtin_catalog() {
         eprintln!("Warning: MCP catalog sync failed: {e}");
@@ -162,6 +167,7 @@ pub fn run() {
             commands::history::get_run_artifacts,
             commands::history::get_session_messages,
             commands::history::delete_session,
+            commands::history::delete_project,
         ])
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");

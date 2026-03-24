@@ -117,3 +117,9 @@ pub async fn get_session_messages(session_id: String) -> Result<Vec<ChatMessage>
 pub async fn delete_session(session_id: String) -> Result<(), String> {
     storage::sessions::delete_session(&session_id)
 }
+
+/// Deletes a project and all its sessions, runs, and index entries.
+#[tauri::command]
+pub async fn delete_project(project_path: String) -> Result<(), String> {
+    storage::projects::remove_project(&project_path)
+}

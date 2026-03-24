@@ -27,7 +27,7 @@ function App(): ReactNode {
   const { health: cliHealth, checking: _cliHealthChecking, checkHealth } = useCliHealth();
   const { health: apiHealth, providers, checking: providersLoading, checkHealth: checkApiHealth } = useApiHealth();
   const { versions: apiVersions, loading: apiVersionsLoading, updating: apiVersionsUpdating, fetchVersions: fetchApiVersions, updateCli: updateApiCli } = useApiCliVersions();
-  const { projects, sessions, loadSessions, loadProjects, loadSessionDetail, loadMoreRuns, deleteSession } = useHistory();
+  const { projects, sessions, loadSessions, loadProjects, loadSessionDetail, loadMoreRuns, deleteSession, deleteProject } = useHistory();
   const { skills, loading: skillsLoading, createSkill, updateSkill, deleteSkill } = useSkills();
   const hasLiveSessions = useLiveSessionStatus();
   const { status: updateStatus, updateVersion } = useUpdateCheck(hasLiveSessions);
@@ -114,6 +114,12 @@ function App(): ReactNode {
               () => toast.error("Failed to delete session."),
             );
             handleArchivedSession(sessionId);
+          }}
+          onRemoveProject={(projectPath) => {
+            void deleteProject(projectPath).then(
+              () => toast.success("Project removed."),
+              () => toast.error("Failed to remove project."),
+            );
           }}
         />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

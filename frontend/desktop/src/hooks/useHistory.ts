@@ -21,6 +21,7 @@ interface UseHistoryReturn {
   loadMoreRuns: (sessionId: string, currentCount: number) => Promise<SessionDetail>;
   createSession: (projectPath: string) => Promise<string>;
   deleteSession: (sessionId: string) => Promise<void>;
+  deleteProject: (projectPath: string) => Promise<void>;
 }
 
 /** Hook for querying project and session history from file-based storage. */
@@ -73,5 +74,10 @@ export function useHistory(): UseHistoryReturn {
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
   }, []);
 
-  return { projects, sessions, loadProjects, loadSessions, loadSessionDetail, loadMoreRuns, createSession, deleteSession };
+  const deleteProject = useCallback(async (projectPath: string): Promise<void> => {
+    await invoke("delete_project", { projectPath });
+    setProjects((prev) => prev.filter((p) => p.path !== projectPath));
+  }, []);
+
+  return { projects, sessions, loadProjects, loadSessions, loadSessionDetail, loadMoreRuns, createSession, deleteSession, deleteProject };
 }
