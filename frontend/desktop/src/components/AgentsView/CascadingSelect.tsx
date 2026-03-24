@@ -34,7 +34,7 @@ export function CascadingSelect({
 
   const backendOptions = backendOptionsFromProviders(
     providers.filter((p) => p.available),
-  );
+  ).filter((opt) => getModelOptionsForBackend(opt.value, settings, providers).length > 0);
   const hasSelectableBackends = backendOptions.length > 0;
   const triggerDisabled = providersLoading || (!optional && !hasSelectableBackends);
 

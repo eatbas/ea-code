@@ -136,10 +136,21 @@ pub async fn run_planning_stages(
     }
 
     // --- Run planners (1 sequential, 2+ parallel) ---
+    let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
+        run_id, iter_num, "enhanced_prompt",
+    )
+    .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    .unwrap_or_else(|| enhanced.to_string());
+
+    let plan_ref = iter_ctx.selected_plan().and_then(|_| {
+        crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, "plan_audit")
+            .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    });
+
     let planner_user_prompt = prompts::build_planner_user(
         &request.prompt,
-        enhanced,
-        iter_ctx.selected_plan(),
+        &enhanced_ref,
+        plan_ref.as_deref(),
         judge_feedback,
     );
     let planner_context = super::run_setup::compose_agent_context(
@@ -218,26 +229,61 @@ pub async fn run_planning_stages(
         .as_ref()
         .unwrap_or(&AgentBackend::Claude);
 
+    // Build file references for the plan audit prompt.
+    let audit_enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
+        run_id, iter_num, "enhanced_prompt",
+    )
+    .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    .unwrap_or_else(|| enhanced.to_string());
+
     let (system_prompt, user_prompt) = if plan_outputs.len() == 1 {
+        // Single plan — file-ref if the artifact was written.
+        let plan_kind = "plan";
+        let plan_ref = crate::orchestrator::helpers::artifact_file_path(
+            run_id, iter_num, plan_kind,
+        )
+        .map(|p| crate::orchestrator::helpers::file_ref(&p))
+        .unwrap_or_else(|| plan_outputs[0].1.clone());
+
         (
             prompts::build_plan_auditor_system(meta),
             prompts::build_plan_auditor_user(
                 &request.prompt,
-                enhanced,
-                &plan_outputs[0].1,
+                &audit_enhanced_ref,
+                &plan_ref,
                 None,
                 None,
                 judge_feedback,
             ),
         )
     } else {
+        // Multiple plans — file-ref each one.
+        let plan_refs: Vec<(String, String)> = plan_outputs
+            .iter()
+            .enumerate()
+            .map(|(i, (label, content))| {
+                let kind = format!("plan_{}", i + 1);
+                let ref_text = crate::orchestrator::helpers::artifact_file_path(
+                    run_id, iter_num, &kind,
+                )
+                .map(|p| crate::orchestrator::helpers::file_ref(&p))
+                .unwrap_or_else(|| content.clone());
+                (label.clone(), ref_text)
+            })
+            .collect();
+
+        let prev_plan_ref = iter_ctx.selected_plan().and_then(|_| {
+            crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, "plan_audit")
+                .map(|p| crate::orchestrator::helpers::file_ref(&p))
+        });
+
         (
             prompts::build_plan_auditor_merge_system(meta),
             prompts::build_plan_auditor_merge_user(
                 &request.prompt,
-                enhanced,
-                &plan_outputs,
-                iter_ctx.selected_plan(),
+                &audit_enhanced_ref,
+                &plan_refs,
+                prev_plan_ref.as_deref(),
                 judge_feedback,
             ),
         )
@@ -404,7 +450,8 @@ async fn run_single_planner(
     if failed {
         Ok(vec![])
     } else {
-        Ok(vec![("Proposed Plan".to_string(), out)])
+        let cleaned = crate::orchestrator::parsing::clean_plan_output(&out);
+        Ok(vec![("Proposed Plan".to_string(), cleaned)])
     }
 }
 
@@ -530,7 +577,8 @@ async fn run_parallel_planners(
                 &output,
                 iter_num,
             );
-            plan_outputs.push((format!("Plan from Planner {}", index + 1), output));
+            let cleaned = crate::orchestrator::parsing::clean_plan_output(&output);
+            plan_outputs.push((format!("Plan from Planner {}", index + 1), cleaned));
         }
         return Ok(plan_outputs);
     }

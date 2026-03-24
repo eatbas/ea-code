@@ -18,18 +18,28 @@ const LEGACY_MODEL_CSV_KEY: Record<string, keyof AppSettings> = {
   opencode: "opencodeModel",
 };
 
-/** Returns enabled model CSV for a backend, checking providerModels first then legacy fields. */
+/**
+ * Returns the enabled model CSV for a backend, or `undefined` when no
+ * explicit configuration exists at all.
+ *
+ * - `providerModels[backend]` takes precedence (can be `""`).
+ * - Falls back to the legacy per-CLI field when non-empty.
+ * - Returns `undefined` when neither source has an explicit value.
+ */
 function enabledModelsCsvForBackend(
   backend: string,
   settings: AppSettings,
-): string {
-  // Dynamic providerModels takes precedence.
+): string | undefined {
+  // Dynamic providerModels takes precedence — even an empty string is explicit.
   const dynamic = settings.providerModels?.[backend];
   if (dynamic !== undefined) return dynamic;
-  // Fall back to legacy per-CLI fields.
+  // Fall back to legacy per-CLI fields (only when non-empty).
   const legacyKey = LEGACY_MODEL_CSV_KEY[backend];
-  if (legacyKey) return settings[legacyKey] as string;
-  return "";
+  if (legacyKey) {
+    const val = settings[legacyKey] as string;
+    if (val) return val;
+  }
+  return undefined;
 }
 
 /**
@@ -48,8 +58,10 @@ export function getModelOptionsForBackend(
   const csv = enabledModelsCsvForBackend(backend, settings);
   const provider = providers.find((p) => p.name === backend);
   const allOptions = modelOptionsFromProvider(provider);
-  // If no explicit model selection exists, show all provider models.
-  if (!csv) return allOptions;
+  // No explicit selection at all → show every provider model as the default.
+  if (csv === undefined) return allOptions;
+  // Explicit but empty → user cleared all models for this provider.
+  if (!csv) return [];
   const enabled = new Set(parseEnabledModels(csv));
   return allOptions.filter((opt) => enabled.has(opt.value));
 }

@@ -47,11 +47,28 @@ pub async fn run_generate_stage(
     let gen_seq = runs::next_sequence(run_id).unwrap_or(1);
     super::stages::append_stage_start_event(run_id, &PipelineStage::Coder, iter_num, gen_seq)?;
 
+    // File-reference the enhanced prompt and plan to keep prompt size small.
+    let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
+        run_id, iter_num, "enhanced_prompt",
+    )
+    .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    .unwrap_or_else(|| enhanced.to_string());
+
+    let plan_ref = iter_ctx.selected_plan().and_then(|_| {
+        let kind = if iter_ctx.audited_plan.is_some() {
+            "plan_audit"
+        } else {
+            "plan"
+        };
+        crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, kind)
+            .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    });
+
     let input = AgentInput {
         prompt: prompts::build_generator_user(
             &request.prompt,
-            enhanced,
-            iter_ctx.selected_plan(),
+            &enhanced_ref,
+            plan_ref.as_deref(),
             selected_skills_section,
             judge_feedback,
             handoff_json,

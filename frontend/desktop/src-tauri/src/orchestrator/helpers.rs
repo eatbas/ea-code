@@ -36,6 +36,24 @@ pub fn stage_to_str(stage: &PipelineStage) -> String {
         .unwrap_or_else(|| format!("{stage:?}"))
 }
 
+/// Builds a file-reference instruction for embedding in agent prompts.
+///
+/// The agent reads the file itself instead of receiving the content inline.
+/// This keeps prompts small even when referenced content is large.
+pub fn file_ref(path: &std::path::Path) -> String {
+    format!("Read the full content from this file: {}", path.display())
+}
+
+/// Returns the artifact path for a completed stage, or `None` if the path
+/// cannot be resolved (e.g. missing run/session index entry).
+pub fn artifact_file_path(
+    run_id: &str,
+    iteration: u32,
+    kind: &str,
+) -> Option<std::path::PathBuf> {
+    runs::artifact_output_path(run_id, iteration, kind).ok()
+}
+
 /// Detects output that is a file-write instruction rather than real content.
 ///
 /// Some CLIs (notably Claude Code) may instruct the model to write plans to

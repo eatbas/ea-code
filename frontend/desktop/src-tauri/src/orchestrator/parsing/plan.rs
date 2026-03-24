@@ -1,4 +1,58 @@
-//! Plan audit output parsing.
+//! Plan audit output parsing and planner output cleaning.
+
+/// Hard cap in characters for plan output when markers are not found.
+const PLAN_HARD_CAP_CHARS: usize = 30_000;
+
+const BEGIN_PLAN_MARKER: &str = "--- BEGIN PLAN ---";
+const END_PLAN_MARKER: &str = "--- END PLAN ---";
+
+/// Extracts the clean plan from raw CLI planner output.
+///
+/// Strategy:
+/// 1. Look for `--- BEGIN PLAN ---` / `--- END PLAN ---` markers.
+///    If found, extract only the text between them.
+/// 2. If markers are absent (agent ignored them), fall back to
+///    `strip_cli_noise()` + `strip_plan_tail_noise()` + truncate
+///    to [`PLAN_HARD_CAP_CHARS`].
+pub fn clean_plan_output(raw_output: &str) -> String {
+    let normalised = raw_output.replace("\r\n", "\n");
+
+    // Try marker-based extraction first.
+    if let Some(begin_idx) = normalised.find(BEGIN_PLAN_MARKER) {
+        let after_begin = begin_idx + BEGIN_PLAN_MARKER.len();
+        let plan_text = if let Some(end_idx) = normalised[after_begin..].find(END_PLAN_MARKER) {
+            // Both markers found — extract between them.
+            normalised[after_begin..after_begin + end_idx].trim()
+        } else {
+            // Only BEGIN found — treat everything after it as the plan.
+            normalised[after_begin..].trim()
+        };
+
+        let cleaned = strip_plan_tail_noise(plan_text);
+        if !cleaned.trim().is_empty() {
+            return cleaned;
+        }
+    }
+
+    // Fallback: strip noise and truncate.
+    let stripped = crate::orchestrator::run_setup::strip_cli_noise(&normalised);
+    let cleaned = strip_plan_tail_noise(&stripped);
+
+    if cleaned.trim().is_empty() {
+        return truncate_plan(&normalised);
+    }
+
+    truncate_plan(&cleaned)
+}
+
+/// Truncates plan text to [`PLAN_HARD_CAP_CHARS`], appending a notice if clipped.
+fn truncate_plan(text: &str) -> String {
+    if text.chars().count() <= PLAN_HARD_CAP_CHARS {
+        return text.to_string();
+    }
+    let clipped: String = text.chars().take(PLAN_HARD_CAP_CHARS).collect();
+    format!("{clipped}\n\n[plan truncated to {PLAN_HARD_CAP_CHARS} chars]")
+}
 
 /// Parsed result from plan auditor output.
 #[derive(Clone, Debug)]

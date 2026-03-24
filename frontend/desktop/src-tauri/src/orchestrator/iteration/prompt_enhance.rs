@@ -46,11 +46,19 @@ pub async fn run_prompt_enhance_stage(
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
+    // Use a temporary empty directory as the workspace so the enhancer cannot
+    // explore the real codebase. It is a text-rewrite task — no file access needed.
+    let enhancer_workspace = std::env::temp_dir()
+        .join("ea-code-enhancer")
+        .to_string_lossy()
+        .to_string();
+    let _ = std::fs::create_dir_all(&enhancer_workspace);
+
     let input = AgentInput {
         prompt: prompts::build_prompt_enhancer_user(&request.prompt),
         // Keep prompt enhancement rewrite-only; avoid workspace execution context here.
         context: Some(prompts::build_prompt_enhancer_system(meta)),
-        workspace_path: request.workspace_path.clone(),
+        workspace_path: enhancer_workspace,
     };
 
     crate::orchestrator::helpers::emit_prompt_artifact(run_id, "enhanced_prompt", &input, iter_num);

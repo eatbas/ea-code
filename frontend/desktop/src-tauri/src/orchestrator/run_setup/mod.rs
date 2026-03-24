@@ -90,7 +90,7 @@ fn looks_like_enhancer_execution_log(output: &str) -> bool {
 }
 
 /// Removes known CLI informational/noise lines from agent output.
-fn strip_cli_noise(output: &str) -> String {
+pub(crate) fn strip_cli_noise(output: &str) -> String {
     output
         .lines()
         .filter(|line| {

@@ -62,6 +62,7 @@ interface CliCardProps {
   actionsDisabled: boolean;
   enabledModels: Set<string>;
   onToggleModel: (value: string) => void;
+  onToggleAll: (selectAll: boolean) => void;
   onUpdate: () => void;
 }
 
@@ -74,6 +75,7 @@ export function CliCard({
   actionsDisabled,
   enabledModels,
   onToggleModel,
+  onToggleAll,
   onUpdate,
 }: CliCardProps): ReactNode {
   const toast = useToast();
@@ -117,11 +119,44 @@ export function CliCard({
           )}
         </div>
       </div>
-      {modelOptions.length > 0 && (
+      {modelOptions.length > 0 && (() => {
+        const allSelected = modelOptions.every((opt) => enabledModels.has(opt.value));
+        return (
         <div className="mt-4">
-          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[#6b6b80]">
-            Models
-          </p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[#6b6b80]">
+              Models
+            </p>
+            <button
+              type="button"
+              onClick={() => onToggleAll(!allSelected)}
+              disabled={modelControlsDisabled}
+              className="flex items-center gap-1.5 text-[10px] font-medium text-[#6b6b80] transition-colors hover:text-[#e4e4ed] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span
+                className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                  allSelected
+                    ? "border-[#e4e4ed] bg-[#e4e4ed]"
+                    : "border-[#3e3e58] bg-transparent"
+                }`}
+              >
+                {allSelected && (
+                  <svg
+                    className="h-2.5 w-2.5 text-[#0f0f14]"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M2.5 6L5 8.5L9.5 3.5" />
+                  </svg>
+                )}
+              </span>
+              Select all
+            </button>
+          </div>
           <div className="flex flex-col gap-1.5">
             {modelOptions.map((opt) => {
               const isChecked = enabledModels.has(opt.value);
@@ -166,7 +201,8 @@ export function CliCard({
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
       {!loading && !provider.available && modelOptions.length > 0 && (
         <p className="mt-4 text-xs text-[#6b6b80]">
           Install this CLI to enable model selection.

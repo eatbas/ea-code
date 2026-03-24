@@ -10,6 +10,21 @@ export function extractPlanOnly(text: string): string {
 
   if (lower.includes("llm not set")) return "";
 
+  // Extract between structured plan markers if present.
+  const beginMarker = "--- BEGIN PLAN ---";
+  const endMarker = "--- END PLAN ---";
+  const beginIdx = cleaned.indexOf(beginMarker);
+  if (beginIdx >= 0) {
+    const afterBegin = beginIdx + beginMarker.length;
+    const endIdx = cleaned.indexOf(endMarker, afterBegin);
+    const planText = endIdx >= 0
+      ? cleaned.slice(afterBegin, endIdx).trim()
+      : cleaned.slice(afterBegin).trim();
+    if (planText) {
+      return stripPlanTailNoise(planText);
+    }
+  }
+
   const lines = cleaned.split("\n");
   let verdictLineIdx = -1;
   let verdict = "";

@@ -54,6 +54,9 @@ impl SidecarManager {
             return Ok(()); // already running
         }
 
+        // Kill any orphaned hive-api processes from a previous session.
+        kill_orphaned_hive_api(inner.port).await;
+
         // 1. Find Python
         let python = find_python().await?;
 
@@ -110,21 +113,27 @@ impl SidecarManager {
         let port_str = inner.port.to_string();
         let config_path = inner.hive_dir.join("config.toml");
 
-        let child = Command::new(&venv_py)
-            .args([
-                "-m",
-                "uvicorn",
-                "hive_api.main:app",
-                "--host",
-                "127.0.0.1",
-                "--port",
-                &port_str,
-            ])
-            .env("HIVE_API_CONFIG", &config_path)
-            .current_dir(&inner.hive_dir)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true)
+        let mut cmd = Command::new(&venv_py);
+        cmd.args([
+            "-m",
+            "uvicorn",
+            "hive_api.main:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            &port_str,
+        ])
+        .env("HIVE_API_CONFIG", &config_path)
+        .current_dir(&inner.hive_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+
+        // Create a new process group so stop() can kill the entire tree.
+        #[cfg(unix)]
+        cmd.process_group(0);
+
+        let child = cmd
             .spawn()
             .map_err(|e| format!("Failed to start hive-api: {e}"))?;
 
@@ -214,7 +223,7 @@ impl SidecarManager {
         if let Some(mut child) = inner.child.take() {
             eprintln!("[sidecar] Stopping hive-api…");
 
-            // On Windows, use taskkill for the process tree
+            // On Windows, use taskkill to kill the entire process tree
             #[cfg(target_os = "windows")]
             if let Some(pid) = child.id() {
                 let _ = Command::new("taskkill")
@@ -225,12 +234,13 @@ impl SidecarManager {
                     .await;
             }
 
-            // On Unix/macOS, send SIGTERM first for graceful shutdown
+            // On Unix/macOS, kill the entire process group so worker
+            // processes are terminated alongside the parent.
             #[cfg(not(target_os = "windows"))]
             if let Some(pid) = child.id() {
-                // SIGTERM lets uvicorn run its shutdown hooks
                 unsafe {
-                    libc::kill(pid as i32, libc::SIGTERM);
+                    // SIGTERM the process group (negative PID).
+                    libc::kill(-(pid as i32), libc::SIGTERM);
                 }
             }
 
@@ -244,11 +254,78 @@ impl SidecarManager {
                 }
                 Err(_) => {
                     eprintln!("[sidecar] hive-api did not exit in time — force killing");
+                    #[cfg(not(target_os = "windows"))]
+                    if let Some(pid) = child.id() {
+                        unsafe {
+                            libc::kill(-(pid as i32), libc::SIGKILL);
+                        }
+                    }
                     let _ = child.kill().await;
                 }
             }
         }
         Ok(())
+    }
+}
+
+/// Kill any orphaned hive-api uvicorn processes listening on the given port.
+///
+/// This handles the case where a previous app session crashed or was force-quit
+/// without properly stopping the sidecar.
+async fn kill_orphaned_hive_api(port: u16) {
+    let port_str = port.to_string();
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Use lsof to find processes listening on the port, then SIGKILL them.
+        let output = Command::new("lsof")
+            .args(["-ti", &format!("tcp:{port_str}")])
+            .output()
+            .await;
+
+        if let Ok(output) = output {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            for pid_str in pids.split_whitespace() {
+                if let Ok(pid) = pid_str.parse::<i32>() {
+                    eprintln!("[sidecar] Killing orphaned process {pid} on port {port_str}");
+                    unsafe {
+                        libc::kill(pid, libc::SIGKILL);
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Use netstat to find PIDs, then taskkill to terminate the process tree.
+        let output = Command::new("cmd")
+            .args(["/C", &format!("netstat -ano | findstr :{port_str} | findstr LISTENING")])
+            .output()
+            .await;
+
+        if let Ok(output) = output {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let mut killed: std::collections::HashSet<String> = std::collections::HashSet::new();
+            for line in stdout.lines() {
+                // netstat output: TCP  127.0.0.1:8719  0.0.0.0:0  LISTENING  12345
+                if let Some(pid_str) = line.split_whitespace().last() {
+                    if killed.contains(pid_str) {
+                        continue;
+                    }
+                    eprintln!(
+                        "[sidecar] Killing orphaned process {pid_str} on port {port_str}"
+                    );
+                    let _ = Command::new("taskkill")
+                        .args(["/T", "/F", "/PID", pid_str])
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status()
+                        .await;
+                    killed.insert(pid_str.to_string());
+                }
+            }
+        }
     }
 }
 

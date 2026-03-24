@@ -101,10 +101,27 @@ pub async fn run_review_fix_stages(
     }
 
     // --- Run reviewers (1 sequential, 2+ parallel) ---
+    // File-reference the enhanced prompt and plan to keep prompt size small.
+    let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
+        run_id, iter_num, "enhanced_prompt",
+    )
+    .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    .unwrap_or_else(|| enhanced.to_string());
+
+    let plan_ref = iter_ctx.selected_plan().and_then(|_| {
+        let kind = if iter_ctx.audited_plan.is_some() {
+            "plan_audit"
+        } else {
+            "plan"
+        };
+        crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, kind)
+            .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    });
+
     let reviewer_user_prompt = prompts::build_reviewer_user(
         &request.prompt,
-        enhanced,
-        iter_ctx.selected_plan(),
+        &enhanced_ref,
+        plan_ref.as_deref(),
         judge_feedback,
     );
     let reviewer_context = super::run_setup::compose_agent_context(
@@ -181,13 +198,20 @@ pub async fn run_review_fix_stages(
     let fix_seq = runs::next_sequence(run_id).unwrap_or(1);
     stages::append_stage_start_event(run_id, &PipelineStage::CodeFixer, iter_num, fix_seq)?;
 
+    // File-reference the merged review to keep prompt size small.
+    let review_ref = crate::orchestrator::helpers::artifact_file_path(
+        run_id, iter_num, "review",
+    )
+    .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    .unwrap_or_else(|| rev_out.clone());
+
     let fix_input = AgentInput {
         prompt: prompts::build_fixer_user(
             &request.prompt,
-            enhanced,
-            iter_ctx.selected_plan(),
+            &enhanced_ref,
+            plan_ref.as_deref(),
             selected_skills_section,
-            &rev_out,
+            &review_ref,
             judge_feedback,
             handoff_json,
         ),
@@ -539,6 +563,37 @@ async fn run_parallel_reviewers_and_merge(
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
+    // File-reference the enhanced prompt and plan to keep prompt size small.
+    let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
+        run_id, iter_num, "enhanced_prompt",
+    )
+    .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    .unwrap_or_else(|| enhanced.to_string());
+
+    let plan_ref = iter_ctx.selected_plan().and_then(|_| {
+        let kind = if iter_ctx.audited_plan.is_some() {
+            "plan_audit"
+        } else {
+            "plan"
+        };
+        crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, kind)
+            .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    });
+
+    // File-reference each individual review.
+    let review_refs: Vec<(String, String)> = review_texts
+        .iter()
+        .enumerate()
+        .map(|(i, (label, text))| {
+            let kind = format!("review_{}", i + 1);
+            let ref_text =
+                crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, &kind)
+                    .map(|p| crate::orchestrator::helpers::file_ref(&p))
+                    .unwrap_or_else(|| text.clone());
+            (label.clone(), ref_text)
+        })
+        .collect();
+
     let merger_r = execute_agent_stage(
         app,
         run_id,
@@ -548,9 +603,9 @@ async fn run_parallel_reviewers_and_merge(
         &AgentInput {
             prompt: prompts::build_review_merger_user(
                 &request.prompt,
-                enhanced,
-                &review_texts,
-                iter_ctx.selected_plan(),
+                &enhanced_ref,
+                &review_refs,
+                plan_ref.as_deref(),
             ),
             context: Some(super::run_setup::compose_agent_context(
                 prompts::build_review_merger_system(meta),

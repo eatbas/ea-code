@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect } from "react";
 import type { ApiHealth, AppSettings, ProviderInfo, ApiCliVersionInfo } from "../../types";
 import { sanitiseAgentAssignmentsForEnabledModels } from "../../utils/agentSettings";
-import { providerDisplayName } from "../shared/constants";
+import { modelOptionsFromProvider, providerDisplayName } from "../shared/constants";
 import { useToast } from "../shared/Toast";
 import { CliCard } from "./CliCard";
 
@@ -104,6 +104,32 @@ export function CliSetupView({
     onSave(sanitiseAgentAssignmentsForEnabledModels(updated));
   }
 
+  function handleToggleAll(providerName: string, selectAll: boolean): void {
+    if (actionsDisabled) return;
+    const provider = providers.find((p) => p.name === providerName);
+    if (provider && !provider.available) return;
+
+    const allValues = modelOptionsFromProvider(provider).map((opt) => opt.value);
+    const updated: Set<string> = selectAll ? new Set(allValues) : new Set();
+    const csv = serialiseEnabledModels(updated);
+    const legacyKey = LEGACY_MODEL_KEY[providerName];
+
+    let next: AppSettings;
+    if (legacyKey) {
+      next = {
+        ...settings,
+        [legacyKey]: csv,
+        providerModels: { ...settings.providerModels, [providerName]: csv },
+      };
+    } else {
+      next = {
+        ...settings,
+        providerModels: { ...settings.providerModels, [providerName]: csv },
+      };
+    }
+    onSave(sanitiseAgentAssignmentsForEnabledModels(next));
+  }
+
   async function handleUpdateCli(providerName: string): Promise<void> {
     if (actionsDisabled) return;
     await onUpdateCli(providerName);
@@ -168,6 +194,7 @@ export function CliSetupView({
                   actionsDisabled={actionsDisabled}
                   enabledModels={getEnabledModels(p.name)}
                   onToggleModel={(model) => handleToggleModel(p.name, model)}
+                  onToggleAll={(selectAll) => handleToggleAll(p.name, selectAll)}
                   onUpdate={() => void handleUpdateCli(p.name)}
                 />
               ))}

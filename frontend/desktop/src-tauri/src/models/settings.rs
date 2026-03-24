@@ -183,7 +183,7 @@ fn default_agent_retry_count() -> u32 {
 }
 
 fn default_agent_timeout_ms() -> u64 {
-    600_000 // 10 minutes
+    1_200_000 // 20 minutes
 }
 
 fn default_agent_max_turns() -> u32 {
@@ -253,7 +253,7 @@ impl Default for AppSettings {
             max_plan_revisions: 3,
             token_optimised_prompts: false,
             agent_retry_count: 1,
-            agent_timeout_ms: 600_000,
+            agent_timeout_ms: 1_200_000,
             agent_max_turns: 25,
             retention_days: 90,
             skill_selector_agent: None,

@@ -5,7 +5,7 @@ use crate::models::JudgeVerdict;
 mod plan;
 mod reviewer;
 
-pub use plan::parse_plan_audit_output;
+pub use plan::{clean_plan_output, parse_plan_audit_output};
 pub use reviewer::parse_review_findings;
 
 /// Parses the judge verdict from raw output text.
@@ -256,6 +256,57 @@ REJECTED\n\
         let findings = parse_review_findings(raw);
         assert!(findings.blockers.is_empty());
         assert!(findings.warnings.is_empty());
+    }
+
+    // --- clean_plan_output tests ---
+
+    #[test]
+    fn clean_plan_both_markers_extracts_plan() {
+        let raw = "I will explore the codebase.\nLet me check.\n\n\
+                    --- BEGIN PLAN ---\n\
+                    1. Add auth module\n\
+                    2. Create endpoints\n\
+                    --- END PLAN ---\n\n\
+                    I'm done with the plan.";
+        let cleaned = clean_plan_output(raw);
+        assert_eq!(cleaned, "1. Add auth module\n2. Create endpoints");
+    }
+
+    #[test]
+    fn clean_plan_only_begin_marker() {
+        let raw = "Thinking...\n--- BEGIN PLAN ---\n1. Step one\n2. Step two";
+        let cleaned = clean_plan_output(raw);
+        assert_eq!(cleaned, "1. Step one\n2. Step two");
+    }
+
+    #[test]
+    fn clean_plan_no_markers_strips_and_truncates() {
+        let raw = "1. Do A\n2. Do B\n3. Do C";
+        let cleaned = clean_plan_output(raw);
+        assert_eq!(cleaned, "1. Do A\n2. Do B\n3. Do C");
+    }
+
+    #[test]
+    fn clean_plan_no_markers_truncates_at_cap() {
+        let large = "x".repeat(40_000);
+        let cleaned = clean_plan_output(&large);
+        assert!(cleaned.len() < 40_000);
+        assert!(cleaned.contains("[plan truncated to 30000 chars]"));
+    }
+
+    #[test]
+    fn clean_plan_empty_between_markers_falls_back() {
+        let raw = "--- BEGIN PLAN ---\n\n--- END PLAN ---\n\nSome noise after";
+        let cleaned = clean_plan_output(raw);
+        // Falls back to strip+truncate of full output (non-empty)
+        assert!(!cleaned.trim().is_empty());
+    }
+
+    #[test]
+    fn clean_plan_strips_tail_noise_after_markers() {
+        let raw = "--- BEGIN PLAN ---\n1. Add module\ntokens used 500\n--- END PLAN ---";
+        let cleaned = clean_plan_output(raw);
+        assert_eq!(cleaned, "1. Add module");
     }
 
     #[test]

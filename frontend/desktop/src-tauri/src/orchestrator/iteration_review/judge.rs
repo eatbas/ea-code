@@ -53,12 +53,28 @@ pub async fn run_judge_stage(
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
+    // File-reference the enhanced prompt and plan to keep prompt size small.
+    let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
+        run_id, iter_num, "enhanced_prompt",
+    )
+    .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    .unwrap_or_else(|| enhanced.to_string());
+
+    let plan_ref = iter_ctx.selected_plan().and_then(|_| {
+        let kind = if iter_ctx.audited_plan.is_some() {
+            "plan_audit"
+        } else {
+            "plan"
+        };
+        crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, kind)
+            .map(|p| crate::orchestrator::helpers::file_ref(&p))
+    });
+
     let input = AgentInput {
-        // Pass compact findings instead of raw outputs
         prompt: prompts::build_judge_user(
             &request.prompt,
-            enhanced,
-            iter_ctx.selected_plan(),
+            &enhanced_ref,
+            plan_ref.as_deref(),
             &findings,
             previous_judge_output.as_deref(),
         ),
