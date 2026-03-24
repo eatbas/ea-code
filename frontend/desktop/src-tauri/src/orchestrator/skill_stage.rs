@@ -106,32 +106,37 @@ pub async fn run_skill_selection_stage(
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
+    let input = AgentInput {
+        prompt: build_skill_selector_user(
+            &request.prompt,
+            enhanced,
+            selected_plan,
+            previous_judge_output,
+            &skill_catalog_json,
+        ),
+        context: Some(compose_agent_context(
+            prompts::build_skill_selector_system(meta),
+            workspace_context,
+        )),
+        workspace_path: request.workspace_path.clone(),
+    };
+
+    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "skill_select", &input, iter_num);
+
     let result = execute_agent_stage(
         app,
         run_id,
         iter_num,
         PipelineStage::SkillSelect,
         selector,
-        &AgentInput {
-            prompt: build_skill_selector_user(
-                &request.prompt,
-                enhanced,
-                selected_plan,
-                previous_judge_output,
-                &skill_catalog_json,
-            ),
-            context: Some(compose_agent_context(
-                prompts::build_skill_selector_system(meta),
-                workspace_context,
-            )),
-            workspace_path: request.workspace_path.clone(),
-        },
+        &input,
         settings,
         cancel_flag,
         pause_flag,
         PauseHandling::ResumeWithinStage,
         Some(session_id),
         skill_output_path_str.as_deref(),
+        None,
     )
     .await;
 
@@ -229,6 +234,11 @@ fn append_stage_end_event(
         status: status.clone(),
         duration_ms,
         verdict: None,
+        input_tokens: None,
+        output_tokens: None,
+        estimated_cost_usd: None,
+        session_pair: None,
+        resumed: None,
     };
     runs::append_event(run_id, event)
 }

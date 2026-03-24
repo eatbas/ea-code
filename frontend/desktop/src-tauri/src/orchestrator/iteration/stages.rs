@@ -38,6 +38,11 @@ pub fn append_stage_end_event(
         status: status.clone(),
         duration_ms,
         verdict: None,
+        input_tokens: None,
+        output_tokens: None,
+        estimated_cost_usd: None,
+        session_pair: None,
+        resumed: None,
     };
     runs::append_event(run_id, event)
 }

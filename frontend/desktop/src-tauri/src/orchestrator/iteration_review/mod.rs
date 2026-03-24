@@ -181,33 +181,38 @@ pub async fn run_review_fix_stages(
     let fix_seq = runs::next_sequence(run_id).unwrap_or(1);
     stages::append_stage_start_event(run_id, &PipelineStage::CodeFixer, iter_num, fix_seq)?;
 
+    let fix_input = AgentInput {
+        prompt: prompts::build_fixer_user(
+            &request.prompt,
+            enhanced,
+            iter_ctx.selected_plan(),
+            selected_skills_section,
+            &rev_out,
+            judge_feedback,
+            handoff_json,
+        ),
+        context: Some(super::run_setup::compose_agent_context(
+            prompts::build_fixer_system(meta),
+            workspace_context,
+        )),
+        workspace_path: request.workspace_path.clone(),
+    };
+
+    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "code_fixer", &fix_input, iter_num);
+
     let fix_r = execute_agent_stage(
         app,
         run_id,
         iter_num,
         PipelineStage::CodeFixer,
         fixer_agent,
-        &AgentInput {
-            prompt: prompts::build_fixer_user(
-                &request.prompt,
-                enhanced,
-                iter_ctx.selected_plan(),
-                selected_skills_section,
-                &rev_out,
-                judge_feedback,
-                handoff_json,
-            ),
-            context: Some(super::run_setup::compose_agent_context(
-                prompts::build_fixer_system(meta),
-                workspace_context,
-            )),
-            workspace_path: request.workspace_path.clone(),
-        },
+        &fix_input,
         settings,
         cancel_flag,
         pause_flag,
         PauseHandling::ResumeWithinStage,
         Some(session_id),
+        None,
         None,
     )
     .await;
@@ -305,23 +310,28 @@ async fn run_single_reviewer(
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
+    let rev_input = AgentInput {
+        prompt: user_prompt.to_string(),
+        context: Some(context.to_string()),
+        workspace_path: workspace_path.to_string(),
+    };
+
+    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "review", &rev_input, iter_num);
+
     let rev_r = execute_agent_stage(
         app,
         run_id,
         iter_num,
         slot.stage.clone(),
         &slot.backend,
-        &AgentInput {
-            prompt: user_prompt.to_string(),
-            context: Some(context.to_string()),
-            workspace_path: workspace_path.to_string(),
-        },
+        &rev_input,
         settings,
         cancel_flag,
         pause_flag,
         PauseHandling::ResumeWithinStage,
         Some(session_id),
         rev_output_path_str.as_deref(),
+        None,
     )
     .await;
     let rev_out = rev_r.output.clone();
@@ -429,6 +439,7 @@ async fn run_parallel_reviewers_and_merge(
                             PauseHandling::ReturnPausedError,
                             Some(&sid),
                             output_path_str.as_deref(),
+                            None,
                         )
                         .await
                     }),
@@ -553,6 +564,7 @@ async fn run_parallel_reviewers_and_merge(
         PauseHandling::ResumeWithinStage,
         Some(session_id),
         merger_output_path_str.as_deref(),
+        None,
     )
     .await;
     let merged_out = merger_r.output.clone();

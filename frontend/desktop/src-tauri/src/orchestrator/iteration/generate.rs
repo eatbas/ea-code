@@ -47,32 +47,37 @@ pub async fn run_generate_stage(
     let gen_seq = runs::next_sequence(run_id).unwrap_or(1);
     super::stages::append_stage_start_event(run_id, &PipelineStage::Coder, iter_num, gen_seq)?;
 
+    let input = AgentInput {
+        prompt: prompts::build_generator_user(
+            &request.prompt,
+            enhanced,
+            iter_ctx.selected_plan(),
+            selected_skills_section,
+            judge_feedback,
+            handoff_json,
+        ),
+        context: Some(crate::orchestrator::run_setup::compose_agent_context(
+            prompts::build_generator_system(meta),
+            workspace_context,
+        )),
+        workspace_path: request.workspace_path.clone(),
+    };
+
+    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "coder", &input, iter_num);
+
     let gen_r = execute_agent_stage(
         app,
         run_id,
         iter_num,
         PipelineStage::Coder,
         generator_agent,
-        &AgentInput {
-            prompt: prompts::build_generator_user(
-                &request.prompt,
-                enhanced,
-                iter_ctx.selected_plan(),
-                selected_skills_section,
-                judge_feedback,
-                handoff_json,
-            ),
-            context: Some(crate::orchestrator::run_setup::compose_agent_context(
-                prompts::build_generator_system(meta),
-                workspace_context,
-            )),
-            workspace_path: request.workspace_path.clone(),
-        },
+        &input,
         settings,
         cancel_flag,
         pause_flag,
         PauseHandling::ResumeWithinStage,
         Some(session_id),
+        None,
         None,
     )
     .await;

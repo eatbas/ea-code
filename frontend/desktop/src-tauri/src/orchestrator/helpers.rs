@@ -1,6 +1,7 @@
 //! Utility functions for the orchestration pipeline:
 //! agent dispatch, event emission, cancellation, and context persistence.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -47,11 +48,20 @@ pub(crate) fn looks_like_output_file_instruction(text: &str) -> bool {
         && lower.contains("plan.md")
 }
 
+/// Result of dispatching an agent, including session continuity metadata.
+pub struct DispatchResult {
+    pub output: AgentOutput,
+    pub provider_session_ref: Option<String>,
+}
+
 /// Dispatches to the appropriate agent runner based on the backend setting.
 ///
 /// When `output_file` is provided, the agent's prompt is augmented with an
 /// instruction to write its output to that file. After the agent finishes,
 /// the file is read and its content becomes the returned `AgentOutput`.
+///
+/// When `session_ref` is provided, the agent continues an existing CLI
+/// session (mode "resume") instead of starting a fresh one.
 pub async fn dispatch_agent(
     backend: &AgentBackend,
     model: &str,
@@ -62,7 +72,8 @@ pub async fn dispatch_agent(
     run_id: &str,
     stage: PipelineStage,
     output_file: Option<&str>,
-) -> Result<AgentOutput, String> {
+    session_ref: Option<&str>,
+) -> Result<DispatchResult, String> {
     if model.is_empty() {
         eprintln!(
             "[warn] No model configured for stage {:?} with backend {:?}; the CLI will use its default.",
@@ -110,6 +121,7 @@ pub async fn dispatch_agent(
         app,
         run_id,
         stage.clone(),
+        session_ref,
     )
     .await;
 
@@ -127,7 +139,9 @@ pub async fn dispatch_agent(
         }
     }
 
-    let result = api_result.map(|r| r.output)?;
+    let api_ok = api_result?;
+    let result = api_ok.output;
+    let captured_session_ref = api_ok.provider_session_ref;
 
     // For text stages, persist the final textual artifact even when the CLI
     // only emitted to stdout. Native file-output is preferred when available.
@@ -161,12 +175,18 @@ pub async fn dispatch_agent(
         if let Some(artifact_path) = output_file {
             let _ = std::fs::write(artifact_path, &final_text);
         }
-        return Ok(AgentOutput {
-            raw_text: final_text,
+        return Ok(DispatchResult {
+            output: AgentOutput {
+                raw_text: final_text,
+            },
+            provider_session_ref: captured_session_ref,
         });
     }
 
-    Ok(result)
+    Ok(DispatchResult {
+        output: result,
+        provider_session_ref: captured_session_ref,
+    })
 }
 
 /// Resolves the model to use for a given pipeline stage from per-stage settings.
@@ -340,6 +360,22 @@ pub fn emit_artifact(app: &AppHandle, run_id: &str, kind: &str, content: &str, i
     }
 }
 
+/// Persists the full prompt sent to an agent as a `{kind}_input.md` artifact.
+///
+/// This captures the complete system + user prompt for debugging and
+/// reproducibility. Does not emit a frontend event — input prompts are
+/// only persisted to disk.
+pub fn emit_prompt_artifact(run_id: &str, kind: &str, input: &AgentInput, iteration: u32) {
+    let mut content = input.prompt.clone();
+    if let Some(ref ctx) = input.context {
+        content = format!("{ctx}\n\n---\n\n{content}");
+    }
+    let input_kind = format!("{kind}_input");
+    if let Err(e) = runs::write_artifact(run_id, iteration, &input_kind, &content) {
+        eprintln!("Warning: Failed to persist prompt artifact '{input_kind}': {e}");
+    }
+}
+
 pub fn is_cancelled(cancel_flag: &Arc<AtomicBool>) -> bool {
     cancel_flag.load(Ordering::SeqCst)
 }
@@ -394,6 +430,29 @@ pub fn push_cancel_iteration(run: &mut PipelineRun, iter_num: u32, stages: Vec<S
     run.status = PipelineStatus::Cancelled;
 }
 
+/// Returns the session pair name for a pipeline stage.
+///
+/// Stages within the same pair share a CLI session for context continuity.
+/// Currently: Plan+PlanAudit+Review+ReviewMerge share "plan_review",
+/// Coder+CodeFixer share "code_fix", others get their own.
+pub fn session_pair_for_stage(stage: &PipelineStage) -> &'static str {
+    match stage {
+        PipelineStage::Plan
+        | PipelineStage::ExtraPlan(_)
+        | PipelineStage::PlanAudit
+        | PipelineStage::CodeReviewer
+        | PipelineStage::ExtraReviewer(_)
+        | PipelineStage::ReviewMerge => "plan_review",
+
+        PipelineStage::Coder | PipelineStage::CodeFixer => "code_fix",
+        PipelineStage::PromptEnhance => "enhance",
+        PipelineStage::Judge => "judge",
+        PipelineStage::SkillSelect => "skill_select",
+        PipelineStage::ExecutiveSummary => "executive_summary",
+        PipelineStage::DirectTask => "direct_task",
+    }
+}
+
 /// Maps an AgentBackend to the hive-api provider string.
 pub fn backend_to_provider_str(backend: &AgentBackend) -> &'static str {
     match backend {
@@ -409,4 +468,50 @@ pub fn backend_to_provider_str(backend: &AgentBackend) -> &'static str {
 #[allow(dead_code)]
 pub fn backend_to_db_str(backend: &AgentBackend) -> &'static str {
     backend_to_provider_str(backend)
+}
+
+/// Tracks CLI session references across pipeline stages within a run.
+///
+/// Session refs are looked up before dispatch and stored after.
+/// The tracker persists to `cli_sessions.json` after each update.
+pub struct CliSessionTracker {
+    run_id: String,
+    sessions: HashMap<String, String>, // pair_name -> provider_session_ref
+}
+
+impl CliSessionTracker {
+    pub fn new(run_id: String) -> Self {
+        Self {
+            run_id,
+            sessions: HashMap::new(),
+        }
+    }
+
+    /// Gets the session ref for a stage's pair, if one exists.
+    #[allow(dead_code)]
+    pub fn get_ref_for_stage(&self, stage: &PipelineStage) -> Option<&str> {
+        let pair = session_pair_for_stage(stage);
+        self.sessions.get(pair).map(|s| s.as_str())
+    }
+
+    /// Stores a session ref returned from a stage and persists to disk.
+    pub fn store_ref_from_result(&mut self, result: &StageResult) {
+        if let Some(ref session_ref) = result.provider_session_ref {
+            let pair = session_pair_for_stage(&result.stage);
+            self.sessions.insert(pair.to_string(), session_ref.clone());
+
+            // Persist to disk (best-effort)
+            let entry = CliSessionEntry {
+                session_ref: session_ref.clone(),
+                backend: AgentBackend::Claude, // Will be refined when backend is passed
+                model: String::new(),
+                stages_used: vec![result.stage.clone()],
+                created_at: crate::storage::now_rfc3339(),
+                last_used_at: crate::storage::now_rfc3339(),
+            };
+            if let Err(e) = crate::storage::runs::update_cli_session(&self.run_id, pair, entry) {
+                eprintln!("Warning: Failed to persist CLI session ref for {pair}: {e}");
+            }
+        }
+    }
 }

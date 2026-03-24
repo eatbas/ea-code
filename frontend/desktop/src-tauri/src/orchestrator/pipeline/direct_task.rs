@@ -79,6 +79,7 @@ pub async fn run_direct_task(
                     run_id,
                     PipelineStage::DirectTask,
                     None,
+                    None,
                 )
                 .await
             } else {
@@ -93,6 +94,7 @@ pub async fn run_direct_task(
                         app,
                         run_id,
                         PipelineStage::DirectTask,
+                        None,
                         None,
                     ),
                 )
@@ -137,9 +139,9 @@ pub async fn run_direct_task(
     let duration_ms = start.elapsed().as_millis() as u64;
 
     let (status, output, error, verdict) = match result {
-        Ok(out) => (
+        Ok(dr) => (
             StageStatus::Completed,
-            out.raw_text,
+            dr.output.raw_text,
             None,
             Some(JudgeVerdict::Complete),
         ),
@@ -178,6 +180,11 @@ pub async fn run_direct_task(
         },
         duration_ms,
         verdict: verdict.clone(),
+        input_tokens: None,
+        output_tokens: None,
+        estimated_cost_usd: None,
+        session_pair: None,
+        resumed: None,
     };
     let _ = runs::append_event(run_id, stage_end);
 
@@ -189,6 +196,9 @@ pub async fn run_direct_task(
             output,
             duration_ms,
             error: error.clone(),
+            provider_session_ref: None,
+            session_pair: None,
+            resumed: None,
         }],
         verdict,
         judge_reasoning: None,

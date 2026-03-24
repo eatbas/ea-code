@@ -56,6 +56,7 @@ pub async fn run_iteration(
     run: &mut PipelineRun,
     carry: &mut IterationCarryover,
     workspace_context: &str,
+    tracker: &mut crate::orchestrator::helpers::CliSessionTracker,
 ) -> Result<bool, String> {
     run.current_iteration = iter_num;
     let mut stages: Vec<StageResult> = Vec::new();
@@ -124,6 +125,11 @@ pub async fn run_iteration(
     iter_ctx.enhanced_prompt = enhanced.clone();
     carry.persistent_enhanced_prompt = Some(enhanced.clone());
 
+    // Store session refs from prompt enhance stage
+    for stage_result in stages.iter() {
+        tracker.store_ref_from_result(stage_result);
+    }
+
     if is_cancelled(cancel_flag) {
         push_cancel_iteration(run, iter_num, stages);
         stages::update_run_summary(run_id, session_id, run)?;
@@ -150,6 +156,11 @@ pub async fn run_iteration(
     )
     .await?;
     carry.last_approved_plan = iter_ctx.selected_plan().map(|plan| plan.to_string());
+
+    // Store session refs from planning stages
+    for stage_result in stages.iter() {
+        tracker.store_ref_from_result(stage_result);
+    }
 
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         stages::update_run_summary(run_id, session_id, run)?;
@@ -201,6 +212,11 @@ pub async fn run_iteration(
     )
     .await?;
 
+    // Store session refs from skill selection stage
+    for stage_result in stages.iter() {
+        tracker.store_ref_from_result(stage_result);
+    }
+
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         stages::update_run_summary(run_id, session_id, run)?;
         return Ok(true);
@@ -242,6 +258,11 @@ pub async fn run_iteration(
         return Ok(true);
     }
 
+    // Store session refs from generate stage
+    for stage_result in stages.iter() {
+        tracker.store_ref_from_result(stage_result);
+    }
+
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         stages::update_run_summary(run_id, session_id, run)?;
         return Ok(true);
@@ -270,13 +291,18 @@ pub async fn run_iteration(
     )
     .await?;
 
+    // Store session refs from review and fix stages
+    for stage_result in stages.iter() {
+        tracker.store_ref_from_result(stage_result);
+    }
+
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
         stages::update_run_summary(run_id, session_id, run)?;
         return Ok(true);
     }
 
     // --- 9. Judge ---
-    run_judge_stage(
+    let judge_result = run_judge_stage(
         app,
         request,
         settings,
@@ -294,5 +320,12 @@ pub async fn run_iteration(
         &mut carry.last_handoff,
         workspace_context,
     )
-    .await
+    .await;
+
+    // Store session refs from judge stage
+    for stage_result in stages.iter() {
+        tracker.store_ref_from_result(stage_result);
+    }
+
+    judge_result
 }

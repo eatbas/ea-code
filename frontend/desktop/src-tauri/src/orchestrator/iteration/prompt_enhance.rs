@@ -46,24 +46,29 @@ pub async fn run_prompt_enhance_stage(
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
+    let input = AgentInput {
+        prompt: prompts::build_prompt_enhancer_user(&request.prompt),
+        // Keep prompt enhancement rewrite-only; avoid workspace execution context here.
+        context: Some(prompts::build_prompt_enhancer_system(meta)),
+        workspace_path: request.workspace_path.clone(),
+    };
+
+    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "enhanced_prompt", &input, iter_num);
+
     let pe_result = execute_agent_stage(
         app,
         run_id,
         iter_num,
         PipelineStage::PromptEnhance,
         prompt_enhancer_agent,
-        &AgentInput {
-            prompt: prompts::build_prompt_enhancer_user(&request.prompt),
-            // Keep prompt enhancement rewrite-only; avoid workspace execution context here.
-            context: Some(prompts::build_prompt_enhancer_system(meta)),
-            workspace_path: request.workspace_path.clone(),
-        },
+        &input,
         settings,
         cancel_flag,
         pause_flag,
         PauseHandling::ResumeWithinStage,
         Some(session_id),
         output_path_str.as_deref(),
+        None,
     )
     .await;
 

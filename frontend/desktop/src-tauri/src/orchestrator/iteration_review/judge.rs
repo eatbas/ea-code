@@ -53,33 +53,38 @@ pub async fn run_judge_stage(
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
+    let input = AgentInput {
+        // Pass compact findings instead of raw outputs
+        prompt: prompts::build_judge_user(
+            &request.prompt,
+            enhanced,
+            iter_ctx.selected_plan(),
+            &findings,
+            previous_judge_output.as_deref(),
+        ),
+        context: Some(crate::orchestrator::run_setup::compose_agent_context(
+            prompts::build_judge_system(meta),
+            workspace_context,
+        )),
+        workspace_path: request.workspace_path.clone(),
+    };
+
+    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "judge", &input, iter_num);
+
     let judge_r = execute_agent_stage(
         app,
         run_id,
         iter_num,
         PipelineStage::Judge,
         judge_agent,
-        &AgentInput {
-            // Pass compact findings instead of raw outputs
-            prompt: prompts::build_judge_user(
-                &request.prompt,
-                enhanced,
-                iter_ctx.selected_plan(),
-                &findings,
-                previous_judge_output.as_deref(),
-            ),
-            context: Some(crate::orchestrator::run_setup::compose_agent_context(
-                prompts::build_judge_system(meta),
-                workspace_context,
-            )),
-            workspace_path: request.workspace_path.clone(),
-        },
+        &input,
         settings,
         cancel_flag,
         pause_flag,
         PauseHandling::ResumeWithinStage,
         Some(session_id),
         judge_output_path_str.as_deref(),
+        None,
     )
     .await;
     let judge_out = judge_r.output.clone();

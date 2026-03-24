@@ -124,6 +124,7 @@ pub async fn execute_agent_stage(
     pause_handling: PauseHandling,
     session_id: Option<&str>,
     output_file: Option<&str>,
+    cli_session_ref: Option<&str>,
 ) -> StageResult {
     let max_attempts = 1 + settings.agent_retry_count;
     let start = Instant::now();
@@ -168,6 +169,7 @@ pub async fn execute_agent_stage(
                         run_id,
                         stage_for_call.clone(),
                         output_file,
+                        cli_session_ref,
                     )
                     .await
                 } else {
@@ -183,6 +185,7 @@ pub async fn execute_agent_stage(
                             run_id,
                             stage_for_call.clone(),
                             output_file,
+                            cli_session_ref,
                         ),
                     )
                     .await
@@ -223,10 +226,10 @@ pub async fn execute_agent_stage(
         };
 
         match dispatch_result {
-            Ok(output) => {
+            Ok(dr) => {
                 if matches!(stage.execution_intent(), StageExecutionIntent::Text) {
                     if let Err(validation_error) =
-                        validate_text_stage_output(&stage, &output.raw_text)
+                        validate_text_stage_output(&stage, &dr.output.raw_text)
                     {
                         last_error = validation_error;
                         continue;
@@ -244,9 +247,12 @@ pub async fn execute_agent_stage(
                 return StageResult {
                     stage,
                     status: StageStatus::Completed,
-                    output: output.raw_text,
+                    output: dr.output.raw_text,
                     duration_ms,
                     error: None,
+                    provider_session_ref: dr.provider_session_ref,
+                    session_pair: None,
+                    resumed: Some(cli_session_ref.is_some()),
                 };
             }
             Err(e) => {
@@ -278,6 +284,9 @@ pub async fn execute_agent_stage(
         output: String::new(),
         duration_ms,
         error: Some(last_error),
+        provider_session_ref: None,
+        session_pair: None,
+        resumed: None,
     }
 }
 
@@ -293,6 +302,7 @@ pub async fn execute_run_level_agent_stage(
     settings: &AppSettings,
     session_id: Option<&str>,
     output_file: Option<&str>,
+    cli_session_ref: Option<&str>,
 ) -> StageResult {
     let start = Instant::now();
     emit_stage(app, run_id, &stage, &StageStatus::Running, iteration_num);
@@ -309,6 +319,7 @@ pub async fn execute_run_level_agent_stage(
             run_id,
             stage.clone(),
             output_file,
+            cli_session_ref,
         )
         .await
     } else {
@@ -324,6 +335,7 @@ pub async fn execute_run_level_agent_stage(
                 run_id,
                 stage.clone(),
                 output_file,
+                cli_session_ref,
             ),
         )
         .await
@@ -337,9 +349,10 @@ pub async fn execute_run_level_agent_stage(
     };
 
     match dispatch_result {
-        Ok(output) => {
+        Ok(dr) => {
             if matches!(stage.execution_intent(), StageExecutionIntent::Text) {
-                if let Err(validation_error) = validate_text_stage_output(&stage, &output.raw_text)
+                if let Err(validation_error) =
+                    validate_text_stage_output(&stage, &dr.output.raw_text)
                 {
                     let duration_ms = start.elapsed().as_millis() as u64;
                     emit_stage_with_duration(
@@ -356,6 +369,9 @@ pub async fn execute_run_level_agent_stage(
                         output: String::new(),
                         duration_ms,
                         error: Some(validation_error),
+                        provider_session_ref: dr.provider_session_ref,
+                        session_pair: None,
+                        resumed: None,
                     };
                 }
             }
@@ -371,9 +387,12 @@ pub async fn execute_run_level_agent_stage(
             StageResult {
                 stage,
                 status: StageStatus::Completed,
-                output: output.raw_text,
+                output: dr.output.raw_text,
                 duration_ms,
                 error: None,
+                provider_session_ref: dr.provider_session_ref,
+                session_pair: None,
+                resumed: Some(cli_session_ref.is_some()),
             }
         }
         Err(e) => {
@@ -392,6 +411,9 @@ pub async fn execute_run_level_agent_stage(
                 output: String::new(),
                 duration_ms,
                 error: Some(e),
+                provider_session_ref: None,
+                session_pair: None,
+                resumed: None,
             }
         }
     }
@@ -449,6 +471,11 @@ pub fn execute_skipped_stage(
         status: StageEndStatus::Skipped,
         duration_ms: 0,
         verdict: None,
+        input_tokens: None,
+        output_tokens: None,
+        estimated_cost_usd: None,
+        session_pair: None,
+        resumed: None,
     };
     let _ = runs::append_event(run_id, event);
 
@@ -458,5 +485,8 @@ pub fn execute_skipped_stage(
         output: reason.to_string(),
         duration_ms: 0,
         error: None,
+        provider_session_ref: None,
+        session_pair: None,
+        resumed: None,
     }
 }

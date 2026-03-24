@@ -159,6 +159,7 @@ pub async fn run_pipeline(
         .await?;
     } else {
         let mut carry = IterationCarryover::new();
+        let mut session_tracker = crate::orchestrator::helpers::CliSessionTracker::new(run_id.clone());
 
         for iter_num in 1..=settings.max_iterations {
             if wait_if_paused(&pause_flag, &cancel_flag).await {
@@ -183,6 +184,7 @@ pub async fn run_pipeline(
                 &mut run,
                 &mut carry,
                 &shared_context,
+                &mut session_tracker,
             )
             .await?;
 

@@ -19,8 +19,9 @@ pub use questions::*;
 pub use settings::*;
 #[allow(unused_imports)]
 pub use skills::Skill;
+#[allow(unused_imports)]
 pub use storage::{
-    ChatMessage, ChatRole, GitBaseline, McpConfigFile, McpServerConfig, ProjectEntry,
-    ReviewFindings, RunDetail, RunFileStatus, RunSummary, SessionDetail, SessionMeta, SkillFile,
-    StorageStats,
+    ChatMessage, ChatRole, CliSessionEntry, CliSessionsFile, GitBaseline, McpConfigFile,
+    McpServerConfig, ProjectEntry, ReviewFindings, RunDetail, RunFileStatus, RunSummary,
+    SessionDetail, SessionMeta, SkillFile, StorageStats,
 };

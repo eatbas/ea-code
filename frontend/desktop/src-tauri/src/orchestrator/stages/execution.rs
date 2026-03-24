@@ -47,6 +47,11 @@ pub fn append_stage_end_event(
         status: stage_end_status,
         duration_ms,
         verdict: None,
+        input_tokens: None,
+        output_tokens: None,
+        estimated_cost_usd: None,
+        session_pair: None,
+        resumed: None,
     };
 
     if let Err(e) = runs::append_event(run_id, event) {

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use super::agents::AgentBackend;
 use super::events::RunEvent;
 use super::pipeline::{JudgeVerdict, PipelineStage, PipelineStatus};
 
@@ -225,4 +226,35 @@ pub struct ChatMessage {
     pub timestamp: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_id: Option<String>,
+}
+
+/// Entry for a single CLI session within a pipeline run.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliSessionEntry {
+    /// Hive-api provider session reference for resume.
+    pub session_ref: String,
+    pub backend: AgentBackend,
+    pub model: String,
+    pub stages_used: Vec<PipelineStage>,
+    pub created_at: String,
+    pub last_used_at: String,
+}
+
+/// File-level structure for cli_sessions.json per run.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliSessionsFile {
+    pub version: u32,
+    /// Maps session pair name (e.g. "plan_review", "code_fix") to session entry.
+    pub sessions: std::collections::HashMap<String, CliSessionEntry>,
+}
+
+impl Default for CliSessionsFile {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            sessions: std::collections::HashMap::new(),
+        }
+    }
 }

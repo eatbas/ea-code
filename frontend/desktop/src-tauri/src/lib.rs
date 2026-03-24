@@ -55,6 +55,11 @@ pub fn run() {
         }
     }
 
+    // Startup cleanup: remove stale temp files, dead MCP configs, legacy SQLite, etc.
+    if let Err(e) = storage::cleanup::cleanup_stale_temp_files() {
+        eprintln!("Warning: startup temp file cleanup failed: {e}");
+    }
+
     // Sync built-in MCP catalog
     if let Err(e) = storage::mcp::sync_builtin_catalog() {
         eprintln!("Warning: MCP catalog sync failed: {e}");

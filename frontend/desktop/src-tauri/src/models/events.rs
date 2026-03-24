@@ -66,6 +66,21 @@ pub enum RunEvent {
         /// Judge verdict, if this was a judge stage.
         #[serde(skip_serializing_if = "Option::is_none")]
         verdict: Option<JudgeVerdict>,
+        /// Input token count for this stage (when available from provider).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        input_tokens: Option<u64>,
+        /// Output token count for this stage (when available from provider).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        output_tokens: Option<u64>,
+        /// Estimated cost in USD for this stage (when available).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        estimated_cost_usd: Option<f64>,
+        /// Which session pair was used (e.g. "plan_review", "code_fix").
+        #[serde(skip_serializing_if = "Option::is_none")]
+        session_pair: Option<String>,
+        /// Whether this stage resumed an existing CLI session.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        resumed: Option<bool>,
     },
 
     /// An iteration loop completes with judge verdict.

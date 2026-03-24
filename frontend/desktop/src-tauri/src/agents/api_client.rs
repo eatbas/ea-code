@@ -17,6 +17,8 @@ pub struct ChatRequest {
     pub prompt: String,
     pub stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_session_ref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_options: Option<serde_json::Value>,
 }
 
@@ -26,6 +28,13 @@ struct CompletedData {
     final_text: String,
     #[allow(dead_code)]
     exit_code: i32,
+    provider_session_ref: Option<String>,
+}
+
+/// SSE `provider_session` event data from hive-api.
+#[derive(Deserialize)]
+struct ProviderSessionData {
+    provider_session_ref: String,
 }
 
 /// SSE `failed` event data from hive-api.
@@ -52,10 +61,14 @@ struct OutputDeltaData {
 pub struct ApiAgentResult {
     pub output: AgentOutput,
     pub job_id: String,
+    pub provider_session_ref: Option<String>,
 }
 
 /// Send a prompt to hive-api via SSE streaming, emitting `pipeline:log`
 /// events for each output chunk, and return the final aggregated text.
+///
+/// When `session_ref` is provided, the request uses `mode: "resume"` to
+/// continue an existing CLI session instead of starting a fresh one.
 pub async fn run_api_agent(
     base_url: &str,
     input: &AgentInput,
@@ -64,16 +77,19 @@ pub async fn run_api_agent(
     app: &AppHandle,
     run_id: &str,
     stage: PipelineStage,
+    session_ref: Option<&str>,
 ) -> Result<ApiAgentResult, String> {
     let full_prompt = crate::agents::base::build_full_prompt(input);
 
+    let mode = if session_ref.is_some() { "resume" } else { "new" };
     let request = ChatRequest {
         provider: provider.to_string(),
         model: model.to_string(),
         workspace_path: input.workspace_path.clone(),
-        mode: "new".to_string(),
+        mode: mode.to_string(),
         prompt: full_prompt,
         stream: true,
+        provider_session_ref: session_ref.map(|s| s.to_string()),
         provider_options: None,
     };
 
@@ -101,6 +117,7 @@ pub async fn run_api_agent(
     let mut buffer = String::new();
     let mut accumulated_text = String::new();
     let mut job_id = String::new();
+    let mut session_ref_out: Option<String> = None;
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| format!("SSE stream error: {e}"))?;
@@ -140,15 +157,27 @@ pub async fn run_api_agent(
                             }
                         }
                     }
+                    "provider_session" => {
+                        if let Ok(ps) =
+                            serde_json::from_str::<ProviderSessionData>(&data)
+                        {
+                            session_ref_out = Some(ps.provider_session_ref);
+                        }
+                    }
                     "completed" => {
                         if let Ok(completed) =
                             serde_json::from_str::<CompletedData>(&data)
                         {
+                            // Prefer session ref from completed event; fall back to earlier capture.
+                            let final_ref = completed
+                                .provider_session_ref
+                                .or(session_ref_out);
                             return Ok(ApiAgentResult {
                                 output: AgentOutput {
                                     raw_text: completed.final_text,
                                 },
                                 job_id,
+                                provider_session_ref: final_ref,
                             });
                         }
                     }
@@ -162,7 +191,7 @@ pub async fn run_api_agent(
                         return Err("Agent was stopped/cancelled".into());
                     }
                     _ => {
-                        // provider_session, etc. — ignore for now
+                        // Unknown event types — skip silently.
                     }
                 }
             }
@@ -176,6 +205,7 @@ pub async fn run_api_agent(
                 raw_text: accumulated_text,
             },
             job_id,
+            provider_session_ref: session_ref_out,
         })
     } else {
         Err("SSE stream ended without completing".into())

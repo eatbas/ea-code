@@ -74,6 +74,7 @@ pub async fn run_executive_summary(
         settings,
         Some(session_id),
         output_path_str.as_deref(),
+        None,
     )
     .await;
 

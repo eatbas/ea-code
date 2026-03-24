@@ -2,6 +2,7 @@ use crate::models::{RunEvent, RunFileStatus, RunSummary};
 
 use super::{add_run_to_index, atomic_write, get_session_for_run, now_rfc3339, validate_id};
 
+pub mod cli_sessions;
 pub mod events;
 pub mod git;
 
@@ -218,14 +219,14 @@ pub fn compute_files_changed(run_id: &str) -> Result<Vec<String>, String> {
 
 // ---- Artifact persistence ----
 
-/// Returns the artifacts directory path for a run.
-fn artifacts_dir(session_id: &str, run_id: &str) -> Result<std::path::PathBuf, String> {
-    Ok(run_dir(session_id, run_id)?.join("artifacts"))
+/// Returns the iteration directory path: .../runs/{rid}/iterations/iter-{N}
+fn iteration_dir(session_id: &str, run_id: &str, iteration: u32) -> Result<std::path::PathBuf, String> {
+    Ok(run_dir(session_id, run_id)?.join("iterations").join(format!("iter-{iteration}")))
 }
 
 /// Returns the absolute path where an agent should write its output artifact.
 ///
-/// Creates the artifacts directory if needed. Returns a `.md` file path.
+/// Creates the iteration directory if needed. Returns a `.md` file path.
 /// Callers pass this path to the agent prompt so it writes directly there.
 pub fn artifact_output_path(
     run_id: &str,
@@ -234,17 +235,17 @@ pub fn artifact_output_path(
 ) -> Result<std::path::PathBuf, String> {
     validate_id(run_id)?;
     let session_id = get_session_for_run(run_id)?;
-    let dir = artifacts_dir(&session_id, run_id)?;
+    let dir = iteration_dir(&session_id, run_id, iteration)?;
     std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Failed to create artifacts directory: {e}"))?;
-    let filename = format!("{iteration}_{kind}.md");
+        .map_err(|e| format!("Failed to create iteration directory: {e}"))?;
+    let filename = format!("{kind}.md");
     Ok(dir.join(filename))
 }
 
 /// Writes an artifact file to disk.
 ///
-/// File naming: `{iteration}_{kind}.md`
-/// Creates the artifacts directory if it does not exist.
+/// File naming: `iterations/iter-{N}/{kind}.md`
+/// Creates the iteration directory if it does not exist.
 pub fn write_artifact(
     run_id: &str,
     iteration: u32,
@@ -253,11 +254,11 @@ pub fn write_artifact(
 ) -> Result<(), String> {
     validate_id(run_id)?;
     let session_id = get_session_for_run(run_id)?;
-    let dir = artifacts_dir(&session_id, run_id)?;
+    let dir = iteration_dir(&session_id, run_id, iteration)?;
     std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Failed to create artifacts directory: {e}"))?;
+        .map_err(|e| format!("Failed to create iteration directory: {e}"))?;
 
-    let filename = format!("{iteration}_{kind}.md");
+    let filename = format!("{kind}.md");
     let path = dir.join(&filename);
     std::fs::write(&path, content)
         .map_err(|e| format!("Failed to write artifact {filename}: {e}"))?;
@@ -266,47 +267,81 @@ pub fn write_artifact(
 
 /// Reads all artifacts for a run, returning a map of `kind` to `content`.
 ///
+/// Supports both the new `iterations/iter-N/{kind}.md` layout and the legacy
+/// `artifacts/{iter}_{kind}.md` layout for backward compatibility.
 /// If multiple iterations wrote the same kind, the latest iteration wins.
 pub fn read_all_artifacts(
     run_id: &str,
 ) -> Result<std::collections::HashMap<String, String>, String> {
     validate_id(run_id)?;
     let session_id = get_session_for_run(run_id)?;
-    let dir = artifacts_dir(&session_id, run_id)?;
+    let base = run_dir(&session_id, run_id)?;
 
     let mut artifacts = std::collections::HashMap::new();
     let mut iter_tracker: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
 
-    if !dir.exists() {
-        return Ok(artifacts);
-    }
-
-    let entries =
-        std::fs::read_dir(&dir).map_err(|e| format!("Failed to read artifacts directory: {e}"))?;
-
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read artifact entry: {e}"))?;
-        let path = entry.path();
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        if ext != "md" && ext != "txt" {
-            continue;
-        }
-        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-            if let Some(underscore_pos) = stem.find('_') {
-                let iter_num: u32 = stem[..underscore_pos].parse().unwrap_or(0);
-                let kind = &stem[underscore_pos + 1..];
-                if kind.is_empty() {
+    // New layout: iterations/iter-N/{kind}.md
+    let iters_dir = base.join("iterations");
+    if iters_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&iters_dir) {
+            for entry in entries.flatten() {
+                let dir_path = entry.path();
+                if !dir_path.is_dir() {
                     continue;
                 }
-                let existing_iter = iter_tracker.get(kind).copied().unwrap_or(0);
-                if iter_num >= existing_iter {
-                    match std::fs::read_to_string(&path) {
-                        Ok(content) => {
-                            artifacts.insert(kind.to_string(), content);
-                            iter_tracker.insert(kind.to_string(), iter_num);
+                let dir_name = match dir_path.file_name().and_then(|n| n.to_str()) {
+                    Some(n) => n.to_string(),
+                    None => continue,
+                };
+                let iter_num: u32 = match dir_name.strip_prefix("iter-").and_then(|s| s.parse().ok()) {
+                    Some(n) => n,
+                    None => continue,
+                };
+                if let Ok(files) = std::fs::read_dir(&dir_path) {
+                    for file_entry in files.flatten() {
+                        let file_path = file_entry.path();
+                        let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                        if ext != "md" && ext != "txt" {
+                            continue;
                         }
-                        Err(e) => {
-                            eprintln!("Warning: Failed to read artifact {}: {e}", path.display());
+                        if let Some(kind) = file_path.file_stem().and_then(|s| s.to_str()) {
+                            let existing_iter = iter_tracker.get(kind).copied().unwrap_or(0);
+                            if iter_num >= existing_iter {
+                                if let Ok(content) = std::fs::read_to_string(&file_path) {
+                                    artifacts.insert(kind.to_string(), content);
+                                    iter_tracker.insert(kind.to_string(), iter_num);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Legacy layout: artifacts/{iter}_{kind}.md
+    let legacy_dir = base.join("artifacts");
+    if legacy_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&legacy_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                if ext != "md" && ext != "txt" {
+                    continue;
+                }
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    if let Some(underscore_pos) = stem.find('_') {
+                        let iter_num: u32 = stem[..underscore_pos].parse().unwrap_or(0);
+                        let kind = &stem[underscore_pos + 1..];
+                        if kind.is_empty() {
+                            continue;
+                        }
+                        let existing_iter = iter_tracker.get(kind).copied().unwrap_or(0);
+                        if iter_num >= existing_iter {
+                            if let Ok(content) = std::fs::read_to_string(&path) {
+                                artifacts.insert(kind.to_string(), content);
+                                iter_tracker.insert(kind.to_string(), iter_num);
+                            }
                         }
                     }
                 }
@@ -318,5 +353,6 @@ pub fn read_all_artifacts(
 }
 
 /// Re-exports for backward compatibility.
+pub use cli_sessions::{read_cli_sessions, update_cli_session, write_cli_sessions};
 pub use events::{append_event, next_sequence, read_events};
 pub use git::capture_git_baseline;

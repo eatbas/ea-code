@@ -251,26 +251,31 @@ pub async fn run_planning_stages(
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
+    let pa_input = AgentInput {
+        prompt: user_prompt,
+        context: Some(super::run_setup::compose_agent_context(
+            system_prompt,
+            workspace_context,
+        )),
+        workspace_path: request.workspace_path.clone(),
+    };
+
+    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "plan_audit", &pa_input, iter_num);
+
     let pa_r = execute_agent_stage(
         app,
         run_id,
         iter_num,
         PipelineStage::PlanAudit,
         auditor_backend,
-        &AgentInput {
-            prompt: user_prompt,
-            context: Some(super::run_setup::compose_agent_context(
-                system_prompt,
-                workspace_context,
-            )),
-            workspace_path: request.workspace_path.clone(),
-        },
+        &pa_input,
         settings,
         cancel_flag,
         pause_flag,
         PauseHandling::ResumeWithinStage,
         Some(session_id),
         pa_output_path_str.as_deref(),
+        None,
     )
     .await;
     let pa_out = pa_r.output.clone();
@@ -356,23 +361,28 @@ async fn run_single_planner(
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
+    let input = AgentInput {
+        prompt: user_prompt.to_string(),
+        context: Some(context.to_string()),
+        workspace_path: workspace_path.to_string(),
+    };
+
+    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "plan", &input, iter_num);
+
     let r = execute_agent_stage(
         app,
         run_id,
         iter_num,
         slot.stage.clone(),
         &slot.backend,
-        &AgentInput {
-            prompt: user_prompt.to_string(),
-            context: Some(context.to_string()),
-            workspace_path: workspace_path.to_string(),
-        },
+        &input,
         settings,
         cancel_flag,
         pause_flag,
         PauseHandling::ResumeWithinStage,
         Some(session_id),
         output_path_str.as_deref(),
+        None,
     )
     .await;
     let out = r.output.clone();
@@ -457,6 +467,7 @@ async fn run_parallel_planners(
                             PauseHandling::ReturnPausedError,
                             Some(&sid),
                             output_path_str.as_deref(),
+                            None,
                         )
                         .await
                     }),

@@ -201,6 +201,7 @@ pub async fn run_plan_gate(
             PauseHandling::ResumeWithinStage,
             None,
             gate_output_path_str.as_deref(),
+            None,
         )
         .await;
 
@@ -281,6 +282,11 @@ fn append_stage_end_event(
         status: status.clone(),
         duration_ms,
         verdict: None,
+        input_tokens: None,
+        output_tokens: None,
+        estimated_cost_usd: None,
+        session_pair: None,
+        resumed: None,
     };
     runs::append_event(run_id, event)
 }
