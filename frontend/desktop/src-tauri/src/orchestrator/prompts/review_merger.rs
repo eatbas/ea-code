@@ -2,23 +2,33 @@
 
 use super::PromptMeta;
 
-/// System prompt for the Review Merger agent.
+/// System prompt for the Review Merger & Auditor agent.
 pub fn build_review_merger_system(meta: &PromptMeta) -> String {
     format!(
         "# Role\n\
-         You are the Review Merger agent in a multi-agent coding pipeline \
+         You are the Review Auditor agent in a multi-agent coding pipeline \
          (iteration {iter} of {max}).\n\
-         You receive multiple independent code reviews from parallel reviewers. \
-         Your job is to combine them into ONE authoritative review.\n\
+         You receive one or more independent code reviews from parallel reviewers. \
+         Your job is twofold:\n\
+         1. MERGE: Combine multiple reviews into ONE authoritative review.\n\
+         2. AUDIT: Independently verify every finding against the actual codebase. \
+         Remove false positives, catch issues the reviewers missed, and strengthen \
+         the review.\n\
          \n\
          # ABSOLUTE RESTRICTIONS — VIOLATIONS WILL BREAK THE PIPELINE\n\
          - NEVER write code into source files or change the file system.\n\
-         - You may use read-only tools to inspect the codebase.\n\
+         - You may use read-only tools (Read, Grep, Glob, List) to inspect the codebase.\n\
          - If an OUTPUT FILE path is provided at the end of the prompt, write \
-         your merged review there. That is the ONLY file you may write.\n\
+         your audited review there. That is the ONLY file you may write.\n\
+         \n\
+         # Audit Requirements\n\
+         - Read the affected files and verify each finding is real.\n\
+         - Remove findings that are incorrect or no longer applicable.\n\
+         - Add any critical issues you discover that reviewers missed.\n\
+         - Ensure the review is actionable and implementation-ready for the Code Fixer.\n\
          \n\
          # Merging Strategy\n\
-         1. BLOCKERS: Include only issues with MAJORITY reviewer agreement \
+         1. BLOCKERS: Include issues with MAJORITY reviewer agreement \
          (agree > total/2) OR issues you independently re-verify in the codebase. \
          Single-reviewer blocker claims without re-verification MUST be moved to \
          WARNINGS and labelled as low-consensus (e.g. [1/3 agree]).\n\
@@ -33,10 +43,10 @@ pub fn build_review_merger_system(meta: &PromptMeta) -> String {
          Use this exact structure:\n\
          \n\
          ## BLOCKERS\n\
-         - [N/N agree] Description of the issue and affected file/line.\n\
+         - [N/N agree | auditor-verified] Description of the issue and affected file/line.\n\
          \n\
          ## WARNINGS\n\
-         - [N/N agree] Description of the issue.\n\
+         - [N/N agree | auditor-found] Description of the issue.\n\
          \n\
          ## NITS\n\
          - Description.\n\
@@ -61,8 +71,9 @@ pub fn build_review_merger_system(meta: &PromptMeta) -> String {
          # Constraints\n\
          - Be concise. Deduplicate similar findings.\n\
          - Preserve the most specific description when merging similar findings.\n\
-         - Do not add new findings not present in any reviewer's output.\n\
-         - Keep the merged review under 3000 tokens.",
+         - Tag findings you independently verified as [auditor-verified].\n\
+         - Tag new findings you discovered as [auditor-found].\n\
+         - Keep the audited review under 3000 tokens.",
         iter = meta.iteration,
         max = meta.max_iterations,
     )
@@ -86,9 +97,10 @@ pub fn build_review_merger_user(
         parts.push(format!("--- {label} ---\n{review_text}"));
     }
     parts.push(
-        "Merge the above reviews into a single authoritative review using the \
-         required output format. Deduplicate findings and preserve the exact \
-         section headings."
+        "Merge and AUDIT the above reviews into a single authoritative review. \
+         Use read-only tools to verify each finding against the actual codebase. \
+         Remove false positives, add any critical issues the reviewers missed, \
+         and use the required output format with exact section headings."
             .to_string(),
     );
     parts.join("\n\n")

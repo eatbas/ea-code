@@ -203,11 +203,11 @@ fn default_review_pass_score() -> f64 {
 }
 
 fn default_max_planners() -> u32 {
-    4
+    99
 }
 
 fn default_max_reviewers() -> u32 {
-    4
+    99
 }
 
 impl Default for AppSettings {

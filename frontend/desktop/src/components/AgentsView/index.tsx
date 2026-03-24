@@ -4,7 +4,7 @@ import type { AppSettings, ProviderInfo } from "../../types";
 import { sanitiseAgentAssignmentsForEnabledModels } from "../../utils/agentSettings";
 import { InlineStageSlot } from "./InlineStageSlot";
 import { StageCard } from "./StageCard";
-import { useExtraSlots } from "./useExtraSlots";
+import { useGroupedExtraSlots } from "./useExtraSlots";
 
 /** Props for the AgentsView component. */
 export interface AgentsViewProps {
@@ -31,14 +31,14 @@ export function AgentsView({
   }, [settings]);
 
   function update(patch: Partial<AppSettings>): void {
-    const next = { ...draftRef.current, ...patch };
+    // Force unlimited slots by setting max high.
+    const next = { ...draftRef.current, ...patch, maxPlanners: 99, maxReviewers: 99 };
     draftRef.current = next;
     setDraft(next);
     onSave(next);
   }
 
-  const plannerSlots = useExtraSlots(settings, draftRef, update, "extraPlanners", "maxPlanners");
-  const reviewerSlots = useExtraSlots(settings, draftRef, update, "extraReviewers", "maxReviewers");
+  const extraSlots = useGroupedExtraSlots(settings, draftRef, update);
 
   function handleFreshStart(): void {
     const cleared: AppSettings = {
@@ -73,8 +73,6 @@ export function AgentsView({
 
   const providerList = providers;
   const loading = Boolean(providersLoading);
-  const plannerCount = plannerSlots.activeCount + (draft.plannerAgent ? 1 : 0);
-  const reviewerCount = reviewerSlots.activeCount + (draft.codeReviewerAgent ? 1 : 0);
 
   const cardProps = { draft, providers: providerList, providersLoading: loading, onUpdate: update };
 
@@ -97,6 +95,7 @@ export function AgentsView({
             </button>
           </div>
 
+          {/* Prompt Enhancer + Skill Selector */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <StageCard
               label="Prompt Enhancer"
@@ -116,121 +115,83 @@ export function AgentsView({
             />
           </div>
 
+          {/* Planning & Review */}
           <div className="flex flex-col gap-3">
             <span className="text-xs font-medium uppercase tracking-wider text-[#6b6b82]">
-              Planning
+              Planning & Review
             </span>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {/* Planner / Reviewer group (with inline extras) */}
               <StageCard
-                label="Planner 1"
-                tag="(optional)"
+                label="Planner / Reviewer 1"
+                tag="(required)"
+                subtitle="Plans and reviews code"
                 backendKey="plannerAgent"
                 modelKey="plannerModel"
-                optional={true}
-                {...cardProps}
-              >
-                {Array.from({ length: plannerSlots.openCount }, (_, i) => (
-                  <InlineStageSlot
-                    key={`planner-${i + 2}`}
-                    label={`Planner ${i + 2}`}
-                    backend={draft.extraPlanners[i]?.agent ?? null}
-                    model={draft.extraPlanners[i]?.model ?? null}
-                    onChange={(b, m) => plannerSlots.updateSlot(i, b, m)}
-                    onRemove={() => plannerSlots.removeSlot(i)}
-                    {...cardProps}
-                  />
-                ))}
-              </StageCard>
-              {plannerCount > 0 && (
-                <StageCard
-                  label="Plan Auditor"
-                  tag={plannerCount > 1 ? "(auto — merges & audits)" : "(auto — audits plan)"}
-                  backendKey="planAuditorAgent"
-                  modelKey="planAuditorModel"
-                  optional={true}
-                  {...cardProps}
-                />
-              )}
-            </div>
-            {plannerSlots.openCount < plannerSlots.maxExtra && (
-              <button
-                type="button"
-                onClick={plannerSlots.addSlot}
-                className="self-start rounded border border-dashed border-[#2e2e48] px-3 py-1.5 text-xs text-[#6b6b82] hover:border-[#6366f1] hover:text-[#6366f1]"
-              >
-                + Add Planner
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <StageCard
-              label="Coder"
-              tag="(required)"
-              backendKey="coderAgent"
-              modelKey="coderModel"
-              optional={false}
-              {...cardProps}
-            />
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <span className="text-xs font-medium uppercase tracking-wider text-[#6b6b82]">
-              Review
-            </span>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <StageCard
-                label="Reviewer 1"
-                tag="(required)"
-                backendKey="codeReviewerAgent"
-                modelKey="codeReviewerModel"
+                groupedKeys={[
+                  { backendKey: "codeReviewerAgent", modelKey: "codeReviewerModel" },
+                ]}
                 optional={false}
                 {...cardProps}
               >
-                {Array.from({ length: reviewerSlots.openCount }, (_, i) => (
+                {Array.from({ length: extraSlots.openCount }, (_, i) => (
                   <InlineStageSlot
-                    key={`reviewer-${i + 2}`}
-                    label={`Reviewer ${i + 2}`}
-                    backend={draft.extraReviewers[i]?.agent ?? null}
-                    model={draft.extraReviewers[i]?.model ?? null}
-                    onChange={(b, m) => reviewerSlots.updateSlot(i, b, m)}
-                    onRemove={() => reviewerSlots.removeSlot(i)}
+                    key={`pr-${i + 2}`}
+                    label={`Planner / Reviewer ${i + 2}`}
+                    backend={draft.extraPlanners[i]?.agent ?? null}
+                    model={draft.extraPlanners[i]?.model ?? null}
+                    onChange={(b, m) => extraSlots.updateSlot(i, b, m)}
+                    onRemove={() => extraSlots.removeSlot(i)}
                     {...cardProps}
                   />
                 ))}
               </StageCard>
-              {reviewerCount >= 2 && (
-                <StageCard
-                  label="Review Merger"
-                  tag="(auto — combines reviews)"
-                  backendKey="reviewMergerAgent"
-                  modelKey="reviewMergerModel"
-                  optional={true}
-                  {...cardProps}
-                />
-              )}
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+              {/* Auditor / Merger group */}
               <StageCard
-                label="Code Fixer"
+                label="Auditor / Merger"
                 tag="(required)"
-                backendKey="codeFixerAgent"
-                modelKey="codeFixerModel"
+                subtitle="Audits plans, merges reviews"
+                backendKey="planAuditorAgent"
+                modelKey="planAuditorModel"
+                groupedKeys={[
+                  { backendKey: "reviewMergerAgent", modelKey: "reviewMergerModel" },
+                ]}
                 optional={false}
                 {...cardProps}
               />
             </div>
-            {reviewerSlots.openCount < reviewerSlots.maxExtra && (
-              <button
-                type="button"
-                onClick={reviewerSlots.addSlot}
-                className="self-start rounded border border-dashed border-[#2e2e48] px-3 py-1.5 text-xs text-[#6b6b82] hover:border-[#6366f1] hover:text-[#6366f1]"
-              >
-                + Add Reviewer
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={extraSlots.addSlot}
+              className="self-start rounded border border-dashed border-[#2e2e48] px-3 py-1.5 text-xs text-[#6b6b82] hover:border-[#6366f1] hover:text-[#6366f1]"
+            >
+              + Add Planner / Reviewer
+            </button>
           </div>
 
+          {/* Coding */}
+          <div className="flex flex-col gap-3">
+            <span className="text-xs font-medium uppercase tracking-wider text-[#6b6b82]">
+              Coding
+            </span>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <StageCard
+                label="Coder / Fixer"
+                tag="(required)"
+                subtitle="Writes and fixes code"
+                backendKey="coderAgent"
+                modelKey="coderModel"
+                groupedKeys={[
+                  { backendKey: "codeFixerAgent", modelKey: "codeFixerModel" },
+                ]}
+                optional={false}
+                {...cardProps}
+              />
+            </div>
+          </div>
+
+          {/* Judge + Executive Summary */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <StageCard
               label="Judge"
@@ -250,6 +211,7 @@ export function AgentsView({
             />
           </div>
 
+          {/* Pipeline config */}
           <div className="flex flex-col gap-3 border-t border-[#2e2e48] pt-4">
             <span className="text-sm font-medium text-[#e4e4ed]">Pipeline</span>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -261,28 +223,6 @@ export function AgentsView({
                   max={10}
                   value={draft.maxIterations}
                   onChange={(e) => update({ maxIterations: Math.max(1, Math.min(10, Number(e.target.value))) })}
-                  className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-[#9898b0]">Max Planners</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={draft.maxPlanners}
-                  onChange={(e) => update({ maxPlanners: Math.max(1, Math.min(10, Number(e.target.value))) })}
-                  className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-[#9898b0]">Max Reviewers</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={draft.maxReviewers}
-                  onChange={(e) => update({ maxReviewers: Math.max(1, Math.min(10, Number(e.target.value))) })}
                   className="w-20 rounded border border-[#2e2e48] bg-[#1a1a24] px-3 py-2 text-sm text-[#e4e4ed] focus:border-[#3e3e58] focus:outline-none"
                 />
               </label>

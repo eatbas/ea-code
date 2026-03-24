@@ -2,18 +2,18 @@ import type { AppSettings } from "../types";
 
 export const MINIMUM_AGENT_FIELDS = [
   "promptEnhancerAgent",
+  "plannerAgent",
+  "planAuditorAgent",
   "coderAgent",
-  "codeReviewerAgent",
-  "codeFixerAgent",
   "finalJudgeAgent",
   "executiveSummaryAgent",
 ] as const;
 
 const MINIMUM_AGENT_LABELS: Record<(typeof MINIMUM_AGENT_FIELDS)[number], string> = {
   promptEnhancerAgent: "Prompt Enhancer",
-  coderAgent: "Coder",
-  codeReviewerAgent: "Code Reviewer",
-  codeFixerAgent: "Code Fixer",
+  plannerAgent: "Planner / Reviewer",
+  planAuditorAgent: "Auditor / Merger",
+  coderAgent: "Coder / Fixer",
   finalJudgeAgent: "Judge",
   executiveSummaryAgent: "Executive Summary",
 };
