@@ -1,5 +1,7 @@
 [env]
-# ring crate requires clang for aarch64-pc-windows-msvc builds.
-# LLVM is installed but not on the default PATH in VS Code terminals.
-CC = "C:\\Program Files\\LLVM\\bin\\clang.exe"
-AR = "C:\\Program Files\\LLVM\\bin\\llvm-ar.exe"
+# LLVM overrides removed — they referenced a non-existent installation and
+# broke cc-rs (space in "Program Files" path). For aarch64 cross-compilation,
+# use target-specific env vars instead:
+# [target.aarch64-pc-windows-msvc.env]
+# CC = "C:\\Program Files\\LLVM\\bin\\clang.exe"
+# AR = "C:\\Program Files\\LLVM\\bin\\llvm-ar.exe"

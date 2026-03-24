@@ -37,8 +37,9 @@ impl PythonInterpreter {
 ///
 /// Search order:
 /// 1. Windows `py` launcher with explicit version flags (3.14, 3.13, 3.12).
-/// 2. Unix-style versioned binaries: python3.14, python3.13, python3.12.
-/// 3. Generic python3 / python — only accepted if >= 3.12.
+/// 2. macOS well-known Homebrew paths (Apple Silicon `/opt/homebrew`, Intel `/usr/local`).
+/// 3. Unix-style versioned binaries on PATH: python3.14, python3.13, python3.12.
+/// 4. Generic python3 / python on PATH — only accepted if >= 3.12.
 pub async fn find_python() -> Result<PythonInterpreter, String> {
     // 1. Windows py launcher
     #[cfg(target_os = "windows")]
@@ -64,7 +65,34 @@ pub async fn find_python() -> Result<PythonInterpreter, String> {
         }
     }
 
-    // 2. Versioned binaries
+    // 2. macOS Homebrew well-known paths (faster than PATH search)
+    #[cfg(target_os = "macos")]
+    {
+        // Apple Silicon: /opt/homebrew/bin/python3*
+        // Intel Mac:     /usr/local/bin/python3*
+        let brew_prefixes = ["/opt/homebrew/bin", "/usr/local/bin"];
+        for prefix in &brew_prefixes {
+            for ver in ["python3.14", "python3.13", "python3.12"] {
+                let path = format!("{prefix}/{ver}");
+                if check_python_version(&path).await {
+                    return Ok(PythonInterpreter {
+                        executable: path,
+                        launcher_version: None,
+                    });
+                }
+            }
+            // Also try the unversioned python3 at this prefix
+            let path = format!("{prefix}/python3");
+            if check_python_version(&path).await {
+                return Ok(PythonInterpreter {
+                    executable: path,
+                    launcher_version: None,
+                });
+            }
+        }
+    }
+
+    // 3. Versioned binaries on PATH
     for candidate in ["python3.14", "python3.13", "python3.12"] {
         if binary_exists(candidate).await {
             return Ok(PythonInterpreter {
@@ -74,7 +102,7 @@ pub async fn find_python() -> Result<PythonInterpreter, String> {
         }
     }
 
-    // 3. Generic python3 / python — version check
+    // 4. Generic python3 / python on PATH — version check
     for candidate in ["python3", "python"] {
         if binary_exists(candidate).await && check_python_version(candidate).await {
             return Ok(PythonInterpreter {

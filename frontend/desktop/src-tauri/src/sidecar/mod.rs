@@ -216,13 +216,16 @@ impl SidecarManager {
                     .await;
             }
 
-            // On Unix, send SIGTERM
+            // On Unix/macOS, send SIGTERM first for graceful shutdown
             #[cfg(not(target_os = "windows"))]
-            {
-                let _ = child.kill().await;
+            if let Some(pid) = child.id() {
+                // SIGTERM lets uvicorn run its shutdown hooks
+                unsafe {
+                    libc::kill(pid as i32, libc::SIGTERM);
+                }
             }
 
-            // Wait with a grace period
+            // Wait with a grace period, then force kill if needed
             match tokio::time::timeout(SHUTDOWN_GRACE, child.wait()).await {
                 Ok(Ok(status)) => {
                     eprintln!("[sidecar] hive-api exited with status: {status}");
