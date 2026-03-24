@@ -49,6 +49,18 @@ pub struct CliVersionInfo {
     pub error: Option<String>,
 }
 
+/// Startup prerequisite check result.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrerequisiteStatus {
+    pub python_available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub python_version: Option<String>,
+    /// Windows-only — always `true` on macOS/Linux.
+    pub git_bash_available: bool,
+    pub hive_api_source_found: bool,
+}
+
 /// Aggregate version information for all CLI tools.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

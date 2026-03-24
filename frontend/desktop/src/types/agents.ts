@@ -50,6 +50,17 @@ export interface AllCliVersions {
   gitBash?: CliVersionInfo;
 }
 
+// ── prerequisite types ─────────────────────────────────────────────
+
+/** Startup prerequisite check result. */
+export interface PrerequisiteStatus {
+  pythonAvailable: boolean;
+  pythonVersion?: string;
+  /** Windows-only — always `true` on macOS/Linux. */
+  gitBashAvailable: boolean;
+  hiveApiSourceFound: boolean;
+}
+
 // ── hive-api types ─────────────────────────────────────────────────
 
 /** hive-api connection health status. */

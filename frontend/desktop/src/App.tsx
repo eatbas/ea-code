@@ -17,7 +17,9 @@ import { Sidebar } from "./components/Sidebar";
 import { AppContentRouter } from "./components/AppContentRouter";
 import { QuestionDialog } from "./components/QuestionDialog";
 import { UpdateInstallBanner } from "./components/shared/UpdateInstallBanner";
+import { PrerequisiteBanner } from "./components/shared/PrerequisiteBanner";
 import { ProjectLoadingOverlay } from "./components/shared/ProjectLoadingOverlay";
+import { usePrerequisites } from "./hooks/usePrerequisites";
 
 function App(): ReactNode {
   const toast = useToast();
@@ -31,6 +33,7 @@ function App(): ReactNode {
   const { skills, loading: skillsLoading, createSkill, updateSkill, deleteSkill } = useSkills();
   const hasLiveSessions = useLiveSessionStatus();
   const { status: updateStatus, updateVersion } = useUpdateCheck(hasLiveSessions);
+  const { status: prereqs, dismissed: prereqsDismissed, dismiss: dismissPrereqs } = usePrerequisites();
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
 
   const {
@@ -178,6 +181,9 @@ function App(): ReactNode {
           />
         )}
       </div>
+      {prereqs && !prereqsDismissed && (!prereqs.pythonAvailable || !prereqs.gitBashAvailable) && (
+        <PrerequisiteBanner status={prereqs} onDismiss={dismissPrereqs} />
+      )}
       {openingWorkspace && <ProjectLoadingOverlay />}
     </div>
   );

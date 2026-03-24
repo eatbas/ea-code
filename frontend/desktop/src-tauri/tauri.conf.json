@@ -36,6 +36,11 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": ["nsis", "dmg"],
+    "resources": {
+      "../../../hive-api/src/": "hive-api/src/",
+      "../../../hive-api/pyproject.toml": "hive-api/pyproject.toml",
+      "../../../hive-api/config.toml": "hive-api/config.toml"
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser"

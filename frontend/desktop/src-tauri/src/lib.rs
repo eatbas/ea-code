@@ -117,6 +117,7 @@ pub fn run() {
             // Workspace commands
             commands::workspace::select_workspace,
             commands::workspace::validate_environment,
+            commands::workspace::check_prerequisites,
             commands::workspace::open_in_vscode,
             // Pipeline commands
             commands::pipeline::run_pipeline,
