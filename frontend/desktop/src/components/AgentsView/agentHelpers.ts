@@ -36,15 +36,21 @@ function enabledModelsCsvForBackend(
  * Returns enabled model options for a given backend, filtered by what
  * the user has enabled in settings and intersected with what the
  * provider actually offers.
+ *
+ * If no models have been explicitly enabled for a provider, all models
+ * from the hive-api provider list are shown (sensible default).
  */
 export function getModelOptionsForBackend(
   backend: string,
   settings: AppSettings,
   providers: ProviderInfo[],
 ): { value: string; label: string }[] {
-  const enabled = new Set(parseEnabledModels(enabledModelsCsvForBackend(backend, settings)));
+  const csv = enabledModelsCsvForBackend(backend, settings);
   const provider = providers.find((p) => p.name === backend);
   const allOptions = modelOptionsFromProvider(provider);
+  // If no explicit model selection exists, show all provider models.
+  if (!csv) return allOptions;
+  const enabled = new Set(parseEnabledModels(csv));
   return allOptions.filter((opt) => enabled.has(opt.value));
 }
 
