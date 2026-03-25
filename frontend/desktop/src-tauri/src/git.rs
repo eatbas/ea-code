@@ -1,5 +1,45 @@
 use crate::models::WorkspaceInfo;
 
+/// Ensures `.ea-code/` is present in the workspace's `.gitignore`.
+/// Only acts when the workspace is a git repository.
+/// Called from `storage::ensure_workspace_dirs()`.
+pub fn ensure_gitignore_entry(workspace_path: &str) {
+    let ws = std::path::Path::new(workspace_path);
+    let git_dir = ws.join(".git");
+    if !git_dir.exists() {
+        return; // Not a git repo — nothing to do.
+    }
+
+    let gitignore = ws.join(".gitignore");
+    let entry = ".ea-code/";
+
+    if gitignore.exists() {
+        let contents = match std::fs::read_to_string(&gitignore) {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        // Check if already present (exact line match).
+        for line in contents.lines() {
+            let trimmed = line.trim();
+            if trimmed == entry || trimmed == ".ea-code" {
+                return; // Already ignored.
+            }
+        }
+
+        // Append entry (ensure preceding newline).
+        let suffix = if contents.ends_with('\n') {
+            format!("{entry}\n")
+        } else {
+            format!("\n{entry}\n")
+        };
+        let _ = std::fs::write(&gitignore, format!("{contents}{suffix}"));
+    } else {
+        // Create .gitignore with this single entry.
+        let _ = std::fs::write(&gitignore, format!("{entry}\n"));
+    }
+}
+
 /// Checks whether the given path resides inside a git repository.
 pub async fn is_git_repo(path: &str) -> bool {
     run_git(&["-C", path, "rev-parse", "--is-inside-work-tree"])

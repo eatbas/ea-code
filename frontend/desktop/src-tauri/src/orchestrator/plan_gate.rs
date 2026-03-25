@@ -30,6 +30,7 @@ pub async fn run_plan_gate(
     pause_flag: &Arc<AtomicBool>,
     answer_sender: &Arc<Mutex<Option<tokio::sync::oneshot::Sender<PipelineAnswer>>>>,
     run_id: &str,
+    session_id: &str,
     iter_num: u32,
     meta: &PromptMeta,
     enhanced: &str,
@@ -38,6 +39,7 @@ pub async fn run_plan_gate(
     stages: &mut Vec<StageResult>,
     iter_ctx: &mut IterationContext,
 ) -> Result<bool, String> {
+    let ws = &run.workspace_path;
     let mut revisions = 0u32;
     let max_revisions = settings.max_plan_revisions;
 
@@ -62,6 +64,8 @@ pub async fn run_plan_gate(
         let answer = if settings.plan_auto_approve_timeout_sec > 0 {
             ask_user_question_with_timeout(
                 app,
+                ws,
+                session_id,
                 run_id,
                 &PipelineStage::PlanAudit,
                 iter_num,
@@ -76,6 +80,8 @@ pub async fn run_plan_gate(
         } else {
             ask_user_question(
                 app,
+                ws,
+                session_id,
                 run_id,
                 &PipelineStage::PlanAudit,
                 iter_num,
@@ -103,7 +109,7 @@ pub async fn run_plan_gate(
 
         if action_lower == "approve" || action_lower.is_empty() {
             // Log plan approval as event
-            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let seq = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
             let event = RunEvent::Question {
                 v: 1,
                 seq,
@@ -114,7 +120,7 @@ pub async fn run_plan_gate(
                 answer: format!("approved (after {} revisions)", revisions),
                 skipped: false,
             };
-            let _ = runs::append_event(run_id, event);
+            let _ = runs::append_event(ws, session_id, run_id, event);
             return Ok(false);
         }
 
@@ -123,7 +129,7 @@ pub async fn run_plan_gate(
             iter_ctx.planner_plan = None;
 
             // Log plan skip as event
-            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let seq = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
             let event = RunEvent::Question {
                 v: 1,
                 seq,
@@ -134,7 +140,7 @@ pub async fn run_plan_gate(
                 answer: format!("skipped (after {} revisions)", revisions),
                 skipped: true,
             };
-            let _ = runs::append_event(run_id, event);
+            let _ = runs::append_event(ws, session_id, run_id, event);
             return Ok(false);
         }
 
@@ -142,7 +148,7 @@ pub async fn run_plan_gate(
         revisions += 1;
         if revisions > max_revisions {
             // Log max revisions reached
-            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let seq = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
             let event = RunEvent::Question {
                 v: 1,
                 seq,
@@ -153,7 +159,7 @@ pub async fn run_plan_gate(
                 answer: format!("approved_max_revisions ({revisions} revisions)"),
                 skipped: false,
             };
-            let _ = runs::append_event(run_id, event);
+            let _ = runs::append_event(ws, session_id, run_id, event);
             return Ok(false);
         }
 
@@ -165,10 +171,10 @@ pub async fn run_plan_gate(
         let user_feedback = action.to_string();
         run.current_stage = Some(PipelineStage::Plan);
 
-        let plan_seq = runs::next_sequence(run_id).unwrap_or(1);
-        append_stage_start_event(run_id, &PipelineStage::Plan, iter_num, plan_seq)?;
+        let plan_seq = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
+        append_stage_start_event(ws, session_id, run_id, &PipelineStage::Plan, iter_num, plan_seq)?;
 
-        let gate_output_path = runs::artifact_output_path(run_id, iter_num, "plan").ok();
+        let gate_output_path = runs::artifact_output_path(ws, session_id, run_id, iter_num, "plan").ok();
         let gate_output_path_str = gate_output_path
             .as_ref()
             .map(|p| p.to_string_lossy().to_string());
@@ -190,7 +196,10 @@ pub async fn run_plan_gate(
                     Some(&user_feedback),
                 ),
                 context: Some(compose_agent_context(
-                    prompts::build_planner_system(meta),
+                    prompts::build_planner_system(
+                        meta,
+                        Some(&runs::artifact_relative_path(session_id, run_id, iter_num, "plan")),
+                    ),
                     workspace_context,
                 )),
                 workspace_path: run.workspace_path.clone(),
@@ -210,6 +219,8 @@ pub async fn run_plan_gate(
 
         if plan_r.status == StageStatus::Failed {
             append_stage_end_event(
+                ws,
+                session_id,
                 run_id,
                 &PipelineStage::Plan,
                 iter_num,
@@ -218,7 +229,7 @@ pub async fn run_plan_gate(
                 plan_duration,
             )?;
             // Log revision failure
-            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let seq = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
             let event = RunEvent::Question {
                 v: 1,
                 seq,
@@ -229,11 +240,13 @@ pub async fn run_plan_gate(
                 answer: format!("approved_revision_failed ({revisions} revisions)"),
                 skipped: false,
             };
-            let _ = runs::append_event(run_id, event);
+            let _ = runs::append_event(ws, session_id, run_id, event);
             return Ok(false);
         }
 
         append_stage_end_event(
+            ws,
+            session_id,
             run_id,
             &PipelineStage::Plan,
             iter_num,
@@ -249,6 +262,8 @@ pub async fn run_plan_gate(
 
 /// Appends a stage_start event to the event log.
 fn append_stage_start_event(
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     stage: &PipelineStage,
     iteration: u32,
@@ -261,11 +276,13 @@ fn append_stage_start_event(
         stage: stage.clone(),
         iteration,
     };
-    runs::append_event(run_id, event)
+    runs::append_event(workspace_path, session_id, run_id, event)
 }
 
 /// Appends a stage_end event to the event log.
 fn append_stage_end_event(
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     stage: &PipelineStage,
     iteration: u32,
@@ -288,5 +305,5 @@ fn append_stage_end_event(
         session_pair: None,
         resumed: None,
     };
-    runs::append_event(run_id, event)
+    runs::append_event(workspace_path, session_id, run_id, event)
 }

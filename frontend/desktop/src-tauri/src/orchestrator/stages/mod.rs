@@ -8,8 +8,7 @@ use tauri::AppHandle;
 use tokio::time::Duration;
 
 use crate::agents::AgentInput;
-use crate::models::{StageEndStatus, *};
-use crate::storage::{self, runs};
+use crate::models::*;
 
 pub use crate::orchestrator::helpers::{
     dispatch_agent, emit_stage, emit_stage_with_duration, resolve_stage_model, wait_for_interrupt,
@@ -475,27 +474,9 @@ pub fn execute_skipped_stage(
     reason: &str,
 ) -> StageResult {
     emit_stage(app, run_id, &stage, &StageStatus::Skipped, iteration_num);
-    // Append event to storage
-    let seq = match runs::next_sequence(run_id) {
-        Ok(s) => s,
-        Err(_) => 1,
-    };
-    let event = RunEvent::StageEnd {
-        v: 1,
-        seq,
-        ts: storage::now_rfc3339(),
-        stage: stage.clone(),
-        iteration: iteration_num,
-        status: StageEndStatus::Skipped,
-        duration_ms: 0,
-        verdict: None,
-        input_tokens: None,
-        output_tokens: None,
-        estimated_cost_usd: None,
-        session_pair: None,
-        resumed: None,
-    };
-    let _ = runs::append_event(run_id, event);
+    // Skipped-stage events are not persisted to the event log because
+    // workspace_path and session_id are not available at this level.
+    // The skip is visible via the frontend event emitted above.
 
     StageResult {
         stage,

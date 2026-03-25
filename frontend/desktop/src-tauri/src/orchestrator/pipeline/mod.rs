@@ -73,7 +73,7 @@ pub async fn run_pipeline(
                 request.workspace_path.clone(),
                 project_id,
             );
-            if let Err(e) = sessions::create_session(&session_meta) {
+            if let Err(e) = sessions::create_session(&request.workspace_path, &session_meta) {
                 eprintln!("Warning: Failed to create session: {e}");
             }
             sid
@@ -82,23 +82,23 @@ pub async fn run_pipeline(
 
     // Create run in storage
     if let Err(e) = runs::create_run(
-        &run_id,
+        &request.workspace_path,
         &session_id,
+        &run_id,
         &request.prompt,
         settings.max_iterations,
-        &request.workspace_path,
     ) {
         eprintln!("Warning: Failed to create run: {e}");
     }
 
     // Append user chat message to session log
     let user_msg = messages::user_message(&request.prompt, Some(run_id.clone()));
-    if let Err(e) = messages::append_message(&session_id, &user_msg) {
+    if let Err(e) = messages::append_message(&request.workspace_path, &session_id, &user_msg) {
         eprintln!("Warning: Failed to append user message: {e}");
     }
 
     // Touch session to update timestamp
-    if let Err(e) = sessions::touch_session(&session_id, None, None, None) {
+    if let Err(e) = sessions::touch_session(&request.workspace_path, &session_id, None, None, None) {
         eprintln!("Warning: Failed to touch session: {e}");
     }
 
@@ -130,7 +130,7 @@ pub async fn run_pipeline(
 
     let workspace_context =
         super::context_summary::build_workspace_context_summary(&request.workspace_path).await;
-    let session_memory = build_session_memory_context(&session_id, Some(&run_id));
+    let session_memory = build_session_memory_context(&request.workspace_path, &session_id, Some(&run_id));
     let shared_context = merge_shared_context(&workspace_context, &session_memory);
 
     // Prime current stage immediately so session-detail polling can show
@@ -159,7 +159,11 @@ pub async fn run_pipeline(
         .await?;
     } else {
         let mut carry = IterationCarryover::new();
-        let mut session_tracker = crate::orchestrator::helpers::CliSessionTracker::new(run_id.clone());
+        let mut session_tracker = crate::orchestrator::helpers::CliSessionTracker::new(
+            request.workspace_path.clone(),
+            session_id.clone(),
+            run_id.clone(),
+        );
 
         for iter_num in 1..=settings.max_iterations {
             if wait_if_paused(&pause_flag, &cancel_flag).await {
@@ -208,7 +212,7 @@ pub async fn run_pipeline(
     let assistant_content = if matches!(run.status, PipelineStatus::Cancelled) {
         "Pipeline cancelled by user.".to_string()
     } else {
-        runs::read_summary(&run_id)
+        runs::read_summary(&request.workspace_path, &session_id, &run_id)
             .ok()
             .and_then(|s| s.executive_summary)
             .unwrap_or_else(|| {
@@ -221,7 +225,7 @@ pub async fn run_pipeline(
             })
     };
     let assistant_msg = messages::assistant_message(&assistant_content, Some(run_id.clone()));
-    if let Err(e) = messages::append_message(&session_id, &assistant_msg) {
+    if let Err(e) = messages::append_message(&request.workspace_path, &session_id, &assistant_msg) {
         eprintln!("Warning: Failed to append assistant message: {e}");
     }
 

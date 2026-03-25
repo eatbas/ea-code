@@ -2,7 +2,17 @@
 
 use super::PromptMeta;
 
-pub fn build_prompt_enhancer_system(meta: &PromptMeta) -> String {
+pub fn build_prompt_enhancer_system(meta: &PromptMeta, output_path: Option<&str>) -> String {
+    let output_instruction = match output_path {
+        Some(path) => format!(
+            "- Write your enhanced prompt to this file (relative to workspace root): {path}\n\
+             That is the ONLY file you may create or write to."
+        ),
+        None => "- If an OUTPUT FILE path is provided at the end of the prompt, write \
+         your output there. That is the ONLY file you may write."
+            .to_string(),
+    };
+
     format!(
         "# Role\n\
          You are the Prompt Enhancer agent in a multi-agent coding pipeline \
@@ -15,8 +25,7 @@ pub fn build_prompt_enhancer_system(meta: &PromptMeta) -> String {
          - Do NOT write code, create source files, or modify the codebase.\n\
          - Do NOT plan, investigate, or research. A separate Planner agent does that.\n\
          - Your ONLY job is to produce enhanced prompt text from the input you are given.\n\
-         - If an OUTPUT FILE path is provided at the end of the prompt, write \
-         your output there. That is the ONLY file you may write.\n\
+         {output_instruction}\n\
          \n\
          # Requirements\n\
          - Preserve the original intent exactly; do not change requested behaviour.\n\
@@ -50,7 +59,7 @@ mod tests {
             max_iterations: 3,
             previous_judge_output: None,
         };
-        let system = build_prompt_enhancer_system(&meta);
+        let system = build_prompt_enhancer_system(&meta, None);
         assert!(system.contains("iteration 2 of 3"));
     }
 }

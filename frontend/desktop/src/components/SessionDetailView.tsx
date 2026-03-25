@@ -171,16 +171,17 @@ export function SessionDetailView({
                 runById={runById}
                 assistantLinkedRunIds={assistantLinkedRunIds}
                 settings={settings}
+                workspacePath={sessionDetail.projectPath}
               />
               {/* Render runs not linked from any assistant message */}
               {orphanRuns.map((run) => (
-                <RunCard key={run.id} run={run} settings={settings} />
+                <RunCard key={run.id} run={run} settings={settings} workspacePath={sessionDetail.projectPath} />
               ))}
             </>
           ) : (
             /* Fallback: legacy sessions without messages.jsonl — render RunCards directly */
             runs.map((run) => (
-              <RunCard key={run.id} run={run} settings={settings} />
+              <RunCard key={run.id} run={run} settings={settings} workspacePath={sessionDetail.projectPath} />
             ))
           )}
         </div>
@@ -232,6 +233,7 @@ interface MessageTimelineProps {
   runById: Map<string, RunSummary>;
   assistantLinkedRunIds: Set<string>;
   settings: AppSettings | null;
+  workspacePath: string;
 }
 
 /** Renders the conversation as a chat timeline driven by messages.jsonl. */
@@ -240,6 +242,7 @@ function MessageTimeline({
   runById,
   assistantLinkedRunIds,
   settings,
+  workspacePath,
 }: MessageTimelineProps): ReactNode {
   return (
     <>
@@ -259,6 +262,7 @@ function MessageTimeline({
                 <RunCard
                   run={linkedRun}
                   settings={settings}
+                  workspacePath={workspacePath}
                   hidePromptBubble
                 />
               )}
@@ -278,6 +282,7 @@ function MessageTimeline({
               <RunCard
                 run={linkedRun}
                 settings={settings}
+                workspacePath={workspacePath}
                 hidePromptBubble
               />
             )}

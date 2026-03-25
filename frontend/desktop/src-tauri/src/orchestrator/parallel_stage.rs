@@ -51,6 +51,8 @@ pub async fn run_parallel_stage_tasks<T, OnResult>(
         u64,
     ) -> Result<(), String>,
     mut on_result: OnResult,
+    workspace_path: &str,
+    session_id: &str,
 ) -> Result<Vec<T>, String>
 where
     OnResult: FnMut(ParallelStageRun) -> Option<T>,
@@ -59,7 +61,7 @@ where
         return Ok(Vec::new());
     }
 
-    let base_seq = runs::next_sequence(run_id).unwrap_or(1);
+    let base_seq = runs::next_sequence(workspace_path, session_id, run_id).unwrap_or(1);
     let mut end_sequences = Vec::with_capacity(tasks.len());
 
     for (index, task) in tasks.iter().enumerate() {

@@ -2,7 +2,8 @@
 
 use super::PromptMeta;
 
-pub fn build_skill_selector_system(meta: &PromptMeta) -> String {
+pub fn build_skill_selector_system(meta: &PromptMeta, output_path: Option<&str>) -> String {
+    let _output_path = output_path; // Skill selector returns JSON, not a file; reserved for future use.
     format!(
         "# Role\n\
          You are the Skill Selector agent in a multi-agent coding pipeline \

@@ -1,12 +1,13 @@
-/// File-based storage module replacing SQLite database.
+/// File-based storage module.
+///
+/// Global data (settings, skills, MCP) lives under `~/.ea-code/`.
+/// Project-specific data (sessions, runs, artifacts) lives under `<workspace>/.ea-code/`.
 ///
 /// Uses atomic writes (write to .tmp, then rename) for all JSON files.
 /// Uses append-only JSONL for event logs.
 pub mod cleanup;
-pub mod index;
 pub mod mcp;
 pub mod messages;
-pub mod migration;
 pub mod projects;
 pub mod recovery;
 pub mod runs;
@@ -16,9 +17,6 @@ pub mod skills;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-
-// Re-export index functions for backward compatibility.
-pub use index::{add_run_to_index, get_session_for_run, remove_run_from_index};
 
 // H8: Per-file-type locks for read-modify-write operations
 lazy_static::lazy_static! {
@@ -169,7 +167,16 @@ pub fn recover_orphaned_backups() -> Result<(), String> {
     Ok(())
 }
 
-/// Ensures all required directories exist.
+/// Returns the workspace-local data directory: `<workspace>/.ea-code/`.
+pub fn workspace_data_dir(workspace_path: &str) -> Result<PathBuf, String> {
+    let p = PathBuf::from(workspace_path);
+    if !p.exists() {
+        return Err(format!("Workspace path does not exist: {workspace_path}"));
+    }
+    Ok(p.join(".ea-code"))
+}
+
+/// Ensures global config directories exist under `~/.ea-code/`.
 pub fn ensure_dirs() -> Result<(), String> {
     let base = config_dir()?;
 
@@ -177,10 +184,24 @@ pub fn ensure_dirs() -> Result<(), String> {
         .map_err(|e| format!("Failed to create config directory: {e}"))?;
     std::fs::create_dir_all(base.join("skills"))
         .map_err(|e| format!("Failed to create skills directory: {e}"))?;
-    std::fs::create_dir_all(base.join("projects"))
-        .map_err(|e| format!("Failed to create projects directory: {e}"))?;
     std::fs::create_dir_all(base.join("prompts"))
         .map_err(|e| format!("Failed to create prompts directory: {e}"))?;
+
+    Ok(())
+}
+
+/// Ensures workspace-local data directories exist under `<workspace>/.ea-code/`.
+/// Also adds `.ea-code/` to the workspace's `.gitignore` if applicable.
+pub fn ensure_workspace_dirs(workspace_path: &str) -> Result<(), String> {
+    let base = workspace_data_dir(workspace_path)?;
+
+    std::fs::create_dir_all(&base)
+        .map_err(|e| format!("Failed to create workspace data directory: {e}"))?;
+    std::fs::create_dir_all(base.join("sessions"))
+        .map_err(|e| format!("Failed to create workspace sessions directory: {e}"))?;
+
+    // Add .ea-code/ to .gitignore
+    crate::git::ensure_gitignore_entry(workspace_path);
 
     Ok(())
 }

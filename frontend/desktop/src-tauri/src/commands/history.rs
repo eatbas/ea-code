@@ -8,16 +8,12 @@ pub async fn list_projects() -> Result<Vec<crate::models::ProjectEntry>, String>
 }
 
 /// Returns session threads for a given project path.
-/// Resolves the filesystem path to a project_id, then lists sessions for that project.
+/// Lists sessions stored under `<project_path>/.ea-code/sessions/`.
 #[tauri::command]
 pub async fn list_sessions(
     project_path: String,
 ) -> Result<Vec<crate::models::SessionMeta>, String> {
-    let project = match storage::projects::find_by_path(&project_path) {
-        Some(p) => p,
-        None => return Ok(Vec::new()),
-    };
-    storage::sessions::list_sessions(&project.id)
+    storage::sessions::list_sessions(&project_path)
 }
 
 /// Returns paginated session detail with batch-loaded runs for the ChatView.
@@ -28,13 +24,14 @@ pub async fn list_sessions(
 #[tauri::command]
 pub async fn get_session_detail(
     session_id: String,
+    workspace_path: String,
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> Result<SessionDetail, String> {
-    let session = storage::sessions::read_session(&session_id)?;
+    let session = storage::sessions::read_session(&workspace_path, &session_id)?;
 
     // Get all runs for this session
-    let mut all_runs = storage::runs::list_runs(&session_id)?;
+    let mut all_runs = storage::runs::list_runs(&workspace_path, &session_id)?;
 
     // Sort by started_at descending (newest first) for pagination
     // This ensures we load the most recent runs when offset=0
@@ -52,7 +49,7 @@ pub async fn get_session_detail(
     paginated_runs.reverse();
 
     // Load chat messages for this session
-    let messages = storage::messages::read_messages(&session_id).unwrap_or_default();
+    let messages = storage::messages::read_messages(&workspace_path, &session_id).unwrap_or_default();
 
     Ok(SessionDetail {
         id: session.id,
@@ -67,7 +64,7 @@ pub async fn get_session_detail(
 }
 
 /// Creates a new session thread for a project.
-/// Resolves the filesystem path to a project_id to place the session correctly.
+/// Uses the project_path as the workspace_path for storage.
 #[tauri::command]
 pub async fn create_session(project_path: String) -> Result<String, String> {
     let project = storage::projects::find_by_path(&project_path)
@@ -77,45 +74,58 @@ pub async fn create_session(project_path: String) -> Result<String, String> {
     let meta = storage::sessions::create_session_meta(
         session_id.clone(),
         "New Session".to_string(),
-        project_path,
+        project_path.clone(),
         project.id,
     );
-    storage::sessions::create_session(&meta)?;
+    storage::sessions::create_session(&project_path, &meta)?;
     Ok(session_id)
 }
 
 /// Returns full detail for a single run.
 #[tauri::command]
-pub async fn get_run_detail(run_id: String) -> Result<RunDetail, String> {
-    let summary = storage::runs::read_summary(&run_id)?;
-    let events = storage::runs::read_events(&run_id)?;
+pub async fn get_run_detail(
+    run_id: String,
+    session_id: String,
+    workspace_path: String,
+) -> Result<RunDetail, String> {
+    let summary = storage::runs::read_summary(&workspace_path, &session_id, &run_id)?;
+    let events = storage::runs::read_events(&workspace_path, &session_id, &run_id)?;
     Ok(RunDetail { summary, events })
 }
 
 /// Get events for a specific run (lazy loading).
 #[tauri::command]
-pub async fn get_run_events(run_id: String) -> Result<Vec<RunEvent>, String> {
-    storage::runs::read_events(&run_id)
+pub async fn get_run_events(
+    run_id: String,
+    session_id: String,
+    workspace_path: String,
+) -> Result<Vec<RunEvent>, String> {
+    storage::runs::read_events(&workspace_path, &session_id, &run_id)
 }
 
 /// Returns all persisted artefacts for a run.
 #[tauri::command]
 pub async fn get_run_artifacts(
     run_id: String,
+    session_id: String,
+    workspace_path: String,
 ) -> Result<std::collections::HashMap<String, String>, String> {
-    storage::runs::read_all_artifacts(&run_id)
+    storage::runs::read_all_artifacts(&workspace_path, &session_id, &run_id)
 }
 
 /// Returns all chat messages for a session.
 #[tauri::command]
-pub async fn get_session_messages(session_id: String) -> Result<Vec<ChatMessage>, String> {
-    storage::messages::read_messages(&session_id)
+pub async fn get_session_messages(
+    session_id: String,
+    workspace_path: String,
+) -> Result<Vec<ChatMessage>, String> {
+    storage::messages::read_messages(&workspace_path, &session_id)
 }
 
 /// Deletes a session and all associated data.
 #[tauri::command]
-pub async fn delete_session(session_id: String) -> Result<(), String> {
-    storage::sessions::delete_session(&session_id)
+pub async fn delete_session(session_id: String, workspace_path: String) -> Result<(), String> {
+    storage::sessions::delete_session(&workspace_path, &session_id)
 }
 
 /// Deletes a project and all its sessions, runs, and index entries.

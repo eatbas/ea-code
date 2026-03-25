@@ -17,10 +17,10 @@ interface UseHistoryReturn {
   sessions: SessionMeta[];
   loadProjects: () => Promise<void>;
   loadSessions: (projectPath: string) => Promise<void>;
-  loadSessionDetail: (sessionId: string, options?: LoadSessionDetailOptions) => Promise<SessionDetail>;
-  loadMoreRuns: (sessionId: string, currentCount: number) => Promise<SessionDetail>;
+  loadSessionDetail: (sessionId: string, workspacePath: string, options?: LoadSessionDetailOptions) => Promise<SessionDetail>;
+  loadMoreRuns: (sessionId: string, workspacePath: string, currentCount: number) => Promise<SessionDetail>;
   createSession: (projectPath: string) => Promise<string>;
-  deleteSession: (sessionId: string) => Promise<void>;
+  deleteSession: (sessionId: string, workspacePath: string) => Promise<void>;
   deleteProject: (projectPath: string) => Promise<void>;
 }
 
@@ -48,18 +48,20 @@ export function useHistory(): UseHistoryReturn {
     }
   }, [toast]);
 
-  const loadSessionDetail = useCallback(async (sessionId: string, options?: LoadSessionDetailOptions): Promise<SessionDetail> => {
+  const loadSessionDetail = useCallback(async (sessionId: string, workspacePath: string, options?: LoadSessionDetailOptions): Promise<SessionDetail> => {
     return invoke<SessionDetail>("get_session_detail", {
       sessionId,
+      workspacePath,
       limit: options?.limit ?? 20,
       offset: options?.offset ?? 0,
     });
   }, []);
 
   /** Loads earlier runs and prepends them to the current session detail. */
-  const loadMoreRuns = useCallback(async (sessionId: string, currentCount: number): Promise<SessionDetail> => {
+  const loadMoreRuns = useCallback(async (sessionId: string, workspacePath: string, currentCount: number): Promise<SessionDetail> => {
     return invoke<SessionDetail>("get_session_detail", {
       sessionId,
+      workspacePath,
       limit: 20,
       offset: currentCount,
     });
@@ -69,8 +71,8 @@ export function useHistory(): UseHistoryReturn {
     return invoke<string>("create_session", { projectPath });
   }, []);
 
-  const deleteSession = useCallback(async (sessionId: string): Promise<void> => {
-    await invoke("delete_session", { sessionId });
+  const deleteSession = useCallback(async (sessionId: string, workspacePath: string): Promise<void> => {
+    await invoke("delete_session", { sessionId, workspacePath });
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
   }, []);
 

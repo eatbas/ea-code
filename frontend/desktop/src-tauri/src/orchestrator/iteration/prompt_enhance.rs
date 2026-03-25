@@ -33,15 +33,18 @@ pub async fn run_prompt_enhance_stage(
     })?;
 
     run.current_stage = Some(PipelineStage::PromptEnhance);
-    let seq_start = runs::next_sequence(run_id).unwrap_or(1);
+    let ws = &request.workspace_path;
+    let seq_start = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
     super::stages::append_stage_start_event(
+        ws,
+        session_id,
         run_id,
         &PipelineStage::PromptEnhance,
         iter_num,
         seq_start,
     )?;
 
-    let output_path = runs::artifact_output_path(run_id, iter_num, "enhanced_prompt").ok();
+    let output_path = runs::artifact_output_path(ws, session_id, run_id, iter_num, "enhanced_prompt").ok();
     let output_path_str = output_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
@@ -57,11 +60,14 @@ pub async fn run_prompt_enhance_stage(
     let input = AgentInput {
         prompt: prompts::build_prompt_enhancer_user(&request.prompt),
         // Keep prompt enhancement rewrite-only; avoid workspace execution context here.
-        context: Some(prompts::build_prompt_enhancer_system(meta)),
+        context: Some(prompts::build_prompt_enhancer_system(
+            meta,
+            Some(&runs::artifact_relative_path(session_id, run_id, iter_num, "enhanced_prompt")),
+        )),
         workspace_path: enhancer_workspace,
     };
 
-    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "enhanced_prompt", &input, iter_num);
+    crate::orchestrator::helpers::emit_prompt_artifact(ws, session_id, run_id, "enhanced_prompt", &input, iter_num);
 
     let pe_result = execute_agent_stage(
         app,
@@ -89,20 +95,24 @@ pub async fn run_prompt_enhance_stage(
     if pe_result.status != StageStatus::Failed {
         crate::orchestrator::helpers::emit_artifact(
             app,
+            ws,
+            session_id,
             run_id,
             "enhanced_prompt",
             &enhanced,
             iter_num,
         );
-        if let Ok(mut summary) = runs::read_summary(run_id) {
+        if let Ok(mut summary) = runs::read_summary(ws, session_id, run_id) {
             summary.enhanced_prompt = Some(enhanced.clone());
-            let _ = runs::update_summary(run_id, &summary);
+            let _ = runs::update_summary(ws, session_id, run_id, &summary);
         }
     }
 
     if pe_result.status == StageStatus::Failed {
         stages.push(pe_result);
         super::stages::append_stage_end_event(
+            ws,
+            session_id,
             run_id,
             &PipelineStage::PromptEnhance,
             iter_num,
@@ -118,12 +128,14 @@ pub async fn run_prompt_enhance_stage(
         });
         run.status = PipelineStatus::Failed;
         run.error = Some("Prompt Enhancer stage failed".to_string());
-        super::stages::update_run_summary(run_id, session_id, run)?;
+        super::stages::update_run_summary(ws, session_id, run_id, run)?;
         return Err("Prompt Enhancer stage failed".to_string());
     }
 
     stages.push(pe_result);
     super::stages::append_stage_end_event(
+        ws,
+        session_id,
         run_id,
         &PipelineStage::PromptEnhance,
         iter_num,

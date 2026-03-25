@@ -15,17 +15,7 @@ use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Migrate config directory from old location (AppData/Roaming/ea-code/) to new (~/.ea-code/)
-    if let Err(e) = storage::recovery::migrate_config_dir() {
-        eprintln!("Warning: config directory migration failed: {e}");
-    }
-
-    // Migrate flat sessions/ layout to projects/{id}/sessions/{id}/ hierarchy
-    if let Err(e) = storage::migration::migrate_to_project_hierarchy() {
-        eprintln!("Warning: storage hierarchy migration failed: {e}");
-    }
-
-    // Ensure storage directories exist
+    // Ensure global storage directories exist
     if let Err(e) = storage::ensure_dirs() {
         eprintln!("Failed to initialise storage directories: {e}");
     }
@@ -111,6 +101,7 @@ pub fn run() {
             answer_senders: Arc::new(Mutex::new(HashMap::new())),
             sidecar: sidecar.clone(),
             active_jobs: Arc::new(Mutex::new(HashMap::new())),
+            run_workspaces: Arc::new(Mutex::new(HashMap::new())),
         })
         .invoke_handler(tauri::generate_handler![
             commands::app::has_live_sessions,

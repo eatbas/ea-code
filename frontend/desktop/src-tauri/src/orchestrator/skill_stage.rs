@@ -98,10 +98,11 @@ pub async fn run_skill_selection_stage(
 
     run.current_stage = Some(PipelineStage::SkillSelect);
 
-    let seq_start = runs::next_sequence(run_id).unwrap_or(1);
-    append_stage_start_event(run_id, &PipelineStage::SkillSelect, iter_num, seq_start)?;
+    let ws = &request.workspace_path;
+    let seq_start = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
+    append_stage_start_event(ws, session_id, run_id, &PipelineStage::SkillSelect, iter_num, seq_start)?;
 
-    let skill_output_path = runs::artifact_output_path(run_id, iter_num, "skills").ok();
+    let skill_output_path = runs::artifact_output_path(ws, session_id, run_id, iter_num, "skills").ok();
     let skill_output_path_str = skill_output_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
@@ -115,13 +116,16 @@ pub async fn run_skill_selection_stage(
             &skill_catalog_json,
         ),
         context: Some(compose_agent_context(
-            prompts::build_skill_selector_system(meta),
+            prompts::build_skill_selector_system(
+                meta,
+                Some(&runs::artifact_relative_path(session_id, run_id, iter_num, "skills")),
+            ),
             workspace_context,
         )),
         workspace_path: request.workspace_path.clone(),
     };
 
-    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "skill_select", &input, iter_num);
+    crate::orchestrator::helpers::emit_prompt_artifact(ws, session_id, run_id, "skill_select", &input, iter_num);
 
     let result = execute_agent_stage(
         app,
@@ -146,6 +150,8 @@ pub async fn run_skill_selection_stage(
     if result.status == StageStatus::Failed {
         stages.push(result);
         append_stage_end_event(
+            ws,
+            session_id,
             run_id,
             &PipelineStage::SkillSelect,
             iter_num,
@@ -165,6 +171,8 @@ pub async fn run_skill_selection_stage(
     }
     stages.push(result);
     append_stage_end_event(
+        ws,
+        session_id,
         run_id,
         &PipelineStage::SkillSelect,
         iter_num,
@@ -201,6 +209,8 @@ pub async fn run_skill_selection_stage(
 
 /// Appends a stage_start event to the event log.
 fn append_stage_start_event(
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     stage: &PipelineStage,
     iteration: u32,
@@ -213,11 +223,13 @@ fn append_stage_start_event(
         stage: stage.clone(),
         iteration,
     };
-    runs::append_event(run_id, event)
+    runs::append_event(workspace_path, session_id, run_id, event)
 }
 
 /// Appends a stage_end event to the event log.
 fn append_stage_end_event(
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     stage: &PipelineStage,
     iteration: u32,
@@ -240,5 +252,5 @@ fn append_stage_end_event(
         session_pair: None,
         resumed: None,
     };
-    runs::append_event(run_id, event)
+    runs::append_event(workspace_path, session_id, run_id, event)
 }

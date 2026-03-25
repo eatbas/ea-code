@@ -2,7 +2,17 @@
 
 use super::PromptMeta;
 
-pub fn build_plan_auditor_system(meta: &PromptMeta) -> String {
+pub fn build_plan_auditor_system(meta: &PromptMeta, output_path: Option<&str>) -> String {
+    let output_instruction = match output_path {
+        Some(path) => format!(
+            "- Write your improved plan to this file (relative to workspace root): {path}\n\
+             That is the ONLY file you may create or write to."
+        ),
+        None => "- If an OUTPUT FILE path is provided at the end of the prompt, write \
+         your improved plan there. That is the ONLY file you may write."
+            .to_string(),
+    };
+
     format!(
         "# Role\n\
          You are the Plan Improver agent in a multi-agent coding pipeline \
@@ -15,8 +25,7 @@ pub fn build_plan_auditor_system(meta: &PromptMeta) -> String {
          - NEVER execute shell commands that change the file system.\n\
          - You may use read-only tools (Read, Grep, Glob, List) to verify \
          the plan against the codebase.\n\
-         - If an OUTPUT FILE path is provided at the end of the prompt, write \
-         your improved plan there. That is the ONLY file you may write.\n\
+         {output_instruction}\n\
          \n\
          # Improvement Requirements\n\
          - Make the plan stronger while keeping the original intent unchanged.\n\
@@ -59,7 +68,17 @@ pub fn build_plan_auditor_user(
 }
 
 /// System prompt for the Plan Merger when merging multiple parallel plans.
-pub fn build_plan_auditor_merge_system(meta: &PromptMeta) -> String {
+pub fn build_plan_auditor_merge_system(meta: &PromptMeta, output_path: Option<&str>) -> String {
+    let output_instruction = match output_path {
+        Some(path) => format!(
+            "- Write your merged plan to this file (relative to workspace root): {path}\n\
+             That is the ONLY file you may create or write to."
+        ),
+        None => "- If an OUTPUT FILE path is provided at the end of the prompt, write \
+         your merged plan there. That is the ONLY file you may write."
+            .to_string(),
+    };
+
     format!(
         "# Role\n\
          You are the Plan Merger agent in a multi-agent coding pipeline \
@@ -73,8 +92,7 @@ pub fn build_plan_auditor_merge_system(meta: &PromptMeta) -> String {
          - NEVER execute shell commands that change the file system.\n\
          - You may use read-only tools (Read, Grep, Glob, List) to verify \
          the plans against the codebase.\n\
-         - If an OUTPUT FILE path is provided at the end of the prompt, write \
-         your merged plan there. That is the ONLY file you may write.\n\
+         {output_instruction}\n\
          \n\
          # Merging Strategy\n\
          1. Identify steps that MULTIPLE planners agree on — high-confidence.\n\

@@ -44,12 +44,13 @@ pub async fn run_generate_stage(
     })?;
 
     run.current_stage = Some(PipelineStage::Coder);
-    let gen_seq = runs::next_sequence(run_id).unwrap_or(1);
-    super::stages::append_stage_start_event(run_id, &PipelineStage::Coder, iter_num, gen_seq)?;
+    let ws = &request.workspace_path;
+    let gen_seq = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
+    super::stages::append_stage_start_event(ws, session_id, run_id, &PipelineStage::Coder, iter_num, gen_seq)?;
 
     // File-reference the enhanced prompt and plan to keep prompt size small.
     let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
-        run_id, iter_num, "enhanced_prompt",
+        ws, session_id, run_id, iter_num, "enhanced_prompt",
     )
     .map(|p| crate::orchestrator::helpers::file_ref(&p))
     .unwrap_or_else(|| enhanced.to_string());
@@ -60,7 +61,7 @@ pub async fn run_generate_stage(
         } else {
             "plan"
         };
-        crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, kind)
+        crate::orchestrator::helpers::artifact_file_path(ws, session_id, run_id, iter_num, kind)
             .map(|p| crate::orchestrator::helpers::file_ref(&p))
     });
 
@@ -80,7 +81,7 @@ pub async fn run_generate_stage(
         workspace_path: request.workspace_path.clone(),
     };
 
-    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "coder", &input, iter_num);
+    crate::orchestrator::helpers::emit_prompt_artifact(ws, session_id, run_id, "coder", &input, iter_num);
 
     let gen_r = execute_agent_stage(
         app,
@@ -105,6 +106,8 @@ pub async fn run_generate_stage(
     if gen_r.status == StageStatus::Failed {
         stages.push(gen_r);
         super::stages::append_stage_end_event(
+            ws,
+            session_id,
             run_id,
             &PipelineStage::Coder,
             iter_num,
@@ -120,12 +123,14 @@ pub async fn run_generate_stage(
         });
         run.status = PipelineStatus::Failed;
         run.error = Some("Coder stage failed".to_string());
-        super::stages::update_run_summary(run_id, session_id, run)?;
+        super::stages::update_run_summary(ws, session_id, run_id, run)?;
         return Err("Coder stage failed".to_string());
     }
 
     stages.push(gen_r);
     super::stages::append_stage_end_event(
+        ws,
+        session_id,
         run_id,
         &PipelineStage::Coder,
         iter_num,
@@ -136,7 +141,7 @@ pub async fn run_generate_stage(
 
     if is_cancelled(cancel_flag) {
         push_cancel_iteration(run, iter_num, std::mem::take(stages));
-        super::stages::update_run_summary(run_id, session_id, run)?;
+        super::stages::update_run_summary(ws, session_id, run_id, run)?;
         return Err("Cancelled".to_string());
     }
 
@@ -146,6 +151,8 @@ pub async fn run_generate_stage(
 
         let answer = ask_user_question(
             app,
+            ws,
+            session_id,
             run_id,
             &PipelineStage::Coder,
             iter_num,
@@ -159,7 +166,7 @@ pub async fn run_generate_stage(
 
         if is_cancelled(cancel_flag) {
             push_cancel_iteration(run, iter_num, std::mem::take(stages));
-            super::stages::update_run_summary(run_id, session_id, run)?;
+            super::stages::update_run_summary(ws, session_id, run_id, run)?;
             return Err("Cancelled".to_string());
         }
 

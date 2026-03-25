@@ -132,7 +132,7 @@ pub async fn run_iteration(
 
     if is_cancelled(cancel_flag) {
         push_cancel_iteration(run, iter_num, stages);
-        stages::update_run_summary(run_id, session_id, run)?;
+        stages::update_run_summary(&request.workspace_path, session_id, run_id, run)?;
         return Ok(true);
     }
 
@@ -163,7 +163,7 @@ pub async fn run_iteration(
     }
 
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
-        stages::update_run_summary(run_id, session_id, run)?;
+        stages::update_run_summary(&request.workspace_path, session_id, run_id, run)?;
         return Ok(true);
     }
 
@@ -176,6 +176,7 @@ pub async fn run_iteration(
             pause_flag,
             answer_sender,
             run_id,
+            session_id,
             iter_num,
             &meta,
             &enhanced,
@@ -186,7 +187,7 @@ pub async fn run_iteration(
         )
         .await?;
         if should_break {
-            stages::update_run_summary(run_id, session_id, run)?;
+            stages::update_run_summary(&request.workspace_path, session_id, run_id, run)?;
             return Ok(true);
         }
         carry.last_approved_plan = iter_ctx.selected_plan().map(|plan| plan.to_string());
@@ -218,17 +219,17 @@ pub async fn run_iteration(
     }
 
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
-        stages::update_run_summary(run_id, session_id, run)?;
+        stages::update_run_summary(&request.workspace_path, session_id, run_id, run)?;
         return Ok(true);
     }
     if wait_if_paused(pause_flag, cancel_flag).await {
         push_cancel_iteration(run, iter_num, stages);
-        stages::update_run_summary(run_id, session_id, run)?;
+        stages::update_run_summary(&request.workspace_path, session_id, run_id, run)?;
         return Ok(true);
     }
     if is_cancelled(cancel_flag) {
         push_cancel_iteration(run, iter_num, stages);
-        stages::update_run_summary(run_id, session_id, run)?;
+        stages::update_run_summary(&request.workspace_path, session_id, run_id, run)?;
         return Ok(true);
     }
 
@@ -264,7 +265,7 @@ pub async fn run_iteration(
     }
 
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
-        stages::update_run_summary(run_id, session_id, run)?;
+        stages::update_run_summary(&request.workspace_path, session_id, run_id, run)?;
         return Ok(true);
     }
 
@@ -297,7 +298,7 @@ pub async fn run_iteration(
     }
 
     if run.status == PipelineStatus::Failed || run.status == PipelineStatus::Cancelled {
-        stages::update_run_summary(run_id, session_id, run)?;
+        stages::update_run_summary(&request.workspace_path, session_id, run_id, run)?;
         return Ok(true);
     }
 

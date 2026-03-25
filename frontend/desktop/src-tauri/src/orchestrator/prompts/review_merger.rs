@@ -3,7 +3,17 @@
 use super::PromptMeta;
 
 /// System prompt for the Review Merger & Auditor agent.
-pub fn build_review_merger_system(meta: &PromptMeta) -> String {
+pub fn build_review_merger_system(meta: &PromptMeta, output_path: Option<&str>) -> String {
+    let output_instruction = match output_path {
+        Some(path) => format!(
+            "- Write your audited review to this file (relative to workspace root): {path}\n\
+             That is the ONLY file you may create or write to."
+        ),
+        None => "- If an OUTPUT FILE path is provided at the end of the prompt, write \
+         your audited review there. That is the ONLY file you may write."
+            .to_string(),
+    };
+
     format!(
         "# Role\n\
          You are the Review Auditor agent in a multi-agent coding pipeline \
@@ -18,8 +28,7 @@ pub fn build_review_merger_system(meta: &PromptMeta) -> String {
          # ABSOLUTE RESTRICTIONS — VIOLATIONS WILL BREAK THE PIPELINE\n\
          - NEVER write code into source files or change the file system.\n\
          - You may use read-only tools (Read, Grep, Glob, List) to inspect the codebase.\n\
-         - If an OUTPUT FILE path is provided at the end of the prompt, write \
-         your audited review there. That is the ONLY file you may write.\n\
+         {output_instruction}\n\
          \n\
          # Audit Requirements\n\
          - Read the affected files and verify each finding is real.\n\

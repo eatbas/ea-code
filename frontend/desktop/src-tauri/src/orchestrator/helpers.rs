@@ -47,23 +47,13 @@ pub fn file_ref(path: &std::path::Path) -> String {
 /// Returns the artifact path for a completed stage, or `None` if the path
 /// cannot be resolved (e.g. missing run/session index entry).
 pub fn artifact_file_path(
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     iteration: u32,
     kind: &str,
 ) -> Option<std::path::PathBuf> {
-    runs::artifact_output_path(run_id, iteration, kind).ok()
-}
-
-/// Detects output that is a file-write instruction rather than real content.
-///
-/// Some CLIs (notably Claude Code) may instruct the model to write plans to
-/// `PLAN.md` rather than returning the text inline. When that happens the
-/// captured stdout contains only a short directive like:
-///   `--- OUTPUT FILE ---\nWrite your plan to this file: …\PLAN.md`
-pub(crate) fn looks_like_output_file_instruction(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    (lower.contains("--- output file ---") || lower.contains("write your plan to this file"))
-        && lower.contains("plan.md")
+    runs::artifact_output_path(workspace_path, session_id, run_id, iteration, kind).ok()
 }
 
 /// Result of dispatching an agent, including session continuity metadata.
@@ -106,24 +96,6 @@ pub async fn dispatch_agent(
         ));
     }
 
-    // For text-only stages, derive a workspace-local temp file path so CLIs
-    // with native file-output support can write there safely. We no longer ask
-    // the model itself to create the file.
-    let workspace_output_file = output_file.map(|artifact_path| {
-        let stem = std::path::Path::new(artifact_path)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("output");
-        let name = format!(".ea-pipeline-{stem}.md");
-        let p = std::path::Path::new(&input.workspace_path).join(&name);
-        // Remove any stale file from a previous run.
-        let _ = std::fs::remove_file(&p);
-        (p, name)
-    });
-    let _workspace_output_file_str = workspace_output_file
-        .as_ref()
-        .map(|(path, _)| path.to_string_lossy().to_string());
-
     // Ensure the hive-api sidecar is running before dispatching.
     let app_state = app.state::<AppState>();
     app_state.sidecar.ensure_running().await?;
@@ -162,33 +134,9 @@ pub async fn dispatch_agent(
     let captured_session_ref = api_ok.provider_session_ref;
 
     // For text stages, persist the final textual artifact even when the CLI
-    // only emitted to stdout. Native file-output is preferred when available.
+    // only emitted to stdout.
     if matches!(intent, StageExecutionIntent::Text) {
-        let mut final_text = result.raw_text.trim().to_string();
-        if let Some((ref ws_file, _)) = workspace_output_file {
-            if let Ok(content) = std::fs::read_to_string(ws_file) {
-                let trimmed = content.trim();
-                if !trimmed.is_empty() {
-                    final_text = trimmed.to_string();
-                }
-            }
-            let _ = std::fs::remove_file(ws_file);
-        }
-
-        // Fallback: some CLIs (e.g. Claude Code) may write to PLAN.md in the
-        // workspace instead of returning the plan inline. If the captured output
-        // looks like a file-write instruction rather than real content, try
-        // reading PLAN.md from the workspace.
-        if looks_like_output_file_instruction(&final_text) || final_text.is_empty() {
-            let plan_md = std::path::Path::new(&input.workspace_path).join("PLAN.md");
-            if let Ok(content) = std::fs::read_to_string(&plan_md) {
-                let trimmed = content.trim();
-                if !trimmed.is_empty() {
-                    final_text = trimmed.to_string();
-                    let _ = std::fs::remove_file(&plan_md);
-                }
-            }
-        }
+        let final_text = result.raw_text.trim().to_string();
 
         if let Some(artifact_path) = output_file {
             let _ = std::fs::write(artifact_path, &final_text);
@@ -349,19 +297,19 @@ pub fn emit_stage_with_duration(
             duration_ms,
         },
     );
-
-    // Update summary.json with current stage for crash recovery
-    if let Ok(mut summary) = runs::read_summary(run_id) {
-        if matches!(status, StageStatus::Running) {
-            summary.current_stage = Some(stage.clone());
-            let _ = runs::update_summary(run_id, &summary);
-        }
-    }
 }
 
 /// Emits a pipeline artefact event so the frontend can display stage outputs,
 /// and persists the artefact to disk for historical viewing.
-pub fn emit_artifact(app: &AppHandle, run_id: &str, kind: &str, content: &str, iteration: u32) {
+pub fn emit_artifact(
+    app: &AppHandle,
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+    kind: &str,
+    content: &str,
+    iteration: u32,
+) {
     let _ = app.emit(
         EVENT_PIPELINE_ARTIFACT,
         PipelineArtifactPayload {
@@ -373,7 +321,7 @@ pub fn emit_artifact(app: &AppHandle, run_id: &str, kind: &str, content: &str, i
     );
 
     // Persist artefact to disk for historical viewing
-    if let Err(e) = runs::write_artifact(run_id, iteration, kind, content) {
+    if let Err(e) = runs::write_artifact(workspace_path, session_id, run_id, iteration, kind, content) {
         eprintln!("Warning: Failed to persist artefact '{kind}': {e}");
     }
 }
@@ -383,13 +331,20 @@ pub fn emit_artifact(app: &AppHandle, run_id: &str, kind: &str, content: &str, i
 /// This captures the complete system + user prompt for debugging and
 /// reproducibility. Does not emit a frontend event — input prompts are
 /// only persisted to disk.
-pub fn emit_prompt_artifact(run_id: &str, kind: &str, input: &AgentInput, iteration: u32) {
+pub fn emit_prompt_artifact(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+    kind: &str,
+    input: &AgentInput,
+    iteration: u32,
+) {
     let mut content = input.prompt.clone();
     if let Some(ref ctx) = input.context {
         content = format!("{ctx}\n\n---\n\n{content}");
     }
     let input_kind = format!("{kind}_input");
-    if let Err(e) = runs::write_artifact(run_id, iteration, &input_kind, &content) {
+    if let Err(e) = runs::write_artifact(workspace_path, session_id, run_id, iteration, &input_kind, &content) {
         eprintln!("Warning: Failed to persist prompt artifact '{input_kind}': {e}");
     }
 }
@@ -493,13 +448,17 @@ pub fn backend_to_db_str(backend: &AgentBackend) -> &'static str {
 /// Session refs are looked up before dispatch and stored after.
 /// The tracker persists to `cli_sessions.json` after each update.
 pub struct CliSessionTracker {
+    workspace_path: String,
+    session_id: String,
     run_id: String,
     sessions: HashMap<String, String>, // pair_name -> provider_session_ref
 }
 
 impl CliSessionTracker {
-    pub fn new(run_id: String) -> Self {
+    pub fn new(workspace_path: String, session_id: String, run_id: String) -> Self {
         Self {
+            workspace_path,
+            session_id,
             run_id,
             sessions: HashMap::new(),
         }
@@ -527,7 +486,13 @@ impl CliSessionTracker {
                 created_at: crate::storage::now_rfc3339(),
                 last_used_at: crate::storage::now_rfc3339(),
             };
-            if let Err(e) = crate::storage::runs::update_cli_session(&self.run_id, pair, entry) {
+            if let Err(e) = crate::storage::runs::update_cli_session(
+                &self.workspace_path,
+                &self.session_id,
+                &self.run_id,
+                pair,
+                entry,
+            ) {
                 eprintln!("Warning: Failed to persist CLI session ref for {pair}: {e}");
             }
         }

@@ -1,23 +1,12 @@
 use crate::models::ProjectEntry;
 
-use super::{atomic_write, config_dir, now_rfc3339, validate_id, with_projects_lock};
+use super::{atomic_write, config_dir, now_rfc3339, with_projects_lock};
 
 const MAX_PROJECTS: usize = 50;
 
-/// Returns the projects root directory.
-fn projects_dir() -> Result<std::path::PathBuf, String> {
-    Ok(config_dir()?.join("projects"))
-}
-
-/// Returns the project directory for a given project ID.
-pub fn project_dir(id: &str) -> Result<std::path::PathBuf, String> {
-    validate_id(id)?;
-    Ok(projects_dir()?.join(id))
-}
-
-/// Returns the project.json file path for a project.
-fn project_path(id: &str) -> Result<std::path::PathBuf, String> {
-    Ok(project_dir(id)?.join("project.json"))
+/// Returns the path to the flat projects registry: `~/.ea-code/projects.json`.
+fn projects_file() -> Result<std::path::PathBuf, String> {
+    Ok(config_dir()?.join("projects.json"))
 }
 
 /// Sorts projects by last_opened descending (most recent first).
@@ -31,47 +20,32 @@ fn sort_by_last_opened(projects: &mut [ProjectEntry]) {
     });
 }
 
-/// Reads all projects by scanning `projects/*/project.json`, sorted by last_opened descending.
-/// Returns empty vector if no projects exist.
+/// Reads the flat projects.json array, sorted by last_opened descending.
+/// Returns empty vector if file does not exist.
 pub fn read_projects() -> Result<Vec<ProjectEntry>, String> {
-    let dir = projects_dir()?;
+    let path = projects_file()?;
 
-    if !dir.exists() {
+    if !path.exists() {
         return Ok(Vec::new());
     }
 
-    let mut projects = Vec::new();
+    let contents = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read projects.json: {e}"))?;
 
-    let entries =
-        std::fs::read_dir(&dir).map_err(|e| format!("Failed to read projects directory: {e}"))?;
-
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
-        let path = entry.path();
-
-        if path.is_dir() {
-            let json_path = path.join("project.json");
-            if json_path.exists() {
-                match std::fs::read_to_string(&json_path) {
-                    Ok(contents) => match serde_json::from_str::<ProjectEntry>(&contents) {
-                        Ok(project) => projects.push(project),
-                        Err(e) => eprintln!(
-                            "Warning: Failed to parse project file {}: {e}",
-                            json_path.display()
-                        ),
-                    },
-                    Err(e) => eprintln!(
-                        "Warning: Failed to read project file {}: {e}",
-                        json_path.display()
-                    ),
-                }
-            }
-        }
-    }
+    let mut projects: Vec<ProjectEntry> =
+        serde_json::from_str(&contents).unwrap_or_default();
 
     sort_by_last_opened(&mut projects);
 
     Ok(projects)
+}
+
+/// Writes the full projects array to disk atomically.
+fn write_projects(projects: &[ProjectEntry]) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(projects)
+        .map_err(|e| format!("Failed to serialise projects: {e}"))?;
+    let path = projects_file()?;
+    atomic_write(&path, &json)
 }
 
 /// Finds a project by its filesystem path.
@@ -81,107 +55,76 @@ pub fn find_by_path(path: &str) -> Option<ProjectEntry> {
     projects.into_iter().find(|p| p.path == path)
 }
 
-/// Writes a single project's metadata to `projects/{id}/project.json`.
-fn write_project(entry: &ProjectEntry) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(entry)
-        .map_err(|e| format!("Failed to serialise project: {e}"))?;
-    let path = project_path(&entry.id)?;
-    atomic_write(&path, &json)
-}
-
 /// Adds or updates a project entry, maintaining the 50-entry cap.
 /// If the project already exists (by path), updates last_opened.
+/// Also ensures the workspace `.ea-code/` directory exists.
 /// H8: Protected by file lock for concurrent access.
 pub fn add_project(entry: &ProjectEntry) -> Result<(), String> {
     with_projects_lock(|| {
         let mut projects = read_projects()?;
 
-        // Check if project already exists by path
         if let Some(existing) = projects.iter_mut().find(|p| p.path == entry.path) {
-            // Update existing entry
             existing.last_opened = Some(now_rfc3339());
             existing.name = entry.name.clone();
-            write_project(existing)?;
         } else {
-            // Add new entry
             let mut new_entry = entry.clone();
             new_entry.last_opened = Some(now_rfc3339());
-            write_project(&new_entry)?;
             projects.push(new_entry);
         }
 
         // Enforce cap: remove oldest projects beyond MAX_PROJECTS
         sort_by_last_opened(&mut projects);
         if projects.len() > MAX_PROJECTS {
-            for old in projects.drain(MAX_PROJECTS..) {
-                let dir = project_dir(&old.id)?;
-                if dir.exists() {
-                    let _ = std::fs::remove_dir_all(&dir);
-                }
-            }
+            projects.truncate(MAX_PROJECTS);
         }
+
+        write_projects(&projects)?;
+
+        // Ensure workspace data directory exists
+        let _ = super::ensure_workspace_dirs(&entry.path);
 
         Ok(())
     })
 }
 
-/// Removes a project by its path, deleting the entire project directory
-/// and cleaning up session/run index entries.
+/// Removes a project by its path from the flat registry.
 /// H8: Protected by file lock for concurrent access.
 pub fn remove_project(path: &str) -> Result<(), String> {
     with_projects_lock(|| {
-        let projects = read_projects()?;
-        let entry = projects
-            .iter()
-            .find(|p| p.path == path)
-            .ok_or_else(|| format!("Project not found: {path}"))?;
+        let mut projects = read_projects()?;
+        let before = projects.len();
+        projects.retain(|p| p.path != path);
 
-        // Clean up index entries for all sessions belonging to this project.
-        remove_project_from_index(&entry.id);
-
-        let dir = project_dir(&entry.id)?;
-        if dir.exists() {
-            std::fs::remove_dir_all(&dir)
-                .map_err(|e| format!("Failed to delete project directory: {e}"))?;
+        if projects.len() == before {
+            return Err(format!("Project not found: {path}"));
         }
 
-        Ok(())
+        write_projects(&projects)
     })
-}
-
-/// Removes all index entries (sessions and runs) belonging to a project.
-fn remove_project_from_index(project_id: &str) {
-    if let Ok(idx) = super::index::load() {
-        let session_ids: Vec<String> = idx
-            .sessions
-            .iter()
-            .filter(|(_sid, pid)| *pid == project_id)
-            .map(|(sid, _)| sid.clone())
-            .collect();
-        for sid in session_ids {
-            let _ = super::index::remove_session_from_index(&sid);
-        }
-    }
 }
 
 /// Removes projects whose filesystem path no longer exists on disk.
 /// Called during startup to keep the project list clean.
 pub fn cleanup_missing_projects() -> Result<(), String> {
     let projects = read_projects()?;
-    for project in &projects {
-        let path = std::path::Path::new(&project.path);
-        if !path.exists() {
+    let mut changed = false;
+    let mut kept = Vec::new();
+
+    for project in projects {
+        let p = std::path::Path::new(&project.path);
+        if p.exists() {
+            kept.push(project);
+        } else {
             eprintln!(
                 "Removing stale project (folder missing): {} → {}",
                 project.name, project.path
             );
-            // Clean up index entries first, then delete project directory.
-            remove_project_from_index(&project.id);
-            let dir = project_dir(&project.id)?;
-            if dir.exists() {
-                let _ = std::fs::remove_dir_all(&dir);
-            }
+            changed = true;
         }
+    }
+
+    if changed {
+        write_projects(&kept)?;
     }
     Ok(())
 }
@@ -202,6 +145,7 @@ pub fn create_project_entry(id: String, path: String, name: String) -> ProjectEn
 
 /// Upserts a project entry from workspace selection.
 /// Creates new entry if path doesn't exist, updates last_opened if it does.
+/// Also ensures the workspace `.ea-code/` directory exists.
 /// H8: Protected by file lock for concurrent access.
 pub fn upsert(
     path: &str,
@@ -213,14 +157,11 @@ pub fn upsert(
         let mut projects = read_projects()?;
 
         if let Some(existing) = projects.iter_mut().find(|p| p.path == path) {
-            // Update existing entry
             existing.last_opened = Some(now_rfc3339());
             existing.name = name.to_string();
             existing.is_git_repo = is_git_repo;
             existing.branch = branch.map(|b| b.to_string());
-            write_project(existing)?;
         } else {
-            // Create new entry
             let id = uuid::Uuid::new_v4().to_string();
             let now = now_rfc3339();
             let entry = ProjectEntry {
@@ -232,20 +173,19 @@ pub fn upsert(
                 is_git_repo,
                 branch: branch.map(|b| b.to_string()),
             };
-            write_project(&entry)?;
             projects.push(entry);
         }
 
         // Enforce cap
         sort_by_last_opened(&mut projects);
         if projects.len() > MAX_PROJECTS {
-            for old in projects.drain(MAX_PROJECTS..) {
-                let dir = project_dir(&old.id)?;
-                if dir.exists() {
-                    let _ = std::fs::remove_dir_all(&dir);
-                }
-            }
+            projects.truncate(MAX_PROJECTS);
         }
+
+        write_projects(&projects)?;
+
+        // Ensure workspace data directory exists
+        let _ = super::ensure_workspace_dirs(path);
 
         Ok(())
     })

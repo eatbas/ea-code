@@ -1,76 +1,44 @@
 use crate::models::SessionMeta;
 
-use super::index;
-use super::{atomic_write, config_dir, now_rfc3339, validate_id, with_session_lock};
+use super::{atomic_write, now_rfc3339, validate_id, with_session_lock, workspace_data_dir};
 
-/// Returns the session directory path within a known project.
-/// Used during creation when the session is not yet in the index.
-pub fn session_dir_for_project(
-    project_id: &str,
-    session_id: &str,
-) -> Result<std::path::PathBuf, String> {
-    validate_id(project_id)?;
+/// Returns the session directory under the workspace.
+pub fn session_dir(workspace_path: &str, session_id: &str) -> Result<std::path::PathBuf, String> {
     validate_id(session_id)?;
-    Ok(config_dir()?
-        .join("projects")
-        .join(project_id)
+    Ok(workspace_data_dir(workspace_path)?
         .join("sessions")
         .join(session_id))
 }
 
-/// Returns the session directory path by looking up the project from the index.
-/// Used for reads/updates after the session has been created.
-pub fn session_dir(id: &str) -> Result<std::path::PathBuf, String> {
-    validate_id(id)?;
-    let project_id = index::get_project_for_session(id)?;
-    session_dir_for_project(&project_id, id)
-}
-
 /// Returns the session.json file path.
-fn session_path_for_project(
-    project_id: &str,
-    session_id: &str,
-) -> Result<std::path::PathBuf, String> {
-    Ok(session_dir_for_project(project_id, session_id)?.join("session.json"))
-}
-
-/// Returns the session.json file path (via index lookup).
-fn session_path(id: &str) -> Result<std::path::PathBuf, String> {
-    Ok(session_dir(id)?.join("session.json"))
+fn session_path(workspace_path: &str, session_id: &str) -> Result<std::path::PathBuf, String> {
+    Ok(session_dir(workspace_path, session_id)?.join("session.json"))
 }
 
 /// Creates a new session with the given metadata.
-/// Writes to `projects/{project_id}/sessions/{session_id}/session.json`.
 /// H8: Protected by file lock for concurrent access.
-pub fn create_session(meta: &SessionMeta) -> Result<(), String> {
+pub fn create_session(workspace_path: &str, meta: &SessionMeta) -> Result<(), String> {
     validate_id(&meta.id)?;
-    validate_id(&meta.project_id)?;
     with_session_lock(|| {
-        let path = session_path_for_project(&meta.project_id, &meta.id)?;
-
-        // Create session directory
-        std::fs::create_dir_all(session_dir_for_project(&meta.project_id, &meta.id)?)
+        let dir = session_dir(workspace_path, &meta.id)?;
+        std::fs::create_dir_all(&dir)
             .map_err(|e| format!("Failed to create session directory: {e}"))?;
 
+        let path = dir.join("session.json");
         let json = serde_json::to_string_pretty(meta)
             .map_err(|e| format!("Failed to serialise session: {e}"))?;
 
-        atomic_write(&path, &json)?;
-
-        // Register in index
-        index::add_session_to_index(&meta.id, &meta.project_id)?;
-
-        Ok(())
+        atomic_write(&path, &json)
     })
 }
 
 /// Reads a session's metadata.
-pub fn read_session(id: &str) -> Result<SessionMeta, String> {
-    validate_id(id)?;
-    let path = session_path(id)?;
+pub fn read_session(workspace_path: &str, session_id: &str) -> Result<SessionMeta, String> {
+    validate_id(session_id)?;
+    let path = session_path(workspace_path, session_id)?;
 
     if !path.exists() {
-        return Err(format!("Session not found: {id}"));
+        return Err(format!("Session not found: {session_id}"));
     }
 
     let contents =
@@ -84,10 +52,10 @@ pub fn read_session(id: &str) -> Result<SessionMeta, String> {
 
 /// Updates a session's metadata (atomically).
 /// H8: Protected by file lock for concurrent access.
-pub fn update_session(meta: &SessionMeta) -> Result<(), String> {
+pub fn update_session(workspace_path: &str, meta: &SessionMeta) -> Result<(), String> {
     validate_id(&meta.id)?;
     with_session_lock(|| {
-        let path = session_path(&meta.id)?;
+        let path = session_path(workspace_path, &meta.id)?;
 
         if !path.exists() {
             return Err(format!("Session not found: {}", meta.id));
@@ -100,14 +68,10 @@ pub fn update_session(meta: &SessionMeta) -> Result<(), String> {
     })
 }
 
-/// Lists sessions for a specific project by scanning its sessions directory.
+/// Lists sessions for a workspace by scanning its sessions directory.
 /// Returns sessions sorted by updated_at descending (most recent first).
-pub fn list_sessions(project_id: &str) -> Result<Vec<SessionMeta>, String> {
-    validate_id(project_id)?;
-    let sessions_dir = config_dir()?
-        .join("projects")
-        .join(project_id)
-        .join("sessions");
+pub fn list_sessions(workspace_path: &str) -> Result<Vec<SessionMeta>, String> {
+    let sessions_dir = workspace_data_dir(workspace_path)?.join("sessions");
 
     if !sessions_dir.exists() {
         return Ok(Vec::new());
@@ -119,30 +83,18 @@ pub fn list_sessions(project_id: &str) -> Result<Vec<SessionMeta>, String> {
     Ok(sessions)
 }
 
-/// Lists ALL sessions across all projects (for crash recovery).
+/// Lists ALL sessions across all known workspaces (for crash recovery).
 /// Returns sessions sorted by updated_at descending (most recent first).
 pub fn list_all_sessions() -> Result<Vec<SessionMeta>, String> {
-    let projects_dir = config_dir()?.join("projects");
-
-    if !projects_dir.exists() {
-        return Ok(Vec::new());
-    }
-
+    let projects = super::projects::read_projects()?;
     let mut all_sessions = Vec::new();
 
-    let project_entries = std::fs::read_dir(&projects_dir)
-        .map_err(|e| format!("Failed to read projects directory: {e}"))?;
-
-    for project_entry in project_entries {
-        let project_entry =
-            project_entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
-        let project_path = project_entry.path();
-
-        if !project_path.is_dir() {
+    for project in &projects {
+        let ws = std::path::Path::new(&project.path);
+        if !ws.exists() {
             continue;
         }
-
-        let sessions_dir = project_path.join("sessions");
+        let sessions_dir = ws.join(".ea-code").join("sessions");
         if sessions_dir.exists() {
             if let Ok(sessions) = scan_sessions_dir(&sessions_dir) {
                 all_sessions.extend(sessions);
@@ -191,20 +143,17 @@ fn scan_sessions_dir(sessions_dir: &std::path::Path) -> Result<Vec<SessionMeta>,
 
 /// Deletes a session and all its runs (recursive delete).
 /// H8: Protected by file lock for concurrent access.
-pub fn delete_session(id: &str) -> Result<(), String> {
-    validate_id(id)?;
+pub fn delete_session(workspace_path: &str, session_id: &str) -> Result<(), String> {
+    validate_id(session_id)?;
     with_session_lock(|| {
-        let dir = session_dir(id)?;
+        let dir = session_dir(workspace_path, session_id)?;
 
         if !dir.exists() {
-            return Err(format!("Session not found: {id}"));
+            return Err(format!("Session not found: {session_id}"));
         }
 
         std::fs::remove_dir_all(&dir)
             .map_err(|e| format!("Failed to delete session directory: {e}"))?;
-
-        // Remove from index (also removes all associated runs)
-        index::remove_session_from_index(id)?;
 
         Ok(())
     })
@@ -212,14 +161,13 @@ pub fn delete_session(id: &str) -> Result<(), String> {
 
 /// Increment run count - called ONCE during create_run.
 /// H8: Protected by file lock for concurrent access.
-pub fn increment_run_count(session_id: &str) -> Result<(), String> {
+pub fn increment_run_count(workspace_path: &str, session_id: &str) -> Result<(), String> {
     validate_id(session_id)?;
     with_session_lock(|| {
-        let mut meta = read_session(session_id)?;
+        let mut meta = read_session(workspace_path, session_id)?;
         meta.run_count += 1;
 
-        // Update directly inside lock to avoid deadlock
-        let path = session_path(&meta.id)?;
+        let path = session_path(workspace_path, &meta.id)?;
         let json = serde_json::to_string_pretty(&meta)
             .map_err(|e| format!("Failed to serialise session: {e}"))?;
         atomic_write(&path, &json)
@@ -229,6 +177,7 @@ pub fn increment_run_count(session_id: &str) -> Result<(), String> {
 /// Touch session - updates timestamps and metadata, does NOT increment run_count.
 /// H8: Protected by file lock for concurrent access.
 pub fn touch_session(
+    workspace_path: &str,
     session_id: &str,
     last_prompt: Option<&str>,
     last_status: Option<&str>,
@@ -236,7 +185,7 @@ pub fn touch_session(
 ) -> Result<(), String> {
     validate_id(session_id)?;
     with_session_lock(|| {
-        let mut meta = read_session(session_id)?;
+        let mut meta = read_session(workspace_path, session_id)?;
 
         meta.updated_at = now_rfc3339();
 
@@ -250,8 +199,7 @@ pub fn touch_session(
             meta.last_verdict = Some(verdict.to_string());
         }
 
-        // Update directly inside lock to avoid deadlock
-        let path = session_path(&meta.id)?;
+        let path = session_path(workspace_path, &meta.id)?;
         let json = serde_json::to_string_pretty(&meta)
             .map_err(|e| format!("Failed to serialise session: {e}"))?;
         atomic_write(&path, &json)

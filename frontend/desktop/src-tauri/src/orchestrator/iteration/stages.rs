@@ -5,6 +5,8 @@ use crate::storage::{self, runs, sessions};
 
 /// Appends a stage_start event to the event log.
 pub fn append_stage_start_event(
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     stage: &PipelineStage,
     iteration: u32,
@@ -17,11 +19,13 @@ pub fn append_stage_start_event(
         stage: stage.clone(),
         iteration,
     };
-    runs::append_event(run_id, event)
+    runs::append_event(workspace_path, session_id, run_id, event)
 }
 
 /// Appends a stage_end event to the event log.
 pub fn append_stage_end_event(
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     stage: &PipelineStage,
     iteration: u32,
@@ -44,12 +48,12 @@ pub fn append_stage_end_event(
         session_pair: None,
         resumed: None,
     };
-    runs::append_event(run_id, event)
+    runs::append_event(workspace_path, session_id, run_id, event)
 }
 
 /// Updates the run summary.json with current state for crash recovery.
-pub fn update_run_summary(run_id: &str, session_id: &str, run: &PipelineRun) -> Result<(), String> {
-    if let Ok(mut summary) = runs::read_summary(run_id) {
+pub fn update_run_summary(workspace_path: &str, session_id: &str, run_id: &str, run: &PipelineRun) -> Result<(), String> {
+    if let Ok(mut summary) = runs::read_summary(workspace_path, session_id, run_id) {
         summary.status = run.status.clone().into();
         summary.current_stage = run.current_stage.clone();
         summary.current_iteration = Some(run.current_iteration);
@@ -57,7 +61,7 @@ pub fn update_run_summary(run_id: &str, session_id: &str, run: &PipelineRun) -> 
         if let Some(ref error) = run.error {
             summary.error = Some(error.clone());
         }
-        let _ = runs::update_summary(run_id, &summary);
+        let _ = runs::update_summary(workspace_path, session_id, run_id, &summary);
     }
 
     // Also update session metadata
@@ -76,7 +80,7 @@ pub fn update_run_summary(run_id: &str, session_id: &str, run: &PipelineRun) -> 
         crate::models::JudgeVerdict::NotComplete => "NOT COMPLETE",
     });
 
-    if let Err(_e) = sessions::touch_session(session_id, None, status_str, verdict_str) {
+    if let Err(_e) = sessions::touch_session(workspace_path, session_id, None, status_str, verdict_str) {
         eprintln!("Warning: Failed to touch session");
     }
 

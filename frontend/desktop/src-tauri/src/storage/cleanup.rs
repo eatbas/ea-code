@@ -4,11 +4,11 @@ use chrono::{DateTime, Utc};
 
 use crate::models::{RunFileStatus, RunSummary, StorageStats};
 
-use super::{config_dir, remove_run_from_index};
+use super::config_dir;
 
 /// Cleans up old runs based on retention policy.
-/// Walks projects/*/sessions/*/runs/*, parses completed_at from summary.json,
-/// and deletes run directories older than retention_days.
+/// Iterates all known workspaces, scanning `<workspace>/.ea-code/sessions/*/runs/*`,
+/// parses completed_at from summary.json, and deletes run directories older than retention_days.
 /// H9: Does NOT remove empty session directories - sessions have metadata
 /// that should only be deleted via explicit delete_session() call.
 pub fn cleanup_old_runs(retention_days: u32) -> Result<(), String> {
@@ -18,28 +18,17 @@ pub fn cleanup_old_runs(retention_days: u32) -> Result<(), String> {
     }
 
     let cutoff = Utc::now() - chrono::Duration::days(retention_days as i64);
-
-    let projects_dir = config_dir()?.join("projects");
-
-    if !projects_dir.exists() {
-        return Ok(());
-    }
-
     let mut total_deleted = 0;
 
-    let project_entries = std::fs::read_dir(&projects_dir)
-        .map_err(|e| format!("Failed to read projects directory: {e}"))?;
+    let projects = super::projects::read_projects().unwrap_or_default();
 
-    for project_entry in project_entries {
-        let project_entry =
-            project_entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
-        let project_path = project_entry.path();
-
-        if !project_path.is_dir() {
+    for project in &projects {
+        let ws = std::path::Path::new(&project.path);
+        if !ws.exists() {
             continue;
         }
 
-        let sessions_dir = project_path.join("sessions");
+        let sessions_dir = ws.join(".ea-code").join("sessions");
         if !sessions_dir.exists() {
             continue;
         }
@@ -91,13 +80,6 @@ fn cleanup_sessions_dir(sessions_dir: &Path, cutoff: DateTime<Utc>) -> Result<us
             let should_delete = should_delete_run(&run_path, cutoff)?;
 
             if should_delete {
-                // Remove from index before deleting directory
-                if let Some(run_id) = run_path.file_name().and_then(|s| s.to_str()) {
-                    if let Err(e) = remove_run_from_index(run_id) {
-                        eprintln!("Warning: Failed to remove run {run_id} from index: {e}");
-                    }
-                }
-
                 if let Err(e) = std::fs::remove_dir_all(&run_path) {
                     eprintln!(
                         "Warning: Failed to delete old run directory {}: {e}",
@@ -175,67 +157,67 @@ fn should_delete_run(run_path: &Path, cutoff: DateTime<Utc>) -> Result<bool, Str
 }
 
 /// Gets storage usage statistics.
-/// Scans the full projects/*/sessions/*/runs/* hierarchy.
+/// Iterates all known workspaces, scanning `<workspace>/.ea-code/sessions/*/runs/*`.
 pub fn get_storage_stats() -> Result<StorageStats, String> {
     let mut total_sessions = 0;
     let mut total_runs = 0;
     let mut total_events_bytes = 0u64;
 
-    let projects_dir = config_dir()?.join("projects");
+    let projects = super::projects::read_projects().unwrap_or_default();
 
-    if projects_dir.exists() {
-        let project_entries = std::fs::read_dir(&projects_dir)
-            .map_err(|e| format!("Failed to read projects directory: {e}"))?;
+    for project in &projects {
+        let ws = std::path::Path::new(&project.path);
+        if !ws.exists() {
+            continue;
+        }
 
-        for project_entry in project_entries {
-            let project_entry =
-                project_entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
-            let project_path = project_entry.path();
+        let sessions_dir = ws.join(".ea-code").join("sessions");
+        if !sessions_dir.exists() {
+            continue;
+        }
 
-            if !project_path.is_dir() {
+        let session_entries = match std::fs::read_dir(&sessions_dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        for session_entry in session_entries {
+            let session_entry = match session_entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            let session_path = session_entry.path();
+
+            if !session_path.is_dir() {
                 continue;
             }
 
-            let sessions_dir = project_path.join("sessions");
-            if !sessions_dir.exists() {
-                continue;
-            }
+            total_sessions += 1;
 
-            let session_entries = std::fs::read_dir(&sessions_dir)
-                .map_err(|e| format!("Failed to read sessions directory: {e}"))?;
+            let runs_dir = session_path.join("runs");
+            if runs_dir.exists() {
+                let run_entries = match std::fs::read_dir(&runs_dir) {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
 
-            for session_entry in session_entries {
-                let session_entry =
-                    session_entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
-                let session_path = session_entry.path();
+                for run_entry in run_entries {
+                    let run_entry = match run_entry {
+                        Ok(e) => e,
+                        Err(_) => continue,
+                    };
+                    let run_path = run_entry.path();
 
-                if !session_path.is_dir() {
-                    continue;
-                }
+                    if !run_path.is_dir() {
+                        continue;
+                    }
 
-                total_sessions += 1;
+                    total_runs += 1;
 
-                let runs_dir = session_path.join("runs");
-                if runs_dir.exists() {
-                    let run_entries = std::fs::read_dir(&runs_dir)
-                        .map_err(|e| format!("Failed to read runs directory: {e}"))?;
-
-                    for run_entry in run_entries {
-                        let run_entry = run_entry
-                            .map_err(|e| format!("Failed to read directory entry: {e}"))?;
-                        let run_path = run_entry.path();
-
-                        if !run_path.is_dir() {
-                            continue;
-                        }
-
-                        total_runs += 1;
-
-                        // Count events.jsonl size
-                        let events_path = run_path.join("events.jsonl");
-                        if let Ok(metadata) = std::fs::metadata(&events_path) {
-                            total_events_bytes += metadata.len();
-                        }
+                    // Count events.jsonl size
+                    let events_path = run_path.join("events.jsonl");
+                    if let Ok(metadata) = std::fs::metadata(&events_path) {
+                        total_events_bytes += metadata.len();
                     }
                 }
             }
@@ -339,44 +321,44 @@ pub fn cleanup_stale_temp_files() -> Result<usize, String> {
         }
     }
 
-    // 5. Delete empty run directories (no summary.json)
-    let projects_dir = base.join("projects");
-    if projects_dir.is_dir() {
-        if let Ok(project_entries) = std::fs::read_dir(&projects_dir) {
-            for project_entry in project_entries.flatten() {
-                let sessions_dir = project_entry.path().join("sessions");
-                if !sessions_dir.is_dir() {
+    // 5. Delete empty run directories (no summary.json) across all workspaces
+    let projects = super::projects::read_projects().unwrap_or_default();
+    for project in &projects {
+        let ws = std::path::Path::new(&project.path);
+        if !ws.exists() {
+            continue;
+        }
+        let sessions_dir = ws.join(".ea-code").join("sessions");
+        if !sessions_dir.is_dir() {
+            continue;
+        }
+        if let Ok(session_entries) = std::fs::read_dir(&sessions_dir) {
+            for session_entry in session_entries.flatten() {
+                let runs_dir = session_entry.path().join("runs");
+                if !runs_dir.is_dir() {
                     continue;
                 }
-                if let Ok(session_entries) = std::fs::read_dir(&sessions_dir) {
-                    for session_entry in session_entries.flatten() {
-                        let runs_dir = session_entry.path().join("runs");
-                        if !runs_dir.is_dir() {
+                if let Ok(run_entries) = std::fs::read_dir(&runs_dir) {
+                    for run_entry in run_entries.flatten() {
+                        let run_path = run_entry.path();
+                        if !run_path.is_dir() {
                             continue;
                         }
-                        if let Ok(run_entries) = std::fs::read_dir(&runs_dir) {
-                            for run_entry in run_entries.flatten() {
-                                let run_path = run_entry.path();
-                                if !run_path.is_dir() {
-                                    continue;
+                        let summary = run_path.join("summary.json");
+                        if !summary.exists() {
+                            match std::fs::remove_dir_all(&run_path) {
+                                Ok(()) => {
+                                    eprintln!(
+                                        "Cleanup: removed empty run dir {}",
+                                        run_path.display()
+                                    );
+                                    cleaned += 1;
                                 }
-                                let summary = run_path.join("summary.json");
-                                if !summary.exists() {
-                                    match std::fs::remove_dir_all(&run_path) {
-                                        Ok(()) => {
-                                            eprintln!(
-                                                "Cleanup: removed empty run dir {}",
-                                                run_path.display()
-                                            );
-                                            cleaned += 1;
-                                        }
-                                        Err(e) => {
-                                            eprintln!(
-                                                "Cleanup warning: could not remove {}: {e}",
-                                                run_path.display()
-                                            );
-                                        }
-                                    }
+                                Err(e) => {
+                                    eprintln!(
+                                        "Cleanup warning: could not remove {}: {e}",
+                                        run_path.display()
+                                    );
                                 }
                             }
                         }

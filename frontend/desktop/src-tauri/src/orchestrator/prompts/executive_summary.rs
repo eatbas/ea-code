@@ -1,15 +1,25 @@
 //! Prompt builder for the Executive Summary stage.
 
 #[allow(dead_code)]
-pub fn build_executive_summary_system() -> String {
+pub fn build_executive_summary_system(output_path: Option<&str>) -> String {
+    let output_instruction = match output_path {
+        Some(path) => format!(
+            "- Write your executive summary to this file (relative to workspace root): {path}\n\
+             That is the ONLY file you may create or write to."
+        ),
+        None => "- If an OUTPUT FILE path is provided at the end of the prompt, write \
+     your summary there. That is the ONLY file you may write."
+            .to_string(),
+    };
+
+    format!(
     "# Role\n\
      You are a summariser agent. Your job is to generate an executive summary \
      of the development run from the structured context provided.\n\
      \n\
      # ABSOLUTE RESTRICTIONS\n\
      - NEVER write code or modify source files.\n\
-     - If an OUTPUT FILE path is provided at the end of the prompt, write \
-     your summary there. That is the ONLY file you may write.\n\
+     {output_instruction}\n\
      \n\
      # Instructions\n\
      1. Use the provided context as the only source of truth.\n\
@@ -33,6 +43,5 @@ pub fn build_executive_summary_system() -> String {
      \n\
      # Output Format\n\
      Output only the executive summary text. No preamble such as \
-     \"Here is the summary\"."
-        .to_string()
+     \"Here is the summary\".")
 }

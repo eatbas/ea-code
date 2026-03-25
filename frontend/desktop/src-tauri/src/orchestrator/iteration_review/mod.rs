@@ -102,8 +102,9 @@ pub async fn run_review_fix_stages(
 
     // --- Run reviewers (1 sequential, 2+ parallel) ---
     // File-reference the enhanced prompt and plan to keep prompt size small.
+    let ws = &request.workspace_path;
     let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
-        run_id, iter_num, "enhanced_prompt",
+        ws, session_id, run_id, iter_num, "enhanced_prompt",
     )
     .map(|p| crate::orchestrator::helpers::file_ref(&p))
     .unwrap_or_else(|| enhanced.to_string());
@@ -114,7 +115,7 @@ pub async fn run_review_fix_stages(
         } else {
             "plan"
         };
-        crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, kind)
+        crate::orchestrator::helpers::artifact_file_path(ws, session_id, run_id, iter_num, kind)
             .map(|p| crate::orchestrator::helpers::file_ref(&p))
     });
 
@@ -124,8 +125,9 @@ pub async fn run_review_fix_stages(
         plan_ref.as_deref(),
         judge_feedback,
     );
+    let reviewer_output_rel = runs::artifact_relative_path(session_id, run_id, iter_num, "review");
     let reviewer_context = super::run_setup::compose_agent_context(
-        prompts::build_reviewer_system(meta),
+        prompts::build_reviewer_system(meta, Some(&reviewer_output_rel)),
         workspace_context,
     );
 
@@ -195,12 +197,12 @@ pub async fn run_review_fix_stages(
 
     // --- Code Fixer stage ---
     run.current_stage = Some(PipelineStage::CodeFixer);
-    let fix_seq = runs::next_sequence(run_id).unwrap_or(1);
-    stages::append_stage_start_event(run_id, &PipelineStage::CodeFixer, iter_num, fix_seq)?;
+    let fix_seq = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
+    stages::append_stage_start_event(ws, session_id, run_id, &PipelineStage::CodeFixer, iter_num, fix_seq)?;
 
     // File-reference the merged review to keep prompt size small.
     let review_ref = crate::orchestrator::helpers::artifact_file_path(
-        run_id, iter_num, "review",
+        ws, session_id, run_id, iter_num, "review",
     )
     .map(|p| crate::orchestrator::helpers::file_ref(&p))
     .unwrap_or_else(|| rev_out.clone());
@@ -222,7 +224,7 @@ pub async fn run_review_fix_stages(
         workspace_path: request.workspace_path.clone(),
     };
 
-    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "code_fixer", &fix_input, iter_num);
+    crate::orchestrator::helpers::emit_prompt_artifact(ws, session_id, run_id, "code_fixer", &fix_input, iter_num);
 
     let fix_r = execute_agent_stage(
         app,
@@ -247,6 +249,8 @@ pub async fn run_review_fix_stages(
     if fix_r.status == StageStatus::Failed {
         stages.push(fix_r);
         stages::append_stage_end_event(
+            ws,
+            session_id,
             run_id,
             &PipelineStage::CodeFixer,
             iter_num,
@@ -262,11 +266,13 @@ pub async fn run_review_fix_stages(
         });
         run.status = PipelineStatus::Failed;
         run.error = Some("Code Fixer stage failed".to_string());
-        stages::update_run_summary(run_id, session_id, run)?;
+        stages::update_run_summary(ws, session_id, run_id, run)?;
         return Ok(());
     }
     stages.push(fix_r);
     stages::append_stage_end_event(
+        ws,
+        session_id,
         run_id,
         &PipelineStage::CodeFixer,
         iter_num,
@@ -284,6 +290,8 @@ pub async fn run_review_fix_stages(
         iter_ctx.fix_question = Some(question.clone());
         let answer = ask_user_question(
             app,
+            ws,
+            session_id,
             run_id,
             &PipelineStage::CodeFixer,
             iter_num,
@@ -326,10 +334,10 @@ async fn run_single_reviewer(
     stages: &mut Vec<StageResult>,
 ) -> Result<String, String> {
     run.current_stage = Some(PipelineStage::CodeReviewer);
-    let rev_seq = runs::next_sequence(run_id).unwrap_or(1);
-    stages::append_stage_start_event(run_id, &PipelineStage::CodeReviewer, iter_num, rev_seq)?;
+    let rev_seq = runs::next_sequence(workspace_path, session_id, run_id).unwrap_or(1);
+    stages::append_stage_start_event(workspace_path, session_id, run_id, &PipelineStage::CodeReviewer, iter_num, rev_seq)?;
 
-    let rev_output_path = runs::artifact_output_path(run_id, iter_num, "review").ok();
+    let rev_output_path = runs::artifact_output_path(workspace_path, session_id, run_id, iter_num, "review").ok();
     let rev_output_path_str = rev_output_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
@@ -340,7 +348,7 @@ async fn run_single_reviewer(
         workspace_path: workspace_path.to_string(),
     };
 
-    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "review", &rev_input, iter_num);
+    crate::orchestrator::helpers::emit_prompt_artifact(workspace_path, session_id, run_id, "review", &rev_input, iter_num);
 
     let rev_r = execute_agent_stage(
         app,
@@ -362,12 +370,14 @@ async fn run_single_reviewer(
     let rev_duration = rev_r.duration_ms;
 
     if rev_r.status != StageStatus::Failed {
-        crate::orchestrator::helpers::emit_artifact(app, run_id, "review", &rev_out, iter_num);
+        crate::orchestrator::helpers::emit_artifact(app, workspace_path, session_id, run_id, "review", &rev_out, iter_num);
     }
 
     if rev_r.status == StageStatus::Failed {
         stages.push(rev_r);
         stages::append_stage_end_event(
+            workspace_path,
+            session_id,
             run_id,
             &PipelineStage::CodeReviewer,
             iter_num,
@@ -383,11 +393,13 @@ async fn run_single_reviewer(
         });
         run.status = PipelineStatus::Failed;
         run.error = Some("Code Reviewer stage failed".to_string());
-        stages::update_run_summary(run_id, session_id, run)?;
+        stages::update_run_summary(workspace_path, session_id, run_id, run)?;
         return Ok(String::new());
     }
     stages.push(rev_r);
     stages::append_stage_end_event(
+        workspace_path,
+        session_id,
         run_id,
         &PipelineStage::CodeReviewer,
         iter_num,
@@ -439,7 +451,7 @@ async fn run_parallel_reviewers_and_merge(
                 let rid = run_id.to_string();
 
                 let output_kind = format!("review_{}", i + 1);
-                let output_path = runs::artifact_output_path(&rid, iter_num, &output_kind).ok();
+                let output_path = runs::artifact_output_path(&ws, &sid, &rid, iter_num, &output_kind).ok();
                 let output_path_str = output_path.map(|p| p.to_string_lossy().to_string());
 
                 ParallelStageTask {
@@ -473,12 +485,14 @@ async fn run_parallel_reviewers_and_merge(
 
         let stage_checkpoint = stages.len();
         let mut pause_retry_requested = false;
+        let ws_ref = request.workspace_path.clone();
+        let sid_ref = session_id.to_string();
         let successful = run_parallel_stage_tasks(
             run_id,
             iter_num,
             tasks,
-            stages::append_stage_start_event,
-            stages::append_stage_end_event,
+            |rid, stage, iteration, seq| stages::append_stage_start_event(&ws_ref, &sid_ref, rid, stage, iteration, seq),
+            |rid, stage, iteration, seq, status, dur| stages::append_stage_end_event(&ws_ref, &sid_ref, rid, stage, iteration, seq, status, dur),
             |parallel_run| {
                 let ParallelStageRun {
                     index,
@@ -504,6 +518,8 @@ async fn run_parallel_reviewers_and_merge(
                     ))
                 }
             },
+            &request.workspace_path,
+            session_id,
         )
         .await?;
 
@@ -511,7 +527,7 @@ async fn run_parallel_reviewers_and_merge(
             stages.truncate(stage_checkpoint);
             for idx in 0..slots.len() {
                 let kind = format!("review_{}", idx + 1);
-                if let Ok(path) = runs::artifact_output_path(run_id, iter_num, &kind) {
+                if let Ok(path) = runs::artifact_output_path(&request.workspace_path, session_id, run_id, iter_num, &kind) {
                     let _ = std::fs::remove_file(path);
                 }
             }
@@ -525,6 +541,8 @@ async fn run_parallel_reviewers_and_merge(
         for (title, output_kind, output) in successful {
             crate::orchestrator::helpers::emit_artifact(
                 app,
+                &request.workspace_path,
+                session_id,
                 run_id,
                 &output_kind,
                 &output,
@@ -544,7 +562,7 @@ async fn run_parallel_reviewers_and_merge(
         });
         run.status = PipelineStatus::Failed;
         run.error = Some("All reviewer stages failed".to_string());
-        stages::update_run_summary(run_id, session_id, run)?;
+        stages::update_run_summary(&request.workspace_path, session_id, run_id, run)?;
         return Ok(String::new());
     }
 
@@ -555,17 +573,17 @@ async fn run_parallel_reviewers_and_merge(
         .or(settings.code_reviewer_agent.as_ref())
         .unwrap_or(&AgentBackend::Claude);
     run.current_stage = Some(PipelineStage::ReviewMerge);
-    let merger_seq = runs::next_sequence(run_id).unwrap_or(1);
-    stages::append_stage_start_event(run_id, &PipelineStage::ReviewMerge, iter_num, merger_seq)?;
+    let merger_seq = runs::next_sequence(&request.workspace_path, session_id, run_id).unwrap_or(1);
+    stages::append_stage_start_event(&request.workspace_path, session_id, run_id, &PipelineStage::ReviewMerge, iter_num, merger_seq)?;
 
-    let merger_output_path = runs::artifact_output_path(run_id, iter_num, "review").ok();
+    let merger_output_path = runs::artifact_output_path(&request.workspace_path, session_id, run_id, iter_num, "review").ok();
     let merger_output_path_str = merger_output_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
     // File-reference the enhanced prompt and plan to keep prompt size small.
     let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
-        run_id, iter_num, "enhanced_prompt",
+        &request.workspace_path, session_id, run_id, iter_num, "enhanced_prompt",
     )
     .map(|p| crate::orchestrator::helpers::file_ref(&p))
     .unwrap_or_else(|| enhanced.to_string());
@@ -576,7 +594,7 @@ async fn run_parallel_reviewers_and_merge(
         } else {
             "plan"
         };
-        crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, kind)
+        crate::orchestrator::helpers::artifact_file_path(&request.workspace_path, session_id, run_id, iter_num, kind)
             .map(|p| crate::orchestrator::helpers::file_ref(&p))
     });
 
@@ -587,7 +605,7 @@ async fn run_parallel_reviewers_and_merge(
         .map(|(i, (label, text))| {
             let kind = format!("review_{}", i + 1);
             let ref_text =
-                crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, &kind)
+                crate::orchestrator::helpers::artifact_file_path(&request.workspace_path, session_id, run_id, iter_num, &kind)
                     .map(|p| crate::orchestrator::helpers::file_ref(&p))
                     .unwrap_or_else(|| text.clone());
             (label.clone(), ref_text)
@@ -608,7 +626,10 @@ async fn run_parallel_reviewers_and_merge(
                 plan_ref.as_deref(),
             ),
             context: Some(super::run_setup::compose_agent_context(
-                prompts::build_review_merger_system(meta),
+                prompts::build_review_merger_system(
+                    meta,
+                    Some(&runs::artifact_relative_path(session_id, run_id, iter_num, "review")),
+                ),
                 workspace_context,
             )),
             workspace_path: request.workspace_path.clone(),
@@ -630,6 +651,8 @@ async fn run_parallel_reviewers_and_merge(
             .clone()
             .unwrap_or_else(|| "Review Merger failed".into());
         stages::append_stage_end_event(
+            &request.workspace_path,
+            session_id,
             run_id,
             &PipelineStage::ReviewMerge,
             iter_num,
@@ -646,12 +669,14 @@ async fn run_parallel_reviewers_and_merge(
         });
         run.status = PipelineStatus::Failed;
         run.error = Some(err);
-        stages::update_run_summary(run_id, session_id, run)?;
+        stages::update_run_summary(&request.workspace_path, session_id, run_id, run)?;
         return Ok(String::new());
     }
 
-    crate::orchestrator::helpers::emit_artifact(app, run_id, "review", &merged_out, iter_num);
+    crate::orchestrator::helpers::emit_artifact(app, &request.workspace_path, session_id, run_id, "review", &merged_out, iter_num);
     stages::append_stage_end_event(
+        &request.workspace_path,
+        session_id,
         run_id,
         &PipelineStage::ReviewMerge,
         iter_num,

@@ -59,7 +59,7 @@ pub async fn run_direct_task(
     );
 
     // Mark session as live while executing
-    let _ = sessions::touch_session(session_id, None, Some("running"), None);
+    let _ = sessions::touch_session(&request.workspace_path, session_id, None, Some("running"), None);
 
     if wait_if_paused(pause_flag, cancel_flag).await || is_cancelled(cancel_flag) {
         push_cancel_iteration(run, 1, Vec::new());
@@ -157,7 +157,8 @@ pub async fn run_direct_task(
     );
 
     // Append stage events to event log
-    let seq_start = runs::next_sequence(run_id).unwrap_or(1);
+    let ws = &request.workspace_path;
+    let seq_start = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
     let stage_start = RunEvent::StageStart {
         v: 1,
         seq: seq_start,
@@ -165,7 +166,7 @@ pub async fn run_direct_task(
         stage: PipelineStage::DirectTask,
         iteration: 1,
     };
-    let _ = runs::append_event(run_id, stage_start);
+    let _ = runs::append_event(ws, session_id, run_id, stage_start);
 
     let stage_end = RunEvent::StageEnd {
         v: 1,
@@ -186,7 +187,7 @@ pub async fn run_direct_task(
         session_pair: None,
         resumed: None,
     };
-    let _ = runs::append_event(run_id, stage_end);
+    let _ = runs::append_event(ws, session_id, run_id, stage_end);
 
     run.iterations.push(Iteration {
         number: 1,

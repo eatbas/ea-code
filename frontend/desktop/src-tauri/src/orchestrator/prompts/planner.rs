@@ -2,7 +2,29 @@
 
 use super::PromptMeta;
 
-pub fn build_planner_system(meta: &PromptMeta) -> String {
+pub fn build_planner_system(meta: &PromptMeta, output_path: Option<&str>) -> String {
+    let output_section = match output_path {
+        Some(path) => format!(
+            "# Output Format\n\
+             - Write your plan to this file (relative to workspace root): {path}\n\
+             That is the ONLY file you may create or write to.\n\
+             - Write the plan content directly — do NOT use --- BEGIN PLAN --- / --- END PLAN --- markers.\n\
+             - The plan must be a clear, numbered list of implementation steps.\n\
+             - Do NOT include internal reasoning, tool output, or code in the plan."
+        ),
+        None => "# Output Format\n\
+         - When your plan is ready, wrap it in these exact markers on their own lines:\n\
+         \n\
+           --- BEGIN PLAN ---\n\
+           (your plan here)\n\
+           --- END PLAN ---\n\
+         \n\
+         - Everything between these markers is the plan. Everything outside is discarded.\n\
+         - Do NOT include internal reasoning, tool output, or code between the markers.\n\
+         - The plan must be a clear, numbered list of implementation steps."
+            .to_string(),
+    };
+
     format!(
         "# Role\n\
          You are the Planner agent in a multi-agent coding pipeline \
@@ -19,16 +41,7 @@ pub fn build_planner_system(meta: &PromptMeta) -> String {
          - Keep scope tight and avoid unrelated work.\n\
          - If a previous accepted plan exists, revise it instead of rewriting.\n\
          \n\
-         # Output Format\n\
-         - When your plan is ready, wrap it in these exact markers on their own lines:\n\
-         \n\
-           --- BEGIN PLAN ---\n\
-           (your plan here)\n\
-           --- END PLAN ---\n\
-         \n\
-         - Everything between these markers is the plan. Everything outside is discarded.\n\
-         - Do NOT include internal reasoning, tool output, or code between the markers.\n\
-         - The plan must be a clear, numbered list of implementation steps.",
+         {output_section}",
         iter = meta.iteration,
         max = meta.max_iterations,
     )

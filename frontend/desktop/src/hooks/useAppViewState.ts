@@ -16,8 +16,8 @@ interface UseAppViewStateArgs {
   sessions: SessionMeta[];
   loadProjects: () => Promise<void>;
   loadSessions: (projectPath: string) => Promise<void>;
-  loadSessionDetail: (sessionId: string) => Promise<SessionDetail>;
-  loadMoreRuns: (sessionId: string, currentCount: number) => Promise<SessionDetail>;
+  loadSessionDetail: (sessionId: string, workspacePath: string) => Promise<SessionDetail>;
+  loadMoreRuns: (sessionId: string, workspacePath: string, currentCount: number) => Promise<SessionDetail>;
   openWorkspace: (path: string) => Promise<void>;
   startPipeline: (request: PipelineRequest) => Promise<void>;
   resetRun: () => void;
@@ -90,7 +90,7 @@ export function useAppViewState({
       try {
         await loadSessions(workspace.path);
         if (activeSessionId) {
-          const detail = await loadSessionDetail(activeSessionId);
+          const detail = await loadSessionDetail(activeSessionId, workspace.path);
           setSessionDetail(detail);
         }
       } catch {
@@ -179,7 +179,7 @@ export function useAppViewState({
     setActiveView("home");
     setSessionDetailLoading(true);
     try {
-      const detail = await loadSessionDetail(sessionId);
+      const detail = await loadSessionDetail(sessionId, workspace?.path ?? "");
       setSessionDetail(detail);
     } catch {
       notifyError("Failed to load session.");
@@ -187,13 +187,13 @@ export function useAppViewState({
     } finally {
       setSessionDetailLoading(false);
     }
-  }, [run, loadSessionDetail, notifyError]);
+  }, [run, workspace, loadSessionDetail, notifyError]);
 
   const handleLoadMoreRuns = useCallback(async (): Promise<void> => {
     if (!activeSessionId || !sessionDetail) return;
     setSessionLoadingMore(true);
     try {
-      const older = await loadMoreRuns(activeSessionId, sessionDetail.runs.length);
+      const older = await loadMoreRuns(activeSessionId, sessionDetail.projectPath, sessionDetail.runs.length);
       setSessionDetail((prev) => {
         if (!prev) return prev;
         return { ...prev, runs: [...older.runs, ...prev.runs], totalRuns: older.totalRuns };

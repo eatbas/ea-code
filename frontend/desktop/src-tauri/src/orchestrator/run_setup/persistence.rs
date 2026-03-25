@@ -55,12 +55,13 @@ pub async fn run_executive_summary(
 
     let summary_iteration = run.current_iteration;
     let output_path =
-        runs::artifact_output_path(run_id, summary_iteration, "executive_summary").ok();
+        runs::artifact_output_path(&run.workspace_path, session_id, run_id, summary_iteration, "executive_summary").ok();
     let output_path_str = output_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
+    let summary_output_rel = runs::artifact_relative_path(session_id, run_id, summary_iteration, "executive_summary");
     let summary_input = AgentInput {
-        prompt: prompts::build_executive_summary_system(),
+        prompt: prompts::build_executive_summary_system(Some(&summary_output_rel)),
         context: Some(build_executive_summary_context(run)),
         workspace_path: run.workspace_path.clone(),
     };
@@ -82,6 +83,8 @@ pub async fn run_executive_summary(
     if summary_result.status == StageStatus::Completed {
         crate::orchestrator::helpers::emit_artifact(
             app,
+            &run.workspace_path,
+            session_id,
             run_id,
             "executive_summary",
             &summary_result.output,
@@ -90,7 +93,7 @@ pub async fn run_executive_summary(
     }
 
     // Update run summary with executive summary
-    if let Ok(mut summary) = runs::read_summary(run_id) {
+    if let Ok(mut summary) = runs::read_summary(&run.workspace_path, session_id, run_id) {
         if summary_result.status == StageStatus::Completed {
             summary.executive_summary = Some(summary_result.output.clone());
         } else {
@@ -99,14 +102,16 @@ pub async fn run_executive_summary(
                 summary_result.error.unwrap_or_default()
             ));
         }
-        let _ = runs::update_summary(run_id, &summary);
+        let _ = runs::update_summary(&run.workspace_path, session_id, run_id, &summary);
     }
 }
 
 /// Persists the final run status to storage.
 pub fn persist_final_run(run: &PipelineRun, session_id: &str) {
+    let ws = &run.workspace_path;
+
     // Update run summary with final state
-    if let Ok(mut summary) = runs::read_summary(&run.id) {
+    if let Ok(mut summary) = runs::read_summary(ws, session_id, &run.id) {
         summary.status = run.status.clone().into();
         summary.final_verdict = run.final_verdict.clone();
         summary.current_stage = None;
@@ -116,12 +121,12 @@ pub fn persist_final_run(run: &PipelineRun, session_id: &str) {
         summary.error = run.error.clone();
 
         // Compute files changed
-        match runs::compute_files_changed(&run.id) {
+        match runs::compute_files_changed(ws, session_id, &run.id) {
             Ok(files) => summary.files_changed = files,
             Err(e) => eprintln!("Warning: Failed to compute files changed: {e}"),
         }
 
-        if let Err(e) = runs::update_summary(&run.id, &summary) {
+        if let Err(e) = runs::update_summary(ws, session_id, &run.id, &summary) {
             eprintln!("Warning: Failed to update run summary: {e}");
         }
     }
@@ -137,7 +142,7 @@ pub fn persist_final_run(run: &PipelineRun, session_id: &str) {
     let verdict = run.final_verdict.clone();
     let error = run.error.clone();
 
-    let seq = match runs::next_sequence(&run.id) {
+    let seq = match runs::next_sequence(ws, session_id, &run.id) {
         Ok(s) => s,
         Err(_) => 1,
     };
@@ -152,7 +157,7 @@ pub fn persist_final_run(run: &PipelineRun, session_id: &str) {
         recovered_at: None,
     };
 
-    if let Err(e) = runs::append_event(&run.id, run_end) {
+    if let Err(e) = runs::append_event(ws, session_id, &run.id, run_end) {
         eprintln!("Warning: Failed to append run_end event: {e}");
     }
 
@@ -170,7 +175,7 @@ pub fn persist_final_run(run: &PipelineRun, session_id: &str) {
     });
 
     if let Err(e) =
-        sessions::touch_session(session_id, Some(&run.prompt), Some(status_str), verdict_str)
+        sessions::touch_session(ws, session_id, Some(&run.prompt), Some(status_str), verdict_str)
     {
         eprintln!("Warning: Failed to update session: {e}");
     }

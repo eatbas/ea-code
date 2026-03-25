@@ -37,4 +37,6 @@ pub struct AppState {
     pub sidecar: SidecarManager,
     /// Maps run_id → active hive-api job_id for in-flight stages.
     pub active_jobs: Arc<Mutex<HashMap<String, String>>>,
+    /// Maps run_id → (workspace_path, session_id) so cancel/pause/resume can locate the run.
+    pub run_workspaces: Arc<Mutex<HashMap<String, (String, String)>>>,
 }

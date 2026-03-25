@@ -112,7 +112,7 @@ function App(): ReactNode {
           onSelectSession={handleSelectSession}
           runningSessionIds={runningSessionIds}
           onArchiveSession={(sessionId) => {
-            void deleteSession(sessionId).then(
+            void deleteSession(sessionId, workspace?.path ?? "").then(
               () => toast.success("Session deleted."),
               () => toast.error("Failed to delete session."),
             );

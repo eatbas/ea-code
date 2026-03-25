@@ -136,14 +136,15 @@ pub async fn run_planning_stages(
     }
 
     // --- Run planners (1 sequential, 2+ parallel) ---
+    let ws = &request.workspace_path;
     let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
-        run_id, iter_num, "enhanced_prompt",
+        ws, session_id, run_id, iter_num, "enhanced_prompt",
     )
     .map(|p| crate::orchestrator::helpers::file_ref(&p))
     .unwrap_or_else(|| enhanced.to_string());
 
     let plan_ref = iter_ctx.selected_plan().and_then(|_| {
-        crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, "plan_audit")
+        crate::orchestrator::helpers::artifact_file_path(ws, session_id, run_id, iter_num, "plan_audit")
             .map(|p| crate::orchestrator::helpers::file_ref(&p))
     });
 
@@ -153,8 +154,9 @@ pub async fn run_planning_stages(
         plan_ref.as_deref(),
         judge_feedback,
     );
+    let planner_output_rel = runs::artifact_relative_path(session_id, run_id, iter_num, "plan");
     let planner_context = super::run_setup::compose_agent_context(
-        prompts::build_planner_system(meta),
+        prompts::build_planner_system(meta, Some(&planner_output_rel)),
         workspace_context,
     );
 
@@ -207,7 +209,7 @@ pub async fn run_planning_stages(
         });
         run.status = PipelineStatus::Failed;
         run.error = Some("All planner stages failed".to_string());
-        persistence::update_run_summary(run_id, run)?;
+        persistence::update_run_summary(ws, session_id, run_id, run)?;
         return Ok(());
     }
 
@@ -231,22 +233,23 @@ pub async fn run_planning_stages(
 
     // Build file references for the plan audit prompt.
     let audit_enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
-        run_id, iter_num, "enhanced_prompt",
+        ws, session_id, run_id, iter_num, "enhanced_prompt",
     )
     .map(|p| crate::orchestrator::helpers::file_ref(&p))
     .unwrap_or_else(|| enhanced.to_string());
 
+    let pa_output_rel = runs::artifact_relative_path(session_id, run_id, iter_num, "plan_audit");
     let (system_prompt, user_prompt) = if plan_outputs.len() == 1 {
         // Single plan — file-ref if the artifact was written.
         let plan_kind = "plan";
         let plan_ref = crate::orchestrator::helpers::artifact_file_path(
-            run_id, iter_num, plan_kind,
+            ws, session_id, run_id, iter_num, plan_kind,
         )
         .map(|p| crate::orchestrator::helpers::file_ref(&p))
         .unwrap_or_else(|| plan_outputs[0].1.clone());
 
         (
-            prompts::build_plan_auditor_system(meta),
+            prompts::build_plan_auditor_system(meta, Some(&pa_output_rel)),
             prompts::build_plan_auditor_user(
                 &request.prompt,
                 &audit_enhanced_ref,
@@ -264,7 +267,7 @@ pub async fn run_planning_stages(
             .map(|(i, (label, content))| {
                 let kind = format!("plan_{}", i + 1);
                 let ref_text = crate::orchestrator::helpers::artifact_file_path(
-                    run_id, iter_num, &kind,
+                    ws, session_id, run_id, iter_num, &kind,
                 )
                 .map(|p| crate::orchestrator::helpers::file_ref(&p))
                 .unwrap_or_else(|| content.clone());
@@ -273,12 +276,12 @@ pub async fn run_planning_stages(
             .collect();
 
         let prev_plan_ref = iter_ctx.selected_plan().and_then(|_| {
-            crate::orchestrator::helpers::artifact_file_path(run_id, iter_num, "plan_audit")
+            crate::orchestrator::helpers::artifact_file_path(ws, session_id, run_id, iter_num, "plan_audit")
                 .map(|p| crate::orchestrator::helpers::file_ref(&p))
         });
 
         (
-            prompts::build_plan_auditor_merge_system(meta),
+            prompts::build_plan_auditor_merge_system(meta, Some(&pa_output_rel)),
             prompts::build_plan_auditor_merge_user(
                 &request.prompt,
                 &audit_enhanced_ref,
@@ -289,10 +292,10 @@ pub async fn run_planning_stages(
         )
     };
 
-    let pa_seq = runs::next_sequence(run_id).unwrap_or(1);
-    persistence::append_stage_start_event(run_id, &PipelineStage::PlanAudit, iter_num, pa_seq)?;
+    let pa_seq = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
+    persistence::append_stage_start_event(ws, session_id, run_id, &PipelineStage::PlanAudit, iter_num, pa_seq)?;
 
-    let pa_output_path = runs::artifact_output_path(run_id, iter_num, "plan_audit").ok();
+    let pa_output_path = runs::artifact_output_path(ws, session_id, run_id, iter_num, "plan_audit").ok();
     let pa_output_path_str = pa_output_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
@@ -306,7 +309,7 @@ pub async fn run_planning_stages(
         workspace_path: request.workspace_path.clone(),
     };
 
-    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "plan_audit", &pa_input, iter_num);
+    crate::orchestrator::helpers::emit_prompt_artifact(ws, session_id, run_id, "plan_audit", &pa_input, iter_num);
 
     let pa_r = execute_agent_stage(
         app,
@@ -334,6 +337,8 @@ pub async fn run_planning_stages(
             .unwrap_or_else(|| "Plan Auditor stage failed".into());
         stages.push(pa_r);
         persistence::append_stage_end_event(
+            ws,
+            session_id,
             run_id,
             &PipelineStage::PlanAudit,
             iter_num,
@@ -349,11 +354,13 @@ pub async fn run_planning_stages(
         });
         run.status = PipelineStatus::Failed;
         run.error = Some(err);
-        persistence::update_run_summary(run_id, run)?;
+        persistence::update_run_summary(ws, session_id, run_id, run)?;
         return Ok(());
     }
     stages.push(pa_r);
     persistence::append_stage_end_event(
+        ws,
+        session_id,
         run_id,
         &PipelineStage::PlanAudit,
         iter_num,
@@ -374,6 +381,8 @@ pub async fn run_planning_stages(
 
     crate::orchestrator::helpers::emit_artifact(
         app,
+        ws,
+        session_id,
         run_id,
         "plan_audit",
         &parsed.improved_plan,
@@ -399,10 +408,10 @@ async fn run_single_planner(
     session_id: &str,
     stages: &mut Vec<StageResult>,
 ) -> Result<Vec<(String, String)>, String> {
-    let seq = runs::next_sequence(run_id).unwrap_or(1);
-    persistence::append_stage_start_event(run_id, &slot.stage, iter_num, seq)?;
+    let seq = runs::next_sequence(workspace_path, session_id, run_id).unwrap_or(1);
+    persistence::append_stage_start_event(workspace_path, session_id, run_id, &slot.stage, iter_num, seq)?;
 
-    let output_path = runs::artifact_output_path(run_id, iter_num, "plan").ok();
+    let output_path = runs::artifact_output_path(workspace_path, session_id, run_id, iter_num, "plan").ok();
     let output_path_str = output_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
@@ -413,7 +422,7 @@ async fn run_single_planner(
         workspace_path: workspace_path.to_string(),
     };
 
-    crate::orchestrator::helpers::emit_prompt_artifact(run_id, "plan", &input, iter_num);
+    crate::orchestrator::helpers::emit_prompt_artifact(workspace_path, session_id, run_id, "plan", &input, iter_num);
 
     let r = execute_agent_stage(
         app,
@@ -436,7 +445,7 @@ async fn run_single_planner(
     let failed = r.status == StageStatus::Failed;
 
     if !failed {
-        crate::orchestrator::helpers::emit_artifact(app, run_id, "plan", &out, iter_num);
+        crate::orchestrator::helpers::emit_artifact(app, workspace_path, session_id, run_id, "plan", &out, iter_num);
     }
 
     let status = if failed {
@@ -444,7 +453,7 @@ async fn run_single_planner(
     } else {
         &StageEndStatus::Completed
     };
-    persistence::append_stage_end_event(run_id, &slot.stage, iter_num, seq + 1, status, dur)?;
+    persistence::append_stage_end_event(workspace_path, session_id, run_id, &slot.stage, iter_num, seq + 1, status, dur)?;
     stages.push(r);
 
     if failed {
@@ -490,7 +499,7 @@ async fn run_parallel_planners(
                 let rid = run_id.to_string();
 
                 let output_kind = format!("plan_{}", i + 1);
-                let output_path = runs::artifact_output_path(&rid, iter_num, &output_kind).ok();
+                let output_path = runs::artifact_output_path(&ws, &sid, &rid, iter_num, &output_kind).ok();
                 let output_path_str = output_path.map(|p| p.to_string_lossy().to_string());
 
                 ParallelStageTask {
@@ -524,12 +533,14 @@ async fn run_parallel_planners(
 
         let stage_checkpoint = stages.len();
         let mut pause_retry_requested = false;
+        let ws_ref = workspace_path.to_string();
+        let sid_ref = session_id.to_string();
         let successful = run_parallel_stage_tasks(
             run_id,
             iter_num,
             tasks,
-            persistence::append_stage_start_event,
-            persistence::append_stage_end_event,
+            |rid, stage, iteration, seq| persistence::append_stage_start_event(&ws_ref, &sid_ref, rid, stage, iteration, seq),
+            |rid, stage, iteration, seq, status, dur| persistence::append_stage_end_event(&ws_ref, &sid_ref, rid, stage, iteration, seq, status, dur),
             |parallel_run| {
                 let crate::orchestrator::parallel_stage::ParallelStageRun {
                     index,
@@ -551,6 +562,8 @@ async fn run_parallel_planners(
                     Some((index, output_kind, output))
                 }
             },
+            workspace_path,
+            session_id,
         )
         .await?;
 
@@ -558,7 +571,7 @@ async fn run_parallel_planners(
             stages.truncate(stage_checkpoint);
             for idx in 0..slots.len() {
                 let kind = format!("plan_{}", idx + 1);
-                if let Ok(path) = runs::artifact_output_path(run_id, iter_num, &kind) {
+                if let Ok(path) = runs::artifact_output_path(workspace_path, session_id, run_id, iter_num, &kind) {
                     let _ = std::fs::remove_file(path);
                 }
             }
@@ -572,6 +585,8 @@ async fn run_parallel_planners(
         for (index, output_kind, output) in successful {
             crate::orchestrator::helpers::emit_artifact(
                 app,
+                workspace_path,
+                session_id,
                 run_id,
                 &output_kind,
                 &output,

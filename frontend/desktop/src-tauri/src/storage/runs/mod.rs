@@ -1,6 +1,6 @@
 use crate::models::{RunEvent, RunFileStatus, RunSummary};
 
-use super::{add_run_to_index, atomic_write, get_session_for_run, now_rfc3339, validate_id};
+use super::{atomic_write, now_rfc3339, validate_id};
 
 pub mod cli_sessions;
 pub mod events;
@@ -8,38 +8,50 @@ pub mod git;
 
 const SCHEMA_VERSION: u32 = 1;
 
-/// Returns the run directory path via the project hierarchy.
-fn run_dir(session_id: &str, run_id: &str) -> Result<std::path::PathBuf, String> {
-    Ok(super::sessions::session_dir(session_id)?
+/// Returns the run directory path under the workspace.
+fn run_dir(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+) -> Result<std::path::PathBuf, String> {
+    Ok(super::sessions::session_dir(workspace_path, session_id)?
         .join("runs")
         .join(run_id))
 }
 
 /// Returns the summary.json file path for a run.
-fn summary_path(session_id: &str, run_id: &str) -> Result<std::path::PathBuf, String> {
-    Ok(run_dir(session_id, run_id)?.join("summary.json"))
+fn summary_path(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+) -> Result<std::path::PathBuf, String> {
+    Ok(run_dir(workspace_path, session_id, run_id)?.join("summary.json"))
 }
 
 /// Returns the events.jsonl file path for a run.
-pub(crate) fn events_path(session_id: &str, run_id: &str) -> Result<std::path::PathBuf, String> {
-    Ok(run_dir(session_id, run_id)?.join("events.jsonl"))
+pub(crate) fn events_path(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+) -> Result<std::path::PathBuf, String> {
+    Ok(run_dir(workspace_path, session_id, run_id)?.join("events.jsonl"))
 }
 
 /// Creates a new run with initial structure.
 /// Creates directories, writes initial summary.json, appends run_start event,
 /// and increments the session's run count exactly once.
 pub fn create_run(
-    run_id: &str,
+    workspace_path: &str,
     session_id: &str,
+    run_id: &str,
     prompt: &str,
     max_iterations: u32,
-    workspace_path: &str,
 ) -> Result<(), String> {
     validate_id(run_id)?;
     validate_id(session_id)?;
 
     // Create run directory
-    let run_dir = run_dir(session_id, run_id)?;
+    let run_dir = run_dir(workspace_path, session_id, run_id)?;
     std::fs::create_dir_all(&run_dir)
         .map_err(|e| format!("Failed to create run directory: {e}"))?;
 
@@ -70,10 +82,10 @@ pub fn create_run(
     };
 
     // Write initial summary
-    update_summary_internal(session_id, run_id, &summary)?;
+    update_summary_internal(workspace_path, session_id, run_id, &summary)?;
 
     // Create empty events.jsonl file
-    let events_file = events_path(session_id, run_id)?;
+    let events_file = events_path(workspace_path, session_id, run_id)?;
     atomic_write(&events_file, "")?;
 
     // Append run_start event (seq=1)
@@ -84,37 +96,39 @@ pub fn create_run(
         prompt: prompt.to_string(),
         max_iterations,
     };
-    events::append_event_internal(session_id, run_id, &run_start)?;
+    events::append_event_internal(workspace_path, session_id, run_id, &run_start)?;
 
     // Update next_sequence to 2 after first event
     let mut summary = summary;
     summary.next_sequence = 2;
-    update_summary_internal(session_id, run_id, &summary)?;
+    update_summary_internal(workspace_path, session_id, run_id, &summary)?;
 
     // Increment run count exactly once here
-    super::sessions::increment_run_count(session_id)?;
-
-    // Add run to index for O(1) lookups
-    add_run_to_index(run_id, session_id)?;
+    super::sessions::increment_run_count(workspace_path, session_id)?;
 
     Ok(())
 }
 
 /// Updates the summary.json file atomically.
-pub fn update_summary(run_id: &str, summary: &RunSummary) -> Result<(), String> {
+pub fn update_summary(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+    summary: &RunSummary,
+) -> Result<(), String> {
     validate_id(run_id)?;
-    let session_id = get_session_for_run(run_id)?;
-    update_summary_internal(&session_id, run_id, summary)
+    update_summary_internal(workspace_path, session_id, run_id, summary)
 }
 
 pub(crate) fn update_summary_internal(
+    workspace_path: &str,
     session_id: &str,
     run_id: &str,
     summary: &RunSummary,
 ) -> Result<(), String> {
     validate_id(session_id)?;
     validate_id(run_id)?;
-    let path = summary_path(session_id, run_id)?;
+    let path = summary_path(workspace_path, session_id, run_id)?;
 
     let json = serde_json::to_string_pretty(summary)
         .map_err(|e| format!("Failed to serialise summary: {e}"))?;
@@ -123,16 +137,14 @@ pub(crate) fn update_summary_internal(
 }
 
 /// Reads the summary.json for a run.
-pub fn read_summary(run_id: &str) -> Result<RunSummary, String> {
-    validate_id(run_id)?;
-    let session_id = get_session_for_run(run_id)?;
-    read_summary_internal(&session_id, run_id)
-}
-
-pub(crate) fn read_summary_internal(session_id: &str, run_id: &str) -> Result<RunSummary, String> {
+pub fn read_summary(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+) -> Result<RunSummary, String> {
     validate_id(session_id)?;
     validate_id(run_id)?;
-    let path = summary_path(session_id, run_id)?;
+    let path = summary_path(workspace_path, session_id, run_id)?;
 
     if !path.exists() {
         return Err(format!("Run summary not found: {run_id}"));
@@ -148,12 +160,9 @@ pub(crate) fn read_summary_internal(session_id: &str, run_id: &str) -> Result<Ru
 }
 
 /// Lists all runs for a session, sorted by started_at descending.
-///
-/// Note: Sorting relies on RFC 3339 timestamp format (e.g., "2026-03-11T14:30:00Z").
-/// This format sorts lexicographically for timestamps in the same timezone.
-pub fn list_runs(session_id: &str) -> Result<Vec<RunSummary>, String> {
+pub fn list_runs(workspace_path: &str, session_id: &str) -> Result<Vec<RunSummary>, String> {
     validate_id(session_id)?;
-    let runs_dir = super::sessions::session_dir(session_id)?.join("runs");
+    let runs_dir = super::sessions::session_dir(workspace_path, session_id)?.join("runs");
 
     if !runs_dir.exists() {
         return Ok(Vec::new());
@@ -189,39 +198,40 @@ pub fn list_runs(session_id: &str) -> Result<Vec<RunSummary>, String> {
     }
 
     // Sort by started_at descending (most recent first)
-    // Note: RFC 3339 timestamps sort lexicographically when in the same timezone
     runs.sort_by(|a, b| b.started_at.cmp(&a.started_at));
 
     Ok(runs)
 }
 
 /// Computes files changed for a run using git diff from the baseline.
-pub fn compute_files_changed(run_id: &str) -> Result<Vec<String>, String> {
+pub fn compute_files_changed(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+) -> Result<Vec<String>, String> {
     validate_id(run_id)?;
-    let session_id = get_session_for_run(run_id)?;
-    let summary = read_summary_internal(&session_id, run_id)?;
+    let summary = read_summary(workspace_path, session_id, run_id)?;
 
     let Some(baseline) = summary.git_baseline else {
         return Ok(Vec::new());
     };
 
-    let workspace_path = summary
-        .workspace_path
-        .or_else(|| {
-            super::sessions::read_session(&summary.session_id)
-                .ok()
-                .map(|s| s.project_path)
-        })
-        .ok_or_else(|| "No workspace path found for run".to_string())?;
-
-    git::compute_files_changed_internal(&baseline, &workspace_path)
+    let ws = summary.workspace_path.as_deref().unwrap_or(workspace_path);
+    git::compute_files_changed_internal(&baseline, ws)
 }
 
 // ---- Artifact persistence ----
 
 /// Returns the iteration directory path: .../runs/{rid}/iterations/iter-{N}
-fn iteration_dir(session_id: &str, run_id: &str, iteration: u32) -> Result<std::path::PathBuf, String> {
-    Ok(run_dir(session_id, run_id)?.join("iterations").join(format!("iter-{iteration}")))
+fn iteration_dir(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+    iteration: u32,
+) -> Result<std::path::PathBuf, String> {
+    Ok(run_dir(workspace_path, session_id, run_id)?
+        .join("iterations")
+        .join(format!("iter-{iteration}")))
 }
 
 /// Returns the absolute path where an agent should write its output artifact.
@@ -229,17 +239,28 @@ fn iteration_dir(session_id: &str, run_id: &str, iteration: u32) -> Result<std::
 /// Creates the iteration directory if needed. Returns a `.md` file path.
 /// Callers pass this path to the agent prompt so it writes directly there.
 pub fn artifact_output_path(
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     iteration: u32,
     kind: &str,
 ) -> Result<std::path::PathBuf, String> {
     validate_id(run_id)?;
-    let session_id = get_session_for_run(run_id)?;
-    let dir = iteration_dir(&session_id, run_id, iteration)?;
+    let dir = iteration_dir(workspace_path, session_id, run_id, iteration)?;
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("Failed to create iteration directory: {e}"))?;
     let filename = format!("{kind}.md");
     Ok(dir.join(filename))
+}
+
+/// Returns the workspace-relative path for an artifact (used in agent prompts).
+pub fn artifact_relative_path(
+    session_id: &str,
+    run_id: &str,
+    iteration: u32,
+    kind: &str,
+) -> String {
+    format!(".ea-code/sessions/{session_id}/runs/{run_id}/iterations/iter-{iteration}/{kind}.md")
 }
 
 /// Writes an artifact file to disk.
@@ -247,14 +268,15 @@ pub fn artifact_output_path(
 /// File naming: `iterations/iter-{N}/{kind}.md`
 /// Creates the iteration directory if it does not exist.
 pub fn write_artifact(
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     iteration: u32,
     kind: &str,
     content: &str,
 ) -> Result<(), String> {
     validate_id(run_id)?;
-    let session_id = get_session_for_run(run_id)?;
-    let dir = iteration_dir(&session_id, run_id, iteration)?;
+    let dir = iteration_dir(workspace_path, session_id, run_id, iteration)?;
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("Failed to create iteration directory: {e}"))?;
 
@@ -267,20 +289,19 @@ pub fn write_artifact(
 
 /// Reads all artifacts for a run, returning a map of `kind` to `content`.
 ///
-/// Supports both the new `iterations/iter-N/{kind}.md` layout and the legacy
-/// `artifacts/{iter}_{kind}.md` layout for backward compatibility.
+/// Scans `iterations/iter-N/{kind}.md`.
 /// If multiple iterations wrote the same kind, the latest iteration wins.
 pub fn read_all_artifacts(
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
 ) -> Result<std::collections::HashMap<String, String>, String> {
     validate_id(run_id)?;
-    let session_id = get_session_for_run(run_id)?;
-    let base = run_dir(&session_id, run_id)?;
+    let base = run_dir(workspace_path, session_id, run_id)?;
 
     let mut artifacts = std::collections::HashMap::new();
     let mut iter_tracker: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
 
-    // New layout: iterations/iter-N/{kind}.md
     let iters_dir = base.join("iterations");
     if iters_dir.exists() {
         if let Ok(entries) = std::fs::read_dir(&iters_dir) {
@@ -293,10 +314,11 @@ pub fn read_all_artifacts(
                     Some(n) => n.to_string(),
                     None => continue,
                 };
-                let iter_num: u32 = match dir_name.strip_prefix("iter-").and_then(|s| s.parse().ok()) {
-                    Some(n) => n,
-                    None => continue,
-                };
+                let iter_num: u32 =
+                    match dir_name.strip_prefix("iter-").and_then(|s| s.parse().ok()) {
+                        Some(n) => n,
+                        None => continue,
+                    };
                 if let Ok(files) = std::fs::read_dir(&dir_path) {
                     for file_entry in files.flatten() {
                         let file_path = file_entry.path();
@@ -311,36 +333,6 @@ pub fn read_all_artifacts(
                                     artifacts.insert(kind.to_string(), content);
                                     iter_tracker.insert(kind.to_string(), iter_num);
                                 }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Legacy layout: artifacts/{iter}_{kind}.md
-    let legacy_dir = base.join("artifacts");
-    if legacy_dir.exists() {
-        if let Ok(entries) = std::fs::read_dir(&legacy_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                if ext != "md" && ext != "txt" {
-                    continue;
-                }
-                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    if let Some(underscore_pos) = stem.find('_') {
-                        let iter_num: u32 = stem[..underscore_pos].parse().unwrap_or(0);
-                        let kind = &stem[underscore_pos + 1..];
-                        if kind.is_empty() {
-                            continue;
-                        }
-                        let existing_iter = iter_tracker.get(kind).copied().unwrap_or(0);
-                        if iter_num >= existing_iter {
-                            if let Ok(content) = std::fs::read_to_string(&path) {
-                                artifacts.insert(kind.to_string(), content);
-                                iter_tracker.insert(kind.to_string(), iter_num);
                             }
                         }
                     }

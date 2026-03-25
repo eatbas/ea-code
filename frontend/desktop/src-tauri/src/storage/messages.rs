@@ -7,23 +7,31 @@ use std::path::PathBuf;
 
 use crate::models::{ChatMessage, ChatRole};
 
-use super::sessions;
-
 /// Returns the path to the messages.jsonl file for a session.
-fn messages_path(session_id: &str) -> Result<PathBuf, String> {
+fn messages_path(workspace_path: &str, session_id: &str) -> Result<PathBuf, String> {
     super::validate_id(session_id)?;
-    Ok(sessions::session_dir(session_id)?.join("messages.jsonl"))
+    Ok(super::sessions::session_dir(workspace_path, session_id)?.join("messages.jsonl"))
 }
 
 /// Appends a single chat message to the session's messages.jsonl.
 /// Uses append-only writes with explicit flush for durability.
-pub fn append_message(session_id: &str, message: &ChatMessage) -> Result<(), String> {
+pub fn append_message(
+    workspace_path: &str,
+    session_id: &str,
+    message: &ChatMessage,
+) -> Result<(), String> {
     use std::io::Write;
 
-    let path = messages_path(session_id)?;
+    let path = messages_path(workspace_path, session_id)?;
 
     let line = serde_json::to_string(message)
         .map_err(|e| format!("Failed to serialise chat message: {e}"))?;
+
+    // Ensure parent directory exists
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create messages directory: {e}"))?;
+    }
 
     let mut file = std::fs::OpenOptions::new()
         .create(true)
@@ -41,8 +49,8 @@ pub fn append_message(session_id: &str, message: &ChatMessage) -> Result<(), Str
 
 /// Reads all chat messages for a session from messages.jsonl.
 /// Skips malformed lines gracefully with a warning.
-pub fn read_messages(session_id: &str) -> Result<Vec<ChatMessage>, String> {
-    let path = messages_path(session_id)?;
+pub fn read_messages(workspace_path: &str, session_id: &str) -> Result<Vec<ChatMessage>, String> {
+    let path = messages_path(workspace_path, session_id)?;
 
     if !path.exists() {
         return Ok(Vec::new());
@@ -74,8 +82,12 @@ pub fn read_messages(session_id: &str) -> Result<Vec<ChatMessage>, String> {
 
 /// Reads the most recent N chat messages for a session.
 /// Useful for building session memory context without loading the full history.
-pub fn read_recent_messages(session_id: &str, limit: usize) -> Result<Vec<ChatMessage>, String> {
-    let all = read_messages(session_id)?;
+pub fn read_recent_messages(
+    workspace_path: &str,
+    session_id: &str,
+    limit: usize,
+) -> Result<Vec<ChatMessage>, String> {
+    let all = read_messages(workspace_path, session_id)?;
     let len = all.len();
     if len <= limit {
         return Ok(all);

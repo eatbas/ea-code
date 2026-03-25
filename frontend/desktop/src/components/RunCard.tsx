@@ -16,6 +16,8 @@ import { ResultCard, buildStageRowsFromEvents, computeDuration } from "./shared/
 interface RunCardProps {
   run: RunSummary;
   settings: AppSettings | null;
+  /** Workspace path required for loading run events and artifacts. */
+  workspacePath: string;
   /** When true, hides the user prompt bubble (rendered separately in message-driven view). */
   hidePromptBubble?: boolean;
 }
@@ -75,7 +77,7 @@ function eventsToStageResults(events: RunEvent[]): StageResult[] {
 /** Displays a single historical run with full step-by-step timeline.
  *  Events are lazy-loaded when the card is expanded.
  */
-export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): ReactNode {
+export function RunCard({ run, settings, workspacePath, hidePromptBubble }: RunCardProps): ReactNode {
   const isTerminalStatus = isTerminalStatusValue(run.status);
   const isActiveStatus = isActiveStatusValue(run.status);
   const [events, setEvents] = useState<RunEvent[] | null>(null);
@@ -88,8 +90,8 @@ export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): Reac
     setLoadingEvents(true);
     try {
       const [runEvents, runArtifacts] = await Promise.all([
-        invoke<RunEvent[]>("get_run_events", { runId: run.id }),
-        invoke<Record<string, string>>("get_run_artifacts", { runId: run.id }),
+        invoke<RunEvent[]>("get_run_events", { runId: run.id, sessionId: run.sessionId, workspacePath }),
+        invoke<Record<string, string>>("get_run_artifacts", { runId: run.id, sessionId: run.sessionId, workspacePath }),
       ]);
       setEvents(runEvents);
       setArtifacts(runArtifacts);
@@ -98,7 +100,7 @@ export function RunCard({ run, settings, hidePromptBubble }: RunCardProps): Reac
     } finally {
       setLoadingEvents(false);
     }
-  }, [events, loadingEvents, run.id]);
+  }, [events, loadingEvents, run.id, run.sessionId, workspacePath]);
 
   // Load events when expanded
   useEffect(() => {

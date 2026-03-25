@@ -1,30 +1,40 @@
 use crate::models::RunEvent;
 
-use super::{events_path, get_session_for_run, validate_id};
+use super::{events_path, validate_id};
 
 /// Appends a single event to the events.jsonl file.
-/// Does NOT update next_sequence in summary.json - that's only updated at run end.
-pub fn append_event(run_id: &str, event: RunEvent) -> Result<(), String> {
+pub fn append_event(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+    event: RunEvent,
+) -> Result<(), String> {
     validate_id(run_id)?;
-    // Get session_id from index (O(1) lookup)
-    let session_id = get_session_for_run(run_id)?;
-    append_event_internal(&session_id, run_id, &event)
+    append_event_internal(workspace_path, session_id, run_id, &event)
 }
 
 pub(crate) fn append_event_internal(
+    workspace_path: &str,
     session_id: &str,
     run_id: &str,
     event: &RunEvent,
 ) -> Result<(), String> {
     validate_id(session_id)?;
     validate_id(run_id)?;
-    let path = events_path(session_id, run_id)?;
+    let path = events_path(workspace_path, session_id, run_id)?;
 
     let line =
         serde_json::to_string(event).map_err(|e| format!("Failed to serialise event: {e}"))?;
 
     // H11: Append to file with explicit flush for durability
     use std::io::Write;
+
+    // Ensure parent directory exists
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create events directory: {e}"))?;
+    }
+
     let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -41,19 +51,23 @@ pub(crate) fn append_event_internal(
 }
 
 /// Reads all events from events.jsonl for a run.
-pub fn read_events(run_id: &str) -> Result<Vec<RunEvent>, String> {
+pub fn read_events(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+) -> Result<Vec<RunEvent>, String> {
     validate_id(run_id)?;
-    let session_id = get_session_for_run(run_id)?;
-    read_events_internal(&session_id, run_id)
+    read_events_internal(workspace_path, session_id, run_id)
 }
 
 pub(crate) fn read_events_internal(
+    workspace_path: &str,
     session_id: &str,
     run_id: &str,
 ) -> Result<Vec<RunEvent>, String> {
     validate_id(session_id)?;
     validate_id(run_id)?;
-    let path = events_path(session_id, run_id)?;
+    let path = events_path(workspace_path, session_id, run_id)?;
 
     if !path.exists() {
         return Ok(Vec::new());
@@ -86,24 +100,29 @@ pub(crate) fn read_events_internal(
 
 /// Gets the next sequence number for events in a run.
 /// Calculates from the line count of events.jsonl for O(1) amortised cost.
-pub fn next_sequence(run_id: &str) -> Result<u64, String> {
+pub fn next_sequence(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+) -> Result<u64, String> {
     validate_id(run_id)?;
-    let session_id = get_session_for_run(run_id)?;
-    next_sequence_internal(&session_id, run_id)
+    next_sequence_internal(workspace_path, session_id, run_id)
 }
 
 /// Calculates next sequence from file line count.
-/// O(N) where N = number of events, but N is small per file.
-pub(crate) fn next_sequence_internal(session_id: &str, run_id: &str) -> Result<u64, String> {
+pub(crate) fn next_sequence_internal(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+) -> Result<u64, String> {
     validate_id(session_id)?;
     validate_id(run_id)?;
-    let path = events_path(session_id, run_id)?;
+    let path = events_path(workspace_path, session_id, run_id)?;
 
     if !path.exists() {
         return Ok(1);
     }
 
-    // Count non-empty lines in the file
     let contents =
         std::fs::read_to_string(&path).map_err(|e| format!("Failed to read events file: {e}"))?;
 

@@ -4,9 +4,20 @@ use crate::models::ReviewFindings;
 
 use super::{format_indented_bullet_list, PromptMeta};
 
-pub fn build_judge_system(meta: &PromptMeta) -> String {
+pub fn build_judge_system(meta: &PromptMeta, output_path: Option<&str>) -> String {
     let is_final = meta.iteration == meta.max_iterations;
     let has_progress = meta.previous_judge_output.is_some();
+
+    let output_instruction = match output_path {
+        Some(path) => format!(
+            "- Write your verdict to this file (relative to workspace root): {path}\n\
+             The first line of the file MUST be exactly: COMPLETE or NOT COMPLETE\n\
+             That is the ONLY file you may create or write to."
+        ),
+        None => "- If an OUTPUT FILE path is provided at the end of the prompt, write \
+         your verdict there. That is the ONLY file you may write."
+            .to_string(),
+    };
 
     let mut parts = vec![format!(
         "# Role\n\
@@ -21,8 +32,7 @@ pub fn build_judge_system(meta: &PromptMeta) -> String {
          the file system.\n\
          - You may use read-only tools (Read, Grep, git diff, git status) to \
          inspect the codebase.\n\
-         - If an OUTPUT FILE path is provided at the end of the prompt, write \
-         your verdict there. That is the ONLY file you may write.\n\
+         {output_instruction}\n\
          \n\
          # Rubric\n\
          Evaluate against this checklist:\n\
@@ -214,7 +224,7 @@ mod tests {
             max_iterations: 3,
             previous_judge_output: Some("NOT COMPLETE".to_string()),
         };
-        let system = build_judge_system(&meta);
+        let system = build_judge_system(&meta, None);
         assert!(system.contains("Final Iteration Guidance"));
         assert!(system.contains("Progress Awareness"));
         assert!(system.contains("pragmatic standard"));
@@ -227,7 +237,7 @@ mod tests {
             max_iterations: 3,
             previous_judge_output: None,
         };
-        let system = build_judge_system(&meta);
+        let system = build_judge_system(&meta, None);
         assert!(!system.contains("Final Iteration Guidance"));
         assert!(!system.contains("Progress Awareness"));
     }

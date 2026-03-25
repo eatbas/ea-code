@@ -11,9 +11,9 @@ const MEMORY_CHAR_CAP: usize = 5_000;
 
 /// Builds a compact memory block from recent run summaries in the same
 /// session so different agent backends can share continuity.
-pub fn build_session_memory_context(session_id: &str, exclude_run_id: Option<&str>) -> String {
+pub fn build_session_memory_context(workspace_path: &str, session_id: &str, exclude_run_id: Option<&str>) -> String {
     // Get all runs for this session
-    let run_summaries = match runs::list_runs(session_id) {
+    let run_summaries = match runs::list_runs(workspace_path, session_id) {
         Ok(summaries) => summaries,
         Err(_) => return String::new(),
     };
@@ -27,7 +27,7 @@ pub fn build_session_memory_context(session_id: &str, exclude_run_id: Option<&st
 
     // Load recent chat messages for conversational context
     let recent_messages =
-        messages::read_recent_messages(session_id, MESSAGE_HISTORY_LIMIT).unwrap_or_default();
+        messages::read_recent_messages(workspace_path, session_id, MESSAGE_HISTORY_LIMIT).unwrap_or_default();
 
     if recent_runs.is_empty() && recent_messages.is_empty() {
         return String::new();

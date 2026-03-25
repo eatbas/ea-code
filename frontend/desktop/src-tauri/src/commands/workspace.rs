@@ -26,6 +26,9 @@ pub async fn select_workspace(path: String) -> Result<WorkspaceInfo, String> {
         info.branch.as_deref(),
     )?;
 
+    // Ensure workspace-local data directories exist
+    storage::ensure_workspace_dirs(&path)?;
+
     Ok(info)
 }
 

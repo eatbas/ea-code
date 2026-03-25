@@ -47,9 +47,21 @@ pub async fn run_pipeline(
         let mut senders = state.answer_senders.lock().await;
         senders.insert(run_id.clone(), answer_sender.clone());
     }
+    // Register workspace_path and session_id for cancel/pause/resume lookups
+    let workspace_path = request.workspace_path.clone();
+    let session_id_for_registry = request.session_id.clone().unwrap_or_default();
+    {
+        let mut ws = state.run_workspaces.lock().await;
+        ws.insert(
+            run_id.clone(),
+            (workspace_path.clone(), session_id_for_registry),
+        );
+    }
+
     let cancel_flags_registry = state.cancel_flags.clone();
     let pause_flags_registry = state.pause_flags.clone();
     let answer_senders_registry = state.answer_senders.clone();
+    let run_workspaces_registry = state.run_workspaces.clone();
 
     // Get retention setting for cleanup after the pipeline finishes
     let retention_days = loaded_settings.retention_days;
@@ -94,6 +106,10 @@ pub async fn run_pipeline(
 
         let mut senders = answer_senders_registry.lock().await;
         senders.remove(&run_id);
+        drop(senders);
+
+        let mut ws = run_workspaces_registry.lock().await;
+        ws.remove(&run_id);
     });
 
     Ok(())
@@ -131,12 +147,26 @@ pub async fn cancel_pipeline(state: State<'_, AppState>, run_id: String) -> Resu
     }
 
     // File-based storage: update run status via summary.json
-    if let Ok(mut summary) = storage::runs::read_summary(&run_id) {
-        summary.status = RunFileStatus::Cancelled;
-        summary.completed_at = Some(storage::now_rfc3339());
-        let _ = storage::runs::update_summary(&run_id, &summary);
-        let _ =
-            storage::sessions::touch_session(&summary.session_id, None, Some("cancelled"), None);
+    let ws_info = {
+        let ws = state.run_workspaces.lock().await;
+        ws.get(&run_id).cloned()
+    };
+    if let Some((workspace_path, session_id)) = ws_info {
+        if let Ok(mut summary) =
+            storage::runs::read_summary(&workspace_path, &session_id, &run_id)
+        {
+            summary.status = RunFileStatus::Cancelled;
+            summary.completed_at = Some(storage::now_rfc3339());
+            let _ =
+                storage::runs::update_summary(&workspace_path, &session_id, &run_id, &summary);
+            let _ = storage::sessions::touch_session(
+                &workspace_path,
+                &session_id,
+                None,
+                Some("cancelled"),
+                None,
+            );
+        }
     }
 
     Ok(())
@@ -153,10 +183,25 @@ pub async fn pause_pipeline(state: State<'_, AppState>, run_id: String) -> Resul
     }
 
     // File-based storage: update run status via summary.json
-    if let Ok(mut summary) = storage::runs::read_summary(&run_id) {
-        summary.status = RunFileStatus::Paused;
-        let _ = storage::runs::update_summary(&run_id, &summary);
-        let _ = storage::sessions::touch_session(&summary.session_id, None, Some("paused"), None);
+    let ws_info = {
+        let ws = state.run_workspaces.lock().await;
+        ws.get(&run_id).cloned()
+    };
+    if let Some((workspace_path, session_id)) = ws_info {
+        if let Ok(mut summary) =
+            storage::runs::read_summary(&workspace_path, &session_id, &run_id)
+        {
+            summary.status = RunFileStatus::Paused;
+            let _ =
+                storage::runs::update_summary(&workspace_path, &session_id, &run_id, &summary);
+            let _ = storage::sessions::touch_session(
+                &workspace_path,
+                &session_id,
+                None,
+                Some("paused"),
+                None,
+            );
+        }
     }
 
     Ok(())
@@ -173,10 +218,25 @@ pub async fn resume_pipeline(state: State<'_, AppState>, run_id: String) -> Resu
     }
 
     // File-based storage: update run status via summary.json
-    if let Ok(mut summary) = storage::runs::read_summary(&run_id) {
-        summary.status = RunFileStatus::Running;
-        let _ = storage::runs::update_summary(&run_id, &summary);
-        let _ = storage::sessions::touch_session(&summary.session_id, None, Some("running"), None);
+    let ws_info = {
+        let ws = state.run_workspaces.lock().await;
+        ws.get(&run_id).cloned()
+    };
+    if let Some((workspace_path, session_id)) = ws_info {
+        if let Ok(mut summary) =
+            storage::runs::read_summary(&workspace_path, &session_id, &run_id)
+        {
+            summary.status = RunFileStatus::Running;
+            let _ =
+                storage::runs::update_summary(&workspace_path, &session_id, &run_id, &summary);
+            let _ = storage::sessions::touch_session(
+                &workspace_path,
+                &session_id,
+                None,
+                Some("running"),
+                None,
+            );
+        }
     }
 
     Ok(())

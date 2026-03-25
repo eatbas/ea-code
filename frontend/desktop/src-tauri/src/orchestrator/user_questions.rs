@@ -18,6 +18,8 @@ use crate::orchestrator::helpers::{emit_stage, wait_for_cancel};
 /// Pauses the pipeline and asks the user a question, persisting Q&A to event log.
 pub async fn ask_user_question(
     app: &AppHandle,
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     stage: &PipelineStage,
     iteration: u32,
@@ -49,7 +51,7 @@ pub async fn ask_user_question(
 
     tokio::select! {
         answer = rx => {
-            handle_answer_result(answer, run_id, stage, iteration)
+            handle_answer_result(answer, workspace_path, session_id, run_id, stage, iteration)
         }
         _ = wait_for_cancel(cancel_flag) => {
             let mut lock = answer_sender.lock().await;
@@ -63,6 +65,8 @@ pub async fn ask_user_question(
 /// if the user has not responded.
 pub async fn ask_user_question_with_timeout(
     app: &AppHandle,
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     stage: &PipelineStage,
     iteration: u32,
@@ -97,14 +101,14 @@ pub async fn ask_user_question_with_timeout(
 
     tokio::select! {
         answer = rx => {
-            handle_answer_result(answer, run_id, stage, iteration)
+            handle_answer_result(answer, workspace_path, session_id, run_id, stage, iteration)
         }
         _ = tokio::time::sleep(timeout_duration) => {
             // Timeout — auto-approve by returning None (caller treats as approve).
             let mut lock = answer_sender.lock().await;
             *lock = None;
             // Log auto-approval as event
-            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let seq = runs::next_sequence(workspace_path, session_id, run_id).unwrap_or(1);
             let event = RunEvent::Question {
                 v: 1,
                 seq,
@@ -115,7 +119,7 @@ pub async fn ask_user_question_with_timeout(
                 answer: "auto-approved (timeout)".to_string(),
                 skipped: false,
             };
-            let _ = runs::append_event(run_id, event);
+            let _ = runs::append_event(workspace_path, session_id, run_id, event);
             Ok(None)
         }
         _ = wait_for_cancel(cancel_flag) => {
@@ -156,6 +160,8 @@ fn emit_question_event(
 /// Handles the result from a oneshot answer channel.
 fn handle_answer_result(
     answer: Result<PipelineAnswer, tokio::sync::oneshot::error::RecvError>,
+    workspace_path: &str,
+    session_id: &str,
     run_id: &str,
     stage: &PipelineStage,
     iteration: u32,
@@ -163,7 +169,7 @@ fn handle_answer_result(
     match answer {
         Ok(a) => {
             // Log Q&A to event log
-            let seq = runs::next_sequence(run_id).unwrap_or(1);
+            let seq = runs::next_sequence(workspace_path, session_id, run_id).unwrap_or(1);
             let event = RunEvent::Question {
                 v: 1,
                 seq,
@@ -182,7 +188,7 @@ fn handle_answer_result(
                 },
                 skipped: a.skipped,
             };
-            let _ = runs::append_event(run_id, event);
+            let _ = runs::append_event(workspace_path, session_id, run_id, event);
             Ok(Some(a))
         }
         Err(_) => Err("Answer channel dropped unexpectedly".to_string()),

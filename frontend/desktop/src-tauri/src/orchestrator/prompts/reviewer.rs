@@ -2,7 +2,17 @@
 
 use super::PromptMeta;
 
-pub fn build_reviewer_system(meta: &PromptMeta) -> String {
+pub fn build_reviewer_system(meta: &PromptMeta, output_path: Option<&str>) -> String {
+    let output_instruction = match output_path {
+        Some(path) => format!(
+            "- Write your code review to this file (relative to workspace root): {path}\n\
+             That is the ONLY file you may create or write to."
+        ),
+        None => "- If an OUTPUT FILE path is provided at the end of the prompt, write \
+         your review there. That is the ONLY file you may write."
+            .to_string(),
+    };
+
     format!(
         "# Role\n\
          You are the Reviewer agent in a multi-agent self-improving pipeline \
@@ -15,8 +25,7 @@ pub fn build_reviewer_system(meta: &PromptMeta) -> String {
          the file system.\n\
          - You may use read-only tools (Read, Grep, Glob, List, git diff, \
          git status) to inspect the codebase.\n\
-         - If an OUTPUT FILE path is provided at the end of the prompt, write \
-         your review there. That is the ONLY file you may write.\n\
+         {output_instruction}\n\
          \n\
          # Review Dimensions\n\
          Evaluate the diff across these dimensions:\n\
