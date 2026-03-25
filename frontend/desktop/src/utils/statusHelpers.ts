@@ -10,13 +10,13 @@ interface StatusToneClasses {
   cardBorder: string;
 }
 
-/** Whether the pipeline is actively executing. */
-export function isActive(status: PipelineStatus): boolean {
+/** Whether a status indicates active execution (running or awaiting input). */
+export function isActive(status: PipelineStatus | string | undefined): boolean {
   return status === "running" || status === "waiting_for_input";
 }
 
-/** Whether the pipeline is in a terminal state. */
-export function isTerminal(status: PipelineStatus): boolean {
+/** Whether a status indicates a terminal state (completed, failed, or cancelled). */
+export function isTerminal(status: PipelineStatus | string | undefined): boolean {
   return status === "completed" || status === "failed" || status === "cancelled";
 }
 
@@ -35,15 +35,6 @@ export function isLiveSessionStatus(status: string | undefined): boolean {
   return status === "running" || status === "waiting_for_input" || status === "paused";
 }
 
-/** Whether an untyped status string is actively running work (excludes paused). */
-export function isActiveStatusValue(status: string | undefined): boolean {
-  return status === "running" || status === "waiting_for_input";
-}
-
-/** Whether an untyped status string is terminal. */
-export function isTerminalStatusValue(status: string | undefined): boolean {
-  return status === "completed" || status === "failed" || status === "cancelled";
-}
 
 /** Maps pipeline statuses to a semantic tone used by the UI. */
 export function statusTone(status: PipelineStatus | string | undefined): StatusTone {

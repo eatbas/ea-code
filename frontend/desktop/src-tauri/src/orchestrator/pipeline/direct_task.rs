@@ -80,6 +80,7 @@ pub async fn run_direct_task(
                     PipelineStage::DirectTask,
                     None,
                     None,
+                    None,
                 )
                 .await
             } else {
@@ -94,6 +95,7 @@ pub async fn run_direct_task(
                         app,
                         run_id,
                         PipelineStage::DirectTask,
+                        None,
                         None,
                         None,
                     ),
@@ -197,6 +199,7 @@ pub async fn run_direct_task(
             output,
             duration_ms,
             error: error.clone(),
+            backend: Some(backend.clone()),
             provider_session_ref: None,
             session_pair: None,
             resumed: None,

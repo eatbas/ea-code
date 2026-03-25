@@ -73,13 +73,6 @@ pub async fn get_mcp_cli_runtime_statuses(app: AppHandle) -> Result<(), String> 
     Ok(())
 }
 
-/// Fire-and-forget wrapper for tauri command compatibility.
-#[tauri::command]
-#[allow(dead_code)]
-pub async fn get_mcp_cli_runtime_statuses_with_state(app: AppHandle) -> Result<(), String> {
-    get_mcp_cli_runtime_statuses(app).await
-}
-
 #[tauri::command]
 pub async fn run_cli_mcp_fix_with_prompt(
     request: RunCliMcpFixWithPromptRequest,

@@ -44,13 +44,10 @@ pub async fn run_prompt_enhance_stage(
         seq_start,
     )?;
 
-    let output_path = runs::artifact_output_path(ws, session_id, run_id, iter_num, "enhanced_prompt").ok();
-    let output_path_str = output_path
-        .as_ref()
-        .map(|p| p.to_string_lossy().to_string());
-
     // Use a temporary empty directory as the workspace so the enhancer cannot
     // explore the real codebase. It is a text-rewrite task — no file access needed.
+    // Because the enhancer runs in a temp dir, we do NOT tell it to write a file
+    // (the relative path would not resolve). We capture stdout instead.
     let enhancer_workspace = std::env::temp_dir()
         .join("ea-code-enhancer")
         .to_string_lossy()
@@ -59,11 +56,7 @@ pub async fn run_prompt_enhance_stage(
 
     let input = AgentInput {
         prompt: prompts::build_prompt_enhancer_user(&request.prompt),
-        // Keep prompt enhancement rewrite-only; avoid workspace execution context here.
-        context: Some(prompts::build_prompt_enhancer_system(
-            meta,
-            Some(&runs::artifact_relative_path(session_id, run_id, iter_num, "enhanced_prompt")),
-        )),
+        context: Some(prompts::build_prompt_enhancer_system(meta, None)),
         workspace_path: enhancer_workspace,
     };
 
@@ -81,7 +74,8 @@ pub async fn run_prompt_enhance_stage(
         pause_flag,
         PauseHandling::ResumeWithinStage,
         Some(session_id),
-        output_path_str.as_deref(),
+        None,
+        None,
         None,
     )
     .await;

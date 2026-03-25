@@ -38,6 +38,7 @@ pub async fn run_generate_stage(
     stages: &mut Vec<StageResult>,
     iter_ctx: &mut IterationContext,
     workspace_context: &str,
+    tracker: &crate::orchestrator::helpers::CliSessionTracker,
 ) -> Result<String, String> {
     let generator_agent = settings.coder_agent.as_ref().ok_or_else(|| {
         "Coder is not set. Go to Settings/Agents and configure the minimum roles.".to_string()
@@ -49,11 +50,9 @@ pub async fn run_generate_stage(
     super::stages::append_stage_start_event(ws, session_id, run_id, &PipelineStage::Coder, iter_num, gen_seq)?;
 
     // File-reference the enhanced prompt and plan to keep prompt size small.
-    let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
-        ws, session_id, run_id, iter_num, "enhanced_prompt",
-    )
-    .map(|p| crate::orchestrator::helpers::file_ref(&p))
-    .unwrap_or_else(|| enhanced.to_string());
+    let enhanced_ref = crate::orchestrator::helpers::file_ref_or_inline(
+        ws, session_id, run_id, iter_num, "enhanced_prompt", enhanced,
+    );
 
     let plan_ref = iter_ctx.selected_plan().and_then(|_| {
         let kind = if iter_ctx.audited_plan.is_some() {
@@ -83,6 +82,7 @@ pub async fn run_generate_stage(
 
     crate::orchestrator::helpers::emit_prompt_artifact(ws, session_id, run_id, "coder", &input, iter_num);
 
+    let coder_session = tracker.get_ref_for_stage(&PipelineStage::Coder, generator_agent);
     let gen_r = execute_agent_stage(
         app,
         run_id,
@@ -96,6 +96,7 @@ pub async fn run_generate_stage(
         PauseHandling::ResumeWithinStage,
         Some(session_id),
         None,
+        coder_session,
         None,
     )
     .await;

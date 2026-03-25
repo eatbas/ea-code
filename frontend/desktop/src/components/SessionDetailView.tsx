@@ -4,7 +4,7 @@ import type { SessionDetail, RunOptions, RunSummary, ProviderInfo, AppSettings }
 import { useElapsedTimer } from "../hooks/useElapsedTimer";
 import { useRecentTerminal } from "../hooks/useRecentTerminal";
 import { useStickyAutoScroll } from "../hooks/useStickyAutoScroll";
-import { isActiveStatusValue, isLiveSessionStatus, statusToneClasses } from "../utils/statusHelpers";
+import { isActive, isLiveSessionStatus, statusToneClasses } from "../utils/statusHelpers";
 import { RunCard } from "./RunCard";
 import { AssistantMessageBubble } from "./shared/AssistantMessageBubble";
 import { PromptInputBar } from "./shared/PromptInputBar";
@@ -92,7 +92,7 @@ export function SessionDetailView({
         ? "Awaiting input"
         : "Running";
   const liveStatusClasses = statusToneClasses(liveRun?.status);
-  const showPause = isActiveStatusValue(liveRun?.status);
+  const showPause = isActive(liveRun?.status);
   const showResume = liveRun?.status === "paused";
   const hasLiveTerminal = !!liveRun && liveRun.id === activeRunId;
 

@@ -141,6 +141,7 @@ pub async fn run_skill_selection_stage(
         Some(session_id),
         skill_output_path_str.as_deref(),
         None,
+        None,
     )
     .await;
 

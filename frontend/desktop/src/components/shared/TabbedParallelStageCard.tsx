@@ -68,6 +68,17 @@ function resolveStatusBadge(stages: StageResult[], isPaused: boolean) {
   return STATUS_BADGES.pending;
 }
 
+/** Finds an artifact value by trying the exact key first, then falling back to
+ *  any key that starts with `{prefix}_{slotNumber}_` (descriptive artifact names
+ *  like `plan_1_claude_opus-4` or `review_2_copilot_gpt-5.4-mini`). */
+function findArtifact(artifacts: Record<string, string>, prefix: string, slotNumber: number): string | undefined {
+  const simpleKey = `${prefix}_${slotNumber}`;
+  if (artifacts[simpleKey] != null) return artifacts[simpleKey];
+  const descriptivePrefix = `${simpleKey}_`;
+  const entry = Object.entries(artifacts).find(([key]) => key.startsWith(descriptivePrefix));
+  return entry?.[1];
+}
+
 function resolveOutputs(
   stages: StageResult[],
   artifacts: Record<string, string>,
@@ -75,12 +86,16 @@ function resolveOutputs(
   artifactKeyPrefix: string,
 ): string[] {
   if (stages.length === 1) {
-    return [artifacts[singleArtifactKey] ?? stages[0].output ?? ""];
+    return [
+      artifacts[singleArtifactKey]
+        ?? findArtifact(artifacts, artifactKeyPrefix, 1)
+        ?? stages[0].output
+        ?? "",
+    ];
   }
 
   return stages.map((stage, index) => {
-    const artifactKey = `${artifactKeyPrefix}_${index + 1}`;
-    return artifacts[artifactKey] ?? stage.output ?? "";
+    return findArtifact(artifacts, artifactKeyPrefix, index + 1) ?? stage.output ?? "";
   });
 }
 

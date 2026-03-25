@@ -73,20 +73,5 @@ export interface RunDetail {
   /** Event timeline from events.jsonl - contains stage timing and status. */
   events: RunEvent[];
 }
-
-/** Stored question/answer entry from events. */
-export interface QuestionEntry {
-  id: string;
-  runId: string;
-  stage: string;
-  iteration: number;
-  questionText: string;
-  optional: boolean;
-  answer?: string;
-  skipped: boolean;
-  askedAt: string;
-  answeredAt?: string;
-}
-
 // Re-export storage types for convenience
 export type { SessionMeta, RunSummaryFile, RunEvent, ProjectEntry, ChatMessage };

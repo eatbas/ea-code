@@ -56,15 +56,6 @@ pub async fn git_status(path: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Returns the diff of all changes (staged and unstaged) in the workspace.
-#[allow(dead_code)]
-pub async fn git_diff(path: &str) -> String {
-    run_git(&["-C", path, "diff"])
-        .await
-        .map(|out| String::from_utf8_lossy(&out.stdout).to_string())
-        .unwrap_or_default()
-}
-
 /// Returns the current branch name, if available.
 pub async fn git_branch(path: &str) -> Option<String> {
     run_git(&["-C", path, "rev-parse", "--abbrev-ref", "HEAD"])

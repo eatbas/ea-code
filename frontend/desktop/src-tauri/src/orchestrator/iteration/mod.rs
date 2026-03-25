@@ -153,6 +153,7 @@ pub async fn run_iteration(
         &mut stages,
         &mut iter_ctx,
         workspace_context,
+        tracker,
     )
     .await?;
     carry.last_approved_plan = iter_ctx.selected_plan().map(|plan| plan.to_string());
@@ -253,6 +254,7 @@ pub async fn run_iteration(
         &mut stages,
         &mut iter_ctx,
         workspace_context,
+        tracker,
     )
     .await
     {
@@ -289,6 +291,7 @@ pub async fn run_iteration(
         &mut stages,
         &mut iter_ctx,
         workspace_context,
+        tracker,
     )
     .await?;
 

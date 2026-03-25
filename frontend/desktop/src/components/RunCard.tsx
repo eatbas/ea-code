@@ -4,7 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type { AppSettings, PipelineStage, RunSummary, RunEvent, StageResult, StageStatus } from "../types";
 import { parseUtcTimestamp } from "../utils/formatters";
 import { stageModelLabel } from "../utils/stageModelLabels";
-import { isActiveStatusValue, isTerminalStatusValue } from "../utils/statusHelpers";
+import { isActive, isTerminal } from "../utils/statusHelpers";
+import { buildPlanArtifactMap, buildReviewArtifactMap } from "../utils/artifactHelpers";
 import { PromptReceivedCard } from "./shared/PromptReceivedCard";
 import { ThinkingIndicator } from "./shared/ThinkingIndicator";
 import { StageCard } from "./shared/StageCard";
@@ -78,8 +79,8 @@ function eventsToStageResults(events: RunEvent[]): StageResult[] {
  *  Events are lazy-loaded when the card is expanded.
  */
 export function RunCard({ run, settings, workspacePath, hidePromptBubble }: RunCardProps): ReactNode {
-  const isTerminalStatus = isTerminalStatusValue(run.status);
-  const isActiveStatus = isActiveStatusValue(run.status);
+  const isTerminalStatus = isTerminal(run.status);
+  const isActiveStatus = isActive(run.status);
   const [events, setEvents] = useState<RunEvent[] | null>(null);
   const [artifacts, setArtifacts] = useState<Record<string, string>>({});
   const [loadingEvents, setLoadingEvents] = useState(false);
@@ -255,20 +256,10 @@ interface RunStageListProps {
 
 function RunStageList({ stageResults, run, artifacts, settings, isActiveStatus }: RunStageListProps) {
   const planGroupStages = stageResults.filter((s) => isPlanStage(s.stage));
-  const planArtifactMap: Record<string, string> = {};
-  for (const [key, value] of Object.entries(artifacts)) {
-    if (key === "plan" || /^plan_\d+$/.test(key)) {
-      planArtifactMap[key] = value;
-    }
-  }
+  const planArtifactMap = buildPlanArtifactMap(artifacts);
 
   const reviewGroupStages = stageResults.filter((s) => isReviewStage(s.stage));
-  const reviewArtifactMap: Record<string, string> = {};
-  for (const [key, value] of Object.entries(artifacts)) {
-    if (key === "review" || /^review_\d+$/.test(key)) {
-      reviewArtifactMap[key] = value;
-    }
-  }
+  const reviewArtifactMap = buildReviewArtifactMap(artifacts);
 
   let planGroupRendered = false;
   let reviewGroupRendered = false;

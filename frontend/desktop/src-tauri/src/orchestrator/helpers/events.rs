@@ -1,7 +1,10 @@
-//! Stage helpers for iteration review.
+//! Shared stage event persistence helpers used across planning, review, and judge stages.
+
+use std::mem;
 
 use crate::models::{
-    JudgeVerdict, PipelineRun, PipelineStage, PipelineStatus, RunEvent, StageEndStatus,
+    Iteration, JudgeVerdict, PipelineRun, PipelineStage, PipelineStatus, RunEvent, StageEndStatus,
+    StageResult,
 };
 use crate::storage::{self, runs, sessions};
 
@@ -35,25 +38,20 @@ pub fn append_stage_end_event(
     status: &StageEndStatus,
     duration_ms: u64,
 ) -> Result<(), String> {
-    let event = RunEvent::StageEnd {
-        v: 1,
-        seq,
-        ts: storage::now_rfc3339(),
-        stage: stage.clone(),
+    append_stage_end_event_with_verdict(
+        workspace_path,
+        session_id,
+        run_id,
+        stage,
         iteration,
-        status: status.clone(),
+        seq,
+        status,
         duration_ms,
-        verdict: None,
-        input_tokens: None,
-        output_tokens: None,
-        estimated_cost_usd: None,
-        session_pair: None,
-        resumed: None,
-    };
-    runs::append_event(workspace_path, session_id, run_id, event)
+        None,
+    )
 }
 
-/// Appends a stage_end event with verdict to the event log.
+/// Appends a stage_end event with an optional verdict to the event log.
 pub fn append_stage_end_event_with_verdict(
     workspace_path: &str,
     session_id: &str,
@@ -83,8 +81,14 @@ pub fn append_stage_end_event_with_verdict(
     runs::append_event(workspace_path, session_id, run_id, event)
 }
 
-/// Updates the run summary.json with current state for crash recovery.
-pub fn update_run_summary(workspace_path: &str, session_id: &str, run_id: &str, run: &PipelineRun) -> Result<(), String> {
+/// Updates the run summary.json with current state for crash recovery,
+/// and touches the parent session with the latest status.
+pub fn update_run_summary(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+    run: &PipelineRun,
+) -> Result<(), String> {
     if let Ok(mut summary) = runs::read_summary(workspace_path, session_id, run_id) {
         summary.status = run.status.clone().into();
         summary.current_stage = run.current_stage.clone();
@@ -96,7 +100,6 @@ pub fn update_run_summary(workspace_path: &str, session_id: &str, run_id: &str, 
         let _ = runs::update_summary(workspace_path, session_id, run_id, &summary);
     }
 
-    // Update session with latest status
     let status_str = match run.status {
         PipelineStatus::Completed => "completed",
         PipelineStatus::Failed => "failed",
@@ -114,5 +117,41 @@ pub fn update_run_summary(workspace_path: &str, session_id: &str, run_id: &str, 
         eprintln!("Warning: Failed to touch session: {e}");
     }
 
+    Ok(())
+}
+
+/// Handles a failed stage: appends the end event, pushes the iteration as failed,
+/// and updates the run summary. Returns `Ok(())` so callers can early-return.
+pub fn handle_stage_failure(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+    stage: &PipelineStage,
+    iter_num: u32,
+    seq: u64,
+    duration_ms: u64,
+    error_msg: &str,
+    run: &mut PipelineRun,
+    stages: &mut Vec<StageResult>,
+) -> Result<(), String> {
+    append_stage_end_event(
+        workspace_path,
+        session_id,
+        run_id,
+        stage,
+        iter_num,
+        seq,
+        &StageEndStatus::Failed,
+        duration_ms,
+    )?;
+    run.iterations.push(Iteration {
+        number: iter_num,
+        stages: mem::take(stages),
+        verdict: None,
+        judge_reasoning: None,
+    });
+    run.status = PipelineStatus::Failed;
+    run.error = Some(error_msg.to_string());
+    update_run_summary(workspace_path, session_id, run_id, run)?;
     Ok(())
 }

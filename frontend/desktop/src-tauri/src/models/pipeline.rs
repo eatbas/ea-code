@@ -2,6 +2,8 @@ use serde::de::Deserializer;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 
+use super::agents::AgentBackend;
+
 /// Execution intent for a pipeline stage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StageExecutionIntent {
@@ -177,10 +179,13 @@ pub struct StageResult {
     pub duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The agent backend used for this stage.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backend: Option<AgentBackend>,
     /// CLI session reference returned by hive-api for session continuity.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_session_ref: Option<String>,
-    /// Which session pair this stage belongs to (e.g. "plan_review", "code_fix").
+    /// Which session pair this stage belongs to (e.g. "plan_review_0", "code_fix").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_pair: Option<String>,
     /// Whether this stage resumed an existing CLI session.

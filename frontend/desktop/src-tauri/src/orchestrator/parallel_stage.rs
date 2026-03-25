@@ -11,6 +11,20 @@ use crate::storage::runs;
 /// The first task starts immediately; subsequent tasks are staggered by this interval.
 const PARALLEL_STAGGER_MS: u64 = 300;
 
+/// Returns `true` when a stage failed specifically because the pipeline was
+/// paused by the user. Used by parallel stage orchestrators to decide whether
+/// to retry the batch after the pause is released.
+pub fn stage_failed_due_to_pause(result: &StageResult) -> bool {
+    if result.status != StageStatus::Failed {
+        return false;
+    }
+    result
+        .error
+        .as_ref()
+        .map(|err| err.to_ascii_lowercase().contains("paused by user"))
+        .unwrap_or(false)
+}
+
 /// A configured parallel stage slot.
 #[derive(Clone)]
 pub struct ParallelStageSlot {

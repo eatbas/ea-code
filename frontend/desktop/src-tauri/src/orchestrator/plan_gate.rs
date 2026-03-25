@@ -211,6 +211,7 @@ pub async fn run_plan_gate(
             None,
             gate_output_path_str.as_deref(),
             None,
+            None,
         )
         .await;
 

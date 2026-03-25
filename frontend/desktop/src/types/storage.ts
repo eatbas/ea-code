@@ -106,16 +106,6 @@ export interface McpServerConfig {
   env?: Record<string, string>;
 }
 
-/** Contents of mcp.json — MCP servers and CLI bindings. */
-export interface McpConfigFile {
-  /** Schema version for migration handling. */
-  schemaVersion: number;
-  /** Map of server ID to MCP server configuration. */
-  servers: Record<string, McpServerConfig>;
-  /** CLI to server bindings: CLI name -> list of MCP server IDs. */
-  cliBindings: Record<string, string[]>;
-}
-
 // ============================================================================
 // Session and run storage
 // ============================================================================

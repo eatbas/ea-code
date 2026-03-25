@@ -10,6 +10,7 @@ use crate::agents::AgentInput;
 use crate::models::{StageEndStatus, *};
 use crate::storage::runs;
 
+use crate::orchestrator::helpers::events;
 use crate::orchestrator::parsing::{parse_judge_verdict, parse_review_findings};
 use crate::orchestrator::prompts::{self, PromptMeta};
 use crate::orchestrator::run_setup::IterationContext;
@@ -47,35 +48,22 @@ pub async fn run_judge_stage(
     run.current_stage = Some(PipelineStage::Judge);
     let ws = &request.workspace_path;
     let judge_seq = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
-    super::stages::append_stage_start_event(ws, session_id, run_id, &PipelineStage::Judge, iter_num, judge_seq)?;
+    events::append_stage_start_event(ws, session_id, run_id, &PipelineStage::Judge, iter_num, judge_seq)?;
 
     let judge_output_path = runs::artifact_output_path(ws, session_id, run_id, iter_num, "judge").ok();
     let judge_output_path_str = judge_output_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
-    // File-reference the enhanced prompt and plan to keep prompt size small.
-    let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
-        ws, session_id, run_id, iter_num, "enhanced_prompt",
-    )
-    .map(|p| crate::orchestrator::helpers::file_ref(&p))
-    .unwrap_or_else(|| enhanced.to_string());
-
-    let plan_ref = iter_ctx.selected_plan().and_then(|_| {
-        let kind = if iter_ctx.audited_plan.is_some() {
-            "plan_audit"
-        } else {
-            "plan"
-        };
-        crate::orchestrator::helpers::artifact_file_path(ws, session_id, run_id, iter_num, kind)
-            .map(|p| crate::orchestrator::helpers::file_ref(&p))
-    });
+    let refs = crate::orchestrator::helpers::build_iteration_refs(
+        ws, session_id, run_id, iter_num, enhanced, iter_ctx,
+    );
 
     let input = AgentInput {
         prompt: prompts::build_judge_user(
             &request.prompt,
-            &enhanced_ref,
-            plan_ref.as_deref(),
+            &refs.enhanced_ref,
+            refs.plan_ref.as_deref(),
             &findings,
             previous_judge_output.as_deref(),
         ),
@@ -105,6 +93,7 @@ pub async fn run_judge_stage(
         Some(session_id),
         judge_output_path_str.as_deref(),
         None,
+        None,
     )
     .await;
     let judge_out = judge_r.output.clone();
@@ -117,25 +106,11 @@ pub async fn run_judge_stage(
 
     if judge_r.status == StageStatus::Failed {
         stages.push(judge_r);
-        super::stages::append_stage_end_event(
-            ws,
-            session_id,
-            run_id,
-            &PipelineStage::Judge,
-            iter_num,
-            judge_seq + 1,
-            &StageEndStatus::Failed,
-            judge_duration,
+        events::handle_stage_failure(
+            ws, session_id, run_id,
+            &PipelineStage::Judge, iter_num, judge_seq + 1,
+            judge_duration, "Judge stage failed", run, stages,
         )?;
-        run.iterations.push(Iteration {
-            number: iter_num,
-            stages: mem::take(stages),
-            verdict: None,
-            judge_reasoning: None,
-        });
-        run.status = PipelineStatus::Failed;
-        run.error = Some("Judge stage failed".to_string());
-        super::stages::update_run_summary(ws, session_id, run_id, run)?;
         return Ok(true);
     }
     stages.push(judge_r);
@@ -143,7 +118,7 @@ pub async fn run_judge_stage(
     let (verdict, reasoning) = parse_judge_verdict(&judge_out);
 
     // Append stage_end with verdict
-    super::stages::append_stage_end_event_with_verdict(
+    events::append_stage_end_event_with_verdict(
         ws,
         session_id,
         run_id,
@@ -176,7 +151,7 @@ pub async fn run_judge_stage(
     if verdict == JudgeVerdict::Complete {
         run.final_verdict = Some(JudgeVerdict::Complete);
         run.status = PipelineStatus::Completed;
-        super::stages::update_run_summary(ws, session_id, run_id, run)?;
+        events::update_run_summary(ws, session_id, run_id, run)?;
         return Ok(true);
     }
 
@@ -191,6 +166,6 @@ pub async fn run_judge_stage(
         run.status = PipelineStatus::Completed;
     }
 
-    super::stages::update_run_summary(ws, session_id, run_id, run)?;
+    events::update_run_summary(ws, session_id, run_id, run)?;
     Ok(false)
 }

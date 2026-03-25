@@ -10,7 +10,6 @@ use crate::orchestrator::prompts;
 use crate::orchestrator::stages::execute_run_level_agent_stage;
 
 /// Builds context for executive summary generation.
-#[allow(dead_code)]
 pub fn build_executive_summary_context(run: &PipelineRun) -> String {
     let mut lines = vec![
         format!("Run ID: {}", run.id),
@@ -41,7 +40,6 @@ pub fn build_executive_summary_context(run: &PipelineRun) -> String {
 }
 
 /// Runs the executive summary stage and persists results.
-#[allow(dead_code)]
 pub async fn run_executive_summary(
     app: &AppHandle,
     run_id: &str,

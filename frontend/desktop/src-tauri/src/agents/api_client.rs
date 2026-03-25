@@ -1,3 +1,6 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -69,6 +72,12 @@ pub struct ApiAgentResult {
 ///
 /// When `session_ref` is provided, the request uses `mode: "resume"` to
 /// continue an existing CLI session instead of starting a fresh one.
+///
+/// When `abort_flag` is provided and set to `true` during the SSE read loop,
+/// the function cancels the running job (if a `job_id` was received) and
+/// returns the text accumulated so far. This enables the "output file
+/// watchdog" to short-circuit agents that write their report to disk but
+/// fail to exit cleanly.
 pub async fn run_api_agent(
     base_url: &str,
     input: &AgentInput,
@@ -78,6 +87,7 @@ pub async fn run_api_agent(
     run_id: &str,
     stage: PipelineStage,
     session_ref: Option<&str>,
+    abort_flag: Option<Arc<AtomicBool>>,
 ) -> Result<ApiAgentResult, String> {
     let full_prompt = crate::agents::base::build_full_prompt(input);
 
@@ -120,6 +130,23 @@ pub async fn run_api_agent(
     let mut session_ref_out: Option<String> = None;
 
     while let Some(chunk) = stream.next().await {
+        // Check abort flag before processing each chunk.
+        if let Some(ref flag) = abort_flag {
+            if flag.load(Ordering::Relaxed) {
+                eprintln!("[info] abort_flag set — cancelling job {job_id} and returning accumulated text");
+                if !job_id.is_empty() {
+                    let _ = cancel_api_job(base_url, &job_id).await;
+                }
+                return Ok(ApiAgentResult {
+                    output: AgentOutput {
+                        raw_text: accumulated_text,
+                    },
+                    job_id,
+                    provider_session_ref: session_ref_out,
+                });
+            }
+        }
+
         let chunk = chunk.map_err(|e| format!("SSE stream error: {e}"))?;
         let text = String::from_utf8_lossy(&chunk);
         buffer.push_str(&text);

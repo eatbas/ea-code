@@ -222,6 +222,17 @@ pub fn compute_files_changed(
 
 // ---- Artifact persistence ----
 
+/// Returns the iteration directory path as a String for the file watchdog.
+pub fn iteration_dir_path(
+    workspace_path: &str,
+    session_id: &str,
+    run_id: &str,
+    iteration: u32,
+) -> Result<String, String> {
+    iteration_dir(workspace_path, session_id, run_id, iteration)
+        .map(|p| p.to_string_lossy().to_string())
+}
+
 /// Returns the iteration directory path: .../runs/{rid}/iterations/iter-{N}
 fn iteration_dir(
     workspace_path: &str,

@@ -11,15 +11,13 @@ use crate::models::{AgentBackend, StageEndStatus, *};
 use crate::storage::runs;
 
 use crate::orchestrator::helpers::{is_cancelled, push_cancel_iteration, wait_if_paused};
-use crate::orchestrator::parallel_stage::{
-    run_parallel_stage_tasks, ParallelStageSlot, ParallelStageTask,
-};
+use crate::orchestrator::parallel_stage::ParallelStageSlot;
 use crate::orchestrator::parsing::parse_plan_audit_output;
 use crate::orchestrator::prompts::{self, PromptMeta};
 use crate::orchestrator::run_setup::IterationContext;
 use crate::orchestrator::stages::*;
 
-mod persistence;
+mod planners;
 
 /// Collects the active planner slots from settings.
 fn active_planner_slots(settings: &AppSettings) -> Vec<ParallelStageSlot> {
@@ -39,17 +37,6 @@ fn active_planner_slots(settings: &AppSettings) -> Vec<ParallelStageSlot> {
         }
     }
     slots
-}
-
-fn stage_failed_due_to_pause(result: &StageResult) -> bool {
-    if result.status != StageStatus::Failed {
-        return false;
-    }
-    result
-        .error
-        .as_ref()
-        .map(|err| err.to_ascii_lowercase().contains("paused by user"))
-        .unwrap_or(false)
 }
 
 /// Skips all planning-related stages and returns Ok.
@@ -94,6 +81,7 @@ pub async fn run_planning_stages(
     stages: &mut Vec<StageResult>,
     iter_ctx: &mut IterationContext,
     workspace_context: &str,
+    tracker: &crate::orchestrator::helpers::CliSessionTracker,
 ) -> Result<(), String> {
     // Budget mode or no_plan → skip planning entirely.
     if request.no_plan || settings.budget_mode {
@@ -137,11 +125,9 @@ pub async fn run_planning_stages(
 
     // --- Run planners (1 sequential, 2+ parallel) ---
     let ws = &request.workspace_path;
-    let enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
-        ws, session_id, run_id, iter_num, "enhanced_prompt",
-    )
-    .map(|p| crate::orchestrator::helpers::file_ref(&p))
-    .unwrap_or_else(|| enhanced.to_string());
+    let enhanced_ref = crate::orchestrator::helpers::file_ref_or_inline(
+        ws, session_id, run_id, iter_num, "enhanced_prompt", enhanced,
+    );
 
     let plan_ref = iter_ctx.selected_plan().and_then(|_| {
         crate::orchestrator::helpers::artifact_file_path(ws, session_id, run_id, iter_num, "plan_audit")
@@ -154,45 +140,24 @@ pub async fn run_planning_stages(
         plan_ref.as_deref(),
         judge_feedback,
     );
-    let planner_output_rel = runs::artifact_relative_path(session_id, run_id, iter_num, "plan");
-    let planner_context = super::run_setup::compose_agent_context(
-        prompts::build_planner_system(meta, Some(&planner_output_rel)),
-        workspace_context,
-    );
 
-    let plan_outputs = if planner_slots.len() == 1 {
-        run_single_planner(
-            app,
-            run_id,
-            iter_num,
-            &planner_slots[0],
-            &planner_user_prompt,
-            &planner_context,
-            &request.workspace_path,
-            settings,
-            cancel_flag,
-            pause_flag,
-            session_id,
-            stages,
-        )
-        .await?
-    } else {
-        run_parallel_planners(
-            app,
-            run_id,
-            iter_num,
-            &planner_slots,
-            &planner_user_prompt,
-            &planner_context,
-            &request.workspace_path,
-            settings,
-            cancel_flag,
-            pause_flag,
-            session_id,
-            stages,
-        )
-        .await?
-    };
+    let plan_outputs = planners::run_parallel_planners(
+        app,
+        run_id,
+        iter_num,
+        &planner_slots,
+        &planner_user_prompt,
+        meta,
+        workspace_context,
+        &request.workspace_path,
+        settings,
+        cancel_flag,
+        pause_flag,
+        session_id,
+        stages,
+        tracker,
+    )
+    .await?;
 
     if is_cancelled(cancel_flag) {
         push_cancel_iteration(run, iter_num, mem::take(stages));
@@ -209,7 +174,7 @@ pub async fn run_planning_stages(
         });
         run.status = PipelineStatus::Failed;
         run.error = Some("All planner stages failed".to_string());
-        persistence::update_run_summary(ws, session_id, run_id, run)?;
+        crate::orchestrator::helpers::events::update_run_summary(ws, session_id, run_id, run)?;
         return Ok(());
     }
 
@@ -232,21 +197,17 @@ pub async fn run_planning_stages(
         .unwrap_or(&AgentBackend::Claude);
 
     // Build file references for the plan audit prompt.
-    let audit_enhanced_ref = crate::orchestrator::helpers::artifact_file_path(
-        ws, session_id, run_id, iter_num, "enhanced_prompt",
-    )
-    .map(|p| crate::orchestrator::helpers::file_ref(&p))
-    .unwrap_or_else(|| enhanced.to_string());
+    let audit_enhanced_ref = crate::orchestrator::helpers::file_ref_or_inline(
+        ws, session_id, run_id, iter_num, "enhanced_prompt", enhanced,
+    );
 
     let pa_output_rel = runs::artifact_relative_path(session_id, run_id, iter_num, "plan_audit");
     let (system_prompt, user_prompt) = if plan_outputs.len() == 1 {
-        // Single plan — file-ref if the artifact was written.
-        let plan_kind = "plan";
-        let plan_ref = crate::orchestrator::helpers::artifact_file_path(
-            ws, session_id, run_id, iter_num, plan_kind,
-        )
-        .map(|p| crate::orchestrator::helpers::file_ref(&p))
-        .unwrap_or_else(|| plan_outputs[0].1.clone());
+        // Single plan — file-ref using the actual output_kind from the planner.
+        let (_, content, ref output_kind) = &plan_outputs[0];
+        let plan_ref = crate::orchestrator::helpers::file_ref_or_inline(
+            ws, session_id, run_id, iter_num, output_kind, content,
+        );
 
         (
             prompts::build_plan_auditor_system(meta, Some(&pa_output_rel)),
@@ -260,17 +221,13 @@ pub async fn run_planning_stages(
             ),
         )
     } else {
-        // Multiple plans — file-ref each one.
+        // Multiple plans — file-ref each one using the stored output_kind.
         let plan_refs: Vec<(String, String)> = plan_outputs
             .iter()
-            .enumerate()
-            .map(|(i, (label, content))| {
-                let kind = format!("plan_{}", i + 1);
-                let ref_text = crate::orchestrator::helpers::artifact_file_path(
-                    ws, session_id, run_id, iter_num, &kind,
-                )
-                .map(|p| crate::orchestrator::helpers::file_ref(&p))
-                .unwrap_or_else(|| content.clone());
+            .map(|(label, content, output_kind)| {
+                let ref_text = crate::orchestrator::helpers::file_ref_or_inline(
+                    ws, session_id, run_id, iter_num, output_kind, content,
+                );
                 (label.clone(), ref_text)
             })
             .collect();
@@ -293,7 +250,7 @@ pub async fn run_planning_stages(
     };
 
     let pa_seq = runs::next_sequence(ws, session_id, run_id).unwrap_or(1);
-    persistence::append_stage_start_event(ws, session_id, run_id, &PipelineStage::PlanAudit, iter_num, pa_seq)?;
+    crate::orchestrator::helpers::events::append_stage_start_event(ws, session_id, run_id, &PipelineStage::PlanAudit, iter_num, pa_seq)?;
 
     let pa_output_path = runs::artifact_output_path(ws, session_id, run_id, iter_num, "plan_audit").ok();
     let pa_output_path_str = pa_output_path
@@ -325,6 +282,7 @@ pub async fn run_planning_stages(
         Some(session_id),
         pa_output_path_str.as_deref(),
         None,
+        None,
     )
     .await;
     let pa_out = pa_r.output.clone();
@@ -336,29 +294,15 @@ pub async fn run_planning_stages(
             .clone()
             .unwrap_or_else(|| "Plan Auditor stage failed".into());
         stages.push(pa_r);
-        persistence::append_stage_end_event(
-            ws,
-            session_id,
-            run_id,
-            &PipelineStage::PlanAudit,
-            iter_num,
-            pa_seq + 1,
-            &StageEndStatus::Failed,
-            pa_duration,
+        crate::orchestrator::helpers::handle_stage_failure(
+            ws, session_id, run_id,
+            &PipelineStage::PlanAudit, iter_num, pa_seq + 1,
+            pa_duration, &err, run, stages,
         )?;
-        run.iterations.push(Iteration {
-            number: iter_num,
-            stages: mem::take(stages),
-            verdict: None,
-            judge_reasoning: None,
-        });
-        run.status = PipelineStatus::Failed;
-        run.error = Some(err);
-        persistence::update_run_summary(ws, session_id, run_id, run)?;
         return Ok(());
     }
     stages.push(pa_r);
-    persistence::append_stage_end_event(
+    crate::orchestrator::helpers::events::append_stage_end_event(
         ws,
         session_id,
         run_id,
@@ -390,211 +334,4 @@ pub async fn run_planning_stages(
     );
 
     Ok(())
-}
-
-/// Runs a single planner and returns its output. Returns empty vec on failure.
-#[allow(clippy::too_many_arguments)]
-async fn run_single_planner(
-    app: &AppHandle,
-    run_id: &str,
-    iter_num: u32,
-    slot: &ParallelStageSlot,
-    user_prompt: &str,
-    context: &str,
-    workspace_path: &str,
-    settings: &AppSettings,
-    cancel_flag: &Arc<AtomicBool>,
-    pause_flag: &Arc<AtomicBool>,
-    session_id: &str,
-    stages: &mut Vec<StageResult>,
-) -> Result<Vec<(String, String)>, String> {
-    let seq = runs::next_sequence(workspace_path, session_id, run_id).unwrap_or(1);
-    persistence::append_stage_start_event(workspace_path, session_id, run_id, &slot.stage, iter_num, seq)?;
-
-    let output_path = runs::artifact_output_path(workspace_path, session_id, run_id, iter_num, "plan").ok();
-    let output_path_str = output_path
-        .as_ref()
-        .map(|p| p.to_string_lossy().to_string());
-
-    let input = AgentInput {
-        prompt: user_prompt.to_string(),
-        context: Some(context.to_string()),
-        workspace_path: workspace_path.to_string(),
-    };
-
-    crate::orchestrator::helpers::emit_prompt_artifact(workspace_path, session_id, run_id, "plan", &input, iter_num);
-
-    let r = execute_agent_stage(
-        app,
-        run_id,
-        iter_num,
-        slot.stage.clone(),
-        &slot.backend,
-        &input,
-        settings,
-        cancel_flag,
-        pause_flag,
-        PauseHandling::ResumeWithinStage,
-        Some(session_id),
-        output_path_str.as_deref(),
-        None,
-    )
-    .await;
-    let out = r.output.clone();
-    let dur = r.duration_ms;
-    let failed = r.status == StageStatus::Failed;
-
-    if !failed {
-        crate::orchestrator::helpers::emit_artifact(app, workspace_path, session_id, run_id, "plan", &out, iter_num);
-    }
-
-    let status = if failed {
-        &StageEndStatus::Failed
-    } else {
-        &StageEndStatus::Completed
-    };
-    persistence::append_stage_end_event(workspace_path, session_id, run_id, &slot.stage, iter_num, seq + 1, status, dur)?;
-    stages.push(r);
-
-    if failed {
-        Ok(vec![])
-    } else {
-        let cleaned = crate::orchestrator::parsing::clean_plan_output(&out);
-        Ok(vec![("Proposed Plan".to_string(), cleaned)])
-    }
-}
-
-/// Runs 2+ planners in parallel via tokio::join! and collects successful outputs.
-#[allow(clippy::too_many_arguments)]
-async fn run_parallel_planners(
-    app: &AppHandle,
-    run_id: &str,
-    iter_num: u32,
-    slots: &[ParallelStageSlot],
-    user_prompt: &str,
-    context: &str,
-    workspace_path: &str,
-    settings: &AppSettings,
-    cancel_flag: &Arc<AtomicBool>,
-    pause_flag: &Arc<AtomicBool>,
-    session_id: &str,
-    stages: &mut Vec<StageResult>,
-) -> Result<Vec<(String, String)>, String> {
-    loop {
-        let tasks: Vec<ParallelStageTask> = slots
-            .iter()
-            .enumerate()
-            .map(|(i, slot)| {
-                let app = app.clone();
-                let backend = slot.backend.clone();
-                let task_stage = slot.stage.clone();
-                let future_stage = task_stage.clone();
-                let prompt = user_prompt.to_string();
-                let ctx = context.to_string();
-                let ws = workspace_path.to_string();
-                let settings = settings.clone();
-                let cf = cancel_flag.clone();
-                let pf = pause_flag.clone();
-                let sid = session_id.to_string();
-                let rid = run_id.to_string();
-
-                let output_kind = format!("plan_{}", i + 1);
-                let output_path = runs::artifact_output_path(&ws, &sid, &rid, iter_num, &output_kind).ok();
-                let output_path_str = output_path.map(|p| p.to_string_lossy().to_string());
-
-                ParallelStageTask {
-                    stage: task_stage,
-                    output_kind,
-                    future: Box::pin(async move {
-                        execute_agent_stage(
-                            &app,
-                            &rid,
-                            iter_num,
-                            future_stage,
-                            &backend,
-                            &AgentInput {
-                                prompt,
-                                context: Some(ctx),
-                                workspace_path: ws,
-                            },
-                            &settings,
-                            &cf,
-                            &pf,
-                            PauseHandling::ReturnPausedError,
-                            Some(&sid),
-                            output_path_str.as_deref(),
-                            None,
-                        )
-                        .await
-                    }),
-                }
-            })
-            .collect();
-
-        let stage_checkpoint = stages.len();
-        let mut pause_retry_requested = false;
-        let ws_ref = workspace_path.to_string();
-        let sid_ref = session_id.to_string();
-        let successful = run_parallel_stage_tasks(
-            run_id,
-            iter_num,
-            tasks,
-            |rid, stage, iteration, seq| persistence::append_stage_start_event(&ws_ref, &sid_ref, rid, stage, iteration, seq),
-            |rid, stage, iteration, seq, status, dur| persistence::append_stage_end_event(&ws_ref, &sid_ref, rid, stage, iteration, seq, status, dur),
-            |parallel_run| {
-                let crate::orchestrator::parallel_stage::ParallelStageRun {
-                    index,
-                    output_kind,
-                    result,
-                    ..
-                } = parallel_run;
-                let paused = stage_failed_due_to_pause(&result);
-                let failed = result.status == StageStatus::Failed;
-                let output = result.output.clone();
-                if paused {
-                    pause_retry_requested = true;
-                }
-                stages.push(result);
-
-                if failed {
-                    None
-                } else {
-                    Some((index, output_kind, output))
-                }
-            },
-            workspace_path,
-            session_id,
-        )
-        .await?;
-
-        if pause_retry_requested {
-            stages.truncate(stage_checkpoint);
-            for idx in 0..slots.len() {
-                let kind = format!("plan_{}", idx + 1);
-                if let Ok(path) = runs::artifact_output_path(workspace_path, session_id, run_id, iter_num, &kind) {
-                    let _ = std::fs::remove_file(path);
-                }
-            }
-            if wait_if_paused(pause_flag, cancel_flag).await {
-                return Ok(Vec::new());
-            }
-            continue;
-        }
-
-        let mut plan_outputs: Vec<(String, String)> = Vec::new();
-        for (index, output_kind, output) in successful {
-            crate::orchestrator::helpers::emit_artifact(
-                app,
-                workspace_path,
-                session_id,
-                run_id,
-                &output_kind,
-                &output,
-                iter_num,
-            );
-            let cleaned = crate::orchestrator::parsing::clean_plan_output(&output);
-            plan_outputs.push((format!("Plan from Planner {}", index + 1), cleaned));
-        }
-        return Ok(plan_outputs);
-    }
 }

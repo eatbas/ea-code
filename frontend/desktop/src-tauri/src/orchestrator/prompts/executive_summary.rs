@@ -1,6 +1,5 @@
 //! Prompt builder for the Executive Summary stage.
 
-#[allow(dead_code)]
 pub fn build_executive_summary_system(output_path: Option<&str>) -> String {
     let output_instruction = match output_path {
         Some(path) => format!(

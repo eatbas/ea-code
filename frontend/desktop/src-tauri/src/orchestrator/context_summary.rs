@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const CONTEXT_CHAR_CAP: usize = 8_000;
 const MAX_TREE_LINES: usize = 120;
@@ -172,23 +172,6 @@ fn build_test_files_section(workspace_path: &str) -> Option<String> {
         return None;
     }
     Some(format!("DISCOVERED TEST FILES\n{}", hits.join("\n")))
-}
-
-#[allow(dead_code)]
-fn build_readme_section(workspace_path: &str) -> Option<String> {
-    let candidates = [PathBuf::from("README.md"), PathBuf::from("readme.md")];
-    for candidate in candidates {
-        let path = Path::new(workspace_path).join(candidate);
-        let content = match fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-        let snippet = content.lines().take(60).collect::<Vec<_>>().join("\n");
-        if !snippet.trim().is_empty() {
-            return Some(format!("README HEAD (first 60 lines)\n{snippet}"));
-        }
-    }
-    None
 }
 
 fn object_keys(value: Option<&serde_json::Value>, limit: usize) -> Vec<String> {

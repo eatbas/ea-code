@@ -10,7 +10,6 @@ struct RawSkillSelection {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct SkillSelectionDecision {
     pub selected_skill_ids: Vec<String>,
     pub reason: String,
