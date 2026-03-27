@@ -5,6 +5,7 @@ mod environment;
 mod settings;
 pub mod storage;
 
+pub(crate) use agents::AgentBackend;
 pub use api::*;
 pub use conversation::*;
 pub use environment::*;

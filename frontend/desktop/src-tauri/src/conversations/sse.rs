@@ -7,9 +7,15 @@ use crate::models::ConversationStatus;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HiveSseEvent {
-    RunStarted { job_id: String },
-    ProviderSession { provider_session_ref: String },
-    OutputDelta { text: String },
+    RunStarted {
+        job_id: String,
+    },
+    ProviderSession {
+        provider_session_ref: String,
+    },
+    OutputDelta {
+        text: String,
+    },
     Completed {
         final_text: String,
         provider_session_ref: Option<String>,
@@ -105,10 +111,14 @@ where
             };
 
             match &event {
-                HiveSseEvent::RunStarted { job_id: current_job_id } => {
+                HiveSseEvent::RunStarted {
+                    job_id: current_job_id,
+                } => {
                     job_id = Some(current_job_id.clone());
                 }
-                HiveSseEvent::ProviderSession { provider_session_ref } => {
+                HiveSseEvent::ProviderSession {
+                    provider_session_ref,
+                } => {
                     session_ref = Some(provider_session_ref.clone());
                 }
                 HiveSseEvent::OutputDelta { text } => {
@@ -127,7 +137,8 @@ where
                     } else {
                         final_text.clone()
                     };
-                    let resolved_session = provider_session_ref.clone().or_else(|| session_ref.clone());
+                    let resolved_session =
+                        provider_session_ref.clone().or_else(|| session_ref.clone());
                     terminal_result = Some(SseResult {
                         final_text: resolved_text,
                         provider_session_ref: resolved_session,
@@ -142,7 +153,8 @@ where
                     provider_session_ref,
                     exit_code,
                 } => {
-                    let resolved_session = provider_session_ref.clone().or_else(|| session_ref.clone());
+                    let resolved_session =
+                        provider_session_ref.clone().or_else(|| session_ref.clone());
                     terminal_result = Some(SseResult {
                         final_text: collected_text.clone(),
                         provider_session_ref: resolved_session,
@@ -166,7 +178,8 @@ where
 
             on_event(&event)?;
             if terminal_result.is_some() {
-                return terminal_result.ok_or_else(|| "Missing terminal hive stream state".to_string());
+                return terminal_result
+                    .ok_or_else(|| "Missing terminal hive stream state".to_string());
             }
         }
     }

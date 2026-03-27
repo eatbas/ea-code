@@ -23,7 +23,10 @@ fn running_conversation_key(workspace_path: &str, conversation_id: &str) -> Stri
     format!("{workspace_path}::{conversation_id}")
 }
 
-fn is_running_conversation_tracked(workspace_path: &str, conversation_id: &str) -> Result<bool, String> {
+fn is_running_conversation_tracked(
+    workspace_path: &str,
+    conversation_id: &str,
+) -> Result<bool, String> {
     running_conversations()
         .lock()
         .map(|tracked| tracked.contains(&running_conversation_key(workspace_path, conversation_id)))
@@ -109,7 +112,10 @@ fn messages_file_path(workspace_path: &str, conversation_id: &str) -> PathBuf {
     conversation_dir(workspace_path, conversation_id).join(MESSAGES_FILE)
 }
 
-fn read_summary_unlocked(workspace_path: &str, conversation_id: &str) -> Result<ConversationSummary, String> {
+fn read_summary_unlocked(
+    workspace_path: &str,
+    conversation_id: &str,
+) -> Result<ConversationSummary, String> {
     let path = conversation_file_path(workspace_path, conversation_id);
     let contents = std::fs::read_to_string(&path)
         .map_err(|error| format!("Failed to read conversation {}: {error}", path.display()))?;
@@ -119,12 +125,19 @@ fn read_summary_unlocked(workspace_path: &str, conversation_id: &str) -> Result<
 
 fn write_summary_unlocked(summary: &ConversationSummary) -> Result<(), String> {
     let path = conversation_file_path(&summary.workspace_path, &summary.id);
-    let json = serde_json::to_string_pretty(summary)
-        .map_err(|error| format!("Failed to serialise conversation {}: {error}", path.display()))?;
+    let json = serde_json::to_string_pretty(summary).map_err(|error| {
+        format!(
+            "Failed to serialise conversation {}: {error}",
+            path.display()
+        )
+    })?;
     atomic_write(&path, &json)
 }
 
-fn read_messages_unlocked(workspace_path: &str, conversation_id: &str) -> Result<Vec<ConversationMessage>, String> {
+fn read_messages_unlocked(
+    workspace_path: &str,
+    conversation_id: &str,
+) -> Result<Vec<ConversationMessage>, String> {
     let path = messages_file_path(workspace_path, conversation_id);
     if !path.exists() {
         return Ok(Vec::new());
@@ -137,8 +150,12 @@ fn read_messages_unlocked(workspace_path: &str, conversation_id: &str) -> Result
         .lines()
         .filter(|line| !line.trim().is_empty())
         .map(|line| {
-            serde_json::from_str::<ConversationMessage>(line)
-                .map_err(|error| format!("Failed to parse message entry in {}: {error}", path.display()))
+            serde_json::from_str::<ConversationMessage>(line).map_err(|error| {
+                format!(
+                    "Failed to parse message entry in {}: {error}",
+                    path.display()
+                )
+            })
         })
         .collect()
 }
@@ -151,8 +168,12 @@ fn write_messages_unlocked(
     let path = messages_file_path(workspace_path, conversation_id);
     let mut contents = String::new();
     for message in messages {
-        let line = serde_json::to_string(message)
-            .map_err(|error| format!("Failed to serialise message for {}: {error}", path.display()))?;
+        let line = serde_json::to_string(message).map_err(|error| {
+            format!(
+                "Failed to serialise message for {}: {error}",
+                path.display()
+            )
+        })?;
         contents.push_str(&line);
         contents.push('\n');
     }
@@ -209,7 +230,9 @@ pub fn create_conversation(
         let now = now_rfc3339();
         let summary = ConversationSummary {
             id: uuid::Uuid::new_v4().to_string(),
-            title: initial_prompt.map(normalise_title).unwrap_or_else(|| "New conversation".to_string()),
+            title: initial_prompt
+                .map(normalise_title)
+                .unwrap_or_else(|| "New conversation".to_string()),
             workspace_path: workspace_path.to_string(),
             agent,
             status: ConversationStatus::Idle,
@@ -234,10 +257,14 @@ pub fn list_conversations(workspace_path: &str) -> Result<Vec<ConversationSummar
         }
 
         let mut summaries: Vec<ConversationSummary> = Vec::new();
-        for entry in std::fs::read_dir(&dir)
-            .map_err(|error| format!("Failed to read conversations directory {}: {error}", dir.display()))?
-        {
-            let entry = entry.map_err(|error| format!("Failed to read conversation entry: {error}"))?;
+        for entry in std::fs::read_dir(&dir).map_err(|error| {
+            format!(
+                "Failed to read conversations directory {}: {error}",
+                dir.display()
+            )
+        })? {
+            let entry =
+                entry.map_err(|error| format!("Failed to read conversation entry: {error}"))?;
             if !entry.path().is_dir() {
                 continue;
             }
@@ -256,7 +283,10 @@ pub fn list_conversations(workspace_path: &str) -> Result<Vec<ConversationSummar
     })
 }
 
-pub fn get_conversation(workspace_path: &str, conversation_id: &str) -> Result<ConversationDetail, String> {
+pub fn get_conversation(
+    workspace_path: &str,
+    conversation_id: &str,
+) -> Result<ConversationDetail, String> {
     with_conversations_lock(|| {
         let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
         reconcile_stale_running_unlocked(&mut summary)?;
@@ -264,7 +294,11 @@ pub fn get_conversation(workspace_path: &str, conversation_id: &str) -> Result<C
     })
 }
 
-pub fn mark_turn_running(workspace_path: &str, conversation_id: &str, prompt: &str) -> Result<ConversationDetail, String> {
+pub fn mark_turn_running(
+    workspace_path: &str,
+    conversation_id: &str,
+    prompt: &str,
+) -> Result<ConversationDetail, String> {
     with_conversations_lock(|| {
         let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
         reconcile_stale_running_unlocked(&mut summary)?;
@@ -353,14 +387,15 @@ pub fn finish_turn(
         let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
         let mut messages = read_messages_unlocked(workspace_path, conversation_id)?;
 
-        let assistant_message = assistant_text
-            .filter(|text| !text.trim().is_empty())
-            .map(|content| ConversationMessage {
-                id: uuid::Uuid::new_v4().to_string(),
-                role: ConversationMessageRole::Assistant,
-                content,
-                created_at: now_rfc3339(),
-            });
+        let assistant_message =
+            assistant_text
+                .filter(|text| !text.trim().is_empty())
+                .map(|content| ConversationMessage {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    role: ConversationMessageRole::Assistant,
+                    content,
+                    created_at: now_rfc3339(),
+                });
 
         if let Some(message) = &assistant_message {
             messages.push(message.clone());
@@ -390,8 +425,9 @@ pub fn delete_conversation(workspace_path: &str, conversation_id: &str) -> Resul
 
         let dir = conversation_dir(workspace_path, conversation_id);
         if dir.exists() {
-            std::fs::remove_dir_all(&dir)
-                .map_err(|error| format!("Failed to delete conversation {}: {error}", dir.display()))?;
+            std::fs::remove_dir_all(&dir).map_err(|error| {
+                format!("Failed to delete conversation {}: {error}", dir.display())
+            })?;
         }
         Ok(())
     })
@@ -402,8 +438,8 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use super::{
-        create_conversation, delete_conversation, finish_turn, get_conversation, list_conversations,
-        mark_turn_running, track_running_conversation,
+        create_conversation, delete_conversation, finish_turn, get_conversation,
+        list_conversations, mark_turn_running, track_running_conversation,
     };
     use crate::models::{AgentSelection, ConversationStatus};
 
@@ -433,7 +469,10 @@ mod tests {
     fn create_and_list_conversations() {
         let workspace = TestWorkspace::new();
         let first = create_conversation(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             AgentSelection {
                 provider: "codex".to_string(),
                 model: "gpt-5.4".to_string(),
@@ -442,8 +481,13 @@ mod tests {
         )
         .expect("conversation should be created");
 
-        let listed = list_conversations(workspace.path().to_str().expect("workspace path should be utf-8"))
-            .expect("conversations should list");
+        let listed = list_conversations(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+        )
+        .expect("conversations should list");
 
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, first.summary.id);
@@ -454,7 +498,10 @@ mod tests {
     fn turn_start_and_finish_persist_messages() {
         let workspace = TestWorkspace::new();
         let conversation = create_conversation(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             AgentSelection {
                 provider: "claude".to_string(),
                 model: "sonnet".to_string(),
@@ -464,7 +511,10 @@ mod tests {
         .expect("conversation should be created");
 
         let running = mark_turn_running(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             &conversation.summary.id,
             "Explain the app structure",
         )
@@ -473,7 +523,10 @@ mod tests {
         assert_eq!(running.messages.len(), 1);
 
         finish_turn(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             &conversation.summary.id,
             ConversationStatus::Completed,
             Some("The app has a Tauri backend and React frontend.".to_string()),
@@ -483,21 +536,30 @@ mod tests {
         .expect("turn should finish");
 
         let loaded = get_conversation(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             &conversation.summary.id,
         )
         .expect("conversation should load");
 
         assert_eq!(loaded.summary.status, ConversationStatus::Completed);
         assert_eq!(loaded.messages.len(), 2);
-        assert_eq!(loaded.summary.last_provider_session_ref.as_deref(), Some("session-123"));
+        assert_eq!(
+            loaded.summary.last_provider_session_ref.as_deref(),
+            Some("session-123")
+        );
     }
 
     #[test]
     fn stale_running_conversations_reconcile_on_load() {
         let workspace = TestWorkspace::new();
         let conversation = create_conversation(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             AgentSelection {
                 provider: "codex".to_string(),
                 model: "gpt-5.4".to_string(),
@@ -507,14 +569,20 @@ mod tests {
         .expect("conversation should be created");
 
         mark_turn_running(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             &conversation.summary.id,
             "Continue the last task",
         )
         .expect("turn should start");
 
         let loaded = get_conversation(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             &conversation.summary.id,
         )
         .expect("conversation should load");
@@ -530,7 +598,10 @@ mod tests {
     fn tracked_running_conversations_stay_running_on_load() {
         let workspace = TestWorkspace::new();
         let conversation = create_conversation(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             AgentSelection {
                 provider: "codex".to_string(),
                 model: "gpt-5.4".to_string(),
@@ -540,20 +611,29 @@ mod tests {
         .expect("conversation should be created");
 
         mark_turn_running(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             &conversation.summary.id,
             "Keep running in the background",
         )
         .expect("turn should start");
 
         let _guard = track_running_conversation(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             &conversation.summary.id,
         )
         .expect("conversation should be tracked");
 
         let loaded = get_conversation(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             &conversation.summary.id,
         )
         .expect("conversation should load");
@@ -566,7 +646,10 @@ mod tests {
     fn deletes_non_running_conversation() {
         let workspace = TestWorkspace::new();
         let conversation = create_conversation(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             AgentSelection {
                 provider: "codex".to_string(),
                 model: "gpt-5.4".to_string(),
@@ -576,13 +659,21 @@ mod tests {
         .expect("conversation should be created");
 
         delete_conversation(
-            workspace.path().to_str().expect("workspace path should be utf-8"),
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
             &conversation.summary.id,
         )
         .expect("conversation should delete");
 
-        let listed = list_conversations(workspace.path().to_str().expect("workspace path should be utf-8"))
-            .expect("conversations should list");
+        let listed = list_conversations(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+        )
+        .expect("conversations should list");
         assert!(listed.is_empty());
     }
 }

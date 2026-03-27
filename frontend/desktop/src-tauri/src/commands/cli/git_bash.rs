@@ -90,7 +90,11 @@ fn find_git_bash_inner() -> Option<String> {
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) async fn run_git_bash_script(script: &str, args: &[&str], timeout_secs: u64) -> Option<Output> {
+pub(crate) async fn run_git_bash_script(
+    script: &str,
+    args: &[&str],
+    timeout_secs: u64,
+) -> Option<Output> {
     let git_bash = find_git_bash()?;
     let mut command = Command::new(git_bash);
     command

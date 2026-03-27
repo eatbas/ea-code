@@ -37,7 +37,9 @@ async fn wait_for_stoppable_conversation(
 }
 
 #[tauri::command]
-pub async fn list_workspace_conversations(workspace_path: String) -> Result<Vec<ConversationSummary>, String> {
+pub async fn list_workspace_conversations(
+    workspace_path: String,
+) -> Result<Vec<ConversationSummary>, String> {
     persistence::list_conversations(&workspace_path)
 }
 
@@ -90,7 +92,9 @@ pub async fn send_conversation_turn(
             }
         };
 
-        if let Err(error) = chat::run_conversation_turn(app_handle, detail_for_task, prompt_for_task, abort).await {
+        if let Err(error) =
+            chat::run_conversation_turn(app_handle, detail_for_task, prompt_for_task, abort).await
+        {
             eprintln!("[conversation] Failed to run conversation turn: {error}");
         }
         let _ = persistence::remove_abort_flag(&tracked_workspace_path, &tracked_conversation_id);
@@ -127,7 +131,9 @@ pub async fn stop_conversation(
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("Failed to stop conversation: HTTP {status} — {body}"));
+        return Err(format!(
+            "Failed to stop conversation: HTTP {status} — {body}"
+        ));
     }
 
     let _stop_response = response
@@ -148,6 +154,9 @@ pub async fn stop_conversation(
 }
 
 #[tauri::command]
-pub async fn delete_conversation(workspace_path: String, conversation_id: String) -> Result<(), String> {
+pub async fn delete_conversation(
+    workspace_path: String,
+    conversation_id: String,
+) -> Result<(), String> {
     persistence::delete_conversation(&workspace_path, &conversation_id)
 }

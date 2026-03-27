@@ -15,7 +15,10 @@ pub async fn select_workspace(path: String) -> Result<WorkspaceInfo, String> {
 
     if crate::git::is_git_repo(&path).await {
         if let Err(error) = crate::git::ensure_ea_code_gitignore_entry(&path) {
-            eprintln!("[workspace] Failed to ensure .ea-code is ignored in {}: {error}", path);
+            eprintln!(
+                "[workspace] Failed to ensure .ea-code is ignored in {}: {error}",
+                path
+            );
         }
     }
 

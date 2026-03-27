@@ -145,7 +145,9 @@ pub async fn run_conversation_turn(
                 },
             )
         }
-        HiveSseEvent::ProviderSession { provider_session_ref } => {
+        HiveSseEvent::ProviderSession {
+            provider_session_ref,
+        } => {
             let summary = persistence::set_provider_session_ref(
                 &workspace_path,
                 &conversation_id,

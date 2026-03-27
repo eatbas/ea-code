@@ -26,7 +26,10 @@ pub(crate) async fn kill_orphaned_hive_api(port: u16) {
     #[cfg(target_os = "windows")]
     {
         let output = Command::new("cmd")
-            .args(["/C", &format!("netstat -ano | findstr :{port_str} | findstr LISTENING")])
+            .args([
+                "/C",
+                &format!("netstat -ano | findstr :{port_str} | findstr LISTENING"),
+            ])
             .output()
             .await;
 

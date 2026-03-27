@@ -24,10 +24,7 @@ pub fn cleanup_stale_temp_files() -> Result<usize, String> {
                             cleaned += 1;
                         }
                         Err(e) => {
-                            eprintln!(
-                                "Cleanup warning: could not remove {}: {e}",
-                                path.display()
-                            );
+                            eprintln!("Cleanup warning: could not remove {}: {e}", path.display());
                         }
                     }
                 }
@@ -44,10 +41,7 @@ pub fn cleanup_stale_temp_files() -> Result<usize, String> {
                     if name.starts_with("mcp-config-") && name.ends_with(".json") {
                         match std::fs::remove_file(&path) {
                             Ok(()) => {
-                                eprintln!(
-                                    "Cleanup: removed stale MCP config {}",
-                                    path.display()
-                                );
+                                eprintln!("Cleanup: removed stale MCP config {}", path.display());
                                 cleaned += 1;
                             }
                             Err(e) => {
@@ -75,10 +69,7 @@ pub fn cleanup_stale_temp_files() -> Result<usize, String> {
                     if name.starts_with("ea-code.db") {
                         match std::fs::remove_file(&path) {
                             Ok(()) => {
-                                eprintln!(
-                                    "Cleanup: removed legacy SQLite file {}",
-                                    path.display()
-                                );
+                                eprintln!("Cleanup: removed legacy SQLite file {}", path.display());
                                 cleaned += 1;
                             }
                             Err(e) => {
@@ -100,10 +91,7 @@ pub fn cleanup_stale_temp_files() -> Result<usize, String> {
         if !summary.exists() {
             match std::fs::remove_dir_all(run_path) {
                 Ok(()) => {
-                    eprintln!(
-                        "Cleanup: removed empty run dir {}",
-                        run_path.display()
-                    );
+                    eprintln!("Cleanup: removed empty run dir {}", run_path.display());
                     cleaned += 1;
                 }
                 Err(e) => {
@@ -135,19 +123,14 @@ fn remove_tmp_files_recursive(dir: &Path) -> usize {
         let path = entry.path();
         if path.is_dir() {
             count += remove_tmp_files_recursive(&path);
-        } else if path.is_file()
-            && path.extension().and_then(|e| e.to_str()) == Some("tmp")
-        {
+        } else if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("tmp") {
             match std::fs::remove_file(&path) {
                 Ok(()) => {
                     eprintln!("Cleanup: removed orphaned tmp file {}", path.display());
                     count += 1;
                 }
                 Err(e) => {
-                    eprintln!(
-                        "Cleanup warning: could not remove {}: {e}",
-                        path.display()
-                    );
+                    eprintln!("Cleanup warning: could not remove {}: {e}", path.display());
                 }
             }
         }

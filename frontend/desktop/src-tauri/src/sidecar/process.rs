@@ -15,7 +15,11 @@ pub(crate) enum RestartState {
 }
 
 pub(crate) fn normalise_port(port: u16) -> u16 {
-    if port == 0 { DEFAULT_PORT } else { port }
+    if port == 0 {
+        DEFAULT_PORT
+    } else {
+        port
+    }
 }
 
 pub(crate) fn build_base_url(port: u16) -> String {

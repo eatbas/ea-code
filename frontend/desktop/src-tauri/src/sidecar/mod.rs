@@ -15,13 +15,8 @@ use tokio::sync::Mutex;
 
 use cleanup::kill_orphaned_hive_api;
 use process::{
-    build_base_url,
-    inspect_child_state,
-    normalise_port,
-    requires_restart,
-    spawn_hive_api_process,
-    stop_hive_api_process,
-    RestartState,
+    build_base_url, inspect_child_state, normalise_port, requires_restart, spawn_hive_api_process,
+    stop_hive_api_process, RestartState,
 };
 use setup::prepare_hive_environment;
 
@@ -68,7 +63,8 @@ impl SidecarManager {
         kill_orphaned_hive_api(inner.port).await;
 
         let prepared = prepare_hive_environment(&inner.hive_dir, inner.setup_complete).await?;
-        let child = spawn_hive_api_process(&prepared.venv_python, &inner.hive_dir, inner.port).await?;
+        let child =
+            spawn_hive_api_process(&prepared.venv_python, &inner.hive_dir, inner.port).await?;
 
         eprintln!("[sidecar] hive-api process spawned on port {}", inner.port);
         inner.setup_complete = prepared.setup_complete;

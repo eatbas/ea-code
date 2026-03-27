@@ -112,11 +112,9 @@ pub async fn find_python() -> Result<PythonInterpreter, String> {
         }
     }
 
-    Err(
-        "Python 3.12 or newer is required but was not found. \
+    Err("Python 3.12 or newer is required but was not found. \
          Install from https://www.python.org/downloads/"
-            .into(),
-    )
+        .into())
 }
 
 /// Resolve the venv Python executable path (platform-aware).
@@ -168,7 +166,10 @@ async fn binary_exists(name: &str) -> bool {
 
 async fn check_python_version(executable: &str) -> bool {
     Command::new(executable)
-        .args(["-c", "import sys; exit(0 if sys.version_info >= (3,12) else 1)"])
+        .args([
+            "-c",
+            "import sys; exit(0 if sys.version_info >= (3,12) else 1)",
+        ])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()

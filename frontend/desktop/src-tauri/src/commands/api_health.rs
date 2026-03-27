@@ -88,7 +88,11 @@ fn map_health_success(base_url: String, body: HealthResponse) -> ApiHealthStatus
     }
 }
 
-fn map_health_failure(base_url: String, status: Option<String>, error: Option<String>) -> ApiHealthStatus {
+fn map_health_failure(
+    base_url: String,
+    status: Option<String>,
+    error: Option<String>,
+) -> ApiHealthStatus {
     ApiHealthStatus {
         connected: false,
         url: base_url,
@@ -105,7 +109,12 @@ pub async fn check_api_health(app: AppHandle, state: State<'_, AppState>) -> Res
     let client = shared_client();
     let url = format!("{base_url}/health");
 
-    let status = match client.get(&url).timeout(Duration::from_secs(3)).send().await {
+    let status = match client
+        .get(&url)
+        .timeout(Duration::from_secs(3))
+        .send()
+        .await
+    {
         Ok(response) if response.status().is_success() => {
             let body = response.json().await.unwrap_or(HealthResponse {
                 status: "ok".to_string(),
@@ -132,14 +141,26 @@ pub async fn get_api_providers(app: AppHandle, state: State<'_, AppState>) -> Re
     let client = shared_client();
     let url = format!("{base_url}/v1/providers?all=true");
 
-    match client.get(&url).timeout(Duration::from_secs(5)).send().await {
+    match client
+        .get(&url)
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+    {
         Ok(response) if response.status().is_success() => {
             if let Ok(providers) = response.json::<Vec<ProviderCapability>>().await {
-                emit_items(&app, EVENT_API_PROVIDER, providers.into_iter().map(map_provider_info));
+                emit_items(
+                    &app,
+                    EVENT_API_PROVIDER,
+                    providers.into_iter().map(map_provider_info),
+                );
             }
         }
         Ok(response) => {
-            eprintln!("[api_health] providers endpoint returned {}", response.status());
+            eprintln!(
+                "[api_health] providers endpoint returned {}",
+                response.status()
+            );
         }
         Err(error) => {
             eprintln!("[api_health] failed to fetch providers: {error}");
@@ -151,20 +172,35 @@ pub async fn get_api_providers(app: AppHandle, state: State<'_, AppState>) -> Re
 }
 
 #[tauri::command]
-pub async fn get_api_cli_versions(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn get_api_cli_versions(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let _ = state.sidecar.ensure_running().await;
     let base_url = hive_api_base_url();
     let client = shared_client();
     let url = format!("{base_url}/v1/cli-versions");
 
-    match client.get(&url).timeout(Duration::from_secs(10)).send().await {
+    match client
+        .get(&url)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+    {
         Ok(response) if response.status().is_success() => {
             if let Ok(versions) = response.json::<Vec<CliVersionResponse>>().await {
-                emit_items(&app, EVENT_API_CLI_VERSION, versions.into_iter().map(map_api_cli_version));
+                emit_items(
+                    &app,
+                    EVENT_API_CLI_VERSION,
+                    versions.into_iter().map(map_api_cli_version),
+                );
             }
         }
         Ok(response) => {
-            eprintln!("[api_health] cli-versions endpoint returned {}", response.status());
+            eprintln!(
+                "[api_health] cli-versions endpoint returned {}",
+                response.status()
+            );
         }
         Err(error) => {
             eprintln!("[api_health] failed to fetch CLI versions: {error}");
@@ -186,7 +222,12 @@ pub async fn update_api_cli(
     let client = shared_client();
     let url = format!("{base_url}/v1/cli-versions/{provider}/update");
 
-    match client.post(&url).timeout(Duration::from_secs(120)).send().await {
+    match client
+        .post(&url)
+        .timeout(Duration::from_secs(120))
+        .send()
+        .await
+    {
         Ok(response) if response.status().is_success() => {
             if let Ok(version) = response.json::<CliVersionResponse>().await {
                 emit_items(&app, EVENT_API_CLI_VERSION, [map_api_cli_version(version)]);
@@ -195,7 +236,9 @@ pub async fn update_api_cli(
         Ok(response) => {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(format!("Update failed for {provider}: HTTP {status} — {body}"));
+            return Err(format!(
+                "Update failed for {provider}: HTTP {status} — {body}"
+            ));
         }
         Err(error) => {
             return Err(format!("Update request failed for {provider}: {error}"));

@@ -1,7 +1,7 @@
 //! CLI health checking, version fetching, and update commands.
 
 use crate::commands::emitter::spawn_joined_task_emits;
-use crate::models::*;
+use crate::models::{AgentBackend, AppSettings, CliHealth, CliStatus};
 use tauri::{AppHandle, Emitter};
 
 use super::availability::check_binary_exists;
@@ -26,12 +26,13 @@ struct CliHealthEvent {
 
 #[tauri::command]
 pub async fn check_cli_health(app: AppHandle, settings: AppSettings) -> Result<(), String> {
-    let cli_paths = configured_cli_paths(&settings);
     let bash_missing = cfg!(target_os = "windows") && !check_binary_exists("bash").await;
-    let mut handles = Vec::with_capacity(cli_paths.len());
+    let mut handles = Vec::with_capacity(AgentBackend::MANAGED.len());
 
-    for (cli_name, path) in cli_paths {
+    for backend in AgentBackend::MANAGED {
         let app_handle = app.clone();
+        let cli_name = backend.as_str().to_string();
+        let path = settings.path_for_backend(backend).to_string();
         handles.push(tokio::spawn(async move {
             let status = if bash_missing {
                 CliStatus {
@@ -52,12 +53,14 @@ pub async fn check_cli_health(app: AppHandle, settings: AppSettings) -> Result<(
 
 #[tauri::command]
 pub async fn get_cli_versions(app: AppHandle, settings: AppSettings) -> Result<(), String> {
-    let mut handles = Vec::with_capacity(6);
+    let mut handles =
+        Vec::with_capacity(AgentBackend::MANAGED.len() + usize::from(cfg!(target_os = "windows")));
 
-    for (path, display_name, cli_name, package_name) in configured_cli_specs(&settings) {
+    for backend in AgentBackend::MANAGED {
         let app_handle = app.clone();
+        let path = settings.path_for_backend(backend).to_string();
         handles.push(tokio::spawn(async move {
-            let info = build_cli_version_info(&path, display_name, cli_name, package_name).await;
+            let info = build_cli_version_info(&path, backend).await;
             let _ = app_handle.emit(EVENT_CLI_VERSION_INFO, &info);
         }));
     }
@@ -77,59 +80,18 @@ pub async fn get_cli_versions(app: AppHandle, settings: AppSettings) -> Result<(
 #[tauri::command]
 pub async fn update_cli(app: AppHandle, cli_name: String) -> Result<String, String> {
     match cli_name.as_str() {
-        "claude" => update_with_npm("@anthropic-ai/claude-code").await,
-        "codex" => update_with_npm("@openai/codex").await,
-        "gemini" => update_with_npm("@google/gemini-cli").await,
-        "opencode" => update_with_npm("opencode-ai").await,
+        "claude" | "codex" | "gemini" | "opencode" => {
+            let backend = AgentBackend::from_cli_name(&cli_name)
+                .ok_or_else(|| format!("Unknown CLI: {cli_name}"))?;
+            let package_name = backend
+                .package_name()
+                .ok_or_else(|| format!("Unknown CLI: {cli_name}"))?;
+            update_with_npm(package_name).await
+        }
         "kimi" => update_kimi_cli().await,
         "gitBash" => update_git_bash(&app),
         _ => Err(format!("Unknown CLI: {cli_name}")),
     }
-}
-
-fn configured_cli_paths(settings: &AppSettings) -> [(String, String); 5] {
-    [
-        ("claude".to_string(), settings.claude_path.clone()),
-        ("codex".to_string(), settings.codex_path.clone()),
-        ("gemini".to_string(), settings.gemini_path.clone()),
-        ("kimi".to_string(), settings.kimi_path.clone()),
-        ("opencode".to_string(), settings.opencode_path.clone()),
-    ]
-}
-
-fn configured_cli_specs(settings: &AppSettings) -> [(String, &'static str, &'static str, &'static str); 5] {
-    [
-        (
-            settings.claude_path.clone(),
-            "Claude CLI",
-            "claude",
-            "@anthropic-ai/claude-code",
-        ),
-        (
-            settings.codex_path.clone(),
-            "Codex CLI",
-            "codex",
-            "@openai/codex",
-        ),
-        (
-            settings.gemini_path.clone(),
-            "Gemini CLI",
-            "gemini",
-            "@google/gemini-cli",
-        ),
-        (
-            settings.kimi_path.clone(),
-            "Kimi CLI",
-            "kimi",
-            "kimi-cli",
-        ),
-        (
-            settings.opencode_path.clone(),
-            "OpenCode CLI",
-            "opencode",
-            "opencode-ai",
-        ),
-    ]
 }
 
 async fn check_single_cli(path: &str) -> CliStatus {

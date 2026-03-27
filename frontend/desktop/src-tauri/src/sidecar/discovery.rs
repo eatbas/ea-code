@@ -52,11 +52,9 @@ pub fn find_hive_dir() -> Result<PathBuf, String> {
             }
         }
 
-        return Err(
-            "hive-api directory exists but has no source code. \
+        return Err("hive-api directory exists but has no source code. \
              Run `git submodule update --init` from the repository root."
-                .into(),
-        );
+            .into());
     }
 
     // Bundled: check platform-specific resource locations next to the executable.

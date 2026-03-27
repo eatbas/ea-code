@@ -1,6 +1,6 @@
 //! CLI version detection and update helpers.
 
-use crate::models::CliVersionInfo;
+use crate::models::{AgentBackend, CliVersionInfo};
 use crate::platform;
 
 use super::availability::check_binary_exists;
@@ -49,8 +49,8 @@ async fn get_npm_package_version(npm_package: &str) -> Option<String> {
 }
 
 /// Fetches the latest version via HTTP (no process spawns).
-async fn get_latest_version(cli_name: &str, npm_package: &str) -> Option<String> {
-    if cli_name == "kimi" {
+async fn get_latest_version(backend: AgentBackend, npm_package: &str) -> Option<String> {
+    if backend == AgentBackend::Kimi {
         if let Some(v) = super::http::get_latest_pypi_version("kimi-cli").await {
             return Some(v);
         }
@@ -59,13 +59,23 @@ async fn get_latest_version(cli_name: &str, npm_package: &str) -> Option<String>
     super::http::get_latest_npm_version_http(npm_package).await
 }
 
-pub(super) async fn build_cli_version_info(
-    path: &str,
-    display_name: &str,
-    cli_name: &str,
-    npm_package: &str,
-) -> CliVersionInfo {
-    let update_command = if cli_name == "kimi" {
+pub(super) async fn build_cli_version_info(path: &str, backend: AgentBackend) -> CliVersionInfo {
+    let cli_name = backend.as_str();
+    let display_name = backend.display_name();
+    let Some(npm_package) = backend.package_name() else {
+        return CliVersionInfo {
+            name: display_name.to_string(),
+            cli_name: cli_name.to_string(),
+            installed_version: None,
+            latest_version: None,
+            up_to_date: false,
+            update_command: String::new(),
+            available: false,
+            error: Some(format!("No package metadata configured for {cli_name}")),
+        };
+    };
+
+    let update_command = if backend == AgentBackend::Kimi {
         "uv tool upgrade kimi-cli --no-cache".to_string()
     } else {
         format!("npm install -g {npm_package}@latest")
@@ -87,7 +97,7 @@ pub(super) async fn build_cli_version_info(
     }
 
     // Phase 1: Try reading version from package.json on disk (no process spawn).
-    let pkg_version = if cli_name != "kimi" {
+    let pkg_version = if backend != AgentBackend::Kimi {
         get_npm_package_version(npm_package).await
     } else {
         None
@@ -104,7 +114,7 @@ pub(super) async fn build_cli_version_info(
                 None
             }
         },
-        get_latest_version(cli_name, npm_package),
+        get_latest_version(backend, npm_package),
     );
     let installed = pkg_version.or(cli_version);
     let up_to_date = matches!((&installed, &latest), (Some(i), Some(l)) if i == l);

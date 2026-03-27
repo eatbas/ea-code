@@ -103,10 +103,7 @@ where
 /// Like [`traverse_runs`], but also calls `on_session` once per session
 /// directory before descending into its runs. Useful for gathering
 /// session-level statistics.
-pub fn traverse_sessions_and_runs<S, R>(
-    on_session: &mut S,
-    on_run: &mut R,
-) -> Result<(), String>
+pub fn traverse_sessions_and_runs<S, R>(on_session: &mut S, on_run: &mut R) -> Result<(), String>
 where
     S: FnMut(&Path, &str, &str) -> Result<(), String>,
     R: FnMut(&Path, &str, &str, &str) -> Result<(), String>,
