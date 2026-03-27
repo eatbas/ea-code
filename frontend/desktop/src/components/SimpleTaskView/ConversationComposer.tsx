@@ -11,12 +11,14 @@ import {
 interface ConversationComposerProps {
   providers: ProviderInfo[];
   agent: AgentSelection | null;
+  prompt: string;
   promptHistory: string[];
   locked: boolean;
   sending: boolean;
   stopping: boolean;
   activeRunning: boolean;
   onAgentChange: (agent: AgentSelection) => void;
+  onPromptChange: (prompt: string) => void;
   onSend: (prompt: string) => Promise<void>;
   onStop: () => Promise<void>;
 }
@@ -24,16 +26,17 @@ interface ConversationComposerProps {
 export function ConversationComposer({
   providers,
   agent,
+  prompt,
   promptHistory,
   locked,
   sending,
   stopping,
   activeRunning,
   onAgentChange,
+  onPromptChange,
   onSend,
   onStop,
 }: ConversationComposerProps): ReactNode {
-  const [prompt, setPrompt] = useState("");
   const [openSelect, setOpenSelect] = useState<"provider" | "model" | null>(null);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [draftBeforeHistory, setDraftBeforeHistory] = useState("");
@@ -42,7 +45,12 @@ export function ConversationComposer({
     () => providers.filter((provider) => provider.available),
     [providers],
   );
-  const selectedProvider = availableProviders.find((provider) => provider.name === agent?.provider);
+  const selectedProvider = availableProviders.find((provider) => provider.name === agent?.provider)
+    ?? availableProviders[0];
+  const selectedProviderValue = selectedProvider?.name ?? "";
+  const selectedModelValue = selectedProvider?.models.includes(agent?.model ?? "")
+    ? agent?.model ?? ""
+    : selectedProvider?.models[0] ?? "";
   const modelOptions = modelOptionsFromProvider(selectedProvider);
   const providerOptions = useMemo(
     () => availableProviders.map((provider) => ({
@@ -77,7 +85,7 @@ export function ConversationComposer({
   }, [promptHistory]);
 
   function updatePromptFromHistory(nextPrompt: string): void {
-    setPrompt(nextPrompt);
+    onPromptChange(nextPrompt);
     requestAnimationFrame(() => {
       const textarea = textareaRef.current;
       if (!textarea) {
@@ -94,7 +102,7 @@ export function ConversationComposer({
       return;
     }
     await onSend(trimmed);
-    setPrompt("");
+    onPromptChange("");
     setHistoryIndex(-1);
     setDraftBeforeHistory("");
   }
@@ -182,15 +190,15 @@ export function ConversationComposer({
   }
 
   return (
-    <div className="border-t border-[#313134] bg-[#0b0b0c] px-5 py-4">
-      <div className="rounded-[20px] border border-[#313134] bg-[#151516] shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
+    <div className="border-t border-edge bg-surface px-5 py-4">
+      <div className="rounded-[20px] border border-edge bg-panel shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
         <label className="block">
           <span className="sr-only">Prompt</span>
           <textarea
             ref={textareaRef}
             value={prompt}
             onChange={(event) => {
-              setPrompt(event.target.value);
+              onPromptChange(event.target.value);
               if (historyIndex !== -1) {
                 setHistoryIndex(-1);
                 setDraftBeforeHistory("");
@@ -199,38 +207,26 @@ export function ConversationComposer({
             onKeyDown={handlePromptKeyDown}
             rows={1}
             placeholder="Describe the task you want the agent to handle."
-            className="w-full resize-none bg-transparent px-4 py-3 text-sm leading-6 text-[#f5f5f5] placeholder:text-[#72727a] focus:outline-none"
+            className="w-full resize-none bg-transparent px-4 py-3 text-sm leading-6 text-fg placeholder:text-fg-faint focus:outline-none"
           />
         </label>
 
-        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-[#313134] px-3 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-edge px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-8 items-center rounded-full border border-[#313134] bg-[#202022] px-2.5 py-1 text-[11px] font-medium text-[#f5f5f5]">
+            <span className="inline-flex h-8 items-center rounded-full border border-edge bg-elevated px-2.5 py-1 text-[11px] font-medium text-fg">
               Simple Task
             </span>
             {locked && (
-              <span className="inline-flex h-8 items-center rounded-full border border-[#313134] bg-[#1c1c1e] px-2.5 py-1 text-[11px] text-[#8b8b93]">
+              <span className="inline-flex h-8 items-center rounded-full border border-edge bg-[#1c1c1e] px-2.5 py-1 text-[11px] text-fg-muted">
                 Resuming this conversation
               </span>
-            )}
-            {activeRunning && (
-              <button
-                type="button"
-                onClick={() => {
-                  void onStop();
-                }}
-                disabled={stopping}
-                className="rounded-full border border-[#4f1f22] bg-[#211112] px-3 py-1.5 text-xs font-medium text-[#f2b7b7] transition-colors hover:bg-[#2a1416] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {stopping ? "Stopping..." : "Stop"}
-              </button>
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-full border border-[#313134] bg-[#111112] px-1.5 py-1 shadow-[0_14px_28px_rgba(0,0,0,0.18)]">
+            <div className="flex items-center gap-1.5 rounded-full border border-edge bg-[#111112] px-1.5 py-1 shadow-[0_14px_28px_rgba(0,0,0,0.18)]">
               <PopoverSelect
-                value={agent?.provider ?? ""}
+                value={selectedProviderValue}
                 options={providerOptions}
                 placeholder="Brand"
                 disabled={locked || providerOptions.length === 0}
@@ -238,8 +234,8 @@ export function ConversationComposer({
                 align="left"
                 open={openSelect === "provider"}
                 onOpenChange={(open) => setOpenSelect(open ? "provider" : null)}
-                triggerClassName="flex h-7 min-w-[6.75rem] items-center gap-2 rounded-full border border-[#46464b] bg-[#1a1a1c] px-2.5 text-[11px] font-semibold text-[#f5f5f5] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#5a5a61] hover:bg-[#202022] disabled:cursor-not-allowed disabled:opacity-55"
-                menuClassName="min-w-[11rem] rounded-2xl border border-[#46464b] bg-[#141415] p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
+                triggerClassName="flex h-7 min-w-[6.75rem] items-center gap-2 rounded-full border border-edge-strong bg-[#1a1a1c] px-2.5 text-[11px] font-semibold text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#5a5a61] hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55"
+                menuClassName="min-w-[11rem] rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
                 onChange={(nextValue) => {
                   const nextProvider = availableProviders.find((provider) => provider.name === nextValue);
                   if (!nextProvider) {
@@ -253,7 +249,7 @@ export function ConversationComposer({
               />
               <span className="px-0.5 text-[#66666d]">·</span>
               <PopoverSelect
-                value={agent?.model ?? ""}
+                value={selectedModelValue}
                 options={modelOptions}
                 placeholder="Model"
                 disabled={locked || modelOptions.length === 0}
@@ -278,13 +274,29 @@ export function ConversationComposer({
             <button
               type="button"
               onClick={() => {
+                if (activeRunning) {
+                  void onStop();
+                  return;
+                }
                 void handleSubmit();
               }}
-              disabled={sending || activeRunning || !agent || prompt.trim().length === 0}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#1eb75f] text-[#041107] transition-colors hover:bg-[#2ad16f] disabled:cursor-not-allowed disabled:opacity-50"
-              title={sending ? "Sending..." : "Send"}
+              disabled={activeRunning ? stopping : sending || !agent || prompt.trim().length === 0}
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                activeRunning
+                  ? "bg-[#6f1d1b] text-[#ffe2e1] hover:bg-[#892321]"
+                  : "bg-[#1eb75f] text-[#041107] hover:bg-[#2ad16f]"
+              }`}
+              title={activeRunning ? (stopping ? "Stopping..." : "Stop") : sending ? "Sending..." : "Send"}
             >
-              {sending ? (
+              {activeRunning ? (
+                stopping ? (
+                  <span className="text-[10px] font-semibold">...</span>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                )
+              ) : sending ? (
                 <span className="text-[10px] font-semibold">...</span>
               ) : (
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

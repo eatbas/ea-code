@@ -15,6 +15,10 @@ const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[
   },
 ];
 
+function hasRunningConversation(conversations: ConversationSummary[]): boolean {
+  return conversations.some((conversation) => conversation.status === "running");
+}
+
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
@@ -107,15 +111,15 @@ export function Sidebar({
   }
 
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col overflow-hidden border-r border-[#313134] bg-[#151516]">
+    <aside className="flex h-full w-72 shrink-0 flex-col overflow-hidden border-r border-edge bg-panel">
       {/* Header */}
       <div className="flex items-center justify-between px-3 pt-8 pb-3">
-        <span className="text-sm font-medium text-[#f5f5f5]">Projects</span>
+        <span className="text-sm font-medium text-fg">Projects</span>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={onAddProject}
-            className="rounded p-1.5 text-[#8b8b93] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
+            className="rounded p-1.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg"
             title="Add project"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -126,7 +130,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={handleSettingsClick}
-            className="rounded p-1.5 text-[#8b8b93] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
+            className="rounded p-1.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg"
             title="Settings"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -137,7 +141,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={onToggle}
-            className="rounded p-1.5 text-[#8b8b93] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
+            className="rounded p-1.5 text-fg-muted transition-colors hover:bg-elevated hover:text-fg"
             title="Collapse sidebar"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -151,11 +155,12 @@ export function Sidebar({
       {/* Project list */}
       <div className="flex-1 overflow-y-auto px-2">
         {projects.length === 0 && (
-          <p className="px-2 py-4 text-center text-xs text-[#72727a]">No projects yet. Add a project to get started.</p>
+          <p className="px-2 py-4 text-center text-xs text-fg-faint">No projects yet. Add a project to get started.</p>
         )}
         {projects.map((project) => {
           const isActive = project.path === activeProjectPath;
           const conversations = conversationIndex[project.path] ?? [];
+          const projectHasRunningConversation = hasRunningConversation(conversations);
           return (
             <div key={project.path} className="group/project mb-2">
               <div className="relative">
@@ -164,15 +169,23 @@ export function Sidebar({
                   onClick={() => void onSelectProject(project.path)}
                   className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 pr-16 text-left text-sm transition-colors ${
                     isActive
-                      ? "bg-[#202022] text-[#f5f5f5]"
-                      : "text-[#8b8b93] hover:bg-[#202022] hover:text-[#f5f5f5]"
+                      ? "bg-elevated text-fg"
+                      : "text-fg-muted hover:bg-elevated hover:text-fg"
                   }`}
                   title={project.path}
                 >
                   <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                   </svg>
-                  <span className="truncate font-medium">{folderName(project.path)}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{folderName(project.path)}</span>
+                    {projectHasRunningConversation && (
+                      <span
+                        className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#1eb75f] shadow-[0_0_0_3px_rgba(30,183,95,0.16)] animate-pulse"
+                        title="A conversation is running in this project"
+                      />
+                    )}
+                  </span>
                 </button>
 
                 <div
@@ -188,7 +201,7 @@ export function Sidebar({
                       setConversationPendingRemoval(null);
                       void onCreateConversation(project.path);
                     }}
-                    className="rounded p-1 text-[#72727a] transition-colors hover:bg-[#262628] hover:text-[#f5f5f5]"
+                    className="rounded p-1 text-fg-faint transition-colors hover:bg-active hover:text-fg"
                     title="New conversation"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -206,7 +219,7 @@ export function Sidebar({
                             setProjectPendingRemoval(null);
                             setConversationPendingRemoval(null);
                           }}
-                          className="rounded px-2 py-1 text-[10px] font-medium text-[#8b8b93] transition-colors hover:bg-[#262628] hover:text-[#f5f5f5]"
+                          className="rounded px-2 py-1 text-[10px] font-medium text-fg-muted transition-colors hover:bg-active hover:text-fg"
                           title="Cancel project removal"
                         >
                           Cancel
@@ -233,7 +246,7 @@ export function Sidebar({
                           setProjectPendingRemoval(project.path);
                           setConversationPendingRemoval(null);
                         }}
-                        className="rounded p-1 text-[#72727a] transition-colors hover:bg-[#262628] hover:text-[#f5f5f5]"
+                        className="rounded p-1 text-fg-faint transition-colors hover:bg-active hover:text-fg"
                         title="Remove project"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -259,12 +272,20 @@ export function Sidebar({
                           }}
                           className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 pr-8 text-left transition-colors ${
                             isConversationActive
-                              ? "bg-[#252527] text-[#f5f5f5]"
-                              : "text-[#a3a3aa] hover:bg-[#1d1d1f] hover:text-[#f5f5f5]"
+                              ? "bg-[#252527] text-fg"
+                              : "text-[#a3a3aa] hover:bg-[#1d1d1f] hover:text-fg"
                           }`}
                         >
-                          <span className="truncate text-sm">{conversation.title}</span>
-                          <span className="shrink-0 text-xs text-[#7e7e86]">
+                          <span className="flex min-w-0 items-center gap-2">
+                            {conversation.status === "running" && (
+                              <span
+                                className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#1eb75f] shadow-[0_0_0_3px_rgba(30,183,95,0.16)] animate-pulse"
+                                title="Conversation running"
+                              />
+                            )}
+                            <span className="truncate text-sm">{conversation.title}</span>
+                          </span>
+                          <span className="shrink-0 text-xs text-fg-subtle">
                             {formatRelativeTime(conversation.updatedAt)}
                           </span>
                         </button>
@@ -277,7 +298,7 @@ export function Sidebar({
                                   event.stopPropagation();
                                   setConversationPendingRemoval(null);
                                 }}
-                                className="rounded px-2 py-1 text-[10px] font-medium text-[#8b8b93] transition-colors hover:bg-[#262628] hover:text-[#f5f5f5]"
+                                className="rounded px-2 py-1 text-[10px] font-medium text-fg-muted transition-colors hover:bg-active hover:text-fg"
                                 title="Cancel conversation removal"
                               >
                                 Cancel
@@ -303,7 +324,7 @@ export function Sidebar({
                                 setConversationPendingRemoval(`${project.path}::${conversation.id}`);
                                 setProjectPendingRemoval(null);
                               }}
-                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-[#72727a] opacity-0 transition-opacity hover:bg-[#262628] hover:text-[#f5f5f5] group-hover/conversation:opacity-100"
+                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-fg-faint opacity-0 transition-opacity hover:bg-active hover:text-fg group-hover/conversation:opacity-100"
                               title="Delete conversation"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -324,8 +345,8 @@ export function Sidebar({
       </div>
 
       {/* Footer */}
-      <div className="border-t border-[#313134] px-3 py-3">
-        <p className="w-full text-center text-[10px] text-[#72727a]" title={appFooterLabel}>
+      <div className="border-t border-edge px-3 py-3">
+        <p className="w-full text-center text-[10px] text-fg-faint" title={appFooterLabel}>
           {appFooterLabel}
         </p>
       </div>

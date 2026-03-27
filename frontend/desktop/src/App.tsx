@@ -34,8 +34,10 @@ function App(): ReactNode {
   const {
     activeConversation,
     activeDraft,
+    activePromptDraft,
     sending,
     stopping,
+    updateActivePromptDraft,
     sendPrompt,
     stopActiveConversation,
     deleteConversationById,
@@ -98,7 +100,7 @@ function App(): ReactNode {
 
   return (
     <div className="relative h-full">
-      <div className={`flex h-full bg-[#0b0b0c] transition-[filter] duration-200 ${openingWorkspace ? "pointer-events-none blur-[2px]" : ""}`}>
+      <div className={`flex h-full bg-surface transition-[filter] duration-200 ${openingWorkspace ? "pointer-events-none blur-[2px]" : ""}`}>
         <Sidebar
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed((prev) => !prev)}
@@ -125,8 +127,10 @@ function App(): ReactNode {
             workspace={workspace}
             activeConversation={activeConversation}
             activeDraft={activeDraft}
+            activePromptDraft={activePromptDraft}
             sendingConversation={sending}
             stoppingConversation={stopping}
+            onPromptDraftChange={updateActivePromptDraft}
             onSendConversationPrompt={sendPrompt}
             onStopConversation={stopActiveConversation}
             projects={projects}

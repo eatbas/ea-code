@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AgentSelection,
   ConversationDetail,
@@ -24,9 +24,11 @@ interface UseConversationSessionReturn {
   conversations: ConversationSummary[];
   activeConversation: ConversationDetail | null;
   activeDraft: string;
+  activePromptDraft: string;
   loading: boolean;
   sending: boolean;
   stopping: boolean;
+  updateActivePromptDraft: (prompt: string) => void;
   openConversation: (conversationId: string) => Promise<void>;
   startNewConversation: () => void;
   sendPrompt: (prompt: string, agent: AgentSelection) => Promise<void>;
@@ -60,6 +62,10 @@ function sortConversations(items: ConversationSummary[]): ConversationSummary[] 
   return [...items].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
+function promptDraftKey(workspacePath: string, conversationId?: string | null): string {
+  return conversationId ? `${workspacePath}::${conversationId}` : `${workspacePath}::__new__`;
+}
+
 export function useConversationSession(
   workspace: WorkspaceInfo | null,
   selectionIntent: ConversationSelectionIntent | null = null,
@@ -68,9 +74,12 @@ export function useConversationSession(
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeConversation, setActiveConversation] = useState<ConversationDetail | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [sending, setSending] = useState<boolean>(false);
-  const [stopping, setStopping] = useState<boolean>(false);
+  const [stoppingConversationId, setStoppingConversationId] = useState<string | null>(null);
+  const previousWorkspacePathRef = useRef<string | null>(null);
+  const stoppingConversationIdRef = useRef<string | null>(null);
 
   useTauriEventListeners({
     listeners: [
@@ -114,6 +123,10 @@ export function useConversationSession(
               delete next[payload.conversation.id];
               return next;
             });
+            if (stoppingConversationIdRef.current === payload.conversation.id) {
+              stoppingConversationIdRef.current = null;
+              setStoppingConversationId(null);
+            }
           }
         },
       },
@@ -121,14 +134,26 @@ export function useConversationSession(
   });
 
   useEffect(() => {
-    setConversations([]);
-    setActiveConversation(null);
-    setDrafts({});
-
     if (!workspace) {
+      previousWorkspacePathRef.current = null;
+      setConversations([]);
+      setActiveConversation(null);
+      setDrafts({});
+      setPromptDrafts({});
+      stoppingConversationIdRef.current = null;
+      setStoppingConversationId(null);
       return;
     }
     const workspacePath = workspace.path;
+    const workspaceChanged = previousWorkspacePathRef.current !== workspacePath;
+    previousWorkspacePathRef.current = workspacePath;
+
+    if (workspaceChanged) {
+      setConversations([]);
+      setDrafts({});
+    }
+    setActiveConversation(null);
+
     const selection = selectionIntent?.workspacePath === workspacePath ? selectionIntent : null;
 
     let cancelled = false;
@@ -206,6 +231,10 @@ export function useConversationSession(
     try {
       if (activeConversation) {
         const updated = await sendConversationTurn(workspacePath, activeConversation.summary.id, prompt);
+        setPromptDrafts((previous) => ({
+          ...previous,
+          [promptDraftKey(workspacePath, activeConversation.summary.id)]: "",
+        }));
         setActiveConversation((previous) => previous && previous.summary.id === updated.summary.id
           ? {
               summary: mergeSummary(previous.summary, updated.summary),
@@ -224,6 +253,11 @@ export function useConversationSession(
 
       const created = await createConversation(workspacePath, agent, prompt);
       const running = await sendConversationTurn(workspacePath, created.summary.id, prompt);
+      setPromptDrafts((previous) => ({
+        ...previous,
+        [promptDraftKey(workspacePath, null)]: "",
+        [promptDraftKey(workspacePath, created.summary.id)]: "",
+      }));
       setActiveConversation((previous) => previous && previous.summary.id === running.summary.id
         ? { ...previous, summary: mergeSummary(previous.summary, running.summary) }
         : running);
@@ -246,10 +280,12 @@ export function useConversationSession(
       return;
     }
     const workspacePath = workspace.path;
+    const conversationId = activeConversation.summary.id;
 
-    setStopping(true);
+    stoppingConversationIdRef.current = conversationId;
+    setStoppingConversationId(conversationId);
     try {
-      const summary = await stopConversation(workspacePath, activeConversation.summary.id);
+      const summary = await stopConversation(workspacePath, conversationId);
       setConversations((previous) => sortConversations(
         upsertByKey(
           previous,
@@ -261,10 +297,14 @@ export function useConversationSession(
         ...previous,
         summary: mergeSummary(previous.summary, summary),
       } : previous);
-    } catch {
-      toast.error("Failed to stop conversation.");
-    } finally {
-      setStopping(false);
+      if (summary.status !== "running") {
+        stoppingConversationIdRef.current = null;
+        setStoppingConversationId(null);
+      }
+    } catch (error) {
+      stoppingConversationIdRef.current = null;
+      setStoppingConversationId(null);
+      toast.error(error instanceof Error ? error.message : "Failed to stop conversation.");
     }
   }, [activeConversation, toast, workspace]);
 
@@ -281,6 +321,11 @@ export function useConversationSession(
         delete next[conversationId];
         return next;
       });
+      setPromptDrafts((previous) => {
+        const next = { ...previous };
+        delete next[promptDraftKey(workspace.path, conversationId)];
+        return next;
+      });
       setActiveConversation((previous) => (
         previous?.summary.id === conversationId ? null : previous
       ));
@@ -293,13 +338,31 @@ export function useConversationSession(
     activeConversation ? drafts[activeConversation.summary.id] ?? "" : ""
   ), [activeConversation, drafts]);
 
+  const activePromptDraft = useMemo(() => {
+    if (!workspace) {
+      return "";
+    }
+    return promptDrafts[promptDraftKey(workspace.path, activeConversation?.summary.id ?? null)] ?? "";
+  }, [activeConversation, promptDrafts, workspace]);
+
   return {
     conversations,
     activeConversation,
     activeDraft,
+    activePromptDraft,
     loading,
     sending,
-    stopping,
+    stopping: activeConversation?.summary.id === stoppingConversationId,
+    updateActivePromptDraft: (prompt: string) => {
+      if (!workspace) {
+        return;
+      }
+      const key = promptDraftKey(workspace.path, activeConversation?.summary.id ?? null);
+      setPromptDrafts((previous) => ({
+        ...previous,
+        [key]: prompt,
+      }));
+    },
     openConversation,
     startNewConversation,
     sendPrompt,

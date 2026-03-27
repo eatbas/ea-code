@@ -1,4 +1,6 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use crate::models::{
     AgentSelection, ConversationDetail, ConversationMessage, ConversationMessageRole,
@@ -10,6 +12,46 @@ const CONVERSATIONS_DIR: &str = ".ea-code/conversations";
 const CONVERSATION_FILE: &str = "conversation.json";
 const MESSAGES_FILE: &str = "messages.jsonl";
 const STALE_RUNNING_ERROR: &str = "ea-code closed while this task was running";
+
+fn running_conversations() -> &'static Mutex<HashSet<String>> {
+    static ACTIVE_RUNNING_CONVERSATIONS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    ACTIVE_RUNNING_CONVERSATIONS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn running_conversation_key(workspace_path: &str, conversation_id: &str) -> String {
+    format!("{workspace_path}::{conversation_id}")
+}
+
+fn is_running_conversation_tracked(workspace_path: &str, conversation_id: &str) -> Result<bool, String> {
+    running_conversations()
+        .lock()
+        .map(|tracked| tracked.contains(&running_conversation_key(workspace_path, conversation_id)))
+        .map_err(|error| format!("Failed to inspect running conversations: {error}"))
+}
+
+pub struct RunningConversationGuard {
+    key: String,
+}
+
+impl Drop for RunningConversationGuard {
+    fn drop(&mut self) {
+        if let Ok(mut tracked) = running_conversations().lock() {
+            tracked.remove(&self.key);
+        }
+    }
+}
+
+pub fn track_running_conversation(
+    workspace_path: &str,
+    conversation_id: &str,
+) -> Result<RunningConversationGuard, String> {
+    let key = running_conversation_key(workspace_path, conversation_id);
+    running_conversations()
+        .lock()
+        .map_err(|error| format!("Failed to track running conversation: {error}"))?
+        .insert(key.clone());
+    Ok(RunningConversationGuard { key })
+}
 
 fn conversations_dir(workspace_path: &str) -> PathBuf {
     Path::new(workspace_path).join(CONVERSATIONS_DIR)
@@ -100,6 +142,9 @@ fn normalise_title(prompt: &str) -> String {
 
 fn reconcile_stale_running_unlocked(summary: &mut ConversationSummary) -> Result<(), String> {
     if summary.status != ConversationStatus::Running {
+        return Ok(());
+    }
+    if is_running_conversation_tracked(&summary.workspace_path, &summary.id)? {
         return Ok(());
     }
 
@@ -239,6 +284,23 @@ pub fn set_provider_session_ref(
     })
 }
 
+pub fn set_status(
+    workspace_path: &str,
+    conversation_id: &str,
+    status: ConversationStatus,
+    error: Option<String>,
+) -> Result<ConversationSummary, String> {
+    with_conversations_lock(|| {
+        let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
+        summary.status = status;
+        summary.updated_at = now_rfc3339();
+        summary.active_job_id = None;
+        summary.error = error;
+        write_summary_unlocked(&summary)?;
+        Ok(summary)
+    })
+}
+
 pub fn finish_turn(
     workspace_path: &str,
     conversation_id: &str,
@@ -301,7 +363,7 @@ mod tests {
 
     use super::{
         create_conversation, delete_conversation, finish_turn, get_conversation, list_conversations,
-        mark_turn_running,
+        mark_turn_running, track_running_conversation,
     };
     use crate::models::{AgentSelection, ConversationStatus};
 
@@ -422,6 +484,42 @@ mod tests {
             loaded.summary.error.as_deref(),
             Some("ea-code closed while this task was running")
         );
+    }
+
+    #[test]
+    fn tracked_running_conversations_stay_running_on_load() {
+        let workspace = TestWorkspace::new();
+        let conversation = create_conversation(
+            workspace.path().to_str().expect("workspace path should be utf-8"),
+            AgentSelection {
+                provider: "codex".to_string(),
+                model: "gpt-5.4".to_string(),
+            },
+            None,
+        )
+        .expect("conversation should be created");
+
+        mark_turn_running(
+            workspace.path().to_str().expect("workspace path should be utf-8"),
+            &conversation.summary.id,
+            "Keep running in the background",
+        )
+        .expect("turn should start");
+
+        let _guard = track_running_conversation(
+            workspace.path().to_str().expect("workspace path should be utf-8"),
+            &conversation.summary.id,
+        )
+        .expect("conversation should be tracked");
+
+        let loaded = get_conversation(
+            workspace.path().to_str().expect("workspace path should be utf-8"),
+            &conversation.summary.id,
+        )
+        .expect("conversation should load");
+
+        assert_eq!(loaded.summary.status, ConversationStatus::Running);
+        assert_eq!(loaded.summary.error, None);
     }
 
     #[test]

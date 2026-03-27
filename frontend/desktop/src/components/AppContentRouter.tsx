@@ -9,8 +9,10 @@ interface AppContentRouterProps {
   workspace: WorkspaceInfo | null;
   activeConversation: ConversationDetail | null;
   activeDraft: string;
+  activePromptDraft: string;
   sendingConversation: boolean;
   stoppingConversation: boolean;
+  onPromptDraftChange: (prompt: string) => void;
   onSendConversationPrompt: (prompt: string, agent: AgentSelection) => Promise<void>;
   onStopConversation: () => Promise<void>;
   projects: ProjectEntry[];
@@ -26,8 +28,10 @@ export function AppContentRouter({
   workspace,
   activeConversation,
   activeDraft,
+  activePromptDraft,
   sendingConversation,
   stoppingConversation,
+  onPromptDraftChange,
   onSendConversationPrompt,
   onStopConversation,
   projects,
@@ -46,10 +50,12 @@ export function AppContentRouter({
         workspace={workspace}
         activeConversation={activeConversation}
         activeDraft={activeDraft}
+        activePromptDraft={activePromptDraft}
         sending={sendingConversation}
         stopping={stoppingConversation}
         onOpenProjectFolder={onOpenProjectFolder}
         onOpenInVsCode={onOpenInVsCode}
+        onPromptDraftChange={onPromptDraftChange}
         onSendPrompt={onSendConversationPrompt}
         onStopConversation={onStopConversation}
       />

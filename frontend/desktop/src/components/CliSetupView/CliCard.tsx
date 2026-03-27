@@ -11,7 +11,15 @@ function buildGoogleInstallSearchUrl(name: string): string {
   return `https://www.google.com/search?q=${query}`;
 }
 
-/** Version/install status badge. */
+const BADGE_BASE = "inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium";
+
+const BADGE_VARIANTS = {
+  neutral: "bg-[#737373]/15 text-[#a3a3a3]",
+  danger: "bg-danger/15 text-danger",
+  success: "bg-success/15 text-success",
+  warning: "bg-warning/15 text-warning",
+} as const;
+
 function StatusBadge({
   provider,
   version,
@@ -21,37 +29,29 @@ function StatusBadge({
   version: ApiCliVersionInfo | undefined;
   loading: boolean;
 }): ReactNode {
+  let label: string;
+  let variant: keyof typeof BADGE_VARIANTS;
+
   if (loading) {
-    return (
-      <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#737373]/15 px-2.5 py-0.5 text-xs font-medium text-[#a3a3a3]">
-        Checking...
-      </span>
-    );
+    label = "Checking...";
+    variant = "neutral";
+  } else if (!provider.available) {
+    label = "Not Installed";
+    variant = "danger";
+  } else if (!version?.latestVersion) {
+    label = "Installed";
+    variant = "neutral";
+  } else if (version.upToDate) {
+    label = "Up to Date";
+    variant = "success";
+  } else {
+    label = "Update Available";
+    variant = "warning";
   }
-  if (!provider.available) {
-    return (
-      <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#ef4444]/15 px-2.5 py-0.5 text-xs font-medium text-[#ef4444]">
-        Not Installed
-      </span>
-    );
-  }
-  if (!version?.latestVersion) {
-    return (
-      <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#737373]/15 px-2.5 py-0.5 text-xs font-medium text-[#a3a3a3]">
-        Installed
-      </span>
-    );
-  }
-  if (version.upToDate) {
-    return (
-      <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#22c55e]/15 px-2.5 py-0.5 text-xs font-medium text-[#22c55e]">
-        Up to Date
-      </span>
-    );
-  }
+
   return (
-    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#f59e0b]/15 px-2.5 py-0.5 text-xs font-medium text-[#f59e0b]">
-      Update Available
+    <span className={`${BADGE_BASE} ${BADGE_VARIANTS[variant]}`}>
+      {label}
     </span>
   );
 }
@@ -90,9 +90,9 @@ export function CliCard({
   const installSearchUrl = buildGoogleInstallSearchUrl(displayName);
 
   return (
-    <div className="rounded-lg border border-[#313134] bg-[#151516] p-5">
+    <div className="rounded-lg border border-edge bg-panel p-5">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[#f5f5f5]">{displayName}</h3>
+        <h3 className="text-sm font-semibold text-fg">{displayName}</h3>
         <StatusBadge provider={provider} version={version} loading={loading} />
       </div>
       <VersionGrid version={version} loading={loading} />
@@ -106,12 +106,12 @@ export function CliCard({
         />
       )}
       {!loading && !provider.available && modelOptions.length > 0 && (
-        <p className="mt-4 text-xs text-[#72727a]">
+        <p className="mt-4 text-xs text-fg-faint">
           Install this CLI to enable model selection.
         </p>
       )}
       {!loading && !provider.available && (
-        <p className="mt-3 text-xs text-[#ef4444]">{provider.name} not found in PATH</p>
+        <p className="mt-3 text-xs text-danger">{provider.name} not found in PATH</p>
       )}
       {showInstall && (
         <button
@@ -122,7 +122,7 @@ export function CliCard({
             });
           }}
           disabled={actionsDisabled}
-          className="mt-4 w-full rounded-md bg-[#f5f5f5] px-4 py-2 text-sm font-medium text-[#0b0b0c] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-4 w-full rounded-md bg-fg px-4 py-2 text-sm font-medium text-surface transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           Install
         </button>
@@ -132,7 +132,7 @@ export function CliCard({
           type="button"
           onClick={onUpdate}
           disabled={updating || actionsDisabled}
-          className="mt-4 w-full rounded-md bg-[#f5f5f5] px-4 py-2 text-sm font-medium text-[#0b0b0c] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-4 w-full rounded-md bg-fg px-4 py-2 text-sm font-medium text-surface transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {updating ? "Updating..." : "Update"}
         </button>

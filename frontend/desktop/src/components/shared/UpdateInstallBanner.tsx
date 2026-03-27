@@ -12,7 +12,7 @@ export function UpdateInstallBanner({ mode, version }: UpdateInstallBannerProps)
     : `Updating to v${version ?? "latest"}...`;
 
   return (
-    <div className="pointer-events-none fixed bottom-3 right-3 z-50 rounded border border-[#313134] bg-[#151516]/95 px-3 py-1 text-xs text-[#f5f5f5] shadow-lg">
+    <div className="pointer-events-none fixed bottom-3 right-3 z-50 rounded border border-edge bg-panel/95 px-3 py-1 text-xs text-fg shadow-lg">
       {text}
     </div>
   );

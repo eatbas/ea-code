@@ -11,12 +11,12 @@ interface HeaderProps {
 /** Minimal top navigation bar for the running/completed pipeline view. */
 export function Header({ workspace, onOpenSettings, onBackToHome, showBackButton }: HeaderProps): ReactNode {
   return (
-    <header className="bg-[#151516] border-b border-[#313134] px-4 py-3 flex items-center justify-between">
+    <header className="bg-panel border-b border-edge px-4 py-3 flex items-center justify-between">
       <div className="flex items-center gap-2">
         {showBackButton && onBackToHome && (
           <button
             onClick={onBackToHome}
-            className="rounded p-1.5 text-[#8b8b93] hover:bg-[#202022] hover:text-[#f5f5f5] transition-colors"
+            className="rounded p-1.5 text-fg-muted hover:bg-elevated hover:text-fg transition-colors"
             title="Back to home"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -27,17 +27,17 @@ export function Header({ workspace, onOpenSettings, onBackToHome, showBackButton
         )}
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="EA Code logo" className="h-12 w-12" />
-          <h1 className="text-lg font-bold text-[#f5f5f5]">EA Code</h1>
+          <h1 className="text-lg font-bold text-fg">EA Code</h1>
         </div>
       </div>
 
-      <span className="font-mono text-sm text-[#8b8b93] truncate max-w-[50%] px-4">
+      <span className="font-mono text-sm text-fg-muted truncate max-w-[50%] px-4">
         {workspace ? workspace.path : "No workspace selected"}
       </span>
 
       <button
         onClick={onOpenSettings}
-        className="p-2 rounded hover:bg-[#202022] transition-colors text-[#8b8b93] hover:text-[#f5f5f5]"
+        className="p-2 rounded hover:bg-elevated transition-colors text-fg-muted hover:text-fg"
         title="Settings"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

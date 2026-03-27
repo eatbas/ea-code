@@ -1,17 +1,21 @@
 @import "tailwindcss";
 
-:root {
-  --colour-bg-primary: #0b0b0c;
-  --colour-bg-secondary: #151516;
-  --colour-bg-tertiary: #202022;
-  --colour-border: #313134;
-  --colour-text-primary: #f5f5f5;
-  --colour-text-secondary: #8b8b93;
-  --colour-accent: #68686f;
-  --colour-accent-hover: #888890;
-  --colour-success: #22c55e;
-  --colour-warning: #f59e0b;
-  --colour-error: #ef4444;
+@theme {
+  --color-surface: #0b0b0c;
+  --color-panel: #151516;
+  --color-elevated: #202022;
+  --color-active: #262628;
+  --color-edge: #313134;
+  --color-edge-strong: #4a4a4f;
+  --color-fg: #f5f5f5;
+  --color-fg-muted: #8b8b93;
+  --color-fg-faint: #72727a;
+  --color-fg-subtle: #7e7e86;
+  --color-accent: #68686f;
+  --color-accent-hover: #888890;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
 }
 
 html,
@@ -23,8 +27,8 @@ body,
 }
 
 body {
-  background-color: var(--colour-bg-primary);
-  color: var(--colour-text-primary);
+  background-color: var(--color-surface);
+  color: var(--color-fg);
   font-family: "Inter", system-ui, -apple-system, sans-serif;
 }
 
@@ -35,7 +39,7 @@ button {
 /* Scrollbar theme aligned with app background and brand green accents. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(34, 197, 94, 0.85) var(--colour-bg-primary);
+  scrollbar-color: rgba(34, 197, 94, 0.85) var(--color-surface);
 }
 
 *::-webkit-scrollbar {
@@ -44,12 +48,12 @@ button {
 }
 
 *::-webkit-scrollbar-track {
-  background: var(--colour-bg-primary);
+  background: var(--color-surface);
 }
 
 *::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, rgba(74, 222, 128, 0.95) 0%, rgba(34, 197, 94, 0.9) 100%);
-  border: 2px solid var(--colour-bg-primary);
+  border: 2px solid var(--color-surface);
   border-radius: 9999px;
 }
 

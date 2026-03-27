@@ -12,11 +12,11 @@ export function SidebarCollapsed({
   settingsActive,
 }: SidebarCollapsedProps): ReactNode {
   return (
-    <aside className="flex h-full w-12 shrink-0 flex-col items-center gap-3 border-r border-[#313134] bg-[#151516] pt-8 pb-3">
+    <aside className="flex h-full w-12 shrink-0 flex-col items-center gap-3 border-r border-edge bg-panel pt-8 pb-3">
       <button
         type="button"
         onClick={onToggle}
-        className="rounded p-2 text-[#8b8b93] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
+        className="rounded p-2 text-fg-muted transition-colors hover:bg-elevated hover:text-fg"
         title="Expand sidebar"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -31,7 +31,7 @@ export function SidebarCollapsed({
         type="button"
         onClick={onSettingsClick}
         className={`rounded p-2 transition-colors ${
-          settingsActive ? "bg-[#202022] text-[#f5f5f5]" : "text-[#8b8b93] hover:bg-[#202022] hover:text-[#f5f5f5]"
+          settingsActive ? "bg-elevated text-fg" : "text-fg-muted hover:bg-elevated hover:text-fg"
         }`}
         title="Settings"
       >

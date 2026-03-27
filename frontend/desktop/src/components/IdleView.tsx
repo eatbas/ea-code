@@ -30,20 +30,23 @@ export function IdleView({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
   useClickOutside(dropdownRef, closeDropdown, dropdownOpen);
+  const handleFooterError = useCallback(() => {
+    toast.error("Failed to open project action.");
+  }, [toast]);
 
   const workspaceLabel = workspace ? folderName(workspace.path) : "";
 
   return (
-    <div className="flex h-full flex-col bg-[#0b0b0c]">
+    <div className="flex h-full flex-col bg-surface">
       <div className="flex flex-1 flex-col items-center justify-center gap-4">
         <img src="/logo.png" alt="EA Code logo" className="h-40 w-40" />
 
-        <h1 className="text-3xl font-bold text-[#f5f5f5]">ea-code</h1>
+        <h1 className="text-3xl font-bold text-fg">ea-code</h1>
 
         <div ref={dropdownRef} className="relative">
           <button
             onClick={() => setDropdownOpen((prev) => !prev)}
-            className="flex items-center gap-2 text-lg text-[#8b8b93] transition-colors hover:text-[#f5f5f5]"
+            className="flex items-center gap-2 text-lg text-fg-muted transition-colors hover:text-fg"
           >
             <span>{workspace ? workspaceLabel : "Select a project..."}</span>
             <svg
@@ -55,9 +58,9 @@ export function IdleView({
           </button>
 
           {dropdownOpen && (
-            <div className="absolute top-full left-1/2 z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-[#313134] bg-[#151516] py-1 shadow-lg">
+            <div className="absolute top-full left-1/2 z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-edge bg-panel py-1 shadow-lg">
               {projects.length === 0 && (
-                <span className="block px-3 py-2 text-xs text-[#72727a]">No projects yet</span>
+                <span className="block px-3 py-2 text-xs text-fg-faint">No projects yet</span>
               )}
 
               {projects.map((project) => {
@@ -71,8 +74,8 @@ export function IdleView({
                     }}
                     className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${
                       isActive
-                        ? "bg-[#202022] text-[#f5f5f5]"
-                        : "text-[#8b8b93] hover:bg-[#202022] hover:text-[#f5f5f5]"
+                        ? "bg-elevated text-fg"
+                        : "text-fg-muted hover:bg-elevated hover:text-fg"
                     }`}
                     title={project.path}
                   >
@@ -88,13 +91,13 @@ export function IdleView({
                 );
               })}
 
-              <div className="my-1 border-t border-[#313134]" />
+              <div className="my-1 border-t border-edge" />
               <button
                 onClick={() => {
                   onAddProject();
                   setDropdownOpen(false);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[#8b8b93] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-elevated hover:text-fg"
               >
                 <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -108,9 +111,9 @@ export function IdleView({
         </div>
 
         {workspace && (
-          <div className="flex gap-2 text-xs text-[#8b8b93]">
+          <div className="flex gap-2 text-xs text-fg-muted">
             {workspace.isGitRepo && (
-              <span className="rounded bg-[#202022] px-2 py-0.5">
+              <span className="rounded bg-elevated px-2 py-0.5">
                 {workspace.branch ?? "git"}
               </span>
             )}
@@ -125,13 +128,11 @@ export function IdleView({
               path={workspace.path}
               onOpenProjectFolder={onOpenProjectFolder}
               onOpenInVsCode={onOpenInVsCode}
-              onError={() => {
-                toast.error("Failed to open project action.");
-              }}
+              onError={handleFooterError}
             />
           </div>
         ) : (
-          <div className="mx-auto flex w-full max-w-5xl items-center justify-between text-xs text-[#8b8b93]">
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between text-xs text-fg-muted">
             <span className="truncate" title="No project selected">No project selected</span>
           </div>
         )}

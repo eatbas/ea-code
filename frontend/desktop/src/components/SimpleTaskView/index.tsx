@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AppSettings,
   AgentSelection,
@@ -19,10 +19,12 @@ interface SimpleTaskViewProps {
   workspace: WorkspaceInfo;
   activeConversation: ConversationDetail | null;
   activeDraft: string;
+  activePromptDraft: string;
   sending: boolean;
   stopping: boolean;
   onOpenProjectFolder: (path: string) => Promise<void>;
   onOpenInVsCode: (path: string) => Promise<void>;
+  onPromptDraftChange: (prompt: string) => void;
   onSendPrompt: (prompt: string, agent: AgentSelection) => Promise<void>;
   onStopConversation: () => Promise<void>;
 }
@@ -31,10 +33,12 @@ export function SimpleTaskView({
   workspace,
   activeConversation,
   activeDraft,
+  activePromptDraft,
   sending,
   stopping,
   onOpenProjectFolder,
   onOpenInVsCode,
+  onPromptDraftChange,
   onSendPrompt,
   onStopConversation,
 }: SimpleTaskViewProps): ReactNode {
@@ -73,6 +77,19 @@ export function SimpleTaskView({
   }, [activeConversation, availableProviders, selectedAgent]);
 
   const activeRunning = activeConversation?.summary.status === "running";
+
+  const handleSend = useCallback(async (prompt: string) => {
+    const agent = activeConversation?.summary.agent ?? selectedAgent;
+    if (!agent) {
+      return;
+    }
+    await onSendPrompt(prompt, agent);
+  }, [activeConversation, selectedAgent, onSendPrompt]);
+
+  const handleFooterError = useCallback(() => {
+    toast.error("Failed to open project action.");
+  }, [toast]);
+
   const promptHistory = useMemo(
     () => activeConversation?.messages
       .filter((message) => message.role === "user")
@@ -81,14 +98,14 @@ export function SimpleTaskView({
   );
 
   return (
-    <div className="flex h-full min-h-0 bg-[#0b0b0c]">
+    <div className="flex h-full min-h-0 bg-surface">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="border-b border-[#313134] bg-[linear-gradient(180deg,#1a1a1c_0%,#101011_100%)] px-5 py-4">
-          <p className="text-lg font-semibold text-[#f5f5f5]">
+        <div className="border-b border-edge bg-[linear-gradient(180deg,#1a1a1c_0%,#101011_100%)] px-5 py-4">
+          <p className="text-lg font-semibold text-fg">
             {activeConversation?.summary.title ?? "New conversation"}
           </p>
           {!activeConversation && (
-            <p className="mt-1 text-sm text-[#8b8b93]">{workspace.path}</p>
+            <p className="mt-1 text-sm text-fg-muted">{workspace.path}</p>
           )}
         </div>
 
@@ -106,11 +123,11 @@ export function SimpleTaskView({
                   key={message.id}
                   className={`max-w-3xl rounded-2xl px-4 py-3 text-sm leading-6 ${
                     message.role === "user"
-                      ? "ml-auto border border-[#4a4a4f] bg-[#202022] text-[#f5f5f5]"
-                      : "mr-auto border border-[#313134] bg-[#151516] text-[#f5f5f5]"
+                      ? "ml-auto border border-edge-strong bg-elevated text-fg"
+                      : "mr-auto border border-edge bg-panel text-fg"
                   }`}
                 >
-                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#7e7e86]">
+                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
                     {message.role === "assistant" && activeConversation
                       ? `Assistant - ${formatAssistantLabel(
                         activeConversation.summary.agent.provider,
@@ -122,8 +139,8 @@ export function SimpleTaskView({
                 </div>
               ))}
               {activeDraft && (
-                <div className="mr-auto max-w-3xl rounded-2xl border border-dashed border-[#4a4a4f] bg-[#1a1a1c] px-4 py-3 text-sm leading-6 text-[#f5f5f5]">
-                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#7e7e86]">
+                <div className="mr-auto max-w-3xl rounded-2xl border border-dashed border-edge-strong bg-[#1a1a1c] px-4 py-3 text-sm leading-6 text-fg">
+                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
                     {activeConversation
                       ? `Assistant - ${formatAssistantLabel(
                         activeConversation.summary.agent.provider,
@@ -142,10 +159,10 @@ export function SimpleTaskView({
             </div>
           ) : (
             <div className="mx-auto flex h-full max-w-3xl items-center justify-center">
-              <div className="rounded-3xl border border-[#313134] bg-[#151516] px-8 py-10 text-center shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
+              <div className="rounded-3xl border border-edge bg-panel px-8 py-10 text-center shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
                 <img src="/logo.png" alt="EA Code logo" className="mx-auto mb-4 h-14 w-14 object-contain" />
-                <p className="text-xl font-semibold text-[#f5f5f5]">Start a new simple task</p>
-                <p className="mt-2 text-sm text-[#8b8b93]">
+                <p className="text-xl font-semibold text-fg">Start a new simple task</p>
+                <p className="mt-2 text-sm text-fg-muted">
                   Pick an agent in the composer and send the first prompt to create a conversation.
                 </p>
               </div>
@@ -156,31 +173,25 @@ export function SimpleTaskView({
         <ConversationComposer
           providers={availableProviders}
           agent={activeConversation?.summary.agent ?? selectedAgent}
+          prompt={activePromptDraft}
           promptHistory={promptHistory}
           locked={Boolean(activeConversation)}
           sending={sending}
           stopping={stopping}
           activeRunning={Boolean(activeRunning)}
           onAgentChange={setSelectedAgent}
-          onSend={async (prompt) => {
-            const agent = activeConversation?.summary.agent ?? selectedAgent;
-            if (!agent) {
-              return;
-            }
-            await onSendPrompt(prompt, agent);
-          }}
+          onPromptChange={onPromptDraftChange}
+          onSend={handleSend}
           onStop={onStopConversation}
         />
 
-        <div className="border-t border-[#313134] px-5 py-4">
+        <div className="border-t border-edge px-5 py-2.5">
           <div className="mx-auto flex w-full max-w-5xl">
             <WorkspaceFooter
               path={workspace.path}
               onOpenProjectFolder={onOpenProjectFolder}
               onOpenInVsCode={onOpenInVsCode}
-              onError={() => {
-                toast.error("Failed to open project action.");
-              }}
+              onError={handleFooterError}
             />
           </div>
         </div>
