@@ -70,11 +70,6 @@ pub(crate) async fn check_binary_exists(path: &str) -> bool {
     result
 }
 
-/// Convenience alias kept for call-sites that read better with this name.
-pub(crate) async fn is_cli_available(path: &str) -> bool {
-    check_binary_exists(path).await
-}
-
 // ---------------------------------------------------------------------------
 // Platform helpers
 // ---------------------------------------------------------------------------

@@ -1,8 +1,7 @@
 import { useCallback, useState } from "react";
-import type { ActiveView, WorkspaceInfo } from "../types";
+import type { ActiveView } from "../types";
 
 interface UseAppViewStateArgs {
-  workspace: WorkspaceInfo | null;
   openWorkspace: (path: string) => Promise<void>;
 }
 

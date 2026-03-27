@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import type { ApiCliVersionInfo } from "../types";
-import { useTauriEventListeners } from "./useTauriEventListeners";
+import { API_EVENTS } from "../constants/events";
+import { getApiCliVersions, updateApiCli } from "../lib/desktopApi";
+import { useEventList } from "./useEventResource";
 
 interface UseApiCliVersionsReturn {
   versions: ApiCliVersionInfo[];
@@ -13,27 +14,20 @@ interface UseApiCliVersionsReturn {
 
 /** Hook for CLI version info from hive-api (event-driven). */
 export function useApiCliVersions(): UseApiCliVersionsReturn {
-  const [versions, setVersions] = useState<ApiCliVersionInfo[]>([]);
   const [updating, setUpdating] = useState<string | null>(null);
-
-  const { checking: loading, setChecking: setLoading } = useTauriEventListeners({
-    listeners: [
-      {
-        event: "api_cli_version_info",
-        handler: (payload: ApiCliVersionInfo) => {
-          setVersions((prev) => {
-            const filtered = prev.filter((v) => v.provider !== payload.provider);
-            return [...filtered, payload];
-          });
-        },
-      },
-    ],
-    doneEvent: "api_versions_check_complete",
+  const {
+    state: versions,
+    loading,
+    setLoading,
+  } = useEventList<ApiCliVersionInfo, string>({
+    itemEvent: API_EVENTS.CLI_VERSION_INFO,
+    doneEvent: API_EVENTS.CLI_VERSIONS_COMPLETE,
+    getKey: (version) => version.provider,
   });
 
   const fetchVersions = useCallback((): void => {
     setLoading(true);
-    invoke("get_api_cli_versions").catch(() => {
+    getApiCliVersions().catch(() => {
       setLoading(false);
     });
   }, [setLoading]);
@@ -41,7 +35,7 @@ export function useApiCliVersions(): UseApiCliVersionsReturn {
   const updateCli = useCallback(async (provider: string): Promise<void> => {
     setUpdating(provider);
     try {
-      await invoke("update_api_cli", { provider });
+      await updateApiCli(provider);
     } finally {
       setUpdating(null);
     }

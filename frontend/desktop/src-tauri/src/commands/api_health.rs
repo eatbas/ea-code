@@ -1,47 +1,17 @@
-use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use std::sync::OnceLock;
+use std::time::Duration;
 
-/// hive-api health response shape.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiHealthStatus {
-    pub connected: bool,
-    pub url: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub drone_count: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
+use serde::Deserialize;
+use tauri::AppHandle;
 
-/// Provider availability info from hive-api.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderInfo {
-    pub name: String,
-    pub available: bool,
-    pub models: Vec<String>,
-}
+use crate::commands::emitter::{emit_done, emit_items};
+use crate::models::{ApiCliVersionInfo, ApiHealthStatus, ProviderInfo};
 
-/// CLI version info from hive-api.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiCliVersionInfo {
-    pub provider: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub installed_version: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub latest_version: Option<String>,
-    pub up_to_date: bool,
-    pub available: bool,
-}
-
-const EVENT_API_HEALTH: &str = "api_health_status";
-const EVENT_API_PROVIDER: &str = "api_provider_info";
-const EVENT_API_PROVIDERS_DONE: &str = "api_providers_check_complete";
-const EVENT_API_CLI_VERSION: &str = "api_cli_version_info";
-const EVENT_API_CLI_VERSIONS_DONE: &str = "api_versions_check_complete";
+pub const EVENT_API_HEALTH: &str = "api_health_status";
+pub const EVENT_API_PROVIDER: &str = "api_provider_info";
+pub const EVENT_API_PROVIDERS_DONE: &str = "api_providers_check_complete";
+pub const EVENT_API_CLI_VERSION: &str = "api_cli_version_info";
+pub const EVENT_API_CLI_VERSIONS_DONE: &str = "api_versions_check_complete";
 
 const DEFAULT_HIVE_API_PORT: u16 = 8719;
 
@@ -66,164 +36,195 @@ struct CliVersionResponse {
     needs_update: bool,
 }
 
-/// Resolves the hive-api base URL from settings.
-fn hive_api_base_url() -> String {
+fn shared_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(120))
+            .build()
+            .expect("failed to build HTTP client")
+    })
+}
+
+pub fn hive_api_base_url() -> String {
     let port = crate::storage::settings::read_settings()
-        .map(|s| if s.hive_api_port == 0 { DEFAULT_HIVE_API_PORT } else { s.hive_api_port })
+        .map(|settings| {
+            if settings.hive_api_port == 0 {
+                DEFAULT_HIVE_API_PORT
+            } else {
+                settings.hive_api_port
+            }
+        })
         .unwrap_or(DEFAULT_HIVE_API_PORT);
     format!("http://127.0.0.1:{port}")
 }
 
-/// Checks hive-api connectivity and emits `api_health_status`.
+fn map_provider_info(provider: ProviderCapability) -> ProviderInfo {
+    ProviderInfo {
+        name: provider.provider,
+        available: provider.available,
+        models: provider.models,
+    }
+}
+
+fn map_api_cli_version(version: CliVersionResponse) -> ApiCliVersionInfo {
+    ApiCliVersionInfo {
+        provider: version.provider,
+        installed_version: version.current_version,
+        latest_version: version.latest_version,
+        up_to_date: !version.needs_update,
+        available: true,
+    }
+}
+
+fn map_health_success(base_url: String, body: HealthResponse) -> ApiHealthStatus {
+    ApiHealthStatus {
+        connected: true,
+        url: base_url,
+        status: Some(body.status),
+        drone_count: body.drone_count,
+        error: None,
+    }
+}
+
+fn map_health_failure(base_url: String, status: Option<String>, error: Option<String>) -> ApiHealthStatus {
+    ApiHealthStatus {
+        connected: false,
+        url: base_url,
+        status,
+        drone_count: None,
+        error,
+    }
+}
+
 #[tauri::command]
 pub async fn check_api_health(app: AppHandle) -> Result<(), String> {
     let base_url = hive_api_base_url();
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(3))
-        .build()
-        .map_err(|e| format!("HTTP client error: {e}"))?;
-
+    let client = shared_client();
     let url = format!("{base_url}/health");
-    let status = match client.get(&url).send().await {
-        Ok(resp) if resp.status().is_success() => {
-            let body: HealthResponse = resp
-                .json()
-                .await
-                .unwrap_or(HealthResponse {
-                    status: "ok".into(),
-                    drone_count: None,
-                });
-            ApiHealthStatus {
-                connected: true,
-                url: base_url,
-                status: Some(body.status),
-                drone_count: body.drone_count,
-                error: None,
-            }
+
+    let status = match client.get(&url).timeout(Duration::from_secs(3)).send().await {
+        Ok(response) if response.status().is_success() => {
+            let body = response.json().await.unwrap_or(HealthResponse {
+                status: "ok".to_string(),
+                drone_count: None,
+            });
+            map_health_success(base_url, body)
         }
-        Ok(resp) => ApiHealthStatus {
-            connected: false,
-            url: base_url,
-            status: Some(format!("HTTP {}", resp.status())),
-            drone_count: None,
-            error: Some(format!("hive-api returned {}", resp.status())),
-        },
-        Err(e) => ApiHealthStatus {
-            connected: false,
-            url: base_url,
-            status: None,
-            drone_count: None,
-            error: Some(format!("{e}")),
-        },
+        Ok(response) => map_health_failure(
+            base_url,
+            Some(format!("HTTP {}", response.status())),
+            Some(format!("hive-api returned {}", response.status())),
+        ),
+        Err(error) => map_health_failure(base_url, None, Some(error.to_string())),
     };
 
-    let _ = app.emit(EVENT_API_HEALTH, &status);
+    emit_items(&app, EVENT_API_HEALTH, [status]);
     Ok(())
 }
 
-/// Fetches available providers and models from hive-api.
 #[tauri::command]
 pub async fn get_api_providers(app: AppHandle) -> Result<(), String> {
     let base_url = hive_api_base_url();
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .map_err(|e| format!("HTTP client error: {e}"))?;
-
+    let client = shared_client();
     let url = format!("{base_url}/v1/providers?all=true");
-    match client.get(&url).send().await {
-        Ok(resp) if resp.status().is_success() => {
-            if let Ok(providers) = resp.json::<Vec<ProviderCapability>>().await {
-                for p in &providers {
-                    let info = ProviderInfo {
-                        name: p.provider.clone(),
-                        available: p.available,
-                        models: p.models.clone(),
-                    };
-                    let _ = app.emit(EVENT_API_PROVIDER, &info);
-                }
+
+    match client.get(&url).timeout(Duration::from_secs(5)).send().await {
+        Ok(response) if response.status().is_success() => {
+            if let Ok(providers) = response.json::<Vec<ProviderCapability>>().await {
+                emit_items(&app, EVENT_API_PROVIDER, providers.into_iter().map(map_provider_info));
             }
         }
-        Ok(resp) => {
-            eprintln!("[api_health] providers endpoint returned {}", resp.status());
+        Ok(response) => {
+            eprintln!("[api_health] providers endpoint returned {}", response.status());
         }
-        Err(e) => {
-            eprintln!("[api_health] failed to fetch providers: {e}");
+        Err(error) => {
+            eprintln!("[api_health] failed to fetch providers: {error}");
         }
     }
 
-    let _ = app.emit(EVENT_API_PROVIDERS_DONE, ());
+    emit_done(&app, EVENT_API_PROVIDERS_DONE);
     Ok(())
 }
 
-/// Fetches CLI version info from hive-api.
 #[tauri::command]
 pub async fn get_api_cli_versions(app: AppHandle) -> Result<(), String> {
     let base_url = hive_api_base_url();
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| format!("HTTP client error: {e}"))?;
-
+    let client = shared_client();
     let url = format!("{base_url}/v1/cli-versions");
-    match client.get(&url).send().await {
-        Ok(resp) if resp.status().is_success() => {
-            if let Ok(versions) = resp.json::<Vec<CliVersionResponse>>().await {
-                for v in &versions {
-                    let info = ApiCliVersionInfo {
-                        provider: v.provider.clone(),
-                        installed_version: v.current_version.clone(),
-                        latest_version: v.latest_version.clone(),
-                        up_to_date: !v.needs_update,
-                        available: true,
-                    };
-                    let _ = app.emit(EVENT_API_CLI_VERSION, &info);
-                }
+
+    match client.get(&url).timeout(Duration::from_secs(10)).send().await {
+        Ok(response) if response.status().is_success() => {
+            if let Ok(versions) = response.json::<Vec<CliVersionResponse>>().await {
+                emit_items(&app, EVENT_API_CLI_VERSION, versions.into_iter().map(map_api_cli_version));
             }
         }
-        Ok(resp) => {
-            eprintln!("[api_health] cli-versions endpoint returned {}", resp.status());
+        Ok(response) => {
+            eprintln!("[api_health] cli-versions endpoint returned {}", response.status());
         }
-        Err(e) => {
-            eprintln!("[api_health] failed to fetch CLI versions: {e}");
+        Err(error) => {
+            eprintln!("[api_health] failed to fetch CLI versions: {error}");
         }
     }
 
-    let _ = app.emit(EVENT_API_CLI_VERSIONS_DONE, ());
+    emit_done(&app, EVENT_API_CLI_VERSIONS_DONE);
     Ok(())
 }
 
-/// Triggers a CLI update for a single provider via hive-api.
 #[tauri::command]
 pub async fn update_api_cli(app: AppHandle, provider: String) -> Result<(), String> {
     let base_url = hive_api_base_url();
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
-        .build()
-        .map_err(|e| format!("HTTP client error: {e}"))?;
-
+    let client = shared_client();
     let url = format!("{base_url}/v1/cli-versions/{provider}/update");
-    match client.post(&url).send().await {
-        Ok(resp) if resp.status().is_success() => {
-            if let Ok(v) = resp.json::<CliVersionResponse>().await {
-                let info = ApiCliVersionInfo {
-                    provider: v.provider,
-                    installed_version: v.current_version,
-                    latest_version: v.latest_version,
-                    up_to_date: !v.needs_update,
-                    available: true,
-                };
-                let _ = app.emit(EVENT_API_CLI_VERSION, &info);
+
+    match client.post(&url).timeout(Duration::from_secs(120)).send().await {
+        Ok(response) if response.status().is_success() => {
+            if let Ok(version) = response.json::<CliVersionResponse>().await {
+                emit_items(&app, EVENT_API_CLI_VERSION, [map_api_cli_version(version)]);
             }
         }
-        Ok(resp) => {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
+        Ok(response) => {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
             return Err(format!("Update failed for {provider}: HTTP {status} — {body}"));
         }
-        Err(e) => {
-            return Err(format!("Update request failed for {provider}: {e}"));
+        Err(error) => {
+            return Err(format!("Update request failed for {provider}: {error}"));
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{map_api_cli_version, map_provider_info, CliVersionResponse, ProviderCapability};
+
+    #[test]
+    fn provider_mapping_preserves_models() {
+        let info = map_provider_info(ProviderCapability {
+            provider: "copilot".to_string(),
+            available: true,
+            models: vec!["gpt-5.4".to_string()],
+        });
+
+        assert_eq!(info.name, "copilot");
+        assert!(info.available);
+        assert_eq!(info.models, vec!["gpt-5.4"]);
+    }
+
+    #[test]
+    fn api_cli_version_mapping_inverts_needs_update() {
+        let version = map_api_cli_version(CliVersionResponse {
+            provider: "copilot".to_string(),
+            current_version: Some("1.0.0".to_string()),
+            latest_version: Some("1.0.1".to_string()),
+            needs_update: true,
+        });
+
+        assert_eq!(version.provider, "copilot");
+        assert_eq!(version.installed_version.as_deref(), Some("1.0.0"));
+        assert_eq!(version.latest_version.as_deref(), Some("1.0.1"));
+        assert!(!version.up_to_date);
+        assert!(version.available);
+    }
 }

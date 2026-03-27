@@ -110,3 +110,13 @@ pub async fn open_in_vscode(app: AppHandle, path: String) -> Result<(), String> 
         .map_err(|e| format!("Failed to open VS Code: {e}"))?;
     Ok(())
 }
+
+/// Opens the given workspace directory in the system file manager.
+#[tauri::command]
+pub async fn open_project_folder(app: AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_path(&path, None::<&str>)
+        .map_err(|error| format!("Failed to open project folder: {error}"))?;
+    Ok(())
+}

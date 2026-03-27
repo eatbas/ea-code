@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { ApiHealth, AppSettings, ProviderInfo, ApiCliVersionInfo } from "../../types";
 import { modelOptionsFromProvider, providerDisplayName } from "../shared/constants";
 import { useToast } from "../shared/Toast";
@@ -9,6 +9,9 @@ import {
   applyModelCsv,
 } from "../../utils/modelSettings";
 import { CliCard } from "./CliCard";
+
+/** Minimum milliseconds between automatic refreshes on mount. */
+const REFRESH_COOLDOWN_MS = 60_000;
 
 interface CliSetupViewProps {
   settings: AppSettings;
@@ -37,17 +40,21 @@ export function CliSetupView({
 }: CliSetupViewProps): ReactNode {
   const toast = useToast();
   const actionsDisabled = versionsLoading || updating !== null;
+  const lastRefreshRef = useRef<number>(0);
 
   const refreshAll = useCallback((showSuccessToast: boolean): void => {
     onRefreshProviders();
     onFetchVersions();
+    lastRefreshRef.current = Date.now();
     if (showSuccessToast) {
       toast.success("CLI version check started.");
     }
   }, [onFetchVersions, onRefreshProviders, toast]);
 
   useEffect(() => {
-    refreshAll(false);
+    if (Date.now() - lastRefreshRef.current >= REFRESH_COOLDOWN_MS) {
+      refreshAll(false);
+    }
   }, [refreshAll]);
 
   function handleToggleModel(providerName: string, model: string): void {

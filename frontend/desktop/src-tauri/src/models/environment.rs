@@ -60,17 +60,3 @@ pub struct PrerequisiteStatus {
     pub git_bash_available: bool,
     pub hive_api_source_found: bool,
 }
-
-/// Aggregate version information for all CLI tools.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
-pub struct AllCliVersions {
-    pub claude: CliVersionInfo,
-    pub codex: CliVersionInfo,
-    pub gemini: CliVersionInfo,
-    pub kimi: CliVersionInfo,
-    pub opencode: CliVersionInfo,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub git_bash: Option<CliVersionInfo>,
-}

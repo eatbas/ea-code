@@ -1,27 +1,29 @@
 import type { ReactNode } from "react";
 import { useState, useRef, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { useClickOutside } from "../hooks/useClickOutside";
 import type { WorkspaceInfo, ProjectEntry } from "../types";
 import { folderName, projectDisplayName } from "../utils/formatters";
 import { Checkmark } from "./shared/Checkmark";
 import { useToast } from "./shared/Toast";
+import { WorkspaceFooter } from "./shared/WorkspaceFooter";
 
 interface IdleViewProps {
   workspace: WorkspaceInfo | null;
-  workspacePath?: string;
   projects: ProjectEntry[];
   onSelectProject: (projectPath: string) => void | Promise<void>;
   onAddProject: () => void;
+  onOpenProjectFolder: (path: string) => Promise<void>;
+  onOpenInVsCode: (path: string) => Promise<void>;
 }
 
 /** Centred idle landing screen with logo, heading, and workspace selector. */
 export function IdleView({
   workspace,
-  workspacePath,
   projects,
   onSelectProject,
   onAddProject,
+  onOpenProjectFolder,
+  onOpenInVsCode,
 }: IdleViewProps): ReactNode {
   const toast = useToast();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -32,20 +34,16 @@ export function IdleView({
   const workspaceLabel = workspace ? folderName(workspace.path) : "";
 
   return (
-    <div className="flex h-full flex-col items-center bg-[#0f0f14]">
-      {/* Centre content — logo, heading, workspace */}
+    <div className="flex h-full flex-col bg-[#0f0f14]">
       <div className="flex flex-1 flex-col items-center justify-center gap-4">
-        {/* Logo icon */}
         <img src="/logo.png" alt="EA Code logo" className="h-40 w-40" />
 
-        {/* Heading */}
         <h1 className="text-3xl font-bold text-[#e4e4ed]">ea-code</h1>
 
-        {/* Workspace selector dropdown */}
         <div ref={dropdownRef} className="relative">
           <button
             onClick={() => setDropdownOpen((prev) => !prev)}
-            className="flex items-center gap-2 text-lg text-[#9898b0] hover:text-[#e4e4ed] transition-colors"
+            className="flex items-center gap-2 text-lg text-[#9898b0] transition-colors hover:text-[#e4e4ed]"
           >
             <span>{workspace ? workspaceLabel : "Select a project..."}</span>
             <svg
@@ -90,14 +88,13 @@ export function IdleView({
                 );
               })}
 
-              {/* Divider + Add project */}
               <div className="my-1 border-t border-[#2e2e48]" />
               <button
                 onClick={() => {
                   onAddProject();
                   setDropdownOpen(false);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[#9898b0] transition-colors hover:bg-[#24243a] hover:text-[#e4e4ed]"
               >
                 <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -110,7 +107,6 @@ export function IdleView({
           )}
         </div>
 
-        {/* Git badge */}
         {workspace && (
           <div className="flex gap-2 text-xs text-[#9898b0]">
             {workspace.isGitRepo && (
@@ -122,31 +118,23 @@ export function IdleView({
         )}
       </div>
 
-      {/* Bottom section — workspace path + VS Code */}
-      <div className="flex w-full max-w-2xl flex-col gap-2 px-6 pb-8">
-        <div className="flex w-full items-center justify-between px-1 text-xs text-[#9898b0]">
-          <span className="truncate" title={workspacePath ?? "No project selected"}>
-            {workspacePath ?? "No project selected"}
-          </span>
-          {workspacePath && (
-            <button
-              onClick={() => {
-                void invoke("open_in_vscode", { path: workspacePath }).catch(() => {
-                  toast.error("Failed to open VS Code.");
-                });
+      <div className="mt-auto border-t border-[#1f1f2b] px-6 py-4">
+        {workspace?.path ? (
+          <div className="mx-auto flex w-full max-w-5xl">
+            <WorkspaceFooter
+              path={workspace.path}
+              onOpenProjectFolder={onOpenProjectFolder}
+              onOpenInVsCode={onOpenInVsCode}
+              onError={() => {
+                toast.error("Failed to open project action.");
               }}
-              className="ml-4 flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
-              title="Open in VS Code"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 3l5 3v12l-5 3L2 12l5-3" />
-                <path d="M16 3L7 12l9 9" />
-                <path d="M16 3v18" />
-              </svg>
-              Open in VS Code
-            </button>
-          )}
-        </div>
+            />
+          </div>
+        ) : (
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between text-xs text-[#9898b0]">
+            <span className="truncate" title="No project selected">No project selected</span>
+          </div>
+        )}
       </div>
     </div>
   );

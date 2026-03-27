@@ -1,17 +1,22 @@
 //! CLI health checking, version fetching, and update commands.
 
+use crate::commands::emitter::spawn_joined_task_emits;
 use crate::models::*;
 use tauri::{AppHandle, Emitter};
 
 use super::availability::check_binary_exists;
-use super::util::run_npm;
-use super::version::{build_cli_version_info, build_git_bash_version_info};
 #[cfg(target_os = "windows")]
 use super::git_bash;
+use super::util::run_npm;
+use super::version::{build_cli_version_info, build_git_bash_version_info};
 #[cfg(not(target_os = "windows"))]
 use tokio::time::{timeout, Duration};
 
-/// Per-CLI health event payload.
+pub const EVENT_CLI_HEALTH_STATUS: &str = "cli_health_status";
+pub const EVENT_CLI_HEALTH_COMPLETE: &str = "cli_health_check_complete";
+pub const EVENT_CLI_VERSION_INFO: &str = "cli_version_info";
+pub const EVENT_CLI_VERSIONS_COMPLETE: &str = "cli_versions_check_complete";
+
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CliHealthEvent {
@@ -19,56 +24,81 @@ struct CliHealthEvent {
     status: CliStatus,
 }
 
-// ---------------------------------------------------------------------------
-// Tauri commands — signatures must remain identical for the frontend contract.
-// ---------------------------------------------------------------------------
-
-/// Fire-and-forget: emits `cli_health_status` per CLI, then `cli_health_check_complete`.
 #[tauri::command]
 pub async fn check_cli_health(app: AppHandle, settings: AppSettings) -> Result<(), String> {
-    let cli_paths = [
-        ("claude", settings.claude_path.clone()),
-        ("codex", settings.codex_path.clone()),
-        ("gemini", settings.gemini_path.clone()),
-        ("kimi", settings.kimi_path.clone()),
-        ("opencode", settings.opencode_path.clone()),
-    ];
+    let cli_paths = configured_cli_paths(&settings);
+    let bash_missing = cfg!(target_os = "windows") && !check_binary_exists("bash").await;
+    let mut handles = Vec::with_capacity(cli_paths.len());
 
-    tokio::spawn(async move {
-        // Windows: check bash availability first (fast — cached).
-        let bash_missing = cfg!(target_os = "windows") && !check_binary_exists("bash").await;
-        let app_complete = app.clone();
+    for (cli_name, path) in cli_paths {
+        let app_handle = app.clone();
+        handles.push(tokio::spawn(async move {
+            let status = if bash_missing {
+                CliStatus {
+                    available: false,
+                    path: path.clone(),
+                    error: Some("Git Bash is required on Windows to run agents".into()),
+                }
+            } else {
+                check_single_cli(&path).await
+            };
+            let _ = app_handle.emit(EVENT_CLI_HEALTH_STATUS, CliHealthEvent { cli_name, status });
+        }));
+    }
 
-        let mut handles = Vec::with_capacity(5);
-        for (cli_name, path) in cli_paths {
-            let app_handle = app.clone();
-            let cli_name = cli_name.to_string();
-            handles.push(tokio::spawn(async move {
-                let status = if bash_missing {
-                    CliStatus {
-                        available: false,
-                        path: path.clone(),
-                        error: Some("Git Bash is required on Windows to run agents".into()),
-                    }
-                } else {
-                    check_single_cli(&path).await
-                };
-                let _ = app_handle.emit("cli_health_status", CliHealthEvent { cli_name, status });
-            }));
-        }
-        for h in handles {
-            let _ = h.await;
-        }
-        let _ = app_complete.emit("cli_health_check_complete", ());
-    });
-
+    spawn_joined_task_emits(app, EVENT_CLI_HEALTH_COMPLETE, handles);
     Ok(())
 }
 
-/// Fire-and-forget: emits `cli_version_info` per CLI, then `cli_versions_check_complete`.
 #[tauri::command]
 pub async fn get_cli_versions(app: AppHandle, settings: AppSettings) -> Result<(), String> {
-    let cli_specs: Vec<(String, &'static str, &'static str, &'static str)> = vec![
+    let mut handles = Vec::with_capacity(6);
+
+    for (path, display_name, cli_name, package_name) in configured_cli_specs(&settings) {
+        let app_handle = app.clone();
+        handles.push(tokio::spawn(async move {
+            let info = build_cli_version_info(&path, display_name, cli_name, package_name).await;
+            let _ = app_handle.emit(EVENT_CLI_VERSION_INFO, &info);
+        }));
+    }
+
+    if cfg!(target_os = "windows") {
+        let app_handle = app.clone();
+        handles.push(tokio::spawn(async move {
+            let info = build_git_bash_version_info().await;
+            let _ = app_handle.emit(EVENT_CLI_VERSION_INFO, &info);
+        }));
+    }
+
+    spawn_joined_task_emits(app, EVENT_CLI_VERSIONS_COMPLETE, handles);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_cli(app: AppHandle, cli_name: String) -> Result<String, String> {
+    match cli_name.as_str() {
+        "claude" => update_with_npm("@anthropic-ai/claude-code").await,
+        "codex" => update_with_npm("@openai/codex").await,
+        "gemini" => update_with_npm("@google/gemini-cli").await,
+        "opencode" => update_with_npm("opencode-ai").await,
+        "kimi" => update_kimi_cli().await,
+        "gitBash" => update_git_bash(&app),
+        _ => Err(format!("Unknown CLI: {cli_name}")),
+    }
+}
+
+fn configured_cli_paths(settings: &AppSettings) -> [(String, String); 5] {
+    [
+        ("claude".to_string(), settings.claude_path.clone()),
+        ("codex".to_string(), settings.codex_path.clone()),
+        ("gemini".to_string(), settings.gemini_path.clone()),
+        ("kimi".to_string(), settings.kimi_path.clone()),
+        ("opencode".to_string(), settings.opencode_path.clone()),
+    ]
+}
+
+fn configured_cli_specs(settings: &AppSettings) -> [(String, &'static str, &'static str, &'static str); 5] {
+    [
         (
             settings.claude_path.clone(),
             "Claude CLI",
@@ -87,64 +117,21 @@ pub async fn get_cli_versions(app: AppHandle, settings: AppSettings) -> Result<(
             "gemini",
             "@google/gemini-cli",
         ),
-        (settings.kimi_path.clone(), "Kimi CLI", "kimi", "kimi-cli"),
+        (
+            settings.kimi_path.clone(),
+            "Kimi CLI",
+            "kimi",
+            "kimi-cli",
+        ),
         (
             settings.opencode_path.clone(),
             "OpenCode CLI",
             "opencode",
             "opencode-ai",
         ),
-    ];
-
-    tokio::spawn(async move {
-        let app_complete = app.clone();
-        let mut handles = Vec::with_capacity(6);
-
-        for (path, display, cli_name, pkg) in cli_specs {
-            let app_handle = app.clone();
-            handles.push(tokio::spawn(async move {
-                let info = build_cli_version_info(&path, display, cli_name, pkg).await;
-                let _ = app_handle.emit("cli_version_info", &info);
-            }));
-        }
-
-        // Git Bash (Windows only).
-        if cfg!(target_os = "windows") {
-            let app_handle = app.clone();
-            handles.push(tokio::spawn(async move {
-                let info = build_git_bash_version_info().await;
-                let _ = app_handle.emit("cli_version_info", &info);
-            }));
-        }
-
-        for h in handles {
-            let _ = h.await;
-        }
-        let _ = app_complete.emit("cli_versions_check_complete", ());
-    });
-
-    Ok(())
+    ]
 }
 
-/// Triggers an npm/pip update for the named CLI tool.
-#[tauri::command]
-pub async fn update_cli(app: AppHandle, cli_name: String) -> Result<String, String> {
-    match cli_name.as_str() {
-        "claude" => update_with_npm("@anthropic-ai/claude-code").await,
-        "codex" => update_with_npm("@openai/codex").await,
-        "gemini" => update_with_npm("@google/gemini-cli").await,
-        "opencode" => update_with_npm("opencode-ai").await,
-        "kimi" => update_kimi_cli().await,
-        "gitBash" => update_git_bash(&app),
-        _ => Err(format!("Unknown CLI: {cli_name}")),
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-/// Checks a single CLI binary and returns its health status.
 async fn check_single_cli(path: &str) -> CliStatus {
     let available = check_binary_exists(path).await;
     CliStatus {
@@ -158,9 +145,6 @@ async fn check_single_cli(path: &str) -> CliStatus {
     }
 }
 
-/// Runs a full health check across all configured CLI tools.
-///
-/// Used internally by [`crate::commands::workspace::validate_environment`].
 pub(crate) async fn check_cli_health_inner(settings: &AppSettings) -> Result<CliHealth, String> {
     let (mut claude, mut codex, mut gemini, mut kimi, mut opencode) = tokio::join!(
         check_single_cli(&settings.claude_path),
@@ -191,7 +175,6 @@ pub(crate) async fn check_cli_health_inner(settings: &AppSettings) -> Result<Cli
     })
 }
 
-/// Installs the latest version of an npm package globally.
 async fn update_with_npm(npm_package: &str) -> Result<String, String> {
     let output = run_npm(&["install", "-g", &format!("{npm_package}@latest")]).await?;
     if output.status.success() {
@@ -201,8 +184,6 @@ async fn update_with_npm(npm_package: &str) -> Result<String, String> {
     Err(format!("Update failed: {stderr}"))
 }
 
-/// Updates the Kimi CLI — prefers `uv tool upgrade` when `uv` is available,
-/// falling back to npm.
 async fn update_kimi_cli() -> Result<String, String> {
     if check_binary_exists("uv").await {
         #[cfg(target_os = "windows")]
@@ -211,13 +192,14 @@ async fn update_kimi_cli() -> Result<String, String> {
             .ok_or_else(|| "Failed to run uv via Git Bash".to_string())?;
         #[cfg(not(target_os = "windows"))]
         let output = {
-            let mut cmd = tokio::process::Command::new("uv");
-            cmd.args(["tool", "upgrade", "kimi-cli", "--no-cache"])
+            let mut command = tokio::process::Command::new("uv");
+            command
+                .args(["tool", "upgrade", "kimi-cli", "--no-cache"])
                 .kill_on_drop(true);
-            timeout(Duration::from_secs(20), cmd.output())
+            timeout(Duration::from_secs(20), command.output())
                 .await
                 .map_err(|_| "uv update timed out after 20 s".to_string())?
-                .map_err(|e| format!("Failed to run uv: {e}"))?
+                .map_err(|error| format!("Failed to run uv: {error}"))?
         };
 
         if output.status.success() {
@@ -229,12 +211,11 @@ async fn update_kimi_cli() -> Result<String, String> {
     update_with_npm("kimi-cli").await
 }
 
-/// Opens the Git for Windows download page so the user can update manually.
 fn update_git_bash(app: &AppHandle) -> Result<String, String> {
     use tauri_plugin_opener::OpenerExt;
     let url = "https://git-scm.com/download/win";
     app.opener()
         .open_url(url, None::<&str>)
-        .map_err(|e| format!("Failed to open browser: {e}"))?;
+        .map_err(|error| format!("Failed to open browser: {error}"))?;
     Ok("Opened Git download page — install the latest version to update.".to_string())
 }

@@ -1,11 +1,12 @@
-import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useCallback } from "react";
 import type { AppSettings, CliHealth, CliStatus } from "../types";
+import { CLI_EVENTS } from "../constants/events";
 import { useToast } from "../components/shared/Toast";
-import { useTauriEventListeners } from "./useTauriEventListeners";
+import { checkCliHealth as requestCliHealth, invalidateCliCache } from "../lib/desktopApi";
+import { useEventRecord } from "./useEventResource";
 
 interface CliHealthEvent {
-  cliName: string;
+  cliName: keyof CliHealth;
   status: CliStatus;
 }
 
@@ -20,7 +21,7 @@ const DEFAULT_HEALTH: CliHealth = {
 };
 
 interface UseCliHealthReturn {
-  health: CliHealth | null;
+  health: CliHealth;
   checking: boolean;
   checkHealth: (settings: AppSettings) => void;
 }
@@ -28,36 +29,28 @@ interface UseCliHealthReturn {
 /** Hook to check availability of CLI agent backends (event-driven, non-blocking). */
 export function useCliHealth(): UseCliHealthReturn {
   const toast = useToast();
-  const [health, setHealth] = useState<CliHealth | null>(null);
-
-  const { checking, setChecking } = useTauriEventListeners({
-    listeners: [
-      {
-        event: "cli_health_status",
-        handler: (payload: CliHealthEvent) => {
-          const { cliName, status } = payload;
-          setHealth((prev) => ({
-            ...(prev ?? DEFAULT_HEALTH),
-            [cliName]: status,
-          }));
-        },
-      },
-    ],
-    doneEvent: "cli_health_check_complete",
+  const {
+    state: health,
+    loading: checking,
+    setLoading: setChecking,
+  } = useEventRecord<CliStatus, CliHealthEvent, keyof CliHealth, CliHealth>({
+    initialState: DEFAULT_HEALTH,
+    itemEvent: CLI_EVENTS.HEALTH_STATUS,
+    doneEvent: CLI_EVENTS.HEALTH_COMPLETE,
+    getKey: (payload) => payload.cliName,
+    getValue: (payload) => payload.status,
   });
 
   const checkHealth = useCallback((settings: AppSettings): void => {
     setChecking(true);
-    invoke("invalidate_cli_cache")
-      .catch(() => {
-        /* best-effort — continue even if invalidation fails */
-      })
-      .then(() => invoke("check_cli_health", { settings }))
-      .catch(() => {
-        setChecking(false);
-        toast.error("CLI health check failed.");
-      });
-  }, [toast, setChecking]);
+    void invalidateCliCache().catch(() => {
+      // Best-effort cache invalidation.
+    });
+    requestCliHealth(settings).catch(() => {
+      setChecking(false);
+      toast.error("CLI health check failed.");
+    });
+  }, [setChecking, toast]);
 
   return { health, checking, checkHealth };
 }

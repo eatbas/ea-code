@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import type { AppSettings } from "../types";
 import { useToast } from "../components/shared/Toast";
+import { getSettings, saveSettings as persistSettings } from "../lib/desktopApi";
 
 interface SaveSettingsOptions {
   notifySuccess?: boolean;
@@ -26,7 +26,7 @@ export function useSettings(): UseSettingsReturn {
 
     async function loadSettings(): Promise<void> {
       try {
-        const result = await invoke<AppSettings>("get_settings");
+        const result = await getSettings();
         if (!cancelled) {
           setSettings(result);
           setError(null);
@@ -43,7 +43,7 @@ export function useSettings(): UseSettingsReturn {
       }
     }
 
-    loadSettings();
+    void loadSettings();
 
     return () => {
       cancelled = true;
@@ -52,15 +52,15 @@ export function useSettings(): UseSettingsReturn {
 
   const saveSettings = useCallback(async (updated: AppSettings, options?: SaveSettingsOptions): Promise<void> => {
     try {
-      await invoke("save_settings", { newSettings: updated });
+      await persistSettings(updated);
       setSettings(updated);
       setError(null);
       if (options?.notifySuccess) {
         toast.success("Settings saved.");
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
       toast.error("Failed to save settings.");
     }
   }, [toast]);

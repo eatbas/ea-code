@@ -29,16 +29,6 @@ export interface CliVersionInfo {
   error?: string;
 }
 
-/** Aggregate version information for all CLI tools. */
-export interface AllCliVersions {
-  claude: CliVersionInfo;
-  codex: CliVersionInfo;
-  gemini: CliVersionInfo;
-  kimi: CliVersionInfo;
-  opencode: CliVersionInfo;
-  gitBash?: CliVersionInfo;
-}
-
 /** Startup prerequisite check result. */
 export interface PrerequisiteStatus {
   pythonAvailable: boolean;

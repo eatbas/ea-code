@@ -1,33 +1,53 @@
 import type { ReactNode } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { useToast } from "./Toast";
 
 interface WorkspaceFooterProps {
   path: string;
+  onOpenProjectFolder: (path: string) => Promise<void>;
+  onOpenInVsCode: (path: string) => Promise<void>;
+  onError: () => void;
 }
 
-export function WorkspaceFooter({ path }: WorkspaceFooterProps): ReactNode {
-  const toast = useToast();
+export function WorkspaceFooter({
+  path,
+  onOpenProjectFolder,
+  onOpenInVsCode,
+  onError,
+}: WorkspaceFooterProps): ReactNode {
+  function handleAction(action: (targetPath: string) => Promise<void>): void {
+    void action(path).catch(() => {
+      onError();
+    });
+  }
 
   return (
-    <div className="flex w-full items-center justify-between px-1 text-xs text-[#9898b0]">
-      <span className="truncate" title={path}>{path}</span>
+    <div className="flex w-full flex-col gap-3 text-xs text-[#9898b0] sm:flex-row sm:items-center sm:justify-between">
       <button
-        onClick={() => {
-          void invoke("open_in_vscode", { path }).catch(() => {
-            toast.error("Failed to open VS Code.");
-          });
-        }}
-        className="ml-4 flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed] transition-colors"
-        title="Open in VS Code"
+        type="button"
+        onClick={() => handleAction(onOpenProjectFolder)}
+        className="flex min-w-0 items-center gap-2 rounded px-2 py-1 text-left transition-colors hover:bg-[#24243a] hover:text-[#e4e4ed]"
+        title="Open project folder"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M16 3l5 3v12l-5 3L2 12l5-3" />
-          <path d="M16 3L7 12l9 9" />
-          <path d="M16 3v18" />
+        <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
         </svg>
-        Open in VS Code
+        <span className="truncate" title={path}>{path}</span>
       </button>
+
+      <div className="flex shrink-0 items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => handleAction(onOpenInVsCode)}
+          className="flex items-center gap-1.5 rounded px-2 py-1 text-[#9898b0] transition-colors hover:bg-[#24243a] hover:text-[#e4e4ed]"
+          title="Open in VS Code"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M16 3l5 3v12l-5 3L2 12l5-3" />
+            <path d="M16 3L7 12l9 9" />
+            <path d="M16 3v18" />
+          </svg>
+          Open in VS Code
+        </button>
+      </div>
     </div>
   );
 }

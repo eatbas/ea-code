@@ -1,25 +1,25 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import { useSettings } from "./hooks/useSettings";
-import { useWorkspace } from "./hooks/useWorkspace";
-import { useCliHealth } from "./hooks/useCliHealth";
-import { useApiHealth } from "./hooks/useApiHealth";
-import { useApiCliVersions } from "./hooks/useApiCliVersions";
+import { useState } from "react";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { useAppViewState } from "./hooks/useAppViewState";
 import { usePrerequisites } from "./hooks/usePrerequisites";
+import { useWorkspaceSession } from "./hooks/useWorkspaceSession";
 import { Sidebar } from "./components/Sidebar";
 import { AppContentRouter } from "./components/AppContentRouter";
 import { UpdateInstallBanner } from "./components/shared/UpdateInstallBanner";
 import { PrerequisiteBanner } from "./components/shared/PrerequisiteBanner";
 import { ProjectLoadingOverlay } from "./components/shared/ProjectLoadingOverlay";
+import { openInVsCode, openProjectFolder } from "./lib/desktopApi";
 
 function App(): ReactNode {
-  const { workspace, openingWorkspace, openWorkspace, selectFolder, projects, loadProjects, deleteProject } = useWorkspace();
-  const { settings, loading, saveSettings } = useSettings();
-  const { checkHealth } = useCliHealth();
-  const { health: apiHealth, providers, checking: providersLoading, checkHealth: checkApiHealth } = useApiHealth();
-  const { versions: apiVersions, loading: apiVersionsLoading, updating: apiVersionsUpdating, fetchVersions: fetchApiVersions, updateCli: updateApiCli } = useApiCliVersions();
+  const {
+    workspace,
+    openingWorkspace,
+    openWorkspace,
+    selectFolder,
+    projects,
+    deleteProject,
+  } = useWorkspaceSession();
   const { status: updateStatus, updateVersion } = useUpdateCheck(false);
   const { status: prereqs, dismissed: prereqsDismissed, dismiss: dismissPrereqs } = usePrerequisites();
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -29,33 +29,8 @@ function App(): ReactNode {
     setActiveView,
     handleSelectProject,
   } = useAppViewState({
-    workspace,
     openWorkspace,
   });
-
-  useEffect(() => {
-    if (!settings) return;
-    checkHealth(settings);
-    checkApiHealth();
-  }, [settings, checkHealth, checkApiHealth]);
-
-  useEffect(() => {
-    void loadProjects();
-  }, [loadProjects]);
-
-  useEffect(() => {
-    if (workspace) {
-      void loadProjects();
-    }
-  }, [workspace, loadProjects]);
-
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center bg-[#0f0f14]">
-        <span className="text-sm text-[#9898b0]">Loading...</span>
-      </div>
-    );
-  }
 
   return (
     <div className="relative h-full">
@@ -78,19 +53,10 @@ function App(): ReactNode {
             activeView={activeView}
             workspace={workspace}
             projects={projects}
-            providers={providers}
-            providersLoading={providersLoading}
-            apiVersions={apiVersions}
-            apiVersionsLoading={apiVersionsLoading}
-            apiVersionsUpdating={apiVersionsUpdating}
-            apiHealth={apiHealth}
-            settings={settings}
-            onSaveSettings={saveSettings}
-            onFetchApiVersions={fetchApiVersions}
-            onRefreshProviders={checkApiHealth}
-            onUpdateApiCli={updateApiCli}
             onSelectProject={handleSelectProject}
             onAddProject={selectFolder}
+            onOpenProjectFolder={openProjectFolder}
+            onOpenInVsCode={openInVsCode}
           />
         </div>
         {updateStatus !== "idle" && (
@@ -107,4 +73,5 @@ function App(): ReactNode {
     </div>
   );
 }
+
 export default App;

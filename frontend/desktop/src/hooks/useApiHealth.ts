@@ -1,7 +1,8 @@
-import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useCallback } from "react";
 import type { ApiHealth, ProviderInfo } from "../types";
-import { useTauriEventListeners } from "./useTauriEventListeners";
+import { API_EVENTS } from "../constants/events";
+import { refreshApiProviders } from "../lib/desktopApi";
+import { useEventList, useEventValue } from "./useEventResource";
 
 interface UseApiHealthReturn {
   health: ApiHealth | null;
@@ -12,36 +13,23 @@ interface UseApiHealthReturn {
 
 /** Hook to check hive-api health and provider availability (event-driven). */
 export function useApiHealth(): UseApiHealthReturn {
-  const [health, setHealth] = useState<ApiHealth | null>(null);
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-
-  const { checking, setChecking } = useTauriEventListeners({
-    listeners: [
-      {
-        event: "api_health_status",
-        handler: (payload: ApiHealth) => {
-          setHealth(payload);
-        },
-      },
-      {
-        event: "api_provider_info",
-        handler: (payload: ProviderInfo) => {
-          setProviders((prev) => {
-            const filtered = prev.filter((p) => p.name !== payload.name);
-            return [...filtered, payload];
-          });
-        },
-      },
-    ],
-    doneEvent: "api_providers_check_complete",
+  const { state: health } = useEventValue<ApiHealth | null>({
+    initialValue: null,
+    itemEvent: API_EVENTS.HEALTH_STATUS,
+  });
+  const {
+    state: providers,
+    loading: checking,
+    setLoading: setChecking,
+  } = useEventList<ProviderInfo, string>({
+    itemEvent: API_EVENTS.PROVIDER_INFO,
+    doneEvent: API_EVENTS.PROVIDERS_COMPLETE,
+    getKey: (provider) => provider.name,
   });
 
   const checkHealth = useCallback((): void => {
     setChecking(true);
-    Promise.all([
-      invoke("check_api_health"),
-      invoke("get_api_providers"),
-    ]).catch(() => {
+    refreshApiProviders().catch(() => {
       setChecking(false);
     });
   }, [setChecking]);
