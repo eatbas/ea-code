@@ -118,6 +118,16 @@ The judge isn't the same agent that wrote the code. That's the point — no mode
 - [Rust](https://www.rust-lang.org/tools/install)
 - [Tauri prerequisites](https://tauri.app/start/prerequisites/)
 - At least one supported AI CLI installed on your machine
+- Initialise the bundled API submodule after cloning:
+  ```bash
+  git submodule update --init --recursive
+  ```
+
+### Platform Notes
+
+- macOS (including Apple Silicon Mac mini): install Xcode Command Line Tools so `clang` is available.
+- Windows ARM64 and Windows x64: install LLVM or the Visual Studio C++ Clang tools. EA Code now auto-discovers common clang installs for both architectures during Rust builds.
+- If your Windows LLVM install lives in a non-standard location, set `EA_CODE_LLVM_BIN` to the LLVM `bin` directory before running Cargo or Tauri.
 
 ### Run
 

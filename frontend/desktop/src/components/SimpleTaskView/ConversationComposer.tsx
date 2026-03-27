@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { AgentSelection, ProviderInfo } from "../../types";
+import { PopoverSelect } from "../shared/PopoverSelect";
 import {
   modelOptionsFromProvider,
   providerDisplayName,
@@ -31,6 +32,7 @@ export function ConversationComposer({
   onStop,
 }: ConversationComposerProps): ReactNode {
   const [prompt, setPrompt] = useState("");
+  const [openSelect, setOpenSelect] = useState<"provider" | "model" | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const availableProviders = useMemo(
     () => providers.filter((provider) => provider.available),
@@ -38,6 +40,13 @@ export function ConversationComposer({
   );
   const selectedProvider = availableProviders.find((provider) => provider.name === agent?.provider);
   const modelOptions = modelOptionsFromProvider(selectedProvider);
+  const providerOptions = useMemo(
+    () => availableProviders.map((provider) => ({
+      value: provider.name,
+      label: providerDisplayName(provider.name),
+    })),
+    [availableProviders],
+  );
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -122,12 +131,20 @@ export function ConversationComposer({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 rounded-full border border-[#2e2e48] bg-[#24243a] px-3 py-1.5">
-              <select
+            <div className="flex items-center gap-2 rounded-full border border-[#2f3448] bg-[#111522] px-2 py-2 shadow-[0_14px_28px_rgba(0,0,0,0.18)]">
+              <PopoverSelect
                 value={agent?.provider ?? ""}
-                disabled={locked || availableProviders.length === 0}
-                onChange={(event) => {
-                  const nextProvider = availableProviders.find((provider) => provider.name === event.target.value);
+                options={providerOptions}
+                placeholder="Brand"
+                disabled={locked || providerOptions.length === 0}
+                direction="up"
+                align="left"
+                open={openSelect === "provider"}
+                onOpenChange={(open) => setOpenSelect(open ? "provider" : null)}
+                triggerClassName="flex h-9 min-w-[8.5rem] items-center gap-2 rounded-full border border-[#363b52] bg-[#181c2a] px-3 text-xs font-semibold text-[#f4f6fd] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#4a5273] hover:bg-[#1d2232] disabled:cursor-not-allowed disabled:opacity-55"
+                menuClassName="min-w-[11rem] rounded-2xl border border-[#363b52] bg-[#141925] p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
+                onChange={(nextValue) => {
+                  const nextProvider = availableProviders.find((provider) => provider.name === nextValue);
                   if (!nextProvider) {
                     return;
                   }
@@ -136,41 +153,29 @@ export function ConversationComposer({
                     model: nextProvider.models[0] ?? "",
                   });
                 }}
-                className={`bg-transparent text-xs font-medium text-[#e4e4ed] focus:outline-none ${
-                  locked || availableProviders.length === 0 ? "disabled:cursor-not-allowed disabled:opacity-60" : "cursor-pointer"
-                }`}
-              >
-                <option value="" disabled>Select provider</option>
-                {availableProviders.map((provider) => (
-                  <option key={provider.name} value={provider.name} className="bg-[#1a1a24] text-[#e4e4ed]">
-                    {providerDisplayName(provider.name)}
-                  </option>
-                ))}
-              </select>
-              <span className="text-[#5f6378]">·</span>
-              <select
+              />
+              <span className="text-[#4f587a]">·</span>
+              <PopoverSelect
                 value={agent?.model ?? ""}
+                options={modelOptions}
+                placeholder="Model"
                 disabled={locked || modelOptions.length === 0}
-                onChange={(event) => {
+                direction="up"
+                align="right"
+                open={openSelect === "model"}
+                onOpenChange={(open) => setOpenSelect(open ? "model" : null)}
+                triggerClassName="flex h-9 max-w-52 min-w-[9rem] items-center gap-2 rounded-full border border-[#295638] bg-[#0f1d15] px-3 text-xs font-semibold text-[#9be7b4] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#37744a] hover:bg-[#13241a] disabled:cursor-not-allowed disabled:opacity-55"
+                menuClassName="min-w-[12rem] rounded-2xl border border-[#295638] bg-[#101a14] p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
+                onChange={(nextValue) => {
                   if (!agent) {
                     return;
                   }
                   onAgentChange({
                     provider: agent.provider,
-                    model: event.target.value,
+                    model: nextValue,
                   });
                 }}
-                className={`max-w-44 rounded-full border border-[#295638] bg-[#0d1811] px-2 py-1 text-xs font-medium text-[#8ce6a8] focus:outline-none ${
-                  locked || modelOptions.length === 0 ? "disabled:cursor-not-allowed disabled:opacity-60" : "cursor-pointer"
-                }`}
-              >
-                <option value="" disabled>Model</option>
-                {modelOptions.map((model) => (
-                  <option key={model.value} value={model.value} className="bg-[#111512] text-[#ecfdf3]">
-                    {model.label}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <button

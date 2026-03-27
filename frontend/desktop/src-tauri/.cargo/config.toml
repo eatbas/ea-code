@@ -1,7 +1,8 @@
 [env]
-# LLVM overrides removed — they referenced a non-existent installation and
-# broke cc-rs (space in "Program Files" path). For aarch64 cross-compilation,
-# use target-specific env vars instead:
-# [target.aarch64-pc-windows-msvc.env]
-# CC = "C:\\Program Files\\LLVM\\bin\\clang.exe"
-# AR = "C:\\Program Files\\LLVM\\bin\\llvm-ar.exe"
+# Windows Rust crates such as `ring` require LLVM clang, but install paths vary
+# across ARM64/x64 machines. Route through repo-local wrappers so every Windows
+# development environment can resolve the correct compiler consistently.
+CC_aarch64_pc_windows_msvc = { value = ".cargo/tooling/clang.cmd", relative = true, force = false }
+CXX_aarch64_pc_windows_msvc = { value = ".cargo/tooling/clang-cxx.cmd", relative = true, force = false }
+CC_x86_64_pc_windows_msvc = { value = ".cargo/tooling/clang.cmd", relative = true, force = false }
+CXX_x86_64_pc_windows_msvc = { value = ".cargo/tooling/clang-cxx.cmd", relative = true, force = false }
