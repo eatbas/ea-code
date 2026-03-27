@@ -29,7 +29,7 @@ export function modelOptionsFromProvider(
 }
 
 /** Formats a raw model identifier for display. */
-function formatModelLabel(model: string): string {
+export function formatModelLabel(model: string): string {
   const known: Record<string, string> = {
     sonnet: "Sonnet",
     opus: "Opus",

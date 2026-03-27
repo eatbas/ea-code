@@ -9,6 +9,8 @@ pub struct WorkspaceInfo {
     pub is_dirty: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ea_code_ignored: Option<bool>,
 }
 
 /// CLI health check result per binary.

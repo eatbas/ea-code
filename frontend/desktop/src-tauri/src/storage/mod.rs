@@ -13,6 +13,7 @@ use std::sync::Mutex;
 lazy_static::lazy_static! {
     static ref SETTINGS_LOCK: Mutex<()> = Mutex::new(());
     static ref PROJECTS_LOCK: Mutex<()> = Mutex::new(());
+    static ref CONVERSATIONS_LOCK: Mutex<()> = Mutex::new(());
 }
 
 /// Helper to acquire lock for settings file operations
@@ -24,6 +25,14 @@ pub fn with_settings_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Result<T
 /// Helper to acquire lock for projects file operations
 pub fn with_projects_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Result<T, String> {
     let _guard = PROJECTS_LOCK.lock().map_err(|_| "Projects lock poisoned")?;
+    f()
+}
+
+/// Helper to acquire lock for workspace conversation file operations
+pub fn with_conversations_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Result<T, String> {
+    let _guard = CONVERSATIONS_LOCK
+        .lock()
+        .map_err(|_| "Conversations lock poisoned")?;
     f()
 }
 

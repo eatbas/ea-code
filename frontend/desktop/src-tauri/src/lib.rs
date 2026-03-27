@@ -1,5 +1,6 @@
 mod bootstrap;
 mod commands;
+mod conversations;
 mod git;
 mod models;
 pub mod platform;
@@ -55,6 +56,12 @@ pub fn run() {
             commands::api_health::get_api_providers,
             commands::api_health::get_api_cli_versions,
             commands::api_health::update_api_cli,
+            conversations::commands::list_workspace_conversations,
+            conversations::commands::create_conversation,
+            conversations::commands::get_conversation,
+            conversations::commands::send_conversation_turn,
+            conversations::commands::stop_conversation,
+            conversations::commands::delete_conversation,
         ])
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");

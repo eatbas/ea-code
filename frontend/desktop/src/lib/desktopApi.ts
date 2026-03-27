@@ -1,7 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type {
+  AgentSelection,
   AppSettings,
+  ConversationDetail,
+  ConversationSummary,
   PrerequisiteStatus,
   ProjectEntry,
   WorkspaceInfo,
@@ -75,4 +78,44 @@ export function getApiCliVersions(): Promise<void> {
 
 export function updateApiCli(provider: string): Promise<void> {
   return invokeCommand<void>("update_api_cli", { provider });
+}
+
+export function listWorkspaceConversations(workspacePath: string): Promise<ConversationSummary[]> {
+  return invokeCommand<ConversationSummary[]>("list_workspace_conversations", { workspacePath });
+}
+
+export function createConversation(
+  workspacePath: string,
+  agent: AgentSelection,
+  initialPrompt?: string,
+): Promise<ConversationDetail> {
+  return invokeCommand<ConversationDetail>("create_conversation", {
+    workspacePath,
+    agent,
+    initialPrompt,
+  });
+}
+
+export function getConversation(workspacePath: string, conversationId: string): Promise<ConversationDetail> {
+  return invokeCommand<ConversationDetail>("get_conversation", { workspacePath, conversationId });
+}
+
+export function sendConversationTurn(
+  workspacePath: string,
+  conversationId: string,
+  prompt: string,
+): Promise<ConversationDetail> {
+  return invokeCommand<ConversationDetail>("send_conversation_turn", {
+    workspacePath,
+    conversationId,
+    prompt,
+  });
+}
+
+export function stopConversation(workspacePath: string, conversationId: string): Promise<ConversationSummary> {
+  return invokeCommand<ConversationSummary>("stop_conversation", { workspacePath, conversationId });
+}
+
+export function deleteConversation(workspacePath: string, conversationId: string): Promise<void> {
+  return invokeCommand<void>("delete_conversation", { workspacePath, conversationId });
 }

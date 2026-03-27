@@ -13,6 +13,12 @@ export const API_EVENTS = {
   CLI_VERSIONS_COMPLETE: "api_versions_check_complete",
 } as const;
 
+/** Simple task conversation runtime events. */
+export const CONVERSATION_EVENTS = {
+  STATUS: "conversation_status",
+  OUTPUT_DELTA: "conversation_output_delta",
+} as const;
+
 /** CLI health events (emitted by `commands/cli/health.rs`). */
 export const CLI_EVENTS = {
   HEALTH_STATUS: "cli_health_status",

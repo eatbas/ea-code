@@ -1,11 +1,18 @@
 import type { ReactNode } from "react";
-import type { ActiveView, WorkspaceInfo, ProjectEntry } from "../types";
+import type { ActiveView, ConversationDetail, WorkspaceInfo, ProjectEntry, AgentSelection } from "../types";
 import { IdleView } from "./IdleView";
 import { CliSetupRoute } from "./CliSetupView/Route";
+import { SimpleTaskView } from "./SimpleTaskView";
 
 interface AppContentRouterProps {
   activeView: ActiveView;
   workspace: WorkspaceInfo | null;
+  activeConversation: ConversationDetail | null;
+  activeDraft: string;
+  sendingConversation: boolean;
+  stoppingConversation: boolean;
+  onSendConversationPrompt: (prompt: string, agent: AgentSelection) => Promise<void>;
+  onStopConversation: () => Promise<void>;
   projects: ProjectEntry[];
   onSelectProject: (projectPath: string) => Promise<void>;
   onAddProject: () => Promise<void>;
@@ -17,6 +24,12 @@ interface AppContentRouterProps {
 export function AppContentRouter({
   activeView,
   workspace,
+  activeConversation,
+  activeDraft,
+  sendingConversation,
+  stoppingConversation,
+  onSendConversationPrompt,
+  onStopConversation,
   projects,
   onSelectProject,
   onAddProject,
@@ -25,6 +38,22 @@ export function AppContentRouter({
 }: AppContentRouterProps): ReactNode {
   if (activeView === "cli-setup") {
     return <CliSetupRoute />;
+  }
+
+  if (workspace) {
+    return (
+      <SimpleTaskView
+        workspace={workspace}
+        activeConversation={activeConversation}
+        activeDraft={activeDraft}
+        sending={sendingConversation}
+        stopping={stoppingConversation}
+        onOpenProjectFolder={onOpenProjectFolder}
+        onOpenInVsCode={onOpenInVsCode}
+        onSendPrompt={onSendConversationPrompt}
+        onStopConversation={onStopConversation}
+      />
+    );
   }
 
   return (

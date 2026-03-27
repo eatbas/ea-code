@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import type { ActiveView, ProjectEntry } from "../types";
+import type { ActiveView, ConversationSummary, ProjectEntry } from "../types";
 import { SidebarCollapsed } from "./SidebarCollapsed";
 import { SidebarSettings } from "./SidebarSettings";
-import { folderName } from "../utils/formatters";
+import { folderName, formatRelativeTime } from "../utils/formatters";
 
 /** Data-driven settings navigation items. */
 const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[] = [
@@ -21,10 +21,15 @@ interface SidebarProps {
   activeView: ActiveView;
   onNavigate: (view: ActiveView) => void;
   projects: ProjectEntry[];
+  conversationIndex: Record<string, ConversationSummary[]>;
   activeProjectPath?: string;
+  activeConversationId?: string | null;
   onSelectProject: (projectPath: string) => void | Promise<void>;
+  onSelectConversation: (projectPath: string, conversationId: string) => void | Promise<void>;
+  onCreateConversation: (projectPath: string) => void | Promise<void>;
   onAddProject: () => void;
   onRemoveProject?: (projectPath: string) => void;
+  onRemoveConversation?: (projectPath: string, conversationId: string) => void;
 }
 
 /** Collapsible left sidebar with project list and settings sub-navigation. */
@@ -34,13 +39,20 @@ export function Sidebar({
   activeView,
   onNavigate,
   projects,
+  conversationIndex,
   activeProjectPath,
+  activeConversationId,
   onSelectProject,
+  onSelectConversation,
+  onCreateConversation,
   onAddProject,
   onRemoveProject,
+  onRemoveConversation,
 }: SidebarProps): ReactNode {
   const isSettings = activeView === "cli-setup";
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [projectPendingRemoval, setProjectPendingRemoval] = useState<string | null>(null);
+  const [conversationPendingRemoval, setConversationPendingRemoval] = useState<string | null>(null);
   const currentYear = new Date().getFullYear();
 
   useEffect(() => {
@@ -95,7 +107,7 @@ export function Sidebar({
   }
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-[#2e2e48] bg-[#1a1a24]">
+    <aside className="flex h-full w-72 shrink-0 flex-col overflow-hidden border-r border-[#2e2e48] bg-[#1a1a24]">
       {/* Header */}
       <div className="flex items-center justify-between px-3 pt-8 pb-3">
         <span className="text-sm font-medium text-[#e4e4ed]">Projects</span>
@@ -143,35 +155,168 @@ export function Sidebar({
         )}
         {projects.map((project) => {
           const isActive = project.path === activeProjectPath;
+          const conversations = conversationIndex[project.path] ?? [];
           return (
-            <div key={project.path} className="group relative">
-              <button
-                type="button"
-                onClick={() => void onSelectProject(project.path)}
-                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                  isActive
-                    ? "bg-[#24243a] text-[#e4e4ed]"
-                    : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
-                }`}
-                title={project.path}
-              >
-                <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                </svg>
-                <span className="truncate">{folderName(project.path)}</span>
-              </button>
-              {onRemoveProject && (
+            <div key={project.path} className="group/project mb-2">
+              <div className="relative">
                 <button
                   type="button"
-                  onClick={() => onRemoveProject(project.path)}
-                  className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-[#6b6b80] opacity-0 transition-opacity hover:text-[#e4e4ed] group-hover:opacity-100"
-                  title="Remove project"
+                  onClick={() => void onSelectProject(project.path)}
+                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 pr-16 text-left text-sm transition-colors ${
+                    isActive
+                      ? "bg-[#24243a] text-[#e4e4ed]"
+                      : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+                  }`}
+                  title={project.path}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
+                  <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                   </svg>
+                  <span className="truncate font-medium">{folderName(project.path)}</span>
                 </button>
+
+                <div
+                  className={`absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1 transition-opacity ${
+                    projectPendingRemoval === project.path ? "opacity-100" : "opacity-0 group-hover/project:opacity-100"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setProjectPendingRemoval(null);
+                      setConversationPendingRemoval(null);
+                      void onCreateConversation(project.path);
+                    }}
+                    className="rounded p-1 text-[#6b6b80] transition-colors hover:bg-[#2a2a3d] hover:text-[#e4e4ed]"
+                    title="New conversation"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  </button>
+                  {onRemoveProject && (
+                    projectPendingRemoval === project.path ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setProjectPendingRemoval(null);
+                            setConversationPendingRemoval(null);
+                          }}
+                          className="rounded px-2 py-1 text-[10px] font-medium text-[#9898b0] transition-colors hover:bg-[#2a2a3d] hover:text-[#e4e4ed]"
+                          title="Cancel project removal"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setProjectPendingRemoval(null);
+                            setConversationPendingRemoval(null);
+                            onRemoveProject(project.path);
+                          }}
+                          className="rounded bg-[#3a1418] px-2 py-1 text-[10px] font-medium text-[#ff8f98] transition-colors hover:bg-[#521a21] hover:text-[#ffd7dc]"
+                          title={`Remove ${folderName(project.path)}`}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setProjectPendingRemoval(project.path);
+                          setConversationPendingRemoval(null);
+                        }}
+                        className="rounded p-1 text-[#6b6b80] transition-colors hover:bg-[#2a2a3d] hover:text-[#e4e4ed]"
+                        title="Remove project"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {conversations.length > 0 && (
+                <div className="mt-1 space-y-1 pl-5">
+                  {conversations.map((conversation) => {
+                    const isConversationActive = isActive && conversation.id === activeConversationId;
+                    return (
+                      <div key={conversation.id} className="group/conversation relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void onSelectConversation(project.path, conversation.id);
+                          }}
+                          className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 pr-8 text-left transition-colors ${
+                            isConversationActive
+                              ? "bg-[#2a2951] text-[#f1f0ff]"
+                              : "text-[#babacf] hover:bg-[#222235] hover:text-[#e4e4ed]"
+                          }`}
+                        >
+                          <span className="truncate text-sm">{conversation.title}</span>
+                          <span className="shrink-0 text-xs text-[#8f91a7]">
+                            {formatRelativeTime(conversation.updatedAt)}
+                          </span>
+                        </button>
+                        {onRemoveConversation && (
+                          conversationPendingRemoval === `${project.path}::${conversation.id}` ? (
+                            <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1 opacity-100">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setConversationPendingRemoval(null);
+                                }}
+                                className="rounded px-2 py-1 text-[10px] font-medium text-[#9898b0] transition-colors hover:bg-[#2a2a3d] hover:text-[#e4e4ed]"
+                                title="Cancel conversation removal"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setConversationPendingRemoval(null);
+                                  onRemoveConversation(project.path, conversation.id);
+                                }}
+                                className="rounded bg-[#3a1418] px-2 py-1 text-[10px] font-medium text-[#ff8f98] transition-colors hover:bg-[#521a21] hover:text-[#ffd7dc]"
+                                title={`Delete ${conversation.title}`}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setConversationPendingRemoval(`${project.path}::${conversation.id}`);
+                                setProjectPendingRemoval(null);
+                              }}
+                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-[#6b6b80] opacity-0 transition-opacity hover:bg-[#2a2a3d] hover:text-[#e4e4ed] group-hover/conversation:opacity-100"
+                              title="Delete conversation"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            </button>
+                          )
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           );

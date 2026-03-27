@@ -13,6 +13,12 @@ pub async fn select_workspace(path: String) -> Result<WorkspaceInfo, String> {
         return Err("Selected path is not a directory".to_string());
     }
 
+    if crate::git::is_git_repo(&path).await {
+        if let Err(error) = crate::git::ensure_ea_code_gitignore_entry(&path) {
+            eprintln!("[workspace] Failed to ensure .ea-code is ignored in {}: {error}", path);
+        }
+    }
+
     let info = crate::git::workspace_info(&path).await;
     let workspace_name = std::path::Path::new(&path)
         .file_name()
