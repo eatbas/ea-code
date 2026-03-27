@@ -185,7 +185,7 @@ export function SimpleTaskView({
           onStop={onStopConversation}
         />
 
-        <div className="border-t border-edge px-5 py-2.5">
+        <div className="px-5 pb-3 pt-0">
           <div className="mx-auto flex w-full max-w-5xl">
             <WorkspaceFooter
               path={workspace.path}

@@ -190,7 +190,7 @@ export function ConversationComposer({
   }
 
   return (
-    <div className="border-t border-edge bg-surface px-5 py-4">
+    <div className="bg-surface px-5 pb-2 pt-4">
       <div className="rounded-[20px] border border-edge bg-panel shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
         <label className="block">
           <span className="sr-only">Prompt</span>
