@@ -1,8 +1,7 @@
 /// File-based storage module.
 ///
-/// Global data (settings, MCP) lives under `~/.ea-code/`.
+/// Global data (settings) lives under `~/.ea-code/`.
 /// Uses atomic writes (write to .tmp, then rename) for all JSON files.
-pub mod mcp;
 pub mod projects;
 pub mod settings;
 
@@ -13,7 +12,6 @@ use std::sync::Mutex;
 lazy_static::lazy_static! {
     static ref SETTINGS_LOCK: Mutex<()> = Mutex::new(());
     static ref PROJECTS_LOCK: Mutex<()> = Mutex::new(());
-    static ref MCP_LOCK: Mutex<()> = Mutex::new(());
 }
 
 /// Helper to acquire lock for settings file operations
@@ -25,12 +23,6 @@ pub fn with_settings_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Result<T
 /// Helper to acquire lock for projects file operations
 pub fn with_projects_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Result<T, String> {
     let _guard = PROJECTS_LOCK.lock().map_err(|_| "Projects lock poisoned")?;
-    f()
-}
-
-/// Helper to acquire lock for MCP config file operations
-pub fn with_mcp_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Result<T, String> {
-    let _guard = MCP_LOCK.lock().map_err(|_| "MCP lock poisoned")?;
     f()
 }
 

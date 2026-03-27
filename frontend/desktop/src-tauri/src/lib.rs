@@ -22,11 +22,6 @@ pub fn run() {
         eprintln!("Warning: failed to import legacy settings: {e}");
     }
 
-    // Sync built-in MCP catalog
-    if let Err(e) = storage::mcp::sync_builtin_catalog() {
-        eprintln!("Warning: MCP catalog sync failed: {e}");
-    }
-
     let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]
@@ -60,20 +55,6 @@ pub fn run() {
             // Settings commands
             commands::settings::get_settings,
             commands::settings::save_settings,
-            // MCP server commands
-            commands::mcp::list_mcp_servers,
-            commands::mcp::list_mcp_capable_clis,
-            commands::mcp::set_mcp_server_enabled,
-            commands::mcp::set_mcp_server_bindings,
-            commands::mcp::create_mcp_server,
-            commands::mcp::update_mcp_server,
-            commands::mcp::delete_mcp_server,
-            commands::mcp::get_mcp_config,
-            commands::mcp::save_mcp_config,
-            commands::mcp::sync_mcp_catalog,
-            commands::mcp::set_context7_api_key,
-            commands::mcp_runtime::get_mcp_cli_runtime_statuses,
-            commands::mcp_runtime::run_cli_mcp_fix_with_prompt,
             // CLI health & version commands
             commands::cli::check_cli_health,
             commands::cli::get_cli_versions,

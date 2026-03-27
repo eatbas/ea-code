@@ -5,8 +5,6 @@ pub(crate) mod cli_util;
 pub(crate) mod cli_version;
 #[cfg(target_os = "windows")]
 pub(crate) mod git_bash;
-pub(crate) mod mcp;
-pub(crate) mod mcp_runtime;
 pub(crate) mod settings;
 pub(crate) mod workspace;
 

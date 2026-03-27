@@ -4,14 +4,12 @@ import type {
   ApiCliVersionInfo,
   ApiHealth,
   AppSettings,
-  CliHealth,
   ProviderInfo,
   WorkspaceInfo,
   ProjectEntry,
 } from "../types";
 import { IdleView } from "./IdleView";
 import { CliSetupView } from "./CliSetupView";
-import { McpView } from "./McpView";
 
 interface AppContentRouterProps {
   activeView: ActiveView;
@@ -23,7 +21,6 @@ interface AppContentRouterProps {
   apiVersionsLoading: boolean;
   apiVersionsUpdating: string | null;
   apiHealth: ApiHealth | null;
-  cliHealth: CliHealth | null;
   settings: AppSettings | null;
   onSaveSettings: (settings: AppSettings) => void | Promise<void>;
   onFetchApiVersions: () => void;
@@ -43,7 +40,6 @@ export function AppContentRouter({
   apiVersionsLoading,
   apiVersionsUpdating,
   apiHealth,
-  cliHealth,
   settings,
   onSaveSettings,
   onFetchApiVersions,
@@ -68,8 +64,6 @@ export function AppContentRouter({
       />
     );
   }
-
-  if (activeView === "mcp") return <McpView cliHealth={cliHealth} />;
 
   return (
     <IdleView

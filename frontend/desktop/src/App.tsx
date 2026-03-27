@@ -17,7 +17,7 @@ import { ProjectLoadingOverlay } from "./components/shared/ProjectLoadingOverlay
 function App(): ReactNode {
   const { workspace, openingWorkspace, openWorkspace, selectFolder, projects, loadProjects, deleteProject } = useWorkspace();
   const { settings, loading, saveSettings } = useSettings();
-  const { health: cliHealth, checkHealth } = useCliHealth();
+  const { checkHealth } = useCliHealth();
   const { health: apiHealth, providers, checking: providersLoading, checkHealth: checkApiHealth } = useApiHealth();
   const { versions: apiVersions, loading: apiVersionsLoading, updating: apiVersionsUpdating, fetchVersions: fetchApiVersions, updateCli: updateApiCli } = useApiCliVersions();
   const { status: updateStatus, updateVersion } = useUpdateCheck(false);
@@ -84,7 +84,6 @@ function App(): ReactNode {
             apiVersionsLoading={apiVersionsLoading}
             apiVersionsUpdating={apiVersionsUpdating}
             apiHealth={apiHealth}
-            cliHealth={cliHealth}
             settings={settings}
             onSaveSettings={saveSettings}
             onFetchApiVersions={fetchApiVersions}

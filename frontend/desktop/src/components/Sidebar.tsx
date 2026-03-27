@@ -16,11 +16,6 @@ const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[
     label: "CLI Setup",
     iconPath: '<polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />',
   },
-  {
-    view: "mcp",
-    label: "MCP Servers",
-    iconPath: '<rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 9h6v6H9z" /><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />',
-  },
 ];
 
 interface SidebarProps {
@@ -47,7 +42,7 @@ export function Sidebar({
   onAddProject,
   onRemoveProject,
 }: SidebarProps): ReactNode {
-  const isSettings = activeView === "cli-setup" || activeView === "mcp";
+  const isSettings = activeView === "cli-setup";
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const currentYear = new Date().getFullYear();
 

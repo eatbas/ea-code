@@ -16,13 +16,6 @@ export interface ProjectEntry {
   createdAt: string;
 }
 
-/** MCP server configuration entry within mcp.json. */
-export interface McpServerConfig {
-  command: string;
-  args?: string[];
-  env?: Record<string, string>;
-}
-
 /** Workspace validation result. */
 export interface WorkspaceInfo {
   path: string;
