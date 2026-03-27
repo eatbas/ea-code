@@ -54,6 +54,45 @@ pub fn track_running_conversation(
     Ok(RunningConversationGuard { key })
 }
 
+fn abort_flags() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
+    static FLAGS: OnceLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = OnceLock::new();
+    FLAGS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+pub fn register_abort_flag(
+    workspace_path: &str,
+    conversation_id: &str,
+) -> Result<Arc<AtomicBool>, String> {
+    let key = running_conversation_key(workspace_path, conversation_id);
+    let flag = Arc::new(AtomicBool::new(false));
+    abort_flags()
+        .lock()
+        .map_err(|error| format!("Failed to register abort flag: {error}"))?
+        .insert(key, flag.clone());
+    Ok(flag)
+}
+
+pub fn trigger_abort(workspace_path: &str, conversation_id: &str) -> Result<(), String> {
+    let key = running_conversation_key(workspace_path, conversation_id);
+    if let Some(flag) = abort_flags()
+        .lock()
+        .map_err(|error| format!("Failed to trigger abort: {error}"))?
+        .get(&key)
+    {
+        flag.store(true, Ordering::Release);
+    }
+    Ok(())
+}
+
+pub fn remove_abort_flag(workspace_path: &str, conversation_id: &str) -> Result<(), String> {
+    let key = running_conversation_key(workspace_path, conversation_id);
+    abort_flags()
+        .lock()
+        .map_err(|error| format!("Failed to remove abort flag: {error}"))?
+        .remove(&key);
+    Ok(())
+}
+
 fn conversations_dir(workspace_path: &str) -> PathBuf {
     Path::new(workspace_path).join(CONVERSATIONS_DIR)
 }

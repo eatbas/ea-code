@@ -23,9 +23,9 @@ export interface ConversationSummary {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
-  lastProviderSessionRef?: string;
-  activeJobId?: string;
-  error?: string;
+  lastProviderSessionRef: string | null;
+  activeJobId: string | null;
+  error: string | null;
 }
 
 export interface ConversationDetail {

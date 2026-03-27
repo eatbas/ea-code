@@ -71,6 +71,7 @@ pub async fn send_conversation_turn(
     }
 
     let detail = persistence::mark_turn_running(&workspace_path, &conversation_id, trimmed)?;
+    let abort = persistence::register_abort_flag(&workspace_path, &conversation_id)?;
     let app_handle = app.clone();
     let detail_for_task = detail.clone();
     let prompt_for_task = trimmed.to_string();
@@ -89,9 +90,10 @@ pub async fn send_conversation_turn(
             }
         };
 
-        if let Err(error) = chat::run_conversation_turn(app_handle, detail_for_task, prompt_for_task).await {
+        if let Err(error) = chat::run_conversation_turn(app_handle, detail_for_task, prompt_for_task, abort).await {
             eprintln!("[conversation] Failed to run conversation turn: {error}");
         }
+        let _ = persistence::remove_abort_flag(&tracked_workspace_path, &tracked_conversation_id);
     });
 
     Ok(detail)
@@ -113,6 +115,8 @@ pub async fn stop_conversation(
         }
         return Ok(summary);
     };
+
+    persistence::trigger_abort(&workspace_path, &conversation_id)?;
 
     let url = format!("{}/v1/chat/{job_id}/stop", hive_api_base_url());
     let response = reqwest::Client::new()

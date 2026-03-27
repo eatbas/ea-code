@@ -52,9 +52,6 @@ function mergeSummary(
   return {
     ...previous,
     ...next,
-    lastProviderSessionRef: next.lastProviderSessionRef ?? previous.lastProviderSessionRef,
-    activeJobId: next.activeJobId ?? previous.activeJobId,
-    error: next.error ?? previous.error,
   };
 }
 

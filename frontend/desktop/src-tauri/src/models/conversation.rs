@@ -44,11 +44,8 @@ pub struct ConversationSummary {
     pub created_at: String,
     pub updated_at: String,
     pub message_count: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub last_provider_session_ref: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub active_job_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 

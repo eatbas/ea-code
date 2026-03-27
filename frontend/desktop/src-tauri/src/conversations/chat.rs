@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
@@ -11,7 +12,7 @@ use crate::models::{
 
 use super::events::{EVENT_CONVERSATION_OUTPUT_DELTA, EVENT_CONVERSATION_STATUS};
 use super::persistence;
-use super::sse::{consume_hive_sse, HiveSseEvent};
+use super::sse::{consume_hive_sse, HiveSseEvent, SseResult};
 
 fn shared_hive_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -79,6 +80,7 @@ pub async fn run_conversation_turn(
     app: AppHandle,
     detail: ConversationDetail,
     prompt: String,
+    abort: Arc<AtomicBool>,
 ) -> Result<(), String> {
     let summary = detail.summary;
     let workspace_path = summary.workspace_path.clone();
@@ -128,7 +130,7 @@ pub async fn run_conversation_turn(
     }
 
     let mut streamed_text = String::new();
-    let stream_result = consume_hive_sse(response, |event| match event {
+    let stream_result = consume_hive_sse(response, &abort, |event| match event {
         HiveSseEvent::RunStarted { job_id } => {
             let summary = persistence::set_active_job_id(
                 &workspace_path,
@@ -170,28 +172,47 @@ pub async fn run_conversation_turn(
     })
     .await;
 
+    let aborted = abort.load(Ordering::Acquire);
+
     let result = match stream_result {
         Ok(result) => result,
         Err(error) => {
-            return finish_with_failure(
-                &app,
-                &workspace_path,
-                &conversation_id,
-                if streamed_text.trim().is_empty() {
-                    None
-                } else {
-                    Some(streamed_text)
-                },
-                error,
-            )
-            .await;
+            if aborted {
+                SseResult {
+                    final_text: streamed_text.clone(),
+                    provider_session_ref: None,
+                    exit_code: None,
+                    status: ConversationStatus::Stopped,
+                    error: None,
+                    job_id: None,
+                }
+            } else {
+                return finish_with_failure(
+                    &app,
+                    &workspace_path,
+                    &conversation_id,
+                    if streamed_text.trim().is_empty() {
+                        None
+                    } else {
+                        Some(streamed_text)
+                    },
+                    error,
+                )
+                .await;
+            }
         }
+    };
+
+    let final_status = if aborted {
+        ConversationStatus::Stopped
+    } else {
+        result.status
     };
 
     let (updated_summary, message) = persistence::finish_turn(
         &workspace_path,
         &conversation_id,
-        result.status,
+        final_status,
         if result.final_text.trim().is_empty() {
             None
         } else {

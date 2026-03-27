@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use futures::StreamExt;
 use serde::Deserialize;
 
@@ -67,6 +69,7 @@ struct FailedPayload {
 
 pub async fn consume_hive_sse<F>(
     response: reqwest::Response,
+    abort: &AtomicBool,
     mut on_event: F,
 ) -> Result<SseResult, String>
 where
@@ -80,6 +83,16 @@ where
     let mut terminal_result: Option<SseResult> = None;
 
     while let Some(chunk_result) = stream.next().await {
+        if abort.load(Ordering::Acquire) {
+            return Ok(SseResult {
+                final_text: collected_text,
+                provider_session_ref: session_ref,
+                exit_code: None,
+                status: ConversationStatus::Stopped,
+                error: None,
+                job_id,
+            });
+        }
         let chunk = chunk_result.map_err(|error| format!("Failed to read hive stream: {error}"))?;
         buffer.push_str(&String::from_utf8_lossy(&chunk));
 
