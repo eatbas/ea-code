@@ -1,9 +1,11 @@
 mod commands;
 mod git;
 mod models;
+pub mod sidecar;
 pub mod storage;
 
 use commands::AppState;
+use sidecar::SidecarManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -22,6 +24,11 @@ pub fn run() {
         eprintln!("Warning: failed to import legacy settings: {e}");
     }
 
+    // Remove projects whose workspace folder no longer exists on disk
+    if let Err(e) = storage::projects::cleanup_missing_projects() {
+        eprintln!("Warning: stale project cleanup failed: {e}");
+    }
+
     let mut builder = tauri::Builder::default();
 
     #[cfg(desktop)]
@@ -36,6 +43,18 @@ pub fn run() {
             }
         }));
     }
+
+    // Resolve hive-api directory and read configured port from settings
+    let hive_api_port = storage::settings::read_settings()
+        .map(|s| s.hive_api_port)
+        .unwrap_or(0);
+    let sidecar = match sidecar::find_hive_dir() {
+        Ok(hive_dir) => SidecarManager::new(hive_dir, hive_api_port),
+        Err(e) => {
+            eprintln!("Warning: {e} — hive-api sidecar will not auto-start");
+            SidecarManager::new(std::path::PathBuf::from("hive-api"), hive_api_port)
+        }
+    };
 
     let app = builder
         .plugin(tauri_plugin_opener::init())
@@ -69,5 +88,26 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");
 
-    app.run(|_app_handle, _event| {});
+    // Start the hive-api sidecar in the background (non-blocking)
+    let sidecar_for_startup = sidecar.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = sidecar_for_startup.start().await {
+            eprintln!("Warning: failed to start hive-api sidecar: {e}");
+            return;
+        }
+        if let Err(e) = sidecar_for_startup.wait_until_healthy().await {
+            eprintln!("Warning: hive-api sidecar not healthy: {e}");
+        }
+    });
+
+    app.run(move |_app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { .. } = event {
+            let sc = sidecar.clone();
+            tauri::async_runtime::block_on(async move {
+                if let Err(e) = sc.stop().await {
+                    eprintln!("Warning: failed to stop hive-api sidecar: {e}");
+                }
+            });
+        }
+    });
 }

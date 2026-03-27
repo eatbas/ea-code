@@ -35,9 +35,33 @@ pub async fn validate_environment(settings: AppSettings) -> Result<CliHealth, St
     check_cli_health_inner(&settings).await
 }
 
-/// Checks system-level prerequisites (Git Bash on Windows).
+/// Checks system-level prerequisites (Python, Git Bash on Windows, hive-api source).
 #[tauri::command]
 pub async fn check_prerequisites() -> Result<PrerequisiteStatus, String> {
+    // Python check
+    let (python_available, python_version) = match crate::sidecar::python::find_python().await {
+        Ok(py) => {
+            let version = tokio::process::Command::new(&py.executable)
+                .args(
+                    py.launcher_version
+                        .iter()
+                        .map(|v| v.as_str())
+                        .chain(["--version"])
+                        .collect::<Vec<_>>(),
+                )
+                .output()
+                .await
+                .ok()
+                .and_then(|o| {
+                    String::from_utf8(o.stdout)
+                        .ok()
+                        .map(|s| s.trim().to_string())
+                });
+            (true, version)
+        }
+        Err(_) => (false, None),
+    };
+
     // Git Bash check — only meaningful on Windows.
     let git_bash_available = if cfg!(target_os = "windows") {
         #[cfg(target_os = "windows")]
@@ -52,11 +76,14 @@ pub async fn check_prerequisites() -> Result<PrerequisiteStatus, String> {
         true
     };
 
+    // hive-api source check.
+    let hive_api_source_found = crate::sidecar::find_hive_dir().is_ok();
+
     Ok(PrerequisiteStatus {
-        python_available: true,
-        python_version: None,
+        python_available,
+        python_version,
         git_bash_available,
-        hive_api_source_found: false,
+        hive_api_source_found,
     })
 }
 
