@@ -11,6 +11,7 @@ import {
 interface ConversationComposerProps {
   providers: ProviderInfo[];
   agent: AgentSelection | null;
+  promptHistory: string[];
   locked: boolean;
   sending: boolean;
   stopping: boolean;
@@ -23,6 +24,7 @@ interface ConversationComposerProps {
 export function ConversationComposer({
   providers,
   agent,
+  promptHistory,
   locked,
   sending,
   stopping,
@@ -33,6 +35,8 @@ export function ConversationComposer({
 }: ConversationComposerProps): ReactNode {
   const [prompt, setPrompt] = useState("");
   const [openSelect, setOpenSelect] = useState<"provider" | "model" | null>(null);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [draftBeforeHistory, setDraftBeforeHistory] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const availableProviders = useMemo(
     () => providers.filter((provider) => provider.available),
@@ -67,6 +71,23 @@ export function ConversationComposer({
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
   }, [prompt]);
 
+  useEffect(() => {
+    setHistoryIndex(-1);
+    setDraftBeforeHistory("");
+  }, [promptHistory]);
+
+  function updatePromptFromHistory(nextPrompt: string): void {
+    setPrompt(nextPrompt);
+    requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) {
+        return;
+      }
+      const cursor = nextPrompt.length;
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  }
+
   async function handleSubmit(): Promise<void> {
     const trimmed = prompt.trim();
     if (!trimmed || !agent) {
@@ -74,9 +95,79 @@ export function ConversationComposer({
     }
     await onSend(trimmed);
     setPrompt("");
+    setHistoryIndex(-1);
+    setDraftBeforeHistory("");
+  }
+
+  function canNavigateHistory(
+    event: KeyboardEvent<HTMLTextAreaElement>,
+    direction: "up" | "down",
+  ): boolean {
+    const textarea = event.currentTarget;
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+      return false;
+    }
+    if (textarea.selectionStart !== textarea.selectionEnd) {
+      return false;
+    }
+
+    const beforeCursor = textarea.value.slice(0, textarea.selectionStart);
+    const afterCursor = textarea.value.slice(textarea.selectionEnd);
+
+    if (direction === "up") {
+      return !beforeCursor.includes("\n");
+    }
+
+    return !afterCursor.includes("\n");
+  }
+
+  function handleHistoryNavigation(direction: "up" | "down"): void {
+    if (promptHistory.length === 0) {
+      return;
+    }
+
+    if (direction === "up") {
+      if (historyIndex === -1) {
+        setDraftBeforeHistory(prompt);
+        setHistoryIndex(promptHistory.length - 1);
+        updatePromptFromHistory(promptHistory[promptHistory.length - 1] ?? "");
+        return;
+      }
+
+      const nextIndex = Math.max(0, historyIndex - 1);
+      setHistoryIndex(nextIndex);
+      updatePromptFromHistory(promptHistory[nextIndex] ?? "");
+      return;
+    }
+
+    if (historyIndex === -1) {
+      return;
+    }
+
+    const nextIndex = historyIndex + 1;
+    if (nextIndex >= promptHistory.length) {
+      setHistoryIndex(-1);
+      updatePromptFromHistory(draftBeforeHistory);
+      return;
+    }
+
+    setHistoryIndex(nextIndex);
+    updatePromptFromHistory(promptHistory[nextIndex] ?? "");
   }
 
   function handlePromptKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (event.key === "ArrowUp" && canNavigateHistory(event, "up")) {
+      event.preventDefault();
+      handleHistoryNavigation("up");
+      return;
+    }
+
+    if (event.key === "ArrowDown" && canNavigateHistory(event, "down")) {
+      event.preventDefault();
+      handleHistoryNavigation("down");
+      return;
+    }
+
     if (event.key !== "Enter" || event.shiftKey) {
       return;
     }
@@ -98,7 +189,13 @@ export function ConversationComposer({
           <textarea
             ref={textareaRef}
             value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
+            onChange={(event) => {
+              setPrompt(event.target.value);
+              if (historyIndex !== -1) {
+                setHistoryIndex(-1);
+                setDraftBeforeHistory("");
+              }
+            }}
             onKeyDown={handlePromptKeyDown}
             rows={1}
             placeholder="Describe the task you want the agent to handle."
@@ -106,13 +203,13 @@ export function ConversationComposer({
           />
         </label>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#2e2e48] px-3 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-[#2e2e48] px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-[#2e2e48] bg-[#24243a] px-3 py-1.5 text-xs font-medium text-[#e4e4ed]">
+            <span className="inline-flex h-8 items-center rounded-full border border-[#2e2e48] bg-[#24243a] px-2.5 py-1 text-[11px] font-medium text-[#e4e4ed]">
               Simple Task
             </span>
             {locked && (
-              <span className="inline-flex items-center rounded-full border border-[#2e2e48] bg-[#202031] px-3 py-1.5 text-xs text-[#9898b0]">
+              <span className="inline-flex h-8 items-center rounded-full border border-[#2e2e48] bg-[#202031] px-2.5 py-1 text-[11px] text-[#9898b0]">
                 Resuming this conversation
               </span>
             )}
@@ -131,7 +228,7 @@ export function ConversationComposer({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 rounded-full border border-[#2f3448] bg-[#111522] px-2 py-2 shadow-[0_14px_28px_rgba(0,0,0,0.18)]">
+            <div className="flex items-center gap-1.5 rounded-full border border-[#2f3448] bg-[#111522] px-1.5 py-1 shadow-[0_14px_28px_rgba(0,0,0,0.18)]">
               <PopoverSelect
                 value={agent?.provider ?? ""}
                 options={providerOptions}
@@ -141,7 +238,7 @@ export function ConversationComposer({
                 align="left"
                 open={openSelect === "provider"}
                 onOpenChange={(open) => setOpenSelect(open ? "provider" : null)}
-                triggerClassName="flex h-9 min-w-[8.5rem] items-center gap-2 rounded-full border border-[#363b52] bg-[#181c2a] px-3 text-xs font-semibold text-[#f4f6fd] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#4a5273] hover:bg-[#1d2232] disabled:cursor-not-allowed disabled:opacity-55"
+                triggerClassName="flex h-7 min-w-[6.75rem] items-center gap-2 rounded-full border border-[#363b52] bg-[#181c2a] px-2.5 text-[11px] font-semibold text-[#f4f6fd] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#4a5273] hover:bg-[#1d2232] disabled:cursor-not-allowed disabled:opacity-55"
                 menuClassName="min-w-[11rem] rounded-2xl border border-[#363b52] bg-[#141925] p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
                 onChange={(nextValue) => {
                   const nextProvider = availableProviders.find((provider) => provider.name === nextValue);
@@ -154,7 +251,7 @@ export function ConversationComposer({
                   });
                 }}
               />
-              <span className="text-[#4f587a]">·</span>
+              <span className="px-0.5 text-[#4f587a]">·</span>
               <PopoverSelect
                 value={agent?.model ?? ""}
                 options={modelOptions}
@@ -164,7 +261,7 @@ export function ConversationComposer({
                 align="right"
                 open={openSelect === "model"}
                 onOpenChange={(open) => setOpenSelect(open ? "model" : null)}
-                triggerClassName="flex h-9 max-w-52 min-w-[9rem] items-center gap-2 rounded-full border border-[#295638] bg-[#0f1d15] px-3 text-xs font-semibold text-[#9be7b4] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#37744a] hover:bg-[#13241a] disabled:cursor-not-allowed disabled:opacity-55"
+                triggerClassName="flex h-7 max-w-44 min-w-[7.25rem] items-center gap-2 rounded-full border border-[#295638] bg-[#0f1d15] px-2.5 text-[11px] font-semibold text-[#9be7b4] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#37744a] hover:bg-[#13241a] disabled:cursor-not-allowed disabled:opacity-55"
                 menuClassName="min-w-[12rem] rounded-2xl border border-[#295638] bg-[#101a14] p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
                 onChange={(nextValue) => {
                   if (!agent) {
@@ -184,13 +281,13 @@ export function ConversationComposer({
                 void handleSubmit();
               }}
               disabled={sending || activeRunning || !agent || prompt.trim().length === 0}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#1eb75f] text-[#041107] transition-colors hover:bg-[#2ad16f] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#1eb75f] text-[#041107] transition-colors hover:bg-[#2ad16f] disabled:cursor-not-allowed disabled:opacity-50"
               title={sending ? "Sending..." : "Send"}
             >
               {sending ? (
                 <span className="text-[10px] font-semibold">...</span>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M5 12h14" />
                   <path d="m12 5 7 7-7 7" />
                 </svg>

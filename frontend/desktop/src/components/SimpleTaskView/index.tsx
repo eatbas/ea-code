@@ -1,15 +1,19 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type {
+  AppSettings,
   AgentSelection,
   ConversationDetail,
+  ProviderInfo,
   WorkspaceInfo,
 } from "../../types";
 import { useApiHealth } from "../../hooks/useApiHealth";
+import { useSettings } from "../../hooks/useSettings";
 import { ConversationComposer } from "./ConversationComposer";
-import { providerDisplayName } from "../shared/constants";
+import { formatAssistantLabel, sortProvidersByDisplayName } from "../shared/constants";
 import { WorkspaceFooter } from "../shared/WorkspaceFooter";
 import { useToast } from "../shared/Toast";
+import { getEnabledModels } from "../../utils/modelSettings";
 
 interface SimpleTaskViewProps {
   workspace: WorkspaceInfo;
@@ -36,11 +40,12 @@ export function SimpleTaskView({
 }: SimpleTaskViewProps): ReactNode {
   const toast = useToast();
   const { providers, checkHealth } = useApiHealth();
+  const { settings } = useSettings();
   const [selectedAgent, setSelectedAgent] = useState<AgentSelection | null>(null);
 
   const availableProviders = useMemo(
-    () => providers.filter((provider) => provider.available && provider.models.length > 0),
-    [providers],
+    () => sortProvidersByDisplayName(filterProvidersBySettings(providers, settings)),
+    [providers, settings],
   );
 
   useEffect(() => {
@@ -52,7 +57,14 @@ export function SimpleTaskView({
       setSelectedAgent(activeConversation.summary.agent);
       return;
     }
-    if (!selectedAgent && availableProviders[0]) {
+    const selectionIsValid = selectedAgent
+      ? availableProviders.some((provider) => (
+        provider.name === selectedAgent.provider
+        && provider.models.includes(selectedAgent.model)
+      ))
+      : false;
+
+    if ((!selectedAgent || !selectionIsValid) && availableProviders[0]) {
       setSelectedAgent({
         provider: availableProviders[0].name,
         model: availableProviders[0].models[0] ?? "",
@@ -61,6 +73,12 @@ export function SimpleTaskView({
   }, [activeConversation, availableProviders, selectedAgent]);
 
   const activeRunning = activeConversation?.summary.status === "running";
+  const promptHistory = useMemo(
+    () => activeConversation?.messages
+      .filter((message) => message.role === "user")
+      .map((message) => message.content) ?? [],
+    [activeConversation],
+  );
 
   return (
     <div className="flex h-full min-h-0 bg-[#0f0f14]">
@@ -69,11 +87,9 @@ export function SimpleTaskView({
           <p className="text-lg font-semibold text-[#e4e4ed]">
             {activeConversation?.summary.title ?? "New conversation"}
           </p>
-          <p className="mt-1 text-sm text-[#9898b0]">
-            {activeConversation
-              ? `${providerDisplayName(activeConversation.summary.agent.provider)} · ${activeConversation.summary.agent.model}`
-              : workspace.path}
-          </p>
+          {!activeConversation && (
+            <p className="mt-1 text-sm text-[#9898b0]">{workspace.path}</p>
+          )}
         </div>
 
         {workspace.isGitRepo && workspace.eaCodeIgnored === false && (
@@ -95,7 +111,12 @@ export function SimpleTaskView({
                   }`}
                 >
                   <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#8f91a7]">
-                    {message.role}
+                    {message.role === "assistant" && activeConversation
+                      ? `Assistant - ${formatAssistantLabel(
+                        activeConversation.summary.agent.provider,
+                        activeConversation.summary.agent.model,
+                      )}`
+                      : message.role}
                   </p>
                   <p className="whitespace-pre-wrap">{message.content}</p>
                 </div>
@@ -103,7 +124,12 @@ export function SimpleTaskView({
               {activeDraft && (
                 <div className="mr-auto max-w-3xl rounded-2xl border border-dashed border-[#3a3a5a] bg-[#181824] px-4 py-3 text-sm leading-6 text-[#e4e4ed]">
                   <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#8f91a7]">
-                    Assistant
+                    {activeConversation
+                      ? `Assistant - ${formatAssistantLabel(
+                        activeConversation.summary.agent.provider,
+                        activeConversation.summary.agent.model,
+                      )}`
+                      : "Assistant"}
                   </p>
                   <p className="whitespace-pre-wrap">{activeDraft}</p>
                 </div>
@@ -130,6 +156,7 @@ export function SimpleTaskView({
         <ConversationComposer
           providers={availableProviders}
           agent={activeConversation?.summary.agent ?? selectedAgent}
+          promptHistory={promptHistory}
           locked={Boolean(activeConversation)}
           sending={sending}
           stopping={stopping}
@@ -160,4 +187,28 @@ export function SimpleTaskView({
       </div>
     </div>
   );
+}
+
+function filterProvidersBySettings(
+  providers: ProviderInfo[],
+  settings: AppSettings | null,
+): ProviderInfo[] {
+  return providers
+    .filter((provider) => provider.available)
+    .map((provider) => {
+      if (!settings) {
+        return provider;
+      }
+
+      const enabledModels = getEnabledModels(settings, provider.name);
+      const models = enabledModels.size > 0
+        ? provider.models.filter((model) => enabledModels.has(model))
+        : [];
+
+      return {
+        ...provider,
+        models,
+      };
+    })
+    .filter((provider) => provider.models.length > 0);
 }

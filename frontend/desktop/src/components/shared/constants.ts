@@ -17,7 +17,10 @@ export function providerDisplayName(name: string): string {
 export function backendOptionsFromProviders(
   providers: ProviderInfo[],
 ): { value: string; label: string }[] {
-  return providers.map((p) => ({ value: p.name, label: providerDisplayName(p.name) }));
+  return sortProvidersByDisplayName(providers).map((p) => ({
+    value: p.name,
+    label: providerDisplayName(p.name),
+  }));
 }
 
 /** Returns model options for a provider from the hive-api provider list. */
@@ -25,7 +28,9 @@ export function modelOptionsFromProvider(
   provider: ProviderInfo | undefined,
 ): { value: string; label: string }[] {
   if (!provider) return [];
-  return provider.models.map((m) => ({ value: m, label: formatModelLabel(m) }));
+  return provider.models
+    .map((m) => ({ value: m, label: formatModelLabel(m) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 /** Formats a raw model identifier for display. */
@@ -47,4 +52,23 @@ export function formatModelLabel(model: string): string {
     "claude-haiku-4.5": "Claude Haiku 4.5",
   };
   return known[model] ?? model;
+}
+
+/** Formats the selected assistant as a single provider + model label. */
+export function formatAssistantLabel(provider: string, model: string): string {
+  const providerLabel = providerDisplayName(provider);
+  const modelLabel = formatModelLabel(model);
+
+  if (modelLabel.toLowerCase().startsWith(providerLabel.toLowerCase())) {
+    return modelLabel;
+  }
+
+  return `${providerLabel} ${modelLabel}`;
+}
+
+/** Returns providers sorted by their display label. */
+export function sortProvidersByDisplayName(providers: ProviderInfo[]): ProviderInfo[] {
+  return [...providers].sort((a, b) => (
+    providerDisplayName(a.name).localeCompare(providerDisplayName(b.name))
+  ));
 }

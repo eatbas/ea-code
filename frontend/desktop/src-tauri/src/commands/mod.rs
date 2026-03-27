@@ -4,5 +4,9 @@ pub(crate) mod emitter;
 pub(crate) mod settings;
 pub(crate) mod workspace;
 
+use crate::sidecar::SidecarManager;
+
 /// Shared application state.
-pub struct AppState {}
+pub struct AppState {
+    pub sidecar: SidecarManager,
+}

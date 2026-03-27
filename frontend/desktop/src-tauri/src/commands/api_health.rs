@@ -2,9 +2,10 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use serde::Deserialize;
-use tauri::AppHandle;
+use tauri::{AppHandle, State};
 
 use crate::commands::emitter::{emit_done, emit_items};
+use crate::commands::AppState;
 use crate::models::{ApiCliVersionInfo, ApiHealthStatus, ProviderInfo};
 
 pub const EVENT_API_HEALTH: &str = "api_health_status";
@@ -98,7 +99,8 @@ fn map_health_failure(base_url: String, status: Option<String>, error: Option<St
 }
 
 #[tauri::command]
-pub async fn check_api_health(app: AppHandle) -> Result<(), String> {
+pub async fn check_api_health(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let _ = state.sidecar.ensure_running().await;
     let base_url = hive_api_base_url();
     let client = shared_client();
     let url = format!("{base_url}/health");
@@ -124,7 +126,8 @@ pub async fn check_api_health(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn get_api_providers(app: AppHandle) -> Result<(), String> {
+pub async fn get_api_providers(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let _ = state.sidecar.ensure_running().await;
     let base_url = hive_api_base_url();
     let client = shared_client();
     let url = format!("{base_url}/v1/providers?all=true");
@@ -148,7 +151,8 @@ pub async fn get_api_providers(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn get_api_cli_versions(app: AppHandle) -> Result<(), String> {
+pub async fn get_api_cli_versions(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let _ = state.sidecar.ensure_running().await;
     let base_url = hive_api_base_url();
     let client = shared_client();
     let url = format!("{base_url}/v1/cli-versions");
@@ -172,7 +176,12 @@ pub async fn get_api_cli_versions(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn update_api_cli(app: AppHandle, provider: String) -> Result<(), String> {
+pub async fn update_api_cli(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    provider: String,
+) -> Result<(), String> {
+    state.sidecar.ensure_running().await?;
     let base_url = hive_api_base_url();
     let client = shared_client();
     let url = format!("{base_url}/v1/cli-versions/{provider}/update");

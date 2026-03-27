@@ -41,7 +41,7 @@ pub async fn workspace_info(path: &str) -> WorkspaceInfo {
         None
     };
     let ea_code_ignored = if is_repo {
-        is_path_ignored(path, ".ea-code").await.ok()
+        Some(is_ea_code_ignored(path).await)
     } else {
         None
     };
@@ -53,6 +53,14 @@ pub async fn workspace_info(path: &str) -> WorkspaceInfo {
         branch,
         ea_code_ignored,
     }
+}
+
+async fn is_ea_code_ignored(path: &str) -> bool {
+    if is_path_ignored(path, ".ea-code").await.unwrap_or(false) {
+        return true;
+    }
+
+    workspace_has_ea_code_gitignore_entry(path).unwrap_or(false)
 }
 
 /// Runs a git command, routing through Git Bash on Windows via the shared
@@ -67,6 +75,21 @@ pub async fn is_path_ignored(path: &str, relative_path: &str) -> Result<bool, St
     Ok(output.status.success())
 }
 
+fn workspace_has_ea_code_gitignore_entry(workspace_path: &str) -> Result<bool, String> {
+    let gitignore_path = Path::new(workspace_path).join(".gitignore");
+    if !gitignore_path.exists() {
+        return Ok(false);
+    }
+
+    let existing = std::fs::read_to_string(&gitignore_path)
+        .map_err(|error| format!("Failed to read {}: {error}", gitignore_path.display()))?;
+
+    Ok(existing.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed == ".ea-code" || trimmed == ".ea-code/"
+    }))
+}
+
 /// Ensures the workspace root `.gitignore` contains `.ea-code/`.
 pub fn ensure_ea_code_gitignore_entry(workspace_path: &str) -> Result<(), String> {
     let gitignore_path = Path::new(workspace_path).join(".gitignore");
@@ -77,10 +100,7 @@ pub fn ensure_ea_code_gitignore_entry(workspace_path: &str) -> Result<(), String
         String::new()
     };
 
-    let already_present = existing.lines().any(|line| {
-        let trimmed = line.trim();
-        trimmed == ".ea-code" || trimmed == ".ea-code/"
-    });
+    let already_present = workspace_has_ea_code_gitignore_entry(workspace_path)?;
     if already_present {
         return Ok(());
     }

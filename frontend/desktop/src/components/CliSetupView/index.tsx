@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import type { ApiHealth, AppSettings, ProviderInfo, ApiCliVersionInfo } from "../../types";
-import { modelOptionsFromProvider, providerDisplayName } from "../shared/constants";
+import {
+  modelOptionsFromProvider,
+  providerDisplayName,
+  sortProvidersByDisplayName,
+} from "../shared/constants";
 import { useToast } from "../shared/Toast";
 import {
   getEnabledModels,
@@ -41,6 +45,7 @@ export function CliSetupView({
   const toast = useToast();
   const actionsDisabled = versionsLoading || updating !== null;
   const lastRefreshRef = useRef<number>(0);
+  const sortedProviders = sortProvidersByDisplayName(providers);
 
   const refreshAll = useCallback((showSuccessToast: boolean): void => {
     onRefreshProviders();
@@ -138,7 +143,7 @@ export function CliSetupView({
 
           {providers.length > 0 && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {providers.map((p) => (
+              {sortedProviders.map((p) => (
                 <CliCard
                   key={p.name}
                   provider={p}
