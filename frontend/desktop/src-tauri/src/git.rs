@@ -1,4 +1,5 @@
 use crate::models::WorkspaceInfo;
+use crate::platform;
 
 /// Checks whether the given path resides inside a git repository.
 pub async fn is_git_repo(path: &str) -> bool {
@@ -47,20 +48,8 @@ pub async fn workspace_info(path: &str) -> WorkspaceInfo {
     }
 }
 
-/// Runs a git command, routing through Git Bash on Windows.
-#[cfg(target_os = "windows")]
+/// Runs a git command, routing through Git Bash on Windows via the shared
+/// [`platform::run_command`] utility.
 async fn run_git(args: &[&str]) -> Result<std::process::Output, String> {
-    crate::commands::git_bash::run_binary("git", args, 15)
-        .await
-        .ok_or_else(|| "Failed to run git via Git Bash".to_string())
-}
-
-#[cfg(not(target_os = "windows"))]
-async fn run_git(args: &[&str]) -> Result<std::process::Output, String> {
-    let mut cmd = tokio::process::Command::new("git");
-    cmd.args(args).kill_on_drop(true);
-    tokio::time::timeout(std::time::Duration::from_secs(15), cmd.output())
-        .await
-        .map_err(|_| "git command timed out after 15 s".to_string())?
-        .map_err(|e| format!("Failed to run git: {e}"))
+    platform::run_command("git", args, None, 15).await
 }

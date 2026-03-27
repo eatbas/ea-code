@@ -1,7 +1,6 @@
-#[cfg(target_os = "windows")]
-use super::git_bash;
-#[cfg(not(target_os = "windows"))]
-use tokio::time::{timeout, Duration};
+//! CLI utility helpers — version extraction and npm invocation.
+
+use crate::platform;
 
 pub(super) fn extract_version_number(raw: &str) -> String {
     for token in raw.split_whitespace() {
@@ -24,21 +23,8 @@ pub(super) fn extract_version_from_output(output: &std::process::Output) -> Opti
     (!stderr.is_empty()).then(|| extract_version_number(&stderr))
 }
 
+/// Runs `npm` with the given arguments, routing through the shared
+/// [`platform::run_command`] utility.
 pub(super) async fn run_npm(args: &[&str]) -> Result<std::process::Output, String> {
-    #[cfg(target_os = "windows")]
-    {
-        return git_bash::run_binary("npm", args, 20)
-            .await
-            .ok_or_else(|| "Failed to run npm via Git Bash".to_string());
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let mut command = tokio::process::Command::new("npm");
-        command.args(args);
-        command.kill_on_drop(true);
-        timeout(Duration::from_secs(20), command.output())
-            .await
-            .map_err(|_| "npm command timed out after 20 seconds".to_string())?
-            .map_err(|e| format!("Failed to run npm: {e}"))
-    }
+    platform::run_command("npm", args, None, 20).await
 }

@@ -1,8 +1,8 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import type { AppSettings, CliHealth, CliStatus } from "../types";
 import { useToast } from "../components/shared/Toast";
+import { useTauriEventListeners } from "./useTauriEventListeners";
 
 interface CliHealthEvent {
   cliName: string;
@@ -29,25 +29,22 @@ interface UseCliHealthReturn {
 export function useCliHealth(): UseCliHealthReturn {
   const toast = useToast();
   const [health, setHealth] = useState<CliHealth | null>(null);
-  const [checking, setChecking] = useState<boolean>(false);
 
-  // Per-CLI events stream in as each binary check completes.
-  useEffect(() => {
-    const unRow = listen<CliHealthEvent>("cli_health_status", (event) => {
-      const { cliName, status } = event.payload;
-      setHealth((prev) => ({
-        ...(prev ?? DEFAULT_HEALTH),
-        [cliName]: status,
-      }));
-    });
-    const unDone = listen<void>("cli_health_check_complete", () => {
-      setChecking(false);
-    });
-    return () => {
-      void unRow.then((fn) => fn());
-      void unDone.then((fn) => fn());
-    };
-  }, []);
+  const { checking, setChecking } = useTauriEventListeners({
+    listeners: [
+      {
+        event: "cli_health_status",
+        handler: (payload: CliHealthEvent) => {
+          const { cliName, status } = payload;
+          setHealth((prev) => ({
+            ...(prev ?? DEFAULT_HEALTH),
+            [cliName]: status,
+          }));
+        },
+      },
+    ],
+    doneEvent: "cli_health_check_complete",
+  });
 
   const checkHealth = useCallback((settings: AppSettings): void => {
     setChecking(true);
@@ -60,7 +57,7 @@ export function useCliHealth(): UseCliHealthReturn {
         setChecking(false);
         toast.error("CLI health check failed.");
       });
-  }, [toast]);
+  }, [toast, setChecking]);
 
   return { health, checking, checkHealth };
 }

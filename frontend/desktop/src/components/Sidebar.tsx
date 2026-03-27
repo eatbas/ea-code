@@ -6,9 +6,6 @@ import { SidebarCollapsed } from "./SidebarCollapsed";
 import { SidebarSettings } from "./SidebarSettings";
 import { folderName } from "../utils/formatters";
 
-// Re-export so existing consumers that import from Sidebar keep working.
-export type { ActiveView } from "../types";
-
 /** Data-driven settings navigation items. */
 const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[] = [
   {

@@ -90,7 +90,7 @@ fn find_git_bash_inner() -> Option<String> {
 }
 
 #[cfg(target_os = "windows")]
-async fn run_git_bash(script: &str, args: &[&str], timeout_secs: u64) -> Option<Output> {
+pub(crate) async fn run_git_bash_script(script: &str, args: &[&str], timeout_secs: u64) -> Option<Output> {
     let git_bash = find_git_bash()?;
     let mut command = Command::new(git_bash);
     command
@@ -151,5 +151,5 @@ pub(crate) async fn run_binary(binary: &str, args: &[&str], timeout_secs: u64) -
     let mut bash_args = Vec::with_capacity(args.len() + 1);
     bash_args.push(binary);
     bash_args.extend_from_slice(args);
-    run_git_bash("exec \"$0\" \"$@\"", &bash_args, timeout_secs).await
+    run_git_bash_script("exec \"$0\" \"$@\"", &bash_args, timeout_secs).await
 }

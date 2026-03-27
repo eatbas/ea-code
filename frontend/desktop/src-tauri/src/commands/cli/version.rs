@@ -1,38 +1,19 @@
 //! CLI version detection and update helpers.
-//!
-//! Extracted from `cli.rs` to keep file sizes under 300 lines.
 
 use crate::models::CliVersionInfo;
+use crate::platform;
 
-use super::cli::check_binary_exists;
-use super::cli_util::extract_version_from_output;
-#[cfg(target_os = "windows")]
-use super::git_bash;
-#[cfg(not(target_os = "windows"))]
-use tokio::time::{timeout, Duration};
+use super::availability::check_binary_exists;
+use super::util::extract_version_from_output;
 
 pub(crate) async fn get_installed_version(path: &str) -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        let output = git_bash::run_binary(path, &["--version"], 5).await?;
-        if !output.status.success() {
-            return None;
-        }
-        extract_version_from_output(&output)
+    let output = platform::run_command(path, &["--version"], None, 5)
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
     }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let mut cmd = tokio::process::Command::new(path);
-        cmd.arg("--version").kill_on_drop(true);
-        let output = timeout(Duration::from_secs(5), cmd.output())
-            .await
-            .ok()?
-            .ok()?;
-        if output.status.success() {
-            return extract_version_from_output(&output);
-        }
-        None
-    }
+    extract_version_from_output(&output)
 }
 
 /// Reads the installed version from the npm package.json on disk (no process spawn).
@@ -70,12 +51,12 @@ async fn get_npm_package_version(npm_package: &str) -> Option<String> {
 /// Fetches the latest version via HTTP (no process spawns).
 async fn get_latest_version(cli_name: &str, npm_package: &str) -> Option<String> {
     if cli_name == "kimi" {
-        if let Some(v) = super::cli_http::get_latest_pypi_version("kimi-cli").await {
+        if let Some(v) = super::http::get_latest_pypi_version("kimi-cli").await {
             return Some(v);
         }
-        return super::cli_http::get_latest_npm_version_http(npm_package).await;
+        return super::http::get_latest_npm_version_http(npm_package).await;
     }
-    super::cli_http::get_latest_npm_version_http(npm_package).await
+    super::http::get_latest_npm_version_http(npm_package).await
 }
 
 pub(super) async fn build_cli_version_info(
@@ -164,7 +145,7 @@ pub(super) async fn build_git_bash_version_info() -> CliVersionInfo {
 
     let (installed, latest) = tokio::join!(
         get_installed_version("git"),
-        super::cli_http::get_latest_git_version_http(),
+        super::http::get_latest_git_version_http(),
     );
     let up_to_date =
         matches!((&installed, &latest), (Some(i), Some(l)) if i == l || i.starts_with(l));

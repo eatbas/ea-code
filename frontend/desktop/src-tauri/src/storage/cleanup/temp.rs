@@ -2,6 +2,8 @@ use std::path::Path;
 
 use crate::storage::config_dir;
 
+use super::traverse::traverse_runs;
+
 /// Removes stale temporary files on app startup.
 ///
 /// Safe to run only at startup when no pipeline is active.
@@ -93,51 +95,27 @@ pub fn cleanup_stale_temp_files() -> Result<usize, String> {
     }
 
     // 5. Delete empty run directories (no summary.json) across all workspaces
-    let projects = crate::storage::projects::read_projects().unwrap_or_default();
-    for project in &projects {
-        let ws = std::path::Path::new(&project.path);
-        if !ws.exists() {
-            continue;
-        }
-        let sessions_dir = ws.join(".ea-code").join("sessions");
-        if !sessions_dir.is_dir() {
-            continue;
-        }
-        if let Ok(session_entries) = std::fs::read_dir(&sessions_dir) {
-            for session_entry in session_entries.flatten() {
-                let runs_dir = session_entry.path().join("runs");
-                if !runs_dir.is_dir() {
-                    continue;
+    traverse_runs(&mut |run_path, _project_id, _session_id, _run_id| {
+        let summary = run_path.join("summary.json");
+        if !summary.exists() {
+            match std::fs::remove_dir_all(run_path) {
+                Ok(()) => {
+                    eprintln!(
+                        "Cleanup: removed empty run dir {}",
+                        run_path.display()
+                    );
+                    cleaned += 1;
                 }
-                if let Ok(run_entries) = std::fs::read_dir(&runs_dir) {
-                    for run_entry in run_entries.flatten() {
-                        let run_path = run_entry.path();
-                        if !run_path.is_dir() {
-                            continue;
-                        }
-                        let summary = run_path.join("summary.json");
-                        if !summary.exists() {
-                            match std::fs::remove_dir_all(&run_path) {
-                                Ok(()) => {
-                                    eprintln!(
-                                        "Cleanup: removed empty run dir {}",
-                                        run_path.display()
-                                    );
-                                    cleaned += 1;
-                                }
-                                Err(e) => {
-                                    eprintln!(
-                                        "Cleanup warning: could not remove {}: {e}",
-                                        run_path.display()
-                                    );
-                                }
-                            }
-                        }
-                    }
+                Err(e) => {
+                    eprintln!(
+                        "Cleanup warning: could not remove {}: {e}",
+                        run_path.display()
+                    );
                 }
             }
         }
-    }
+        Ok(())
+    })?;
 
     if cleaned > 0 {
         eprintln!("Startup cleanup: removed {cleaned} stale file(s)/dir(s)");

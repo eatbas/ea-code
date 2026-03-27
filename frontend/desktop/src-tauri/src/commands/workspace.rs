@@ -2,7 +2,7 @@ use crate::models::*;
 use crate::storage;
 use tauri::AppHandle;
 
-use super::cli::check_cli_health_inner;
+use super::cli::health::check_cli_health_inner;
 
 /// Validates a workspace directory and returns its git status.
 #[tauri::command]
@@ -66,7 +66,7 @@ pub async fn check_prerequisites() -> Result<PrerequisiteStatus, String> {
     let git_bash_available = if cfg!(target_os = "windows") {
         #[cfg(target_os = "windows")]
         {
-            super::git_bash::find_git_bash().is_some()
+            super::cli::git_bash::find_git_bash().is_some()
         }
         #[cfg(not(target_os = "windows"))]
         {

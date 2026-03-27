@@ -3,24 +3,12 @@ import { useCallback, useEffect } from "react";
 import type { ApiHealth, AppSettings, ProviderInfo, ApiCliVersionInfo } from "../../types";
 import { modelOptionsFromProvider, providerDisplayName } from "../shared/constants";
 import { useToast } from "../shared/Toast";
+import {
+  getEnabledModels,
+  serialiseEnabledModels,
+  applyModelCsv,
+} from "../../utils/modelSettings";
 import { CliCard } from "./CliCard";
-
-/** Legacy per-CLI model CSV settings keys. */
-const LEGACY_MODEL_KEY: Record<string, keyof AppSettings> = {
-  claude: "claudeModel",
-  codex: "codexModel",
-  gemini: "geminiModel",
-  kimi: "kimiModel",
-  opencode: "opencodeModel",
-};
-
-function parseEnabledModels(csv: string): Set<string> {
-  return new Set(csv.split(",").map((s) => s.trim()).filter(Boolean));
-}
-
-function serialiseEnabledModels(models: Set<string>): string {
-  return Array.from(models).join(",");
-}
 
 interface CliSetupViewProps {
   settings: AppSettings;
@@ -62,21 +50,12 @@ export function CliSetupView({
     refreshAll(false);
   }, [refreshAll]);
 
-  function getEnabledModels(providerName: string): Set<string> {
-    // Check providerModels first, then legacy fields.
-    const dynamic = settings.providerModels?.[providerName];
-    if (dynamic !== undefined) return parseEnabledModels(dynamic);
-    const legacyKey = LEGACY_MODEL_KEY[providerName];
-    if (legacyKey) return parseEnabledModels(settings[legacyKey] as string);
-    return new Set();
-  }
-
   function handleToggleModel(providerName: string, model: string): void {
     if (actionsDisabled) return;
     const provider = providers.find((p) => p.name === providerName);
     if (provider && !provider.available) return;
 
-    const current = getEnabledModels(providerName);
+    const current = getEnabledModels(settings, providerName);
     if (current.has(model)) {
       current.delete(model);
     } else {
@@ -84,23 +63,7 @@ export function CliSetupView({
     }
 
     const csv = serialiseEnabledModels(current);
-    const legacyKey = LEGACY_MODEL_KEY[providerName];
-
-    let updated: AppSettings;
-    if (legacyKey) {
-      // Write to both legacy field and providerModels for consistency.
-      updated = {
-        ...settings,
-        [legacyKey]: csv,
-        providerModels: { ...settings.providerModels, [providerName]: csv },
-      };
-    } else {
-      updated = {
-        ...settings,
-        providerModels: { ...settings.providerModels, [providerName]: csv },
-      };
-    }
-    onSave(updated);
+    onSave(applyModelCsv(settings, providerName, csv));
   }
 
   function handleToggleAll(providerName: string, selectAll: boolean): void {
@@ -109,24 +72,9 @@ export function CliSetupView({
     if (provider && !provider.available) return;
 
     const allValues = modelOptionsFromProvider(provider).map((opt) => opt.value);
-    const updated: Set<string> = selectAll ? new Set(allValues) : new Set();
-    const csv = serialiseEnabledModels(updated);
-    const legacyKey = LEGACY_MODEL_KEY[providerName];
-
-    let next: AppSettings;
-    if (legacyKey) {
-      next = {
-        ...settings,
-        [legacyKey]: csv,
-        providerModels: { ...settings.providerModels, [providerName]: csv },
-      };
-    } else {
-      next = {
-        ...settings,
-        providerModels: { ...settings.providerModels, [providerName]: csv },
-      };
-    }
-    onSave(next);
+    const next: Set<string> = selectAll ? new Set(allValues) : new Set();
+    const csv = serialiseEnabledModels(next);
+    onSave(applyModelCsv(settings, providerName, csv));
   }
 
   async function handleUpdateCli(providerName: string): Promise<void> {
@@ -191,7 +139,7 @@ export function CliSetupView({
                   loading={versionsLoading || updating === p.name}
                   updating={updating === p.name}
                   actionsDisabled={actionsDisabled}
-                  enabledModels={getEnabledModels(p.name)}
+                  enabledModels={getEnabledModels(settings, p.name)}
                   onToggleModel={(model) => handleToggleModel(p.name, model)}
                   onToggleAll={(selectAll) => handleToggleAll(p.name, selectAll)}
                   onUpdate={() => void handleUpdateCli(p.name)}

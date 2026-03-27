@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useClickOutside } from "../hooks/useClickOutside";
 import type { WorkspaceInfo, ProjectEntry } from "../types";
 import { folderName, projectDisplayName } from "../utils/formatters";
+import { Checkmark } from "./shared/Checkmark";
 import { useToast } from "./shared/Toast";
 
 interface IdleViewProps {
@@ -78,9 +79,7 @@ export function IdleView({
                     title={project.path}
                   >
                     {isActive ? (
-                      <svg className="h-4 w-4 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M2.5 6L5 8.5L9.5 3.5" />
-                      </svg>
+                      <Checkmark size="md" className="h-4 w-4 shrink-0" />
                     ) : (
                       <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />

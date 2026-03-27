@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import type { ApiHealth, ProviderInfo } from "../types";
+import { useTauriEventListeners } from "./useTauriEventListeners";
 
 interface UseApiHealthReturn {
   health: ApiHealth | null;
@@ -14,30 +14,27 @@ interface UseApiHealthReturn {
 export function useApiHealth(): UseApiHealthReturn {
   const [health, setHealth] = useState<ApiHealth | null>(null);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [checking, setChecking] = useState<boolean>(false);
 
-  useEffect(() => {
-    const unHealth = listen<ApiHealth>("api_health_status", (event) => {
-      setHealth(event.payload);
-    });
-
-    const unProvider = listen<ProviderInfo>("api_provider_info", (event) => {
-      setProviders((prev) => {
-        const filtered = prev.filter((p) => p.name !== event.payload.name);
-        return [...filtered, event.payload];
-      });
-    });
-
-    const unDone = listen<void>("api_providers_check_complete", () => {
-      setChecking(false);
-    });
-
-    return () => {
-      void unHealth.then((fn) => fn());
-      void unProvider.then((fn) => fn());
-      void unDone.then((fn) => fn());
-    };
-  }, []);
+  const { checking, setChecking } = useTauriEventListeners({
+    listeners: [
+      {
+        event: "api_health_status",
+        handler: (payload: ApiHealth) => {
+          setHealth(payload);
+        },
+      },
+      {
+        event: "api_provider_info",
+        handler: (payload: ProviderInfo) => {
+          setProviders((prev) => {
+            const filtered = prev.filter((p) => p.name !== payload.name);
+            return [...filtered, payload];
+          });
+        },
+      },
+    ],
+    doneEvent: "api_providers_check_complete",
+  });
 
   const checkHealth = useCallback((): void => {
     setChecking(true);
@@ -47,7 +44,7 @@ export function useApiHealth(): UseApiHealthReturn {
     ]).catch(() => {
       setChecking(false);
     });
-  }, []);
+  }, [setChecking]);
 
   return { health, providers, checking, checkHealth };
 }

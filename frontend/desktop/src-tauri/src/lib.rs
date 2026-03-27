@@ -1,6 +1,7 @@
 mod commands;
 mod git;
 mod models;
+pub mod platform;
 pub mod sidecar;
 pub mod storage;
 
@@ -75,10 +76,10 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::save_settings,
             // CLI health & version commands
-            commands::cli::check_cli_health,
-            commands::cli::get_cli_versions,
-            commands::cli::update_cli,
-            commands::cli::invalidate_cli_cache,
+            commands::cli::health::check_cli_health,
+            commands::cli::health::get_cli_versions,
+            commands::cli::health::update_cli,
+            commands::cli::availability::invalidate_cli_cache,
             // hive-api health & provider commands
             commands::api_health::check_api_health,
             commands::api_health::get_api_providers,

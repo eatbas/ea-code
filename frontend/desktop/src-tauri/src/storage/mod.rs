@@ -2,6 +2,7 @@
 ///
 /// Global data (settings) lives under `~/.ea-code/`.
 /// Uses atomic writes (write to .tmp, then rename) for all JSON files.
+pub mod cleanup;
 pub mod projects;
 pub mod settings;
 

@@ -5,4 +5,4 @@ pub mod storage;
 
 pub use environment::*;
 pub use settings::*;
-pub use storage::ProjectEntry;
+pub use storage::{ProjectEntry, RunFileStatus, RunSummary, StorageStats};
