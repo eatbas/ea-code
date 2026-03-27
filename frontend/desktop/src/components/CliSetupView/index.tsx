@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect } from "react";
 import type { ApiHealth, AppSettings, ProviderInfo, ApiCliVersionInfo } from "../../types";
-import { sanitiseAgentAssignmentsForEnabledModels } from "../../utils/agentSettings";
 import { modelOptionsFromProvider, providerDisplayName } from "../shared/constants";
 import { useToast } from "../shared/Toast";
 import { CliCard } from "./CliCard";
@@ -101,7 +100,7 @@ export function CliSetupView({
         providerModels: { ...settings.providerModels, [providerName]: csv },
       };
     }
-    onSave(sanitiseAgentAssignmentsForEnabledModels(updated));
+    onSave(updated);
   }
 
   function handleToggleAll(providerName: string, selectAll: boolean): void {
@@ -127,7 +126,7 @@ export function CliSetupView({
         providerModels: { ...settings.providerModels, [providerName]: csv },
       };
     }
-    onSave(sanitiseAgentAssignmentsForEnabledModels(next));
+    onSave(next);
   }
 
   async function handleUpdateCli(providerName: string): Promise<void> {

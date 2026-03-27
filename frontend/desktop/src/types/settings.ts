@@ -1,11 +1,3 @@
-import type { AgentBackend } from "./agents";
-
-/** Configuration for an extra parallel planner or reviewer slot. */
-export interface ExtraSlotConfig {
-  agent: AgentBackend | null;
-  model: string | null;
-}
-
 /** Application settings persisted locally. */
 export interface AppSettings {
   /** UI theme preference. */
@@ -17,39 +9,6 @@ export interface AppSettings {
   geminiPath: string;
   kimiPath: string;
   opencodePath: string;
-  promptEnhancerAgent: AgentBackend | null;
-  skillSelectorAgent: AgentBackend | null;
-  plannerAgent: AgentBackend | null;
-  planAuditorAgent: AgentBackend | null;
-  coderAgent: AgentBackend | null;
-  codeReviewerAgent: AgentBackend | null;
-  /** Review Merger agent backend. */
-  reviewMergerAgent: AgentBackend | null;
-  codeFixerAgent: AgentBackend | null;
-  finalJudgeAgent: AgentBackend | null;
-  executiveSummaryAgent: AgentBackend | null;
-  maxIterations: number;
-  requireGit: boolean;
-  /** Budget mode: skip all planning, send prompt directly to coder. */
-  budgetMode: boolean;
-  /** Minimum weighted review score to pass (default 7.0). */
-  reviewPassScore: number;
-  /** Pause pipeline after planning to let the user approve, revise, or skip the plan. */
-  requirePlanApproval: boolean;
-  /** Seconds to wait before auto-approving the plan (0 = wait indefinitely). */
-  planAutoApproveTimeoutSec: number;
-  /** Maximum number of plan revision rounds before auto-approving. */
-  maxPlanRevisions: number;
-  /** Use token-optimised prompt variants (compact handoff, git inspection). */
-  tokenOptimisedPrompts: boolean;
-  /** Number of retries per agent call on failure (0 = no retries). */
-  agentRetryCount: number;
-  /** Per-agent timeout in milliseconds (0 = no timeout). */
-  agentTimeoutMs: number;
-  /** Maximum agentic turns per invocation for CLIs that support it. */
-  agentMaxTurns: number;
-  /** Completed runs older than this many days are deleted on startup (0 = disabled). */
-  retentionDays: number;
   /** Comma-separated list of enabled Claude models. */
   claudeModel: string;
   /** Comma-separated list of enabled Codex models. */
@@ -60,31 +19,11 @@ export interface AppSettings {
   kimiModel: string;
   /** Comma-separated list of enabled OpenCode models. */
   opencodeModel: string;
-  /** Per-stage model selections. */
-  promptEnhancerModel: string;
-  skillSelectorModel: string | null;
-  plannerModel: string | null;
-  planAuditorModel: string | null;
-  coderModel: string;
-  codeReviewerModel: string;
-  /** Model for review merger stage. */
-  reviewMergerModel: string | null;
-  codeFixerModel: string;
-  finalJudgeModel: string;
-  executiveSummaryModel: string;
-  /** Extra planner slot configurations (planner 2, 3, 4, ...). */
-  extraPlanners: ExtraSlotConfig[];
-  /** Extra reviewer slot configurations (reviewer 2, 3, 4, ...). */
-  extraReviewers: ExtraSlotConfig[];
-  /** Maximum total planner slots (1 = primary only, 2+ = primary + extras). */
-  maxPlanners: number;
-  /** Maximum total reviewer slots (1 = primary only, 2+ = primary + extras). */
-  maxReviewers: number;
   /** Per-provider enabled models (e.g. { copilot: "claude-sonnet-4.6,gpt-5.4" }). */
   providerModels: Record<string, string>;
   /** Port for the hive-api sidecar (0 = default 8719). */
   hiveApiPort: number;
-  /** Python interpreter path override for the sidecar (empty = auto-detect). */
+  /** Python interpreter path override (empty = auto-detect). */
   pythonPath: string;
 }
 
@@ -97,49 +36,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   geminiPath: "gemini",
   kimiPath: "kimi",
   opencodePath: "opencode",
-  promptEnhancerAgent: null,
-  skillSelectorAgent: null,
-  plannerAgent: null,
-  planAuditorAgent: null,
-  coderAgent: null,
-  codeReviewerAgent: null,
-  reviewMergerAgent: null,
-  codeFixerAgent: null,
-  finalJudgeAgent: null,
-  executiveSummaryAgent: null,
-  maxIterations: 3,
-  requireGit: true,
-  budgetMode: false,
-  reviewPassScore: 7.0,
-  requirePlanApproval: false,
-  planAutoApproveTimeoutSec: 45,
-  maxPlanRevisions: 3,
-  tokenOptimisedPrompts: false,
-  agentRetryCount: 1,
-  agentTimeoutMs: 0,
-  agentMaxTurns: 25,
-  retentionDays: 90,
   claudeModel: "sonnet",
   codexModel: "gpt-5.3-codex",
   geminiModel: "gemini-3-flash-preview",
   kimiModel: "kimi-code/kimi-for-coding",
   opencodeModel: "opencode/glm-5",
-  promptEnhancerModel: "sonnet",
-  skillSelectorModel: null,
-  plannerModel: null,
-  planAuditorModel: null,
-  coderModel: "sonnet",
-  codeReviewerModel: "gpt-5.3-codex",
-  reviewMergerModel: null,
-  codeFixerModel: "sonnet",
-  finalJudgeModel: "gpt-5.3-codex",
-  executiveSummaryModel: "gpt-5.3-codex",
-  extraPlanners: [],
-  extraReviewers: [],
-  maxPlanners: 4,
-  maxReviewers: 4,
   providerModels: {},
   hiveApiPort: 0,
   pythonPath: "",
 };
-

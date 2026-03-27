@@ -1,17 +1,9 @@
-mod agents;
 mod commands;
-mod events;
 mod git;
 mod models;
-mod orchestrator;
-pub mod sidecar;
 pub mod storage;
 
 use commands::AppState;
-use sidecar::SidecarManager;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,31 +20,6 @@ pub fn run() {
     // Import legacy settings from SQLite if needed (one-time migration)
     if let Err(e) = storage::settings::import_from_legacy_json() {
         eprintln!("Warning: failed to import legacy settings: {e}");
-    }
-
-    // Run crash recovery to mark any interrupted runs as crashed
-    if let Err(e) = storage::recovery::recover_all_crashed() {
-        eprintln!("Warning: crash recovery failed: {e}");
-    }
-
-    // Retention cleanup: delete completed runs older than configured threshold
-    if let Ok(settings) = storage::settings::read_settings() {
-        if settings.retention_days > 0 {
-            match storage::cleanup::cleanup_old_runs(settings.retention_days) {
-                Ok(()) => {}
-                Err(e) => eprintln!("Warning: retention cleanup failed: {e}"),
-            }
-        }
-    }
-
-    // Startup cleanup: remove stale temp files, dead MCP configs, legacy SQLite, etc.
-    if let Err(e) = storage::cleanup::cleanup_stale_temp_files() {
-        eprintln!("Warning: startup temp file cleanup failed: {e}");
-    }
-
-    // Remove projects whose workspace folder no longer exists on disk
-    if let Err(e) = storage::projects::cleanup_missing_projects() {
-        eprintln!("Warning: stale project cleanup failed: {e}");
     }
 
     // Sync built-in MCP catalog
@@ -75,56 +42,24 @@ pub fn run() {
         }));
     }
 
-    // Resolve hive-api directory and read configured port from settings
-    let hive_api_port = storage::settings::read_settings()
-        .map(|s| s.hive_api_port)
-        .unwrap_or(0);
-    let sidecar = match sidecar::find_hive_dir() {
-        Ok(hive_dir) => SidecarManager::new(hive_dir, hive_api_port),
-        Err(e) => {
-            eprintln!("Warning: {e} — hive-api sidecar will not auto-start");
-            // Create a dummy manager pointing at a non-existent dir;
-            // ensure_running() will fail gracefully at pipeline time.
-            SidecarManager::new(std::path::PathBuf::from("hive-api"), hive_api_port)
-        }
-    };
-
     let app = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .manage(AppState {
-            cancel_flags: Arc::new(Mutex::new(HashMap::new())),
-            pause_flags: Arc::new(Mutex::new(HashMap::new())),
-            answer_senders: Arc::new(Mutex::new(HashMap::new())),
-            sidecar: sidecar.clone(),
-            active_jobs: Arc::new(Mutex::new(HashMap::new())),
-            run_workspaces: Arc::new(Mutex::new(HashMap::new())),
-        })
+        .manage(AppState {})
         .invoke_handler(tauri::generate_handler![
-            commands::app::has_live_sessions,
             // Workspace commands
             commands::workspace::select_workspace,
             commands::workspace::validate_environment,
             commands::workspace::check_prerequisites,
+            commands::workspace::list_projects,
+            commands::workspace::delete_project,
             commands::workspace::open_in_vscode,
-            // Pipeline commands
-            commands::pipeline::run_pipeline,
-            commands::pipeline::cancel_pipeline,
-            commands::pipeline::pause_pipeline,
-            commands::pipeline::resume_pipeline,
-            commands::pipeline::answer_pipeline_question,
             // Settings commands
             commands::settings::get_settings,
             commands::settings::save_settings,
-            // Skills commands
-            commands::skills::list_skills,
-            commands::skills::get_skill,
-            commands::skills::create_skill,
-            commands::skills::update_skill,
-            commands::skills::delete_skill,
             // MCP server commands
             commands::mcp::list_mcp_servers,
             commands::mcp::list_mcp_capable_clis,
@@ -139,7 +74,7 @@ pub fn run() {
             commands::mcp::set_context7_api_key,
             commands::mcp_runtime::get_mcp_cli_runtime_statuses,
             commands::mcp_runtime::run_cli_mcp_fix_with_prompt,
-            // CLI health & version commands (legacy — to be removed)
+            // CLI health & version commands
             commands::cli::check_cli_health,
             commands::cli::get_cli_versions,
             commands::cli::update_cli,
@@ -149,41 +84,9 @@ pub fn run() {
             commands::api_health::get_api_providers,
             commands::api_health::get_api_cli_versions,
             commands::api_health::update_api_cli,
-            // History / session commands
-            commands::history::list_projects,
-            commands::history::list_sessions,
-            commands::history::get_session_detail,
-            commands::history::create_session,
-            commands::history::get_run_detail,
-            commands::history::get_run_events,
-            commands::history::get_run_artifacts,
-            commands::history::get_session_messages,
-            commands::history::delete_session,
-            commands::history::delete_project,
         ])
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");
 
-    // Start the hive-api sidecar in the background (non-blocking)
-    let sidecar_for_startup = sidecar.clone();
-    tauri::async_runtime::spawn(async move {
-        if let Err(e) = sidecar_for_startup.start().await {
-            eprintln!("Warning: failed to start hive-api sidecar: {e}");
-            return;
-        }
-        if let Err(e) = sidecar_for_startup.wait_until_healthy().await {
-            eprintln!("Warning: hive-api sidecar not healthy: {e}");
-        }
-    });
-
-    app.run(move |_app_handle, event| {
-        if let tauri::RunEvent::ExitRequested { .. } = event {
-            let sc = sidecar.clone();
-            tauri::async_runtime::block_on(async move {
-                if let Err(e) = sc.stop().await {
-                    eprintln!("Warning: failed to stop hive-api sidecar: {e}");
-                }
-            });
-        }
-    });
+    app.run(|_app_handle, _event| {});
 }

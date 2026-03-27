@@ -1,14 +1,3 @@
-/** Agent role identifiers for the orchestration pipeline. */
-export type AgentRole =
-  | "prompt_enhancer"
-  | "planner"
-  | "plan_auditor"
-  | "coder"
-  | "reviewer_auditor"
-  | "code_fixer"
-  | "judge"
-  | "executive_summary";
-
 /** Supported CLI agent backends (dynamic — any provider name from hive-api). */
 export type AgentBackend = string;
 
@@ -50,8 +39,6 @@ export interface AllCliVersions {
   gitBash?: CliVersionInfo;
 }
 
-// ── prerequisite types ─────────────────────────────────────────────
-
 /** Startup prerequisite check result. */
 export interface PrerequisiteStatus {
   pythonAvailable: boolean;
@@ -60,8 +47,6 @@ export interface PrerequisiteStatus {
   gitBashAvailable: boolean;
   hiveApiSourceFound: boolean;
 }
-
-// ── hive-api types ─────────────────────────────────────────────────
 
 /** hive-api connection health status. */
 export interface ApiHealth {

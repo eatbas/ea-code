@@ -2,34 +2,25 @@ import type { ReactNode } from "react";
 import { useState, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useClickOutside } from "../hooks/useClickOutside";
-import type { WorkspaceInfo, ProjectSummary, RunOptions, ProviderInfo, AppSettings } from "../types";
+import type { WorkspaceInfo, ProjectEntry } from "../types";
 import { folderName, projectDisplayName } from "../utils/formatters";
-import { PromptInputBar } from "./shared/PromptInputBar";
 import { useToast } from "./shared/Toast";
 
 interface IdleViewProps {
   workspace: WorkspaceInfo | null;
   workspacePath?: string;
-  projects: ProjectSummary[];
-  providers: ProviderInfo[];
-  settings: AppSettings | null;
-  onMissingAgentSetup: () => void;
+  projects: ProjectEntry[];
   onSelectProject: (projectPath: string) => void | Promise<void>;
   onAddProject: () => void;
-  onRun: (options: RunOptions) => void;
 }
 
-/** Centred idle landing screen with logo, heading, workspace selector, and input bar. */
+/** Centred idle landing screen with logo, heading, and workspace selector. */
 export function IdleView({
   workspace,
   workspacePath,
   projects,
-  providers,
-  settings,
-  onMissingAgentSetup,
   onSelectProject,
   onAddProject,
-  onRun,
 }: IdleViewProps): ReactNode {
   const toast = useToast();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -132,18 +123,8 @@ export function IdleView({
         )}
       </div>
 
-      {/* Bottom section — input + workspace */}
+      {/* Bottom section — workspace path + VS Code */}
       <div className="flex w-full max-w-2xl flex-col gap-2 px-6 pb-8">
-        <PromptInputBar
-          placeholder="What would you like to build?"
-          providers={providers}
-          settings={settings}
-          hasProjectSelected={Boolean(workspace)}
-          onMissingAgentSetup={onMissingAgentSetup}
-          onSubmit={onRun}
-        />
-
-        {/* Workspace path + Open in VS Code */}
         <div className="flex w-full items-center justify-between px-1 text-xs text-[#9898b0]">
           <span className="truncate" title={workspacePath ?? "No project selected"}>
             {workspacePath ?? "No project selected"}

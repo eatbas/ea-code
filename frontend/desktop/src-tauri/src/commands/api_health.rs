@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
-
-use super::AppState;
+use tauri::{AppHandle, Emitter};
 
 /// hive-api health response shape.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,15 +37,13 @@ pub struct ApiCliVersionInfo {
     pub available: bool,
 }
 
-// ── Event names ──────────────────────────────────────────────────────
-
 const EVENT_API_HEALTH: &str = "api_health_status";
 const EVENT_API_PROVIDER: &str = "api_provider_info";
 const EVENT_API_PROVIDERS_DONE: &str = "api_providers_check_complete";
 const EVENT_API_CLI_VERSION: &str = "api_cli_version_info";
 const EVENT_API_CLI_VERSIONS_DONE: &str = "api_versions_check_complete";
 
-// ── hive-api response shapes (for deserialization) ───────────────────
+const DEFAULT_HIVE_API_PORT: u16 = 8719;
 
 #[derive(Deserialize)]
 struct HealthResponse {
@@ -70,12 +66,18 @@ struct CliVersionResponse {
     needs_update: bool,
 }
 
-// ── Tauri commands ───────────────────────────────────────────────────
+/// Resolves the hive-api base URL from settings.
+fn hive_api_base_url() -> String {
+    let port = crate::storage::settings::read_settings()
+        .map(|s| if s.hive_api_port == 0 { DEFAULT_HIVE_API_PORT } else { s.hive_api_port })
+        .unwrap_or(DEFAULT_HIVE_API_PORT);
+    format!("http://127.0.0.1:{port}")
+}
 
 /// Checks hive-api connectivity and emits `api_health_status`.
 #[tauri::command]
-pub async fn check_api_health(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let base_url = state.sidecar.base_url().await;
+pub async fn check_api_health(app: AppHandle) -> Result<(), String> {
+    let base_url = hive_api_base_url();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(3))
         .build()
@@ -120,10 +122,9 @@ pub async fn check_api_health(app: AppHandle, state: State<'_, AppState>) -> Res
 }
 
 /// Fetches available providers and models from hive-api.
-/// Emits `api_provider_info` per provider, then `api_providers_check_complete`.
 #[tauri::command]
-pub async fn get_api_providers(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let base_url = state.sidecar.base_url().await;
+pub async fn get_api_providers(app: AppHandle) -> Result<(), String> {
+    let base_url = hive_api_base_url();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()
@@ -156,13 +157,9 @@ pub async fn get_api_providers(app: AppHandle, state: State<'_, AppState>) -> Re
 }
 
 /// Fetches CLI version info from hive-api.
-/// Emits `api_cli_version_info` per provider, then `api_versions_check_complete`.
 #[tauri::command]
-pub async fn get_api_cli_versions(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    let base_url = state.sidecar.base_url().await;
+pub async fn get_api_cli_versions(app: AppHandle) -> Result<(), String> {
+    let base_url = hive_api_base_url();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -185,10 +182,7 @@ pub async fn get_api_cli_versions(
             }
         }
         Ok(resp) => {
-            eprintln!(
-                "[api_health] cli-versions endpoint returned {}",
-                resp.status()
-            );
+            eprintln!("[api_health] cli-versions endpoint returned {}", resp.status());
         }
         Err(e) => {
             eprintln!("[api_health] failed to fetch CLI versions: {e}");
@@ -200,14 +194,9 @@ pub async fn get_api_cli_versions(
 }
 
 /// Triggers a CLI update for a single provider via hive-api.
-/// Emits `api_cli_version_info` with the updated version info.
 #[tauri::command]
-pub async fn update_api_cli(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    provider: String,
-) -> Result<(), String> {
-    let base_url = state.sidecar.base_url().await;
+pub async fn update_api_cli(app: AppHandle, provider: String) -> Result<(), String> {
+    let base_url = hive_api_base_url();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .build()

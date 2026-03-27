@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { ProjectSummary, WorkspaceInfo } from "../types";
+import type { ProjectEntry, WorkspaceInfo } from "../types";
 import { useToast } from "../components/shared/Toast";
 
 interface UseWorkspaceReturn {
@@ -10,6 +10,9 @@ interface UseWorkspaceReturn {
   openingWorkspace: boolean;
   openWorkspace: (path: string) => Promise<void>;
   selectFolder: () => Promise<void>;
+  projects: ProjectEntry[];
+  loadProjects: () => Promise<void>;
+  deleteProject: (projectPath: string) => Promise<void>;
 }
 
 /** Hook to manage workspace folder selection via the native dialog. */
@@ -18,6 +21,26 @@ export function useWorkspace(): UseWorkspaceReturn {
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openingWorkspace, setOpeningWorkspace] = useState(false);
+  const [projects, setProjects] = useState<ProjectEntry[]>([]);
+
+  const loadProjects = useCallback(async (): Promise<void> => {
+    try {
+      const list = await invoke<ProjectEntry[]>("list_projects");
+      setProjects(list);
+    } catch {
+      // Silent — project list is non-critical.
+    }
+  }, []);
+
+  const deleteProject = useCallback(async (projectPath: string): Promise<void> => {
+    try {
+      await invoke("delete_project", { projectPath });
+      await loadProjects();
+      toast.success("Project removed.");
+    } catch {
+      toast.error("Failed to remove project.");
+    }
+  }, [loadProjects, toast]);
 
   const openWorkspace = useCallback(async (path: string): Promise<void> => {
     setOpeningWorkspace(true);
@@ -53,8 +76,11 @@ export function useWorkspace(): UseWorkspaceReturn {
 
     async function restoreLastWorkspace(): Promise<void> {
       try {
-        const projects = await invoke<ProjectSummary[]>("list_projects");
-        const lastProjectPath = projects[0]?.path;
+        const list = await invoke<ProjectEntry[]>("list_projects");
+        if (!disposed) {
+          setProjects(list);
+        }
+        const lastProjectPath = list[0]?.path;
         if (!lastProjectPath || disposed) {
           return;
         }
@@ -68,7 +94,7 @@ export function useWorkspace(): UseWorkspaceReturn {
         setWorkspace(info);
         setError(null);
       } catch {
-        // Ignore startup restore errors to keep initial load quiet.
+        // Ignore startup restore errors.
       } finally {
         if (!disposed) {
           setOpeningWorkspace(false);
@@ -82,5 +108,5 @@ export function useWorkspace(): UseWorkspaceReturn {
     };
   }, []);
 
-  return { workspace, error, openingWorkspace, openWorkspace, selectFolder };
+  return { workspace, error, openingWorkspace, openWorkspace, selectFolder, projects, loadProjects, deleteProject };
 }

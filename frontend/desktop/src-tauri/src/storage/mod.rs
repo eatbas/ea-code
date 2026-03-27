@@ -1,30 +1,19 @@
 /// File-based storage module.
 ///
-/// Global data (settings, skills, MCP) lives under `~/.ea-code/`.
-/// Project-specific data (sessions, runs, artifacts) lives under `<workspace>/.ea-code/`.
-///
+/// Global data (settings, MCP) lives under `~/.ea-code/`.
 /// Uses atomic writes (write to .tmp, then rename) for all JSON files.
-/// Uses append-only JSONL for event logs.
-pub mod cleanup;
 pub mod mcp;
-pub mod messages;
 pub mod projects;
-pub mod recovery;
-pub mod runs;
-pub mod sessions;
 pub mod settings;
-pub mod skills;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-// H8: Per-file-type locks for read-modify-write operations
+// Per-file-type locks for read-modify-write operations
 lazy_static::lazy_static! {
     static ref SETTINGS_LOCK: Mutex<()> = Mutex::new(());
     static ref PROJECTS_LOCK: Mutex<()> = Mutex::new(());
-    static ref SESSION_LOCK: Mutex<()> = Mutex::new(());
     static ref MCP_LOCK: Mutex<()> = Mutex::new(());
-    static ref SKILLS_LOCK: Mutex<()> = Mutex::new(());
 }
 
 /// Helper to acquire lock for settings file operations
@@ -39,21 +28,9 @@ pub fn with_projects_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Result<T
     f()
 }
 
-/// Helper to acquire lock for session file operations
-pub fn with_session_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Result<T, String> {
-    let _guard = SESSION_LOCK.lock().map_err(|_| "Session lock poisoned")?;
-    f()
-}
-
 /// Helper to acquire lock for MCP config file operations
 pub fn with_mcp_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Result<T, String> {
     let _guard = MCP_LOCK.lock().map_err(|_| "MCP lock poisoned")?;
-    f()
-}
-
-/// Helper to acquire lock for skills file operations
-pub fn with_skills_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Result<T, String> {
-    let _guard = SKILLS_LOCK.lock().map_err(|_| "Skills lock poisoned")?;
     f()
 }
 
@@ -65,18 +42,12 @@ pub fn config_dir() -> Result<PathBuf, String> {
 
 /// Atomically writes content to a file.
 /// N7: Uses 3-step pattern with .bak file to prevent data loss on crash.
-/// 1. Write to .tmp
-/// 2. Rename original to .bak (if exists)
-/// 3. Rename .tmp to target
-/// 4. Delete .bak on success
 pub fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
-    // Ensure parent directory exists
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create directory {}: {e}", parent.display()))?;
     }
 
-    // H12: Proper temp file naming - append .tmp/.bak instead of replacing extension
     let path_str = path
         .as_os_str()
         .to_str()
@@ -84,25 +55,20 @@ pub fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
     let tmp_path = PathBuf::from(format!("{}.tmp", path_str));
     let bak_path = PathBuf::from(format!("{}.bak", path_str));
 
-    // Step 1: Write to temp file
     std::fs::write(&tmp_path, contents)
         .map_err(|e| format!("Failed to write tmp file {}: {e}", tmp_path.display()))?;
 
-    // Step 2: If target exists, move it to .bak
     if path.exists() {
         std::fs::rename(path, &bak_path)
             .map_err(|e| format!("Failed to create backup {}: {e}", bak_path.display()))?;
     }
 
-    // Step 3: Rename temp to target
     match std::fs::rename(&tmp_path, path) {
         Ok(()) => {
-            // Step 4: Delete backup on success
             let _ = std::fs::remove_file(&bak_path);
             Ok(())
         }
         Err(e) => {
-            // Restore backup on failure
             if bak_path.exists() {
                 let _ = std::fs::rename(&bak_path, path);
             }
@@ -117,12 +83,9 @@ pub fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
 }
 
 /// Recover any orphaned .bak files on startup.
-/// If a .bak file exists without its corresponding target, restore it.
-/// This handles crashes that occurred during atomic_write.
 pub fn recover_orphaned_backups() -> Result<(), String> {
     let base = config_dir()?;
 
-    // Scan for .bak files recursively
     fn scan_and_restore(dir: &Path) -> Result<usize, String> {
         let mut restored = 0;
         let entries = std::fs::read_dir(dir)
@@ -136,10 +99,8 @@ pub fn recover_orphaned_backups() -> Result<(), String> {
                 restored += scan_and_restore(&path)?;
             } else if let Some(ext) = path.extension() {
                 if ext == "bak" {
-                    // Found a .bak file - check if target is missing
                     let target_path = path.with_extension("");
                     if !target_path.exists() {
-                        // Orphaned backup - restore it
                         std::fs::rename(&path, &target_path).map_err(|e| {
                             format!(
                                 "Failed to restore backup {} to {}: {e}",
@@ -149,7 +110,6 @@ pub fn recover_orphaned_backups() -> Result<(), String> {
                         })?;
                         restored += 1;
                     } else {
-                        // Target exists, backup is stale - delete it
                         let _ = std::fs::remove_file(&path);
                     }
                 }
@@ -167,41 +127,12 @@ pub fn recover_orphaned_backups() -> Result<(), String> {
     Ok(())
 }
 
-/// Returns the workspace-local data directory: `<workspace>/.ea-code/`.
-pub fn workspace_data_dir(workspace_path: &str) -> Result<PathBuf, String> {
-    let p = PathBuf::from(workspace_path);
-    if !p.exists() {
-        return Err(format!("Workspace path does not exist: {workspace_path}"));
-    }
-    Ok(p.join(".ea-code"))
-}
-
 /// Ensures global config directories exist under `~/.ea-code/`.
 pub fn ensure_dirs() -> Result<(), String> {
     let base = config_dir()?;
 
     std::fs::create_dir_all(&base)
         .map_err(|e| format!("Failed to create config directory: {e}"))?;
-    std::fs::create_dir_all(base.join("skills"))
-        .map_err(|e| format!("Failed to create skills directory: {e}"))?;
-    std::fs::create_dir_all(base.join("prompts"))
-        .map_err(|e| format!("Failed to create prompts directory: {e}"))?;
-
-    Ok(())
-}
-
-/// Ensures workspace-local data directories exist under `<workspace>/.ea-code/`.
-/// Also adds `.ea-code/` to the workspace's `.gitignore` if applicable.
-pub fn ensure_workspace_dirs(workspace_path: &str) -> Result<(), String> {
-    let base = workspace_data_dir(workspace_path)?;
-
-    std::fs::create_dir_all(&base)
-        .map_err(|e| format!("Failed to create workspace data directory: {e}"))?;
-    std::fs::create_dir_all(base.join("sessions"))
-        .map_err(|e| format!("Failed to create workspace sessions directory: {e}"))?;
-
-    // Add .ea-code/ to .gitignore
-    crate::git::ensure_gitignore_entry(workspace_path);
 
     Ok(())
 }
@@ -209,13 +140,4 @@ pub fn ensure_workspace_dirs(workspace_path: &str) -> Result<(), String> {
 /// Returns the current UTC timestamp as an RFC 3339 string.
 pub fn now_rfc3339() -> String {
     chrono::Utc::now().to_rfc3339()
-}
-
-/// Validates an ID to prevent path traversal attacks.
-/// Rejects IDs containing path separators or parent directory references.
-pub fn validate_id(id: &str) -> Result<(), String> {
-    if id.contains("..") || id.contains('/') || id.contains('\\') {
-        return Err("Invalid ID: path traversal detected".to_string());
-    }
-    Ok(())
 }

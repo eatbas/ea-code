@@ -26,9 +26,6 @@ pub async fn select_workspace(path: String) -> Result<WorkspaceInfo, String> {
         info.branch.as_deref(),
     )?;
 
-    // Ensure workspace-local data directories exist
-    storage::ensure_workspace_dirs(&path)?;
-
     Ok(info)
 }
 
@@ -38,34 +35,9 @@ pub async fn validate_environment(settings: AppSettings) -> Result<CliHealth, St
     check_cli_health_inner(&settings).await
 }
 
-/// Checks system-level prerequisites (Python, Git Bash on Windows, hive-api source).
+/// Checks system-level prerequisites (Git Bash on Windows).
 #[tauri::command]
 pub async fn check_prerequisites() -> Result<PrerequisiteStatus, String> {
-    // Python check — reuse the sidecar detection logic.
-    let (python_available, python_version) = match crate::sidecar::python::find_python().await {
-        Ok(py) => {
-            // Try to get the version string.
-            let version = tokio::process::Command::new(&py.executable)
-                .args(
-                    py.launcher_version
-                        .iter()
-                        .map(|v| v.as_str())
-                        .chain(["--version"])
-                        .collect::<Vec<_>>(),
-                )
-                .output()
-                .await
-                .ok()
-                .and_then(|o| {
-                    String::from_utf8(o.stdout)
-                        .ok()
-                        .map(|s| s.trim().to_string())
-                });
-            (true, version)
-        }
-        Err(_) => (false, None),
-    };
-
     // Git Bash check — only meaningful on Windows.
     let git_bash_available = if cfg!(target_os = "windows") {
         #[cfg(target_os = "windows")]
@@ -80,15 +52,24 @@ pub async fn check_prerequisites() -> Result<PrerequisiteStatus, String> {
         true
     };
 
-    // hive-api source check.
-    let hive_api_source_found = crate::sidecar::find_hive_dir().is_ok();
-
     Ok(PrerequisiteStatus {
-        python_available,
-        python_version,
+        python_available: true,
+        python_version: None,
         git_bash_available,
-        hive_api_source_found,
+        hive_api_source_found: false,
     })
+}
+
+/// Lists all known project bookmarks.
+#[tauri::command]
+pub async fn list_projects() -> Result<Vec<crate::models::ProjectEntry>, String> {
+    storage::projects::list_projects()
+}
+
+/// Deletes a project bookmark by path.
+#[tauri::command]
+pub async fn delete_project(project_path: String) -> Result<(), String> {
+    storage::projects::delete_project(&project_path)
 }
 
 /// Opens the given workspace path in VS Code.

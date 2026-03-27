@@ -1,11 +1,6 @@
-/** Display formatting utilities for pipeline metrics. */
+/** Display formatting utilities. */
 
-import type { ProjectSummary } from "../types";
-
-// Re-export plan and CLI parsers so existing imports keep working.
-export { extractPlanOnly, resolvePlanText, resolveAuditedPlanText } from "./planParser";
-export { tryParseJson, parseCliResult } from "./cliParser";
-export type { CliResult } from "./cliParser";
+import type { ProjectEntry } from "../types";
 
 /** Extracts the last path segment as a folder display name. */
 export function folderName(path: string): string {
@@ -14,26 +9,18 @@ export function folderName(path: string): string {
 }
 
 /** Returns a display name for a project (name or folder fallback). */
-export function projectDisplayName(project: ProjectSummary): string {
+export function projectDisplayName(project: ProjectEntry): string {
   return project.name.trim().length > 0 ? project.name : folderName(project.path);
 }
 
 /**
  * Parses a timestamp string as UTC.
- *
- * SQLite's CURRENT_TIMESTAMP produces bare strings like "2026-03-10 07:51:00"
- * without timezone info. JavaScript's Date() treats these as *local* time,
- * causing wrong durations when compared with RFC 3339 UTC strings. This helper
- * appends a "Z" suffix when no timezone indicator is present so the value is
- * always interpreted as UTC.
  */
 export function parseUtcTimestamp(ts: string): Date {
   const trimmed = ts.trim();
-  // Already has timezone info (+00:00, Z, -05:00, etc.)
   if (/[Zz]$/.test(trimmed) || /[+-]\d{2}:\d{2}$/.test(trimmed)) {
     return new Date(trimmed);
   }
-  // Replace space separator with 'T' for ISO compliance and add UTC indicator
   return new Date(trimmed.replace(" ", "T") + "Z");
 }
 
@@ -48,7 +35,7 @@ export function formatTimestamp(iso: string): string {
   }
 }
 
-/** Formats a timestamp for compact UI labels while preserving the start time/date. */
+/** Formats a timestamp for compact UI labels. */
 export function formatCompactTimestamp(iso: string): string {
   try {
     const d = parseUtcTimestamp(iso);
@@ -71,7 +58,7 @@ export function formatCompactTimestamp(iso: string): string {
   }
 }
 
-/** Formats milliseconds into human-readable duration (e.g., "1.3s", "2m 5s", "1h 23m 5s"). */
+/** Formats milliseconds into human-readable duration. */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   const totalSecs = Math.floor(ms / 1000);
@@ -85,21 +72,21 @@ export function formatDuration(ms: number): string {
   return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
 }
 
-/** Formats a token count into short notation (e.g., 13103 → "13.1k"). */
+/** Formats a token count into short notation. */
 export function formatTokens(count: number): string {
   if (count < 1000) return String(count);
   if (count < 1_000_000) return `${(count / 1000).toFixed(1)}k`;
   return `${(count / 1_000_000).toFixed(1)}M`;
 }
 
-/** Formats a cost in USD (e.g., 0.013 → "$0.013"). */
+/** Formats a cost in USD. */
 export function formatCost(usd: number): string {
   if (usd < 0.01) return `$${usd.toFixed(4)}`;
   if (usd < 1) return `$${usd.toFixed(3)}`;
   return `$${usd.toFixed(2)}`;
 }
 
-/** Formats a timestamp into a short relative label (e.g., "2m", "6h", "3d"). */
+/** Formats a timestamp into a short relative label. */
 export function formatRelativeTime(iso: string): string {
   try {
     const d = parseUtcTimestamp(iso);
@@ -121,7 +108,7 @@ export function formatRelativeTime(iso: string): string {
   }
 }
 
-/** Truncates text to the first N words and appends an ellipsis when truncated. */
+/** Truncates text to the first N words. */
 export function truncateWords(text: string, maxWords: number): string {
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "";

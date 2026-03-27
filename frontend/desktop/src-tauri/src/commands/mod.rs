@@ -1,42 +1,14 @@
 pub(crate) mod api_health;
-pub(crate) mod app;
 pub(crate) mod cli;
 pub(crate) mod cli_http;
 pub(crate) mod cli_util;
 pub(crate) mod cli_version;
 #[cfg(target_os = "windows")]
 pub(crate) mod git_bash;
-pub(crate) mod history;
 pub(crate) mod mcp;
 pub(crate) mod mcp_runtime;
-pub(crate) mod pipeline;
 pub(crate) mod settings;
-pub(crate) mod skills;
 pub(crate) mod workspace;
 
-use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-
-use tokio::sync::Mutex;
-
-use crate::models::PipelineAnswer;
-use crate::sidecar::SidecarManager;
-
-pub type RunCancelFlag = Arc<AtomicBool>;
-pub type RunPauseFlag = Arc<AtomicBool>;
-pub type PipelineAnswerSender = tokio::sync::oneshot::Sender<PipelineAnswer>;
-pub type RunAnswerSender = Arc<Mutex<Option<PipelineAnswerSender>>>;
-
-/// Shared application state, holding per-run cancel/pause flags,
-/// per-run answer channels, and the hive-api sidecar manager.
-pub struct AppState {
-    pub cancel_flags: Arc<Mutex<HashMap<String, RunCancelFlag>>>,
-    pub pause_flags: Arc<Mutex<HashMap<String, RunPauseFlag>>>,
-    pub answer_senders: Arc<Mutex<HashMap<String, RunAnswerSender>>>,
-    pub sidecar: SidecarManager,
-    /// Maps run_id → active hive-api job_id for in-flight stages.
-    pub active_jobs: Arc<Mutex<HashMap<String, String>>>,
-    /// Maps run_id → (workspace_path, session_id) so cancel/pause/resume can locate the run.
-    pub run_workspaces: Arc<Mutex<HashMap<String, (String, String)>>>,
-}
+/// Shared application state.
+pub struct AppState {}
