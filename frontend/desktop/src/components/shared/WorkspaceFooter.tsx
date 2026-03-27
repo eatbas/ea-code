@@ -20,11 +20,11 @@ export function WorkspaceFooter({
   }
 
   return (
-    <div className="flex w-full flex-col gap-3 text-xs text-[#9898b0] sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex w-full flex-col gap-3 text-xs text-[#8b8b93] sm:flex-row sm:items-center sm:justify-between">
       <button
         type="button"
         onClick={() => handleAction(onOpenProjectFolder)}
-        className="flex min-w-0 items-center gap-2 rounded px-2 py-1 text-left transition-colors hover:bg-[#24243a] hover:text-[#e4e4ed]"
+        className="flex min-w-0 items-center gap-2 rounded px-2 py-1 text-left transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
         title="Open project folder"
       >
         <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -37,7 +37,7 @@ export function WorkspaceFooter({
         <button
           type="button"
           onClick={() => handleAction(onOpenInVsCode)}
-          className="flex items-center gap-1.5 rounded px-2 py-1 text-[#9898b0] transition-colors hover:bg-[#24243a] hover:text-[#e4e4ed]"
+          className="flex items-center gap-1.5 rounded px-2 py-1 text-[#8b8b93] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
           title="Open in VS Code"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

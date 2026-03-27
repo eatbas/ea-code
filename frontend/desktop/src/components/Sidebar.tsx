@@ -107,15 +107,15 @@ export function Sidebar({
   }
 
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col overflow-hidden border-r border-[#2e2e48] bg-[#1a1a24]">
+    <aside className="flex h-full w-72 shrink-0 flex-col overflow-hidden border-r border-[#313134] bg-[#151516]">
       {/* Header */}
       <div className="flex items-center justify-between px-3 pt-8 pb-3">
-        <span className="text-sm font-medium text-[#e4e4ed]">Projects</span>
+        <span className="text-sm font-medium text-[#f5f5f5]">Projects</span>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={onAddProject}
-            className="rounded p-1.5 text-[#9898b0] transition-colors hover:bg-[#24243a] hover:text-[#e4e4ed]"
+            className="rounded p-1.5 text-[#8b8b93] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
             title="Add project"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -126,7 +126,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={handleSettingsClick}
-            className="rounded p-1.5 text-[#9898b0] transition-colors hover:bg-[#24243a] hover:text-[#e4e4ed]"
+            className="rounded p-1.5 text-[#8b8b93] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
             title="Settings"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -137,7 +137,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={onToggle}
-            className="rounded p-1.5 text-[#9898b0] transition-colors hover:bg-[#24243a] hover:text-[#e4e4ed]"
+            className="rounded p-1.5 text-[#8b8b93] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
             title="Collapse sidebar"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -151,7 +151,7 @@ export function Sidebar({
       {/* Project list */}
       <div className="flex-1 overflow-y-auto px-2">
         {projects.length === 0 && (
-          <p className="px-2 py-4 text-center text-xs text-[#6b6b80]">No projects yet. Add a project to get started.</p>
+          <p className="px-2 py-4 text-center text-xs text-[#72727a]">No projects yet. Add a project to get started.</p>
         )}
         {projects.map((project) => {
           const isActive = project.path === activeProjectPath;
@@ -164,8 +164,8 @@ export function Sidebar({
                   onClick={() => void onSelectProject(project.path)}
                   className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 pr-16 text-left text-sm transition-colors ${
                     isActive
-                      ? "bg-[#24243a] text-[#e4e4ed]"
-                      : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+                      ? "bg-[#202022] text-[#f5f5f5]"
+                      : "text-[#8b8b93] hover:bg-[#202022] hover:text-[#f5f5f5]"
                   }`}
                   title={project.path}
                 >
@@ -188,7 +188,7 @@ export function Sidebar({
                       setConversationPendingRemoval(null);
                       void onCreateConversation(project.path);
                     }}
-                    className="rounded p-1 text-[#6b6b80] transition-colors hover:bg-[#2a2a3d] hover:text-[#e4e4ed]"
+                    className="rounded p-1 text-[#72727a] transition-colors hover:bg-[#262628] hover:text-[#f5f5f5]"
                     title="New conversation"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -206,7 +206,7 @@ export function Sidebar({
                             setProjectPendingRemoval(null);
                             setConversationPendingRemoval(null);
                           }}
-                          className="rounded px-2 py-1 text-[10px] font-medium text-[#9898b0] transition-colors hover:bg-[#2a2a3d] hover:text-[#e4e4ed]"
+                          className="rounded px-2 py-1 text-[10px] font-medium text-[#8b8b93] transition-colors hover:bg-[#262628] hover:text-[#f5f5f5]"
                           title="Cancel project removal"
                         >
                           Cancel
@@ -233,7 +233,7 @@ export function Sidebar({
                           setProjectPendingRemoval(project.path);
                           setConversationPendingRemoval(null);
                         }}
-                        className="rounded p-1 text-[#6b6b80] transition-colors hover:bg-[#2a2a3d] hover:text-[#e4e4ed]"
+                        className="rounded p-1 text-[#72727a] transition-colors hover:bg-[#262628] hover:text-[#f5f5f5]"
                         title="Remove project"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -259,12 +259,12 @@ export function Sidebar({
                           }}
                           className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 pr-8 text-left transition-colors ${
                             isConversationActive
-                              ? "bg-[#2a2951] text-[#f1f0ff]"
-                              : "text-[#babacf] hover:bg-[#222235] hover:text-[#e4e4ed]"
+                              ? "bg-[#252527] text-[#f5f5f5]"
+                              : "text-[#a3a3aa] hover:bg-[#1d1d1f] hover:text-[#f5f5f5]"
                           }`}
                         >
                           <span className="truncate text-sm">{conversation.title}</span>
-                          <span className="shrink-0 text-xs text-[#8f91a7]">
+                          <span className="shrink-0 text-xs text-[#7e7e86]">
                             {formatRelativeTime(conversation.updatedAt)}
                           </span>
                         </button>
@@ -277,7 +277,7 @@ export function Sidebar({
                                   event.stopPropagation();
                                   setConversationPendingRemoval(null);
                                 }}
-                                className="rounded px-2 py-1 text-[10px] font-medium text-[#9898b0] transition-colors hover:bg-[#2a2a3d] hover:text-[#e4e4ed]"
+                                className="rounded px-2 py-1 text-[10px] font-medium text-[#8b8b93] transition-colors hover:bg-[#262628] hover:text-[#f5f5f5]"
                                 title="Cancel conversation removal"
                               >
                                 Cancel
@@ -303,7 +303,7 @@ export function Sidebar({
                                 setConversationPendingRemoval(`${project.path}::${conversation.id}`);
                                 setProjectPendingRemoval(null);
                               }}
-                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-[#6b6b80] opacity-0 transition-opacity hover:bg-[#2a2a3d] hover:text-[#e4e4ed] group-hover/conversation:opacity-100"
+                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-[#72727a] opacity-0 transition-opacity hover:bg-[#262628] hover:text-[#f5f5f5] group-hover/conversation:opacity-100"
                               title="Delete conversation"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -324,8 +324,8 @@ export function Sidebar({
       </div>
 
       {/* Footer */}
-      <div className="border-t border-[#2e2e48] px-3 py-3">
-        <p className="w-full text-center text-[10px] text-[#6b6b82]" title={appFooterLabel}>
+      <div className="border-t border-[#313134] px-3 py-3">
+        <p className="w-full text-center text-[10px] text-[#72727a]" title={appFooterLabel}>
           {appFooterLabel}
         </p>
       </div>

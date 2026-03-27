@@ -21,7 +21,7 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 const VARIANT_CLASSES: Record<ToastVariant, string> = {
   success: "border-[#22c55e]/40 bg-[#22c55e]/10 text-[#86efac]",
   error: "border-[#ef4444]/40 bg-[#ef4444]/10 text-[#fca5a5]",
-  info: "border-[#6366f1]/40 bg-[#6366f1]/10 text-[#a5b4fc]",
+  info: "border-[#5a5a61]/60 bg-[#27272a] text-[#f5f5f5]",
 };
 
 const DISMISS_MS = 3500;

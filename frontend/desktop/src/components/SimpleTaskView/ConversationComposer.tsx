@@ -182,8 +182,8 @@ export function ConversationComposer({
   }
 
   return (
-    <div className="border-t border-[#2e2e48] bg-[#0f0f14] px-5 py-4">
-      <div className="rounded-[20px] border border-[#2e2e48] bg-[#1a1a24] shadow-[0_0_0_1px_rgba(46,46,72,0.24)]">
+    <div className="border-t border-[#313134] bg-[#0b0b0c] px-5 py-4">
+      <div className="rounded-[20px] border border-[#313134] bg-[#151516] shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
         <label className="block">
           <span className="sr-only">Prompt</span>
           <textarea
@@ -199,17 +199,17 @@ export function ConversationComposer({
             onKeyDown={handlePromptKeyDown}
             rows={1}
             placeholder="Describe the task you want the agent to handle."
-            className="w-full resize-none bg-transparent px-4 py-3 text-sm leading-6 text-[#e4e4ed] placeholder:text-[#6b6b80] focus:outline-none"
+            className="w-full resize-none bg-transparent px-4 py-3 text-sm leading-6 text-[#f5f5f5] placeholder:text-[#72727a] focus:outline-none"
           />
         </label>
 
-        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-[#2e2e48] px-3 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-[#313134] px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-8 items-center rounded-full border border-[#2e2e48] bg-[#24243a] px-2.5 py-1 text-[11px] font-medium text-[#e4e4ed]">
+            <span className="inline-flex h-8 items-center rounded-full border border-[#313134] bg-[#202022] px-2.5 py-1 text-[11px] font-medium text-[#f5f5f5]">
               Simple Task
             </span>
             {locked && (
-              <span className="inline-flex h-8 items-center rounded-full border border-[#2e2e48] bg-[#202031] px-2.5 py-1 text-[11px] text-[#9898b0]">
+              <span className="inline-flex h-8 items-center rounded-full border border-[#313134] bg-[#1c1c1e] px-2.5 py-1 text-[11px] text-[#8b8b93]">
                 Resuming this conversation
               </span>
             )}
@@ -228,7 +228,7 @@ export function ConversationComposer({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-full border border-[#2f3448] bg-[#111522] px-1.5 py-1 shadow-[0_14px_28px_rgba(0,0,0,0.18)]">
+            <div className="flex items-center gap-1.5 rounded-full border border-[#313134] bg-[#111112] px-1.5 py-1 shadow-[0_14px_28px_rgba(0,0,0,0.18)]">
               <PopoverSelect
                 value={agent?.provider ?? ""}
                 options={providerOptions}
@@ -238,8 +238,8 @@ export function ConversationComposer({
                 align="left"
                 open={openSelect === "provider"}
                 onOpenChange={(open) => setOpenSelect(open ? "provider" : null)}
-                triggerClassName="flex h-7 min-w-[6.75rem] items-center gap-2 rounded-full border border-[#363b52] bg-[#181c2a] px-2.5 text-[11px] font-semibold text-[#f4f6fd] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#4a5273] hover:bg-[#1d2232] disabled:cursor-not-allowed disabled:opacity-55"
-                menuClassName="min-w-[11rem] rounded-2xl border border-[#363b52] bg-[#141925] p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
+                triggerClassName="flex h-7 min-w-[6.75rem] items-center gap-2 rounded-full border border-[#46464b] bg-[#1a1a1c] px-2.5 text-[11px] font-semibold text-[#f5f5f5] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#5a5a61] hover:bg-[#202022] disabled:cursor-not-allowed disabled:opacity-55"
+                menuClassName="min-w-[11rem] rounded-2xl border border-[#46464b] bg-[#141415] p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
                 onChange={(nextValue) => {
                   const nextProvider = availableProviders.find((provider) => provider.name === nextValue);
                   if (!nextProvider) {
@@ -251,7 +251,7 @@ export function ConversationComposer({
                   });
                 }}
               />
-              <span className="px-0.5 text-[#4f587a]">·</span>
+              <span className="px-0.5 text-[#66666d]">·</span>
               <PopoverSelect
                 value={agent?.model ?? ""}
                 options={modelOptions}

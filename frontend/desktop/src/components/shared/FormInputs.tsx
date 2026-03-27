@@ -13,12 +13,12 @@ export interface TextInputProps {
 export function TextInput({ label, value, onChange }: TextInputProps): ReactNode {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-[#9898b0]">{label}</span>
+      <span className="text-xs font-medium text-[#8b8b93]">{label}</span>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+        className="rounded border border-[#313134] bg-[#0b0b0c] px-3 py-1.5 text-sm text-[#f5f5f5] focus:border-[#68686f] focus:outline-none"
       />
     </label>
   );
@@ -37,11 +37,11 @@ export function AgentSelect({ label, value, providers, onChange }: AgentSelectPr
   const options = backendOptionsFromProviders(providers.filter((p) => p.available));
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-[#9898b0]">{label}</span>
+      <span className="text-xs font-medium text-[#8b8b93]">{label}</span>
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
-        className="rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+        className="rounded border border-[#313134] bg-[#0b0b0c] px-3 py-1.5 text-sm text-[#f5f5f5] focus:border-[#68686f] focus:outline-none"
       >
         <option value="">Not selected</option>
         {options.map((opt) => (
@@ -67,11 +67,11 @@ export function OptionalAgentSelect({ label, value, providers, onChange }: Optio
   const options = backendOptionsFromProviders(providers.filter((p) => p.available));
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-[#9898b0]">{label}</span>
+      <span className="text-xs font-medium text-[#8b8b93]">{label}</span>
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
-        className="rounded border border-[#2e2e48] bg-[#0f0f14] px-3 py-1.5 text-sm text-[#e4e4ed] focus:border-[#6366f1] focus:outline-none"
+        className="rounded border border-[#313134] bg-[#0b0b0c] px-3 py-1.5 text-sm text-[#f5f5f5] focus:border-[#68686f] focus:outline-none"
       >
         <option value="">Not selected (Skip)</option>
         {options.map((opt) => (

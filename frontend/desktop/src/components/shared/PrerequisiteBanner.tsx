@@ -35,7 +35,7 @@ export function PrerequisiteBanner({ status, onDismiss }: PrerequisiteBannerProp
   if (missing.length === 0) return null;
 
   return (
-    <div className="fixed top-0 right-0 left-0 z-50 border-b border-[#ef4444]/30 bg-[#1a1a24]/95 px-4 py-3 shadow-lg backdrop-blur-sm">
+    <div className="fixed top-0 right-0 left-0 z-50 border-b border-[#ef4444]/30 bg-[#151516]/95 px-4 py-3 shadow-lg backdrop-blur-sm">
       <div className="mx-auto flex max-w-3xl items-start gap-3">
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -54,15 +54,15 @@ export function PrerequisiteBanner({ status, onDismiss }: PrerequisiteBannerProp
           <line x1="12" y1="16" x2="12.01" y2="16" />
         </svg>
         <div className="flex-1 space-y-1">
-          <p className="text-sm font-medium text-[#e4e4ed]">Missing prerequisites</p>
+          <p className="text-sm font-medium text-[#f5f5f5]">Missing prerequisites</p>
           {missing.map((item) => (
-            <p key={item.label} className="text-xs text-[#9898b0]">
+            <p key={item.label} className="text-xs text-[#8b8b93]">
               {item.label}{" "}
               <a
                 href={item.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#818cf8] underline underline-offset-2 hover:text-[#a5b4fc]"
+                className="text-[#d4d4d8] underline underline-offset-2 hover:text-white"
               >
                 {item.linkText}
               </a>
@@ -72,7 +72,7 @@ export function PrerequisiteBanner({ status, onDismiss }: PrerequisiteBannerProp
         <button
           type="button"
           onClick={onDismiss}
-          className="shrink-0 rounded p-1 text-[#6f7086] transition-colors hover:bg-[#24243a] hover:text-[#e4e4ed]"
+          className="shrink-0 rounded p-1 text-[#787880] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
           title="Dismiss"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -23,7 +23,7 @@ function StatusBadge({
 }): ReactNode {
   if (loading) {
     return (
-      <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#64748b]/15 px-2.5 py-0.5 text-xs font-medium text-[#94a3b8]">
+      <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#737373]/15 px-2.5 py-0.5 text-xs font-medium text-[#a3a3a3]">
         Checking...
       </span>
     );
@@ -37,7 +37,7 @@ function StatusBadge({
   }
   if (!version?.latestVersion) {
     return (
-      <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#64748b]/15 px-2.5 py-0.5 text-xs font-medium text-[#94a3b8]">
+      <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#737373]/15 px-2.5 py-0.5 text-xs font-medium text-[#a3a3a3]">
         Installed
       </span>
     );
@@ -90,9 +90,9 @@ export function CliCard({
   const installSearchUrl = buildGoogleInstallSearchUrl(displayName);
 
   return (
-    <div className="rounded-lg border border-[#2e2e48] bg-[#1a1a24] p-5">
+    <div className="rounded-lg border border-[#313134] bg-[#151516] p-5">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[#e4e4ed]">{displayName}</h3>
+        <h3 className="text-sm font-semibold text-[#f5f5f5]">{displayName}</h3>
         <StatusBadge provider={provider} version={version} loading={loading} />
       </div>
       <VersionGrid version={version} loading={loading} />
@@ -106,7 +106,7 @@ export function CliCard({
         />
       )}
       {!loading && !provider.available && modelOptions.length > 0 && (
-        <p className="mt-4 text-xs text-[#6b6b80]">
+        <p className="mt-4 text-xs text-[#72727a]">
           Install this CLI to enable model selection.
         </p>
       )}
@@ -122,7 +122,7 @@ export function CliCard({
             });
           }}
           disabled={actionsDisabled}
-          className="mt-4 w-full rounded-md bg-[#e4e4ed] px-4 py-2 text-sm font-medium text-[#0f0f14] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-4 w-full rounded-md bg-[#f5f5f5] px-4 py-2 text-sm font-medium text-[#0b0b0c] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           Install
         </button>
@@ -132,7 +132,7 @@ export function CliCard({
           type="button"
           onClick={onUpdate}
           disabled={updating || actionsDisabled}
-          className="mt-4 w-full rounded-md bg-[#e4e4ed] px-4 py-2 text-sm font-medium text-[#0f0f14] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-4 w-full rounded-md bg-[#f5f5f5] px-4 py-2 text-sm font-medium text-[#0b0b0c] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {updating ? "Updating..." : "Update"}
         </button>

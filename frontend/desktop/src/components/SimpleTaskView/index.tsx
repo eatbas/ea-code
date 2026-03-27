@@ -81,14 +81,14 @@ export function SimpleTaskView({
   );
 
   return (
-    <div className="flex h-full min-h-0 bg-[#0f0f14]">
+    <div className="flex h-full min-h-0 bg-[#0b0b0c]">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="border-b border-[#2e2e48] bg-[linear-gradient(180deg,#181822_0%,#12121a_100%)] px-5 py-4">
-          <p className="text-lg font-semibold text-[#e4e4ed]">
+        <div className="border-b border-[#313134] bg-[linear-gradient(180deg,#1a1a1c_0%,#101011_100%)] px-5 py-4">
+          <p className="text-lg font-semibold text-[#f5f5f5]">
             {activeConversation?.summary.title ?? "New conversation"}
           </p>
           {!activeConversation && (
-            <p className="mt-1 text-sm text-[#9898b0]">{workspace.path}</p>
+            <p className="mt-1 text-sm text-[#8b8b93]">{workspace.path}</p>
           )}
         </div>
 
@@ -106,11 +106,11 @@ export function SimpleTaskView({
                   key={message.id}
                   className={`max-w-3xl rounded-2xl px-4 py-3 text-sm leading-6 ${
                     message.role === "user"
-                      ? "ml-auto border border-[#3a3a5a] bg-[#24243a] text-[#f1f0ff]"
-                      : "mr-auto border border-[#2e2e48] bg-[#1a1a24] text-[#e4e4ed]"
+                      ? "ml-auto border border-[#4a4a4f] bg-[#202022] text-[#f5f5f5]"
+                      : "mr-auto border border-[#313134] bg-[#151516] text-[#f5f5f5]"
                   }`}
                 >
-                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#8f91a7]">
+                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#7e7e86]">
                     {message.role === "assistant" && activeConversation
                       ? `Assistant - ${formatAssistantLabel(
                         activeConversation.summary.agent.provider,
@@ -122,8 +122,8 @@ export function SimpleTaskView({
                 </div>
               ))}
               {activeDraft && (
-                <div className="mr-auto max-w-3xl rounded-2xl border border-dashed border-[#3a3a5a] bg-[#181824] px-4 py-3 text-sm leading-6 text-[#e4e4ed]">
-                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#8f91a7]">
+                <div className="mr-auto max-w-3xl rounded-2xl border border-dashed border-[#4a4a4f] bg-[#1a1a1c] px-4 py-3 text-sm leading-6 text-[#f5f5f5]">
+                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#7e7e86]">
                     {activeConversation
                       ? `Assistant - ${formatAssistantLabel(
                         activeConversation.summary.agent.provider,
@@ -142,10 +142,10 @@ export function SimpleTaskView({
             </div>
           ) : (
             <div className="mx-auto flex h-full max-w-3xl items-center justify-center">
-              <div className="rounded-3xl border border-[#2e2e48] bg-[#1a1a24] px-8 py-10 text-center shadow-[0_0_0_1px_rgba(46,46,72,0.24)]">
+              <div className="rounded-3xl border border-[#313134] bg-[#151516] px-8 py-10 text-center shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
                 <img src="/logo.png" alt="EA Code logo" className="mx-auto mb-4 h-14 w-14 object-contain" />
-                <p className="text-xl font-semibold text-[#e4e4ed]">Start a new simple task</p>
-                <p className="mt-2 text-sm text-[#9898b0]">
+                <p className="text-xl font-semibold text-[#f5f5f5]">Start a new simple task</p>
+                <p className="mt-2 text-sm text-[#8b8b93]">
                   Pick an agent in the composer and send the first prompt to create a conversation.
                 </p>
               </div>
@@ -172,7 +172,7 @@ export function SimpleTaskView({
           onStop={onStopConversation}
         />
 
-        <div className="border-t border-[#2e2e48] px-5 py-4">
+        <div className="border-t border-[#313134] px-5 py-4">
           <div className="mx-auto flex w-full max-w-5xl">
             <WorkspaceFooter
               path={workspace.path}

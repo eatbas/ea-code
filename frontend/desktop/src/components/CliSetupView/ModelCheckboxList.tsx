@@ -32,24 +32,24 @@ export function ModelCheckboxList({
   return (
     <div className="mt-4">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-[#6b6b80]">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-[#72727a]">
           Models
         </p>
         <button
           type="button"
           onClick={() => onToggleAll(!allSelected)}
           disabled={disabled}
-          className="flex items-center gap-1.5 text-[10px] font-medium text-[#6b6b80] transition-colors hover:text-[#e4e4ed] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-1.5 text-[10px] font-medium text-[#72727a] transition-colors hover:text-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span
             className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
               allSelected
-                ? "border-[#e4e4ed] bg-[#e4e4ed]"
-                : "border-[#3e3e58] bg-transparent"
+                ? "border-[#f5f5f5] bg-[#f5f5f5]"
+                : "border-[#4a4a4f] bg-transparent"
             }`}
           >
             {allSelected && (
-              <Checkmark size="sm" className="text-[#0f0f14]" />
+              <Checkmark size="sm" className="text-[#0b0b0c]" />
             )}
           </span>
           Select all
@@ -66,21 +66,21 @@ export function ModelCheckboxList({
               disabled={disabled}
               className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors ${
                 isChecked
-                  ? "bg-[#24243a] text-[#e4e4ed]"
+                  ? "bg-[#202022] text-[#f5f5f5]"
                   : disabled
-                    ? "bg-[#0f0f14] text-[#6b6b80]"
-                    : "bg-[#0f0f14] text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+                    ? "bg-[#0b0b0c] text-[#72727a]"
+                    : "bg-[#0b0b0c] text-[#8b8b93] hover:bg-[#202022] hover:text-[#f5f5f5]"
               } disabled:cursor-not-allowed disabled:opacity-50`}
             >
               <span
                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                   isChecked
-                    ? "border-[#e4e4ed] bg-[#e4e4ed]"
-                    : "border-[#3e3e58] bg-transparent"
+                    ? "border-[#f5f5f5] bg-[#f5f5f5]"
+                    : "border-[#4a4a4f] bg-transparent"
                 }`}
               >
                 {isChecked && (
-                  <Checkmark size="md" className="text-[#0f0f14]" />
+                  <Checkmark size="md" className="text-[#0b0b0c]" />
                 )}
               </span>
               {opt.label}

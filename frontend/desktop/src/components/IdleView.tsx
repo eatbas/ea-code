@@ -34,16 +34,16 @@ export function IdleView({
   const workspaceLabel = workspace ? folderName(workspace.path) : "";
 
   return (
-    <div className="flex h-full flex-col bg-[#0f0f14]">
+    <div className="flex h-full flex-col bg-[#0b0b0c]">
       <div className="flex flex-1 flex-col items-center justify-center gap-4">
         <img src="/logo.png" alt="EA Code logo" className="h-40 w-40" />
 
-        <h1 className="text-3xl font-bold text-[#e4e4ed]">ea-code</h1>
+        <h1 className="text-3xl font-bold text-[#f5f5f5]">ea-code</h1>
 
         <div ref={dropdownRef} className="relative">
           <button
             onClick={() => setDropdownOpen((prev) => !prev)}
-            className="flex items-center gap-2 text-lg text-[#9898b0] transition-colors hover:text-[#e4e4ed]"
+            className="flex items-center gap-2 text-lg text-[#8b8b93] transition-colors hover:text-[#f5f5f5]"
           >
             <span>{workspace ? workspaceLabel : "Select a project..."}</span>
             <svg
@@ -55,9 +55,9 @@ export function IdleView({
           </button>
 
           {dropdownOpen && (
-            <div className="absolute top-full left-1/2 z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-[#2e2e48] bg-[#1a1a2e] py-1 shadow-lg">
+            <div className="absolute top-full left-1/2 z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-[#313134] bg-[#151516] py-1 shadow-lg">
               {projects.length === 0 && (
-                <span className="block px-3 py-2 text-xs text-[#6b6b80]">No projects yet</span>
+                <span className="block px-3 py-2 text-xs text-[#72727a]">No projects yet</span>
               )}
 
               {projects.map((project) => {
@@ -71,8 +71,8 @@ export function IdleView({
                     }}
                     className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${
                       isActive
-                        ? "bg-[#24243a] text-[#e4e4ed]"
-                        : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+                        ? "bg-[#202022] text-[#f5f5f5]"
+                        : "text-[#8b8b93] hover:bg-[#202022] hover:text-[#f5f5f5]"
                     }`}
                     title={project.path}
                   >
@@ -88,13 +88,13 @@ export function IdleView({
                 );
               })}
 
-              <div className="my-1 border-t border-[#2e2e48]" />
+              <div className="my-1 border-t border-[#313134]" />
               <button
                 onClick={() => {
                   onAddProject();
                   setDropdownOpen(false);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[#9898b0] transition-colors hover:bg-[#24243a] hover:text-[#e4e4ed]"
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[#8b8b93] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
               >
                 <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -108,9 +108,9 @@ export function IdleView({
         </div>
 
         {workspace && (
-          <div className="flex gap-2 text-xs text-[#9898b0]">
+          <div className="flex gap-2 text-xs text-[#8b8b93]">
             {workspace.isGitRepo && (
-              <span className="rounded bg-[#24243a] px-2 py-0.5">
+              <span className="rounded bg-[#202022] px-2 py-0.5">
                 {workspace.branch ?? "git"}
               </span>
             )}
@@ -118,7 +118,7 @@ export function IdleView({
         )}
       </div>
 
-      <div className="mt-auto border-t border-[#1f1f2b] px-6 py-4">
+      <div className="mt-auto border-t border-[#232325] px-6 py-4">
         {workspace?.path ? (
           <div className="mx-auto flex w-full max-w-5xl">
             <WorkspaceFooter
@@ -131,7 +131,7 @@ export function IdleView({
             />
           </div>
         ) : (
-          <div className="mx-auto flex w-full max-w-5xl items-center justify-between text-xs text-[#9898b0]">
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between text-xs text-[#8b8b93]">
             <span className="truncate" title="No project selected">No project selected</span>
           </div>
         )}

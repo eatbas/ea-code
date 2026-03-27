@@ -100,13 +100,13 @@ export function CliSetupView({
   }
 
   return (
-    <div className="relative flex h-full flex-col bg-[#0f0f14]">
+    <div className="relative flex h-full flex-col bg-[#0b0b0c]">
       <div className="flex-1 overflow-y-auto px-8 py-8">
         <div className="mx-auto flex max-w-2xl flex-col gap-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-[#e4e4ed]">CLI Setup</h1>
-              <p className="mt-1 text-sm text-[#9898b0]">
+              <h1 className="text-xl font-bold text-[#f5f5f5]">CLI Setup</h1>
+              <p className="mt-1 text-sm text-[#8b8b93]">
                 Manage your agent CLI tools and keep them up to date.
               </p>
             </div>
@@ -114,13 +114,13 @@ export function CliSetupView({
               type="button"
               onClick={() => refreshAll(true)}
               disabled={actionsDisabled}
-              className="rounded-md border border-[#2e2e48] bg-[#24243a] px-4 py-2 text-sm font-medium text-[#9898b0] transition-colors hover:bg-[#2e2e48] hover:text-[#e4e4ed] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-[#313134] bg-[#202022] px-4 py-2 text-sm font-medium text-[#8b8b93] transition-colors hover:bg-[#2a2a2d] hover:text-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {versionsLoading ? "Checking..." : updating ? "Updating..." : "Refresh"}
             </button>
           </div>
           {/* Hive-API status */}
-          <div className="flex items-center gap-3 rounded-lg border border-[#2e2e48] bg-[#1a1a24] px-4 py-3">
+          <div className="flex items-center gap-3 rounded-lg border border-[#313134] bg-[#151516] px-4 py-3">
             <span
               className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
                 apiHealth?.connected ? "bg-[#22c55e]" : "bg-[#ef4444]"
@@ -128,15 +128,15 @@ export function CliSetupView({
             />
             <div className="flex flex-1 items-center justify-between">
               <div>
-                <span className="text-sm font-medium text-[#e4e4ed]">Hive API</span>
-                <span className="ml-2 text-xs text-[#6b6b80]">
+                <span className="text-sm font-medium text-[#f5f5f5]">Hive API</span>
+                <span className="ml-2 text-xs text-[#72727a]">
                   {apiHealth?.connected
                     ? `Connected${apiHealth.droneCount != null ? ` · ${apiHealth.droneCount} drone${apiHealth.droneCount !== 1 ? "s" : ""}` : ""}`
                     : apiHealth?.error ?? "Not connected"}
                 </span>
               </div>
               {apiHealth?.connected && apiHealth.url && (
-                <span className="text-xs font-mono text-[#6b6b80]">{apiHealth.url}</span>
+                <span className="text-xs font-mono text-[#72727a]">{apiHealth.url}</span>
               )}
             </div>
           </div>
@@ -160,7 +160,7 @@ export function CliSetupView({
             </div>
           )}
           {providers.length === 0 && !versionsLoading && (
-            <p className="text-sm text-[#6b6b80]">
+            <p className="text-sm text-[#72727a]">
               No providers detected. Ensure the hive-api sidecar is running.
             </p>
           )}

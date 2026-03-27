@@ -29,8 +29,8 @@ export function CliSetupRoute(): ReactNode {
 
   if (loading || !settings) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#0f0f14]">
-        <span className="text-sm text-[#9898b0]">Loading...</span>
+      <div className="flex h-full items-center justify-center bg-[#0b0b0c]">
+        <span className="text-sm text-[#8b8b93]">Loading...</span>
       </div>
     );
   }

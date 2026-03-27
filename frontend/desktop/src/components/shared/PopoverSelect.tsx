@@ -64,9 +64,9 @@ export function PopoverSelect({
     : "top-full mt-2";
   const alignClasses = align === "right" ? "right-0" : "left-0";
   const resolvedTriggerClassName = triggerClassName
-    ?? "flex h-9 items-center gap-2 rounded-full border border-[#34374d] bg-[#161925] px-3 text-xs font-medium text-[#f3f5fb] shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition-all hover:border-[#4d5371] hover:bg-[#1b1f2d] disabled:cursor-not-allowed disabled:opacity-55";
+    ?? "flex h-9 items-center gap-2 rounded-full border border-[#46464b] bg-[#1a1a1c] px-3 text-xs font-medium text-[#f5f5f5] shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition-all hover:border-[#5a5a61] hover:bg-[#202022] disabled:cursor-not-allowed disabled:opacity-55";
   const resolvedMenuClassName = menuClassName
-    ?? "w-max min-w-full rounded-2xl border border-[#34374d] bg-[#141722] p-1 shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur";
+    ?? "w-max min-w-full rounded-2xl border border-[#46464b] bg-[#141415] p-1 shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur";
 
   return (
     <div ref={ref} className="relative">
@@ -81,7 +81,7 @@ export function PopoverSelect({
         className={resolvedTriggerClassName}
       >
         <span className="min-w-0 flex-1 truncate text-left">{selectedLabel}</span>
-        <svg className={`ml-auto h-3.5 w-3.5 shrink-0 text-[#98a0bf] transition-transform ${open ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25">
+        <svg className={`ml-auto h-3.5 w-3.5 shrink-0 text-[#8b8b93] transition-transform ${open ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25">
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
@@ -94,8 +94,8 @@ export function PopoverSelect({
               onClick={() => { onChange(opt.value); setOpen(false); }}
               className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs whitespace-nowrap transition-colors ${
                 opt.value === value
-                  ? "bg-[#212536] text-[#f5f7ff]"
-                  : "text-[#a7aec9] hover:bg-[#1b1f2d] hover:text-[#f5f7ff]"
+                  ? "bg-[#202022] text-[#f5f5f5]"
+                  : "text-[#9a9aa2] hover:bg-[#1a1a1c] hover:text-[#f5f5f5]"
               }`}
             >
               <span>{opt.label}</span>

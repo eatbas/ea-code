@@ -23,12 +23,12 @@ export function SidebarSettings({
   navItems,
 }: SidebarSettingsProps): ReactNode {
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-[#2e2e48] bg-[#1a1a24]">
+    <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-[#313134] bg-[#151516]">
       <div className="px-3 pt-8 pb-3">
         <button
           type="button"
           onClick={onBackToApp}
-          className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#9898b0] transition-colors hover:bg-[#24243a] hover:text-[#e4e4ed]"
+          className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#8b8b93] transition-colors hover:bg-[#202022] hover:text-[#f5f5f5]"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="19" y1="12" x2="5" y2="12" />
@@ -46,8 +46,8 @@ export function SidebarSettings({
             onClick={() => onNavigate(view)}
             className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
               activeView === view
-                ? "bg-[#24243a] text-[#e4e4ed]"
-                : "text-[#9898b0] hover:bg-[#24243a] hover:text-[#e4e4ed]"
+                ? "bg-[#202022] text-[#f5f5f5]"
+                : "text-[#8b8b93] hover:bg-[#202022] hover:text-[#f5f5f5]"
             }`}
           >
             <svg
@@ -69,8 +69,8 @@ export function SidebarSettings({
 
       <div className="flex-1" />
 
-      <div className="border-t border-[#2e2e48] px-3 py-3">
-        <p className="w-full text-center text-[10px] text-[#6b6b82]" title={appFooterLabel}>
+      <div className="border-t border-[#313134] px-3 py-3">
+        <p className="w-full text-center text-[10px] text-[#72727a]" title={appFooterLabel}>
           {appFooterLabel}
         </p>
       </div>
