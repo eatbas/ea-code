@@ -99,7 +99,7 @@ export function OrchestratorCard({
               type="button"
               onClick={() => save({ ...orchestrator, maxIterations: Math.max(1, orchestrator.maxIterations - 1) })}
               disabled={orchestrator.maxIterations <= 1}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-edge-strong bg-[#1a1a1c] text-sm text-fg transition-colors hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-edge-strong bg-input-bg text-sm text-fg transition-colors hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-40"
             >
               -
             </button>
@@ -110,7 +110,7 @@ export function OrchestratorCard({
               type="button"
               onClick={() => save({ ...orchestrator, maxIterations: Math.min(10, orchestrator.maxIterations + 1) })}
               disabled={orchestrator.maxIterations >= 10}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-edge-strong bg-[#1a1a1c] text-sm text-fg transition-colors hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-edge-strong bg-input-bg text-sm text-fg transition-colors hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-40"
             >
               +
             </button>

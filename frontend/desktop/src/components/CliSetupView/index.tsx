@@ -114,7 +114,7 @@ export function CliSetupView({
               type="button"
               onClick={() => refreshAll(true)}
               disabled={actionsDisabled}
-              className="rounded-md border border-edge bg-elevated px-4 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-[#2a2a2d] hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-edge bg-elevated px-4 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-active hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
             >
               {versionsLoading ? "Checking..." : updating ? "Updating..." : "Refresh"}
             </button>

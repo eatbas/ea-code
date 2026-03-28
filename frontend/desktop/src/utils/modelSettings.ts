@@ -1,4 +1,24 @@
-import type { AppSettings } from "../types";
+import type { AppSettings, ProviderInfo } from "../types";
+
+/** Filter to available providers whose enabled models are non-empty. */
+export function filterProvidersBySettings(
+  providers: ProviderInfo[],
+  settings: AppSettings | null,
+): ProviderInfo[] {
+  return providers
+    .filter((provider) => provider.available)
+    .map((provider) => {
+      if (!settings) {
+        return provider;
+      }
+      const enabled = getEnabledModels(settings, provider.name);
+      const models = enabled.size > 0
+        ? provider.models.filter((model) => enabled.has(model))
+        : [];
+      return { ...provider, models };
+    })
+    .filter((provider) => provider.models.length > 0);
+}
 
 /** Legacy per-CLI model CSV settings keys. */
 const LEGACY_MODEL_KEY: Record<string, keyof AppSettings> = {

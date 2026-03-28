@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { useState, useRef, useCallback } from "react";
+import { ChevronDown, Folder, FolderPlus } from "lucide-react";
 import { useClickOutside } from "../hooks/useClickOutside";
+import { useFooterErrorHandler } from "../hooks/useFooterErrorHandler";
 import type { WorkspaceInfo, ProjectEntry } from "../types";
 import { folderName, projectDisplayName } from "../utils/formatters";
 import { Checkmark } from "./shared/Checkmark";
-import { useToast } from "./shared/Toast";
 import { WorkspaceFooter } from "./shared/WorkspaceFooter";
 
 interface IdleViewProps {
@@ -25,14 +26,11 @@ export function IdleView({
   onOpenProjectFolder,
   onOpenInVsCode,
 }: IdleViewProps): ReactNode {
-  const toast = useToast();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
   useClickOutside(dropdownRef, closeDropdown, dropdownOpen);
-  const handleFooterError = useCallback(() => {
-    toast.error("Failed to open project action.");
-  }, [toast]);
+  const handleFooterError = useFooterErrorHandler();
 
   const workspaceEntry = workspace
     ? projects.find((project) => project.path === workspace.path)
@@ -54,12 +52,10 @@ export function IdleView({
             className="flex items-center gap-2 text-lg text-fg-muted transition-colors hover:text-fg"
           >
             <span>{workspace ? workspaceLabel : "Select a project..."}</span>
-            <svg
-              className={`h-4 w-4 shrink-0 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
-              xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
+            <ChevronDown
+              size={16}
+              className={`shrink-0 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
+            />
           </button>
 
           {dropdownOpen && (
@@ -87,9 +83,7 @@ export function IdleView({
                     {isActive ? (
                       <Checkmark size="md" className="h-4 w-4 shrink-0" />
                     ) : (
-                      <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                      </svg>
+                      <Folder size={16} className="shrink-0" />
                     )}
                     <span className="truncate">{projectDisplayName(project)}</span>
                   </button>
@@ -104,11 +98,7 @@ export function IdleView({
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg-muted transition-colors hover:bg-elevated hover:text-fg"
               >
-                <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <line x1="12" y1="11" x2="12" y2="17" />
-                  <line x1="9" y1="14" x2="15" y2="14" />
-                </svg>
+                <FolderPlus size={16} className="shrink-0" />
                 <span>Add project</span>
               </button>
             </div>
@@ -126,7 +116,7 @@ export function IdleView({
         )}
       </div>
 
-      <div className="mt-auto border-t border-[#232325] px-6 py-4">
+      <div className="mt-auto border-t border-menu-surface px-6 py-4">
         {workspace?.path ? (
           <div className="mx-auto flex w-full max-w-5xl">
             <WorkspaceFooter

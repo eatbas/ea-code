@@ -18,7 +18,7 @@ export function TextInput({ label, value, onChange }: TextInputProps): ReactNode
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-edge bg-surface px-3 py-1.5 text-sm text-fg focus:border-[#68686f] focus:outline-none"
+        className="rounded border border-edge bg-surface px-3 py-1.5 text-sm text-fg focus:border-accent focus:outline-none"
       />
     </label>
   );
@@ -41,7 +41,7 @@ export function AgentSelect({ label, value, providers, onChange }: AgentSelectPr
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
-        className="rounded border border-edge bg-surface px-3 py-1.5 text-sm text-fg focus:border-[#68686f] focus:outline-none"
+        className="rounded border border-edge bg-surface px-3 py-1.5 text-sm text-fg focus:border-accent focus:outline-none"
       >
         <option value="">Not selected</option>
         {options.map((opt) => (
@@ -71,7 +71,7 @@ export function OptionalAgentSelect({ label, value, providers, onChange }: Optio
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
-        className="rounded border border-edge bg-surface px-3 py-1.5 text-sm text-fg focus:border-[#68686f] focus:outline-none"
+        className="rounded border border-edge bg-surface px-3 py-1.5 text-sm text-fg focus:border-accent focus:outline-none"
       >
         <option value="">Not selected (Skip)</option>
         {options.map((opt) => (

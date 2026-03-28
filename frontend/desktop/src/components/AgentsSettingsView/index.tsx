@@ -7,7 +7,7 @@ import {
   providerDisplayName,
   sortProvidersByDisplayName,
 } from "../shared/constants";
-import { getEnabledModels } from "../../utils/modelSettings";
+import { filterProvidersBySettings } from "../../utils/modelSettings";
 import { parseAgentSelection, serialiseAgentSelection } from "../../utils/agentSettings";
 import { useToast } from "../shared/Toast";
 import { CodePipelineCard } from "./CodePipelineCard";
@@ -190,20 +190,3 @@ export function AgentsSettingsView({
   );
 }
 
-/** Filter to available providers with enabled models. */
-function filterProvidersBySettings(
-  providers: ProviderInfo[],
-  settings: AppSettings | null,
-): ProviderInfo[] {
-  return providers
-    .filter((p) => p.available)
-    .map((p) => {
-      if (!settings) return p;
-      const enabled = getEnabledModels(settings, p.name);
-      const models = enabled.size > 0
-        ? p.models.filter((m) => enabled.has(m))
-        : [];
-      return { ...p, models };
-    })
-    .filter((p) => p.models.length > 0);
-}

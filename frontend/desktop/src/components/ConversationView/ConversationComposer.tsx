@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
+import { ArrowRight, Square } from "lucide-react";
 import type { AgentSelection, ProviderInfo } from "../../types";
+import { useAutoResizeTextarea } from "../../hooks/useAutoResizeTextarea";
 import { PopoverSelect } from "../shared/PopoverSelect";
 import {
   modelOptionsFromProvider,
@@ -72,24 +74,7 @@ export function ConversationComposer({
     [availableProviders],
   );
 
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) {
-      return;
-    }
-
-    textarea.style.height = "0px";
-
-    const computedStyle = window.getComputedStyle(textarea);
-    const lineHeight = Number.parseFloat(computedStyle.lineHeight) || 24;
-    const paddingTop = Number.parseFloat(computedStyle.paddingTop) || 0;
-    const paddingBottom = Number.parseFloat(computedStyle.paddingBottom) || 0;
-    const maxHeight = lineHeight * 3 + paddingTop + paddingBottom;
-    const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
-
-    textarea.style.height = `${nextHeight}px`;
-    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
-  }, [prompt]);
+  useAutoResizeTextarea(textareaRef, prompt);
 
   useEffect(() => {
     setHistoryIndex(-1);
@@ -233,18 +218,18 @@ export function ConversationComposer({
               align="left"
               open={openSelect === "pipeline"}
               onOpenChange={(open) => setOpenSelect(open ? "pipeline" : null)}
-              triggerClassName="flex h-8 items-center gap-2 rounded-lg border border-edge bg-elevated px-2.5 text-[11px] font-semibold text-fg transition-all hover:border-[#5a5a61] hover:bg-[#2a2a2d] disabled:cursor-not-allowed disabled:opacity-55"
+              triggerClassName="flex h-8 items-center gap-2 rounded-lg border border-edge bg-elevated px-2.5 text-[11px] font-semibold text-fg transition-all hover:border-input-border-focus hover:bg-active disabled:cursor-not-allowed disabled:opacity-55"
               onChange={(value) => onPipelineModeChange(value as PipelineMode)}
             />
             {locked && (
-              <span className="inline-flex h-8 items-center rounded-lg border border-edge bg-[#1c1c1e] px-2.5 py-1 text-[11px] text-fg-muted">
+              <span className="inline-flex h-8 items-center rounded-lg border border-edge bg-badge-bg px-2.5 py-1 text-[11px] text-fg-muted">
                 Resuming this conversation
               </span>
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className={`flex items-center gap-1.5 rounded-lg border border-edge bg-[#111112] px-1.5 py-1 shadow-[0_14px_28px_rgba(0,0,0,0.18)] ${pipelineMode !== "simple" ? "invisible" : ""}`}>
+            <div className={`flex items-center gap-1.5 rounded-lg border border-edge bg-surface px-1.5 py-1 shadow-[0_14px_28px_rgba(0,0,0,0.18)] ${pipelineMode !== "simple" ? "invisible" : ""}`}>
                 <PopoverSelect
                   value={selectedProviderValue}
                   options={providerOptions}
@@ -254,7 +239,7 @@ export function ConversationComposer({
                   align="left"
                   open={openSelect === "provider"}
                   onOpenChange={(open) => setOpenSelect(open ? "provider" : null)}
-                  triggerClassName="flex h-7 min-w-[6.75rem] items-center gap-2 rounded-lg border border-edge-strong bg-[#1a1a1c] px-2.5 text-[11px] font-semibold text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#5a5a61] hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55"
+                  triggerClassName="flex h-7 min-w-[6.75rem] items-center gap-2 rounded-lg border border-edge-strong bg-input-bg px-2.5 text-[11px] font-semibold text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-input-border-focus hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55"
                   menuClassName="min-w-[11rem] rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
                   onChange={(nextValue) => {
                     const nextProvider = availableProviders.find((provider) => provider.name === nextValue);
@@ -267,7 +252,7 @@ export function ConversationComposer({
                     });
                   }}
                 />
-                <span className="px-0.5 text-[#66666d]">·</span>
+                <span className="px-0.5 text-separator">·</span>
                 <PopoverSelect
                   value={selectedModelValue}
                   options={modelOptions}
@@ -277,8 +262,8 @@ export function ConversationComposer({
                   align="right"
                   open={openSelect === "model"}
                   onOpenChange={(open) => setOpenSelect(open ? "model" : null)}
-                  triggerClassName="flex h-7 max-w-44 min-w-[7.25rem] items-center gap-2 rounded-lg border border-[#295638] bg-[#0f1d15] px-2.5 text-[11px] font-semibold text-[#9be7b4] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#37744a] hover:bg-[#13241a] disabled:cursor-not-allowed disabled:opacity-55"
-                  menuClassName="min-w-[12rem] rounded-2xl border border-[#295638] bg-[#101a14] p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
+                  triggerClassName="flex h-7 max-w-44 min-w-[7.25rem] items-center gap-2 rounded-lg border border-success-chip-border bg-success-chip-bg px-2.5 text-[11px] font-semibold text-success-chip-text shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-success-chip-border-hover hover:bg-success-chip-bg-hover disabled:cursor-not-allowed disabled:opacity-55"
+                  menuClassName="min-w-[12rem] rounded-2xl border border-success-chip-border bg-success-chip-bg p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
                   onChange={(nextValue) => {
                     if (!agent) {
                       return;
@@ -303,8 +288,8 @@ export function ConversationComposer({
               disabled={activeRunning ? stopping : stopping || sending || !agent || prompt.trim().length === 0}
               className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 activeRunning
-                  ? "bg-[#6f1d1b] text-[#ffe2e1] hover:bg-[#892321]"
-                  : "bg-[#1eb75f] text-[#041107] hover:bg-[#2ad16f]"
+                  ? "bg-stop-bg text-stop-text hover:bg-stop-bg-hover"
+                  : "bg-running-dot text-send-text hover:bg-send-bg-hover"
               }`}
               title={activeRunning ? (stopping ? "Stopping..." : "Stop") : sending ? "Sending..." : "Send"}
             >
@@ -312,17 +297,12 @@ export function ConversationComposer({
                 stopping ? (
                   <span className="text-[10px] font-semibold">...</span>
                 ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="6" y="6" width="12" height="12" rx="2" />
-                  </svg>
+                  <Square size={12} fill="currentColor" />
                 )
               ) : sending ? (
                 <span className="text-[10px] font-semibold">...</span>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
+                <ArrowRight size={12} strokeWidth={2.2} />
               )}
             </button>
           </div>

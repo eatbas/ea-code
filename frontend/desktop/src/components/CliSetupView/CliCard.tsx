@@ -14,7 +14,7 @@ function buildGoogleInstallSearchUrl(name: string): string {
 const BADGE_BASE = "inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium";
 
 const BADGE_VARIANTS = {
-  neutral: "bg-[#737373]/15 text-[#a3a3a3]",
+  neutral: "bg-neutral-badge-bg text-neutral-badge-text",
   danger: "bg-danger/15 text-danger",
   success: "bg-success/15 text-success",
   warning: "bg-warning/15 text-warning",

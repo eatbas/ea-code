@@ -16,6 +16,64 @@
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
+
+  /* Semantic surface tokens */
+  --color-menu-surface: #232325;
+  --color-input-bg: #19191a;
+  --color-input-border-focus: #5a5a61;
+  --color-row-active: #252527;
+  --color-row-hover: #1d1d1f;
+
+  /* Danger palette */
+  --color-danger-bg: #3a1418;
+  --color-danger-bg-hover: #521a21;
+  --color-danger-text: #ffb4bb;
+  --color-danger-text-hover: #ffd7dc;
+
+  /* Success / green chip palette */
+  --color-success-chip-border: #295638;
+  --color-success-chip-bg: #0f1d15;
+  --color-success-chip-bg-hover: #13241a;
+  --color-success-chip-text: #9be7b4;
+  --color-success-chip-border-hover: #37744a;
+  --color-running-dot: #1eb75f;
+  --color-send-bg-hover: #2ad16f;
+  --color-send-text: #041107;
+  --color-stop-bg: #6f1d1b;
+  --color-stop-bg-hover: #892321;
+  --color-stop-text: #ffe2e1;
+  --color-new-btn-bg-hover: #18210f;
+  --color-new-btn-text: #7ee787;
+
+  /* Warning / info banner palette */
+  --color-warning-border: rgba(95, 111, 44, 0.3);
+  --color-warning-text: #d5f18b;
+
+  /* Error message palette */
+  --color-error-border: #7f1d1d;
+  --color-error-bg: #2a1418;
+  --color-error-text: #fecaca;
+
+  /* Toast palette */
+  --color-toast-success-text: #86efac;
+  --color-toast-error-text: #fca5a5;
+  --color-toast-info-border: rgba(90, 90, 97, 0.6);
+  --color-toast-info-bg: #27272a;
+
+  /* Overlay / loading */
+  --color-overlay-bg: rgba(17, 17, 18, 0.95);
+
+  /* Neutral badge (CliCard status) */
+  --color-neutral-badge-bg: rgba(115, 115, 115, 0.15);
+  --color-neutral-badge-text: #a3a3a3;
+
+  /* Misc neutral shades */
+  --color-separator: #66666d;
+  --color-option-muted: #9a9aa2;
+  --color-badge-bg: #1c1c1e;
+  --color-fg-secondary: #d0d0d4;
+  --color-fg-inactive: #a3a3aa;
+  --color-drag-bg: #242426;
 }
 
 html,

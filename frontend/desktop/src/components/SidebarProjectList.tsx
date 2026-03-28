@@ -287,7 +287,7 @@ export function SidebarProjectList({
 
       <DragOverlay>
         {draggingProject && (
-          <div className="mx-1 rounded-lg border border-edge-strong bg-[#242426] px-3 py-1.5 text-sm text-fg shadow-[0_18px_36px_rgba(0,0,0,0.35)]">
+          <div className="mx-1 rounded-lg border border-edge-strong bg-drag-bg px-3 py-1.5 text-sm text-fg shadow-[0_18px_36px_rgba(0,0,0,0.35)]">
             {projectDisplayName(draggingProject)}
           </div>
         )}

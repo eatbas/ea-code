@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AlertCircle, X } from "lucide-react";
 import type { PrerequisiteStatus } from "../../types";
 
 interface PrerequisiteBannerProps {
@@ -37,22 +38,7 @@ export function PrerequisiteBanner({ status, onDismiss }: PrerequisiteBannerProp
   return (
     <div className="fixed top-0 right-0 left-0 z-50 border-b border-danger/30 bg-panel/95 px-4 py-3 shadow-lg backdrop-blur-sm">
       <div className="mx-auto flex max-w-3xl items-start gap-3">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#ef4444"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="mt-0.5 shrink-0"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="12" />
-          <line x1="12" y1="16" x2="12.01" y2="16" />
-        </svg>
+        <AlertCircle size={18} strokeWidth={2} className="mt-0.5 shrink-0 text-danger" />
         <div className="flex-1 space-y-1">
           <p className="text-sm font-medium text-fg">Missing prerequisites</p>
           {missing.map((item) => (
@@ -62,7 +48,7 @@ export function PrerequisiteBanner({ status, onDismiss }: PrerequisiteBannerProp
                 href={item.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#d4d4d8] underline underline-offset-2 hover:text-white"
+                className="text-fg-secondary underline underline-offset-2 hover:text-white"
               >
                 {item.linkText}
               </a>
@@ -75,10 +61,7 @@ export function PrerequisiteBanner({ status, onDismiss }: PrerequisiteBannerProp
           className="shrink-0 rounded p-1 text-fg-faint transition-colors hover:bg-elevated hover:text-fg"
           title="Dismiss"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
+          <X size={14} strokeWidth={2} />
         </button>
       </div>
     </div>

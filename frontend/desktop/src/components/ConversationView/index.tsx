@@ -1,10 +1,8 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
-  AppSettings,
   AgentSelection,
   ConversationDetail,
-  ProviderInfo,
   WorkspaceInfo,
 } from "../../types";
 import { useApiHealth } from "../../hooks/useApiHealth";
@@ -12,8 +10,8 @@ import { useSettings } from "../../hooks/useSettings";
 import { ConversationComposer, type PipelineMode } from "./ConversationComposer";
 import { formatAssistantLabel, sortProvidersByDisplayName } from "../shared/constants";
 import { WorkspaceFooter } from "../shared/WorkspaceFooter";
-import { useToast } from "../shared/Toast";
-import { getEnabledModels } from "../../utils/modelSettings";
+import { useFooterErrorHandler } from "../../hooks/useFooterErrorHandler";
+import { filterProvidersBySettings } from "../../utils/modelSettings";
 import { parseAgentSelection } from "../../utils/agentSettings";
 
 interface ConversationViewProps {
@@ -43,7 +41,6 @@ export function ConversationView({
   onSendPrompt,
   onStopConversation,
 }: ConversationViewProps): ReactNode {
-  const toast = useToast();
   const { providers, checkHealth } = useApiHealth();
   const { settings } = useSettings();
   const [selectedAgent, setSelectedAgent] = useState<AgentSelection | null>(null);
@@ -121,9 +118,7 @@ export function ConversationView({
     await onSendPrompt(prompt, agent);
   }, [activeConversation, selectedAgent, onSendPrompt]);
 
-  const handleFooterError = useCallback(() => {
-    toast.error("Failed to open project action.");
-  }, [toast]);
+  const handleFooterError = useFooterErrorHandler();
 
   const promptHistory = useMemo(
     () => activeConversation?.messages
@@ -135,7 +130,7 @@ export function ConversationView({
   return (
     <div className="flex h-full min-h-0 bg-surface">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="border-b border-edge bg-[linear-gradient(180deg,#1a1a1c_0%,#101011_100%)] px-5 py-4">
+        <div className="border-b border-edge bg-[linear-gradient(180deg,var(--color-input-bg)_0%,var(--color-surface)_100%)] px-5 py-4">
           <p className="text-lg font-semibold text-fg">
             {activeConversation?.summary.title ?? "New conversation"}
           </p>
@@ -145,7 +140,7 @@ export function ConversationView({
         </div>
 
         {workspace.isGitRepo && workspace.eaCodeIgnored === false && (
-          <div className="border-b border-[#5f6f2c]/30 bg-[#18210f] px-5 py-3 text-sm text-[#d5f18b]">
+          <div className="border-b border-warning-border bg-new-btn-bg-hover px-5 py-3 text-sm text-warning-text">
             `.ea-code/` is not currently ignored in this repository. ea-code will attempt to add it to `.gitignore`.
           </div>
         )}
@@ -174,7 +169,7 @@ export function ConversationView({
                 </div>
               ))}
               {activeDraft && (
-                <div className="mr-auto max-w-3xl rounded-2xl border border-dashed border-edge-strong bg-[#1a1a1c] px-4 py-3 text-sm leading-6 text-fg">
+                <div className="mr-auto max-w-3xl rounded-2xl border border-dashed border-edge-strong bg-input-bg px-4 py-3 text-sm leading-6 text-fg">
                   <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
                     {activeConversation
                       ? `Assistant - ${formatAssistantLabel(
@@ -187,7 +182,7 @@ export function ConversationView({
                 </div>
               )}
               {activeConversation.summary.error && activeConversation.summary.status === "failed" && (
-                <div className="mr-auto max-w-3xl rounded-2xl border border-[#7f1d1d] bg-[#2a1418] px-4 py-3 text-sm text-[#fecaca]">
+                <div className="mr-auto max-w-3xl rounded-2xl border border-error-border bg-error-bg px-4 py-3 text-sm text-error-text">
                   {activeConversation.summary.error}
                 </div>
               )}
@@ -237,26 +232,3 @@ export function ConversationView({
   );
 }
 
-function filterProvidersBySettings(
-  providers: ProviderInfo[],
-  settings: AppSettings | null,
-): ProviderInfo[] {
-  return providers
-    .filter((provider) => provider.available)
-    .map((provider) => {
-      if (!settings) {
-        return provider;
-      }
-
-      const enabledModels = getEnabledModels(settings, provider.name);
-      const models = enabledModels.size > 0
-        ? provider.models.filter((model) => enabledModels.has(model))
-        : [];
-
-      return {
-        ...provider,
-        models,
-      };
-    })
-    .filter((provider) => provider.models.length > 0);
-}

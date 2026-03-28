@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { X } from "lucide-react";
 
 type ToastVariant = "success" | "error" | "info";
 
@@ -19,9 +20,9 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const VARIANT_CLASSES: Record<ToastVariant, string> = {
-  success: "border-success/40 bg-success/10 text-[#86efac]",
-  error: "border-danger/40 bg-danger/10 text-[#fca5a5]",
-  info: "border-[#5a5a61]/60 bg-[#27272a] text-fg",
+  success: "border-success/40 bg-success/10 text-toast-success-text",
+  error: "border-danger/40 bg-danger/10 text-toast-error-text",
+  info: "border-toast-info-border bg-toast-info-bg text-fg",
 };
 
 const DISMISS_MS = 3500;
@@ -64,10 +65,7 @@ export function ToastProvider({ children }: { children: ReactNode }): ReactNode 
                   className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
                   aria-label="Dismiss"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
+                  <X size={14} strokeWidth={2} />
                 </button>
               </div>
               {t.action && (

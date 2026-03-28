@@ -2,11 +2,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { useAppViewState } from "./hooks/useAppViewState";
-import {
-  useConversationSession,
-  type ConversationSelectionIntent,
-} from "./hooks/useConversationSession";
-import { useProjectConversationIndex } from "./hooks/useProjectConversationIndex";
+import { useConversationStore } from "./hooks/useConversationStore";
 import { usePrerequisites } from "./hooks/usePrerequisites";
 import { useWorkspaceSession } from "./hooks/useWorkspaceSession";
 import { Sidebar } from "./components/Sidebar";
@@ -14,19 +10,9 @@ import { AppContentRouter } from "./components/AppContentRouter";
 import { UpdateInstallBanner } from "./components/shared/UpdateInstallBanner";
 import { PrerequisiteBanner } from "./components/shared/PrerequisiteBanner";
 import { ProjectLoadingOverlay } from "./components/shared/ProjectLoadingOverlay";
-import {
-  archiveConversation,
-  deleteConversation,
-  openInVsCode,
-  openProjectFolder,
-  renameConversation,
-  setConversationPinned,
-  unarchiveConversation,
-} from "./lib/desktopApi";
-import { useToast } from "./components/shared/Toast";
+import { openInVsCode, openProjectFolder } from "./lib/desktopApi";
 
 function App(): ReactNode {
-  const toast = useToast();
   const {
     workspace,
     openingWorkspace,
@@ -42,30 +28,9 @@ function App(): ReactNode {
   const { status: updateStatus, updateVersion } = useUpdateCheck(false);
   const { status: prereqs, dismissed: prereqsDismissed, dismiss: dismissPrereqs } = usePrerequisites();
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  const [conversationSelection, setConversationSelection] = useState<ConversationSelectionIntent | null>(null);
-  const {
-    activeConversation,
-    activeDraft,
-    activePromptDraft,
-    sending,
-    stopping,
-    updateActivePromptDraft,
-    sendPrompt,
-    stopActiveConversation,
-    deleteConversationById,
-    renameConversationById,
-    archiveConversationById,
-    unarchiveConversationById,
-    setConversationPinnedById,
-  } = useConversationSession(workspace, conversationSelection);
-  const {
-    index: conversationIndex,
-    loadedProjectPaths,
-    loadingProjectPaths,
-    ensureLoaded: ensureProjectConversationsLoaded,
-    upsertConversation: upsertConversationInIndex,
-    removeConversation: removeConversationFromIndex,
-  } = useProjectConversationIndex(projects);
+
+  const store = useConversationStore(projects, workspace);
+
   const activeProjects = useMemo(
     () => projects.filter((project) => !project.archivedAt),
     [projects],
@@ -80,12 +45,12 @@ function App(): ReactNode {
   });
 
   async function handleSelectProjectWithDefault(projectPath: string): Promise<void> {
-    setConversationSelection(null);
+    store.setConversationSelection(null);
     await handleSelectProject(projectPath);
   }
 
   async function handleOpenConversation(projectPath: string, conversationId: string): Promise<void> {
-    setConversationSelection({
+    store.setConversationSelection({
       workspacePath: projectPath,
       mode: "conversation",
       conversationId,
@@ -98,7 +63,7 @@ function App(): ReactNode {
   }
 
   async function handleCreateConversation(projectPath: string): Promise<void> {
-    setConversationSelection({
+    store.setConversationSelection({
       workspacePath: projectPath,
       mode: "new",
     });
@@ -107,83 +72,6 @@ function App(): ReactNode {
       return;
     }
     setActiveView("home");
-  }
-
-  async function handleDeleteConversation(projectPath: string, conversationId: string): Promise<void> {
-    try {
-      let deleted = false;
-      if (workspace?.path === projectPath) {
-        deleted = await deleteConversationById(conversationId);
-      } else {
-        await deleteConversation(projectPath, conversationId);
-        deleted = true;
-      }
-      if (deleted) {
-        removeConversationFromIndex(projectPath, conversationId);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete conversation.");
-    }
-  }
-
-  async function handleRenameConversation(
-    projectPath: string,
-    conversationId: string,
-    title: string,
-  ): Promise<void> {
-    try {
-      const summary = workspace?.path === projectPath
-        ? await renameConversationById(conversationId, title)
-        : await renameConversation(projectPath, conversationId, title);
-      if (summary) {
-        upsertConversationInIndex(summary);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to rename conversation.");
-    }
-  }
-
-  async function handleArchiveConversation(projectPath: string, conversationId: string): Promise<void> {
-    try {
-      const summary = workspace?.path === projectPath
-        ? await archiveConversationById(conversationId)
-        : await archiveConversation(projectPath, conversationId);
-      if (summary) {
-        upsertConversationInIndex(summary);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to archive conversation.");
-    }
-  }
-
-  async function handleSetConversationPinned(
-    projectPath: string,
-    conversationId: string,
-    pinned: boolean,
-  ): Promise<void> {
-    try {
-      const summary = workspace?.path === projectPath
-        ? await setConversationPinnedById(conversationId, pinned)
-        : await setConversationPinned(projectPath, conversationId, pinned);
-      if (summary) {
-        upsertConversationInIndex(summary);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update pin.");
-    }
-  }
-
-  async function handleUnarchiveConversation(projectPath: string, conversationId: string): Promise<void> {
-    try {
-      const summary = workspace?.path === projectPath
-        ? await unarchiveConversationById(conversationId)
-        : await unarchiveConversation(projectPath, conversationId);
-      if (summary) {
-        upsertConversationInIndex(summary);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to unarchive conversation.");
-    }
   }
 
   return (
@@ -195,56 +83,38 @@ function App(): ReactNode {
           activeView={activeView}
           onNavigate={setActiveView}
           projects={projects}
-          conversationIndex={conversationIndex}
-          loadedProjectPaths={loadedProjectPaths}
-          loadingProjectPaths={loadingProjectPaths}
+          conversationIndex={store.conversationIndex}
+          loadedProjectPaths={store.loadedProjectPaths}
+          loadingProjectPaths={store.loadingProjectPaths}
           activeProjectPath={workspace?.path}
-          activeConversationId={activeConversation?.summary.id ?? null}
-          onLoadProjectConversations={ensureProjectConversationsLoaded}
+          activeConversationId={store.activeConversation?.summary.id ?? null}
+          onLoadProjectConversations={store.ensureProjectConversationsLoaded}
           onSelectConversation={handleOpenConversation}
           onCreateConversation={handleCreateConversation}
           onAddProject={selectFolder}
           onReorderProjects={reorderProjects}
-          onRemoveProject={(projectPath) => {
-            void deleteProject(projectPath);
-          }}
-          onRenameProject={(projectPath, name) => {
-            void renameProject(projectPath, name);
-          }}
-          onArchiveProject={(projectPath) => {
-            void archiveProject(projectPath);
-          }}
-          onUnarchiveProject={(projectPath) => {
-            void unarchiveProject(projectPath);
-          }}
-          onRemoveConversation={(projectPath, conversationId) => {
-            void handleDeleteConversation(projectPath, conversationId);
-          }}
-          onRenameConversation={(projectPath, conversationId, title) => {
-            void handleRenameConversation(projectPath, conversationId, title);
-          }}
-          onArchiveConversation={(projectPath, conversationId) => {
-            void handleArchiveConversation(projectPath, conversationId);
-          }}
-          onUnarchiveConversation={(projectPath, conversationId) => {
-            void handleUnarchiveConversation(projectPath, conversationId);
-          }}
-          onSetConversationPinned={(projectPath, conversationId, pinned) => {
-            void handleSetConversationPinned(projectPath, conversationId, pinned);
-          }}
+          onRemoveProject={(p) => { void deleteProject(p); }}
+          onRenameProject={(p, name) => { void renameProject(p, name); }}
+          onArchiveProject={(p) => { void archiveProject(p); }}
+          onUnarchiveProject={(p) => { void unarchiveProject(p); }}
+          onRemoveConversation={store.deleteConversation}
+          onRenameConversation={store.renameConversation}
+          onArchiveConversation={store.archiveConversation}
+          onUnarchiveConversation={store.unarchiveConversation}
+          onSetConversationPinned={store.setConversationPinned}
         />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <AppContentRouter
             activeView={activeView}
             workspace={workspace}
-            activeConversation={activeConversation}
-            activeDraft={activeDraft}
-            activePromptDraft={activePromptDraft}
-            sendingConversation={sending}
-            stoppingConversation={stopping}
-            onPromptDraftChange={updateActivePromptDraft}
-            onSendConversationPrompt={sendPrompt}
-            onStopConversation={stopActiveConversation}
+            activeConversation={store.activeConversation}
+            activeDraft={store.activeDraft}
+            activePromptDraft={store.activePromptDraft}
+            sendingConversation={store.sending}
+            stoppingConversation={store.stopping}
+            onPromptDraftChange={store.updateActivePromptDraft}
+            onSendConversationPrompt={store.sendPrompt}
+            onStopConversation={store.stopActiveConversation}
             projects={activeProjects}
             onSelectProject={handleSelectProjectWithDefault}
             onAddProject={selectFolder}
