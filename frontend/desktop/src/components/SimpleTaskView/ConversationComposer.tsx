@@ -182,7 +182,7 @@ export function ConversationComposer({
 
     event.preventDefault();
 
-    if (sending || activeRunning || !agent || prompt.trim().length === 0) {
+    if (sending || stopping || activeRunning || !agent || prompt.trim().length === 0) {
       return;
     }
 
@@ -280,7 +280,7 @@ export function ConversationComposer({
                 }
                 void handleSubmit();
               }}
-              disabled={activeRunning ? stopping : sending || !agent || prompt.trim().length === 0}
+              disabled={activeRunning ? stopping : stopping || sending || !agent || prompt.trim().length === 0}
               className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 activeRunning
                   ? "bg-[#6f1d1b] text-[#ffe2e1] hover:bg-[#892321]"
