@@ -9,14 +9,14 @@ import type {
 } from "../../types";
 import { useApiHealth } from "../../hooks/useApiHealth";
 import { useSettings } from "../../hooks/useSettings";
-import { ConversationComposer } from "./ConversationComposer";
+import { ConversationComposer, type PipelineMode } from "./ConversationComposer";
 import { formatAssistantLabel, sortProvidersByDisplayName } from "../shared/constants";
 import { WorkspaceFooter } from "../shared/WorkspaceFooter";
 import { useToast } from "../shared/Toast";
 import { getEnabledModels } from "../../utils/modelSettings";
 import { parseAgentSelection } from "../../utils/agentSettings";
 
-interface SimpleTaskViewProps {
+interface ConversationViewProps {
   workspace: WorkspaceInfo;
   activeConversation: ConversationDetail | null;
   activeDraft: string;
@@ -30,7 +30,7 @@ interface SimpleTaskViewProps {
   onStopConversation: () => Promise<void>;
 }
 
-export function SimpleTaskView({
+export function ConversationView({
   workspace,
   activeConversation,
   activeDraft,
@@ -42,11 +42,12 @@ export function SimpleTaskView({
   onPromptDraftChange,
   onSendPrompt,
   onStopConversation,
-}: SimpleTaskViewProps): ReactNode {
+}: ConversationViewProps): ReactNode {
   const toast = useToast();
   const { providers, checkHealth } = useApiHealth();
   const { settings } = useSettings();
   const [selectedAgent, setSelectedAgent] = useState<AgentSelection | null>(null);
+  const [pipelineMode, setPipelineMode] = useState<PipelineMode>("auto");
   const prevConversationIdRef = useRef<string | null>(null);
 
   const availableProviders = useMemo(
@@ -213,6 +214,8 @@ export function SimpleTaskView({
           sending={sending}
           stopping={stopping}
           activeRunning={Boolean(activeRunning)}
+          pipelineMode={pipelineMode}
+          onPipelineModeChange={setPipelineMode}
           onAgentChange={setSelectedAgent}
           onPromptChange={onPromptDraftChange}
           onSend={handleSend}

@@ -4,6 +4,14 @@ export interface PipelineAgent {
   model: string;
 }
 
+/** Orchestrator agent that enhances prompts and routes to the right pipeline. */
+export interface OrchestratorSettings {
+  /** Fast agent used for prompt enhancement and pipeline routing. */
+  agent: PipelineAgent;
+  /** Maximum review-fix iterations before stopping (default 3). */
+  maxIterations: number;
+}
+
 /** Configuration for the multi-stage code pipeline. */
 export interface CodePipelineSettings {
   /** Agents that plan in parallel, each producing Plan-N.md. */
@@ -41,6 +49,8 @@ export interface AppSettings {
   hiveApiPort: number;
   /** Python interpreter path override (empty = auto-detect). */
   pythonPath: string;
+  /** Orchestrator configuration (null = not configured). */
+  orchestrator: OrchestratorSettings | null;
   /** Code pipeline configuration (null = not configured). */
   codePipeline: CodePipelineSettings | null;
 }
@@ -62,5 +72,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   providerModels: {},
   hiveApiPort: 0,
   pythonPath: "",
+  orchestrator: null,
   codePipeline: null,
 };

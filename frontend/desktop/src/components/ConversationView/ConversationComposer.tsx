@@ -8,6 +8,14 @@ import {
   providerDisplayName,
 } from "../shared/constants";
 
+export type PipelineMode = "auto" | "simple" | "code";
+
+const PIPELINE_OPTIONS: { value: PipelineMode; label: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: "simple", label: "Simple Task" },
+  { value: "code", label: "Code Pipeline" },
+];
+
 interface ConversationComposerProps {
   providers: ProviderInfo[];
   agent: AgentSelection | null;
@@ -17,6 +25,8 @@ interface ConversationComposerProps {
   sending: boolean;
   stopping: boolean;
   activeRunning: boolean;
+  pipelineMode: PipelineMode;
+  onPipelineModeChange: (mode: PipelineMode) => void;
   onAgentChange: (agent: AgentSelection) => void;
   onPromptChange: (prompt: string) => void;
   onSend: (prompt: string) => Promise<void>;
@@ -32,12 +42,14 @@ export function ConversationComposer({
   sending,
   stopping,
   activeRunning,
+  pipelineMode,
+  onPipelineModeChange,
   onAgentChange,
   onPromptChange,
   onSend,
   onStop,
 }: ConversationComposerProps): ReactNode {
-  const [openSelect, setOpenSelect] = useState<"provider" | "model" | null>(null);
+  const [openSelect, setOpenSelect] = useState<"pipeline" | "provider" | "model" | null>(null);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [draftBeforeHistory, setDraftBeforeHistory] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -213,9 +225,17 @@ export function ConversationComposer({
 
         <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-edge px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-8 items-center rounded-lg border border-edge bg-elevated px-2.5 py-1 text-[11px] font-medium text-fg">
-              Simple Task
-            </span>
+            <PopoverSelect
+              value={pipelineMode}
+              options={PIPELINE_OPTIONS}
+              disabled={locked}
+              direction="up"
+              align="left"
+              open={openSelect === "pipeline"}
+              onOpenChange={(open) => setOpenSelect(open ? "pipeline" : null)}
+              triggerClassName="flex h-8 items-center gap-2 rounded-lg border border-edge bg-elevated px-2.5 text-[11px] font-semibold text-fg transition-all hover:border-[#5a5a61] hover:bg-[#2a2a2d] disabled:cursor-not-allowed disabled:opacity-55"
+              onChange={(value) => onPipelineModeChange(value as PipelineMode)}
+            />
             {locked && (
               <span className="inline-flex h-8 items-center rounded-lg border border-edge bg-[#1c1c1e] px-2.5 py-1 text-[11px] text-fg-muted">
                 Resuming this conversation

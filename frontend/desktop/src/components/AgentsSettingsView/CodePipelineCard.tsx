@@ -8,6 +8,8 @@ interface CodePipelineCardProps {
   settings: AppSettings;
   providers: ProviderInfo[];
   onSave: (settings: AppSettings) => void;
+  /** When true, skip the outer card wrapper (used inside a tabbed container). */
+  embedded?: boolean;
 }
 
 function defaultAgent(providers: ProviderInfo[]): PipelineAgent {
@@ -32,6 +34,7 @@ export function CodePipelineCard({
   settings,
   providers,
   onSave,
+  embedded = false,
 }: CodePipelineCardProps): ReactNode {
   const toast = useToast();
   const [openSelect, setOpenSelect] = useState<string | null>(null);
@@ -70,14 +73,9 @@ export function CodePipelineCard({
     return null;
   }
 
-  return (
-    <div className="rounded-lg border border-edge bg-panel p-5">
-      <div className="flex items-center gap-2">
-        <span className="inline-flex items-center rounded-lg border border-edge bg-elevated px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg">
-          Code Pipeline
-        </span>
-      </div>
-      <p className="mt-3 text-xs text-fg-muted">
+  const content = (
+    <>
+      <p className={embedded ? "mt-3 text-xs text-fg-muted" : "mt-3 text-xs text-fg-muted"}>
         Plan, code, review, and fix in a multi-step pipeline.
         Planners also act as reviewers.
       </p>
@@ -100,6 +98,21 @@ export function CodePipelineCard({
         coderProviders={providers}
         onCoderChange={(agent) => save({ ...pipeline, coder: agent })}
       />
+    </>
+  );
+
+  if (embedded) {
+    return <div>{content}</div>;
+  }
+
+  return (
+    <div className="rounded-lg border border-edge bg-panel p-5">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center rounded-lg border border-edge bg-elevated px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg">
+          Code Pipeline
+        </span>
+      </div>
+      {content}
     </div>
   );
 }

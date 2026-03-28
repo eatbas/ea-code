@@ -11,12 +11,15 @@ import { getEnabledModels } from "../../utils/modelSettings";
 import { parseAgentSelection, serialiseAgentSelection } from "../../utils/agentSettings";
 import { useToast } from "../shared/Toast";
 import { CodePipelineCard } from "./CodePipelineCard";
+import { OrchestratorCard } from "./OrchestratorCard";
 
 interface AgentsSettingsViewProps {
   settings: AppSettings;
   providers: ProviderInfo[];
   onSave: (settings: AppSettings) => void;
 }
+
+type PipelineTab = "simple" | "code";
 
 export function AgentsSettingsView({
   settings,
@@ -25,6 +28,7 @@ export function AgentsSettingsView({
 }: AgentsSettingsViewProps): ReactNode {
   const toast = useToast();
   const [openSelect, setOpenSelect] = useState<"provider" | "model" | null>(null);
+  const [activeTab, setActiveTab] = useState<PipelineTab>("simple");
 
   const availableProviders = useMemo(
     () => sortProvidersByDisplayName(filterProvidersBySettings(providers, settings)),
@@ -78,73 +82,108 @@ export function AgentsSettingsView({
             </p>
           </div>
 
-          {/* Simple Task — default agent */}
-          <div className="rounded-lg border border-edge bg-panel p-5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center rounded-lg border border-edge bg-elevated px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg">
-                Simple Task
-              </span>
-            </div>
-            <p className="mt-3 text-xs text-fg-muted">
-              Send prompts to a single agent and stream the response.
-            </p>
-
-            {availableProviders.length > 0 ? (
-              <div className="mt-5">
-                <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-fg">
-                  Default Agent
-                </p>
-                <div className="flex items-center gap-3">
-                <PopoverSelect
-                  value={resolvedAgent?.provider ?? ""}
-                  options={providerOptions}
-                  placeholder="Provider"
-                  direction="down"
-                  align="left"
-                  open={openSelect === "provider"}
-                  onOpenChange={(open) => setOpenSelect(open ? "provider" : null)}
-                  onChange={(nextValue) => {
-                    const nextProvider = availableProviders.find((p) => p.name === nextValue);
-                    if (!nextProvider) return;
-                    handleAgentChange({
-                      provider: nextProvider.name,
-                      model: nextProvider.models[0] ?? "",
-                    });
-                  }}
-                />
-                <span className="text-xs text-fg-faint">/</span>
-                <PopoverSelect
-                  value={resolvedAgent?.model ?? ""}
-                  options={modelOptions}
-                  placeholder="Model"
-                  direction="down"
-                  align="left"
-                  open={openSelect === "model"}
-                  onOpenChange={(open) => setOpenSelect(open ? "model" : null)}
-                  onChange={(nextValue) => {
-                    if (!resolvedAgent) return;
-                    handleAgentChange({
-                      provider: resolvedAgent.provider,
-                      model: nextValue,
-                    });
-                  }}
-                />
-                </div>
-              </div>
-            ) : (
-              <p className="mt-4 text-xs text-fg-faint">
-                No providers available. Check the CLI Setup page to ensure at
-                least one provider is installed and has enabled models.
-              </p>
-            )}
-          </div>
-
-          {/* Code Pipeline */}
-          <CodePipelineCard
+          {/* Orchestrator */}
+          <OrchestratorCard
             settings={settings}
             providers={availableProviders}
             onSave={onSave}
           />
+
+          {/* Pipeline tabs */}
+          <div className="rounded-lg border border-edge bg-panel p-5">
+            {/* Tab bar */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab("simple")}
+                className={`inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                  activeTab === "simple"
+                    ? "border-fg/20 bg-elevated text-fg"
+                    : "border-edge bg-transparent text-fg-muted hover:bg-elevated hover:text-fg"
+                }`}
+              >
+                Simple Task
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("code")}
+                className={`inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                  activeTab === "code"
+                    ? "border-fg/20 bg-elevated text-fg"
+                    : "border-edge bg-transparent text-fg-muted hover:bg-elevated hover:text-fg"
+                }`}
+              >
+                Code Pipeline
+              </button>
+            </div>
+
+            {/* Tab content */}
+            {activeTab === "simple" && (
+              <div>
+                <p className="mt-3 text-xs text-fg-muted">
+                  Send prompts to a single agent and stream the response.
+                </p>
+
+                {availableProviders.length > 0 ? (
+                  <div className="mt-5">
+                    <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-fg">
+                      Default Agent
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <PopoverSelect
+                        value={resolvedAgent?.provider ?? ""}
+                        options={providerOptions}
+                        placeholder="Provider"
+                        direction="down"
+                        align="left"
+                        open={openSelect === "provider"}
+                        onOpenChange={(open) => setOpenSelect(open ? "provider" : null)}
+                        onChange={(nextValue) => {
+                          const nextProvider = availableProviders.find((p) => p.name === nextValue);
+                          if (!nextProvider) return;
+                          handleAgentChange({
+                            provider: nextProvider.name,
+                            model: nextProvider.models[0] ?? "",
+                          });
+                        }}
+                      />
+                      <span className="text-xs text-fg-faint">/</span>
+                      <PopoverSelect
+                        value={resolvedAgent?.model ?? ""}
+                        options={modelOptions}
+                        placeholder="Model"
+                        direction="down"
+                        align="left"
+                        open={openSelect === "model"}
+                        onOpenChange={(open) => setOpenSelect(open ? "model" : null)}
+                        onChange={(nextValue) => {
+                          if (!resolvedAgent) return;
+                          handleAgentChange({
+                            provider: resolvedAgent.provider,
+                            model: nextValue,
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-4 text-xs text-fg-faint">
+                    No providers available. Check the CLI Setup page to ensure at
+                    least one provider is installed and has enabled models.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {activeTab === "code" && (
+              <CodePipelineCard
+                settings={settings}
+                providers={availableProviders}
+                onSave={onSave}
+                embedded
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>

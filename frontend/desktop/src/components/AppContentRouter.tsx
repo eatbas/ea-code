@@ -3,7 +3,7 @@ import type { ActiveView, ConversationDetail, WorkspaceInfo, ProjectEntry, Agent
 import { IdleView } from "./IdleView";
 import { AgentsSettingsRoute } from "./AgentsSettingsView/Route";
 import { CliSetupRoute } from "./CliSetupView/Route";
-import { SimpleTaskView } from "./SimpleTaskView";
+import { ConversationView } from "./ConversationView";
 
 interface AppContentRouterProps {
   activeView: ActiveView;
@@ -51,7 +51,7 @@ export function AppContentRouter({
 
   if (workspace) {
     return (
-      <SimpleTaskView
+      <ConversationView
         workspace={workspace}
         activeConversation={activeConversation}
         activeDraft={activeDraft}

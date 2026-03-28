@@ -15,6 +15,14 @@ pub struct PipelineAgent {
     pub model: String,
 }
 
+/// Orchestrator agent that enhances prompts and routes to the right pipeline.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrchestratorSettings {
+    pub agent: PipelineAgent,
+    pub max_iterations: u32,
+}
+
 /// Configuration for the multi-stage code pipeline.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,6 +68,9 @@ pub struct AppSettings {
     /// Python interpreter path override (empty = auto-detect).
     #[serde(default)]
     pub python_path: String,
+    /// Orchestrator configuration (None = not configured).
+    #[serde(default)]
+    pub orchestrator: Option<OrchestratorSettings>,
     /// Code pipeline configuration (None = not configured).
     #[serde(default)]
     pub code_pipeline: Option<CodePipelineSettings>,
@@ -87,6 +98,7 @@ impl Default for AppSettings {
             provider_models: HashMap::new(),
             hive_api_port: 0,
             python_path: String::new(),
+            orchestrator: None,
             code_pipeline: None,
         }
     }
