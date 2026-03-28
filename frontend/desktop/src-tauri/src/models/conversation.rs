@@ -47,6 +47,8 @@ pub struct ConversationSummary {
     pub last_provider_session_ref: Option<String>,
     pub active_job_id: Option<String>,
     pub error: Option<String>,
+    pub archived_at: Option<String>,
+    pub pinned_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

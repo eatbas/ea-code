@@ -46,6 +46,8 @@ pub fn run() {
             commands::workspace::check_prerequisites,
             commands::workspace::list_projects,
             commands::workspace::delete_project,
+            commands::workspace::rename_project,
+            commands::workspace::archive_project,
             commands::workspace::open_project_folder,
             commands::workspace::open_in_vscode,
             commands::settings::get_settings,
@@ -64,6 +66,9 @@ pub fn run() {
             conversations::commands::send_conversation_turn,
             conversations::commands::stop_conversation,
             conversations::commands::delete_conversation,
+            conversations::commands::rename_conversation,
+            conversations::commands::archive_conversation,
+            conversations::commands::set_conversation_pinned,
         ])
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");

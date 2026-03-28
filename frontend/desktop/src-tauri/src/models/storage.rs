@@ -14,6 +14,8 @@ pub struct ProjectEntry {
     pub is_git_repo: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<String>,
 }
 
 /// Status of a persisted run in summary.json.

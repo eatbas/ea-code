@@ -108,6 +108,16 @@ pub async fn delete_project(project_path: String) -> Result<(), String> {
     storage::projects::delete_project(&project_path)
 }
 
+#[tauri::command]
+pub async fn rename_project(project_path: String, name: String) -> Result<crate::models::ProjectEntry, String> {
+    storage::projects::rename_project(&project_path, &name)
+}
+
+#[tauri::command]
+pub async fn archive_project(project_path: String) -> Result<crate::models::ProjectEntry, String> {
+    storage::projects::archive_project(&project_path)
+}
+
 /// Opens the given workspace path in VS Code.
 #[tauri::command]
 pub async fn open_in_vscode(app: AppHandle, path: String) -> Result<(), String> {

@@ -3,8 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { ActiveView, ConversationSummary, ProjectEntry } from "../types";
 import { SidebarCollapsed } from "./SidebarCollapsed";
+import { SidebarConversationRow } from "./SidebarConversationRow";
+import { SidebarProjectRow } from "./SidebarProjectRow";
 import { SidebarSettings } from "./SidebarSettings";
-import { folderName, formatRelativeTime } from "../utils/formatters";
+import { projectDisplayName } from "../utils/formatters";
 
 /** Data-driven settings navigation items. */
 const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[] = [
@@ -33,7 +35,12 @@ interface SidebarProps {
   onCreateConversation: (projectPath: string) => void | Promise<void>;
   onAddProject: () => void;
   onRemoveProject?: (projectPath: string) => void;
+  onRenameProject?: (projectPath: string, name: string) => void;
+  onArchiveProject?: (projectPath: string) => void;
   onRemoveConversation?: (projectPath: string, conversationId: string) => void;
+  onRenameConversation?: (projectPath: string, conversationId: string, title: string) => void;
+  onArchiveConversation?: (projectPath: string, conversationId: string) => void;
+  onSetConversationPinned?: (projectPath: string, conversationId: string, pinned: boolean) => void;
 }
 
 /** Collapsible left sidebar with project list and settings sub-navigation. */
@@ -51,12 +58,16 @@ export function Sidebar({
   onCreateConversation,
   onAddProject,
   onRemoveProject,
+  onRenameProject,
+  onArchiveProject,
   onRemoveConversation,
+  onRenameConversation,
+  onArchiveConversation,
+  onSetConversationPinned,
 }: SidebarProps): ReactNode {
   const isSettings = activeView === "cli-setup";
   const [appVersion, setAppVersion] = useState<string | null>(null);
-  const [projectPendingRemoval, setProjectPendingRemoval] = useState<string | null>(null);
-  const [conversationPendingRemoval, setConversationPendingRemoval] = useState<string | null>(null);
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const currentYear = new Date().getFullYear();
 
   useEffect(() => {
@@ -78,6 +89,27 @@ export function Sidebar({
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    setExpandedProjects((current) => {
+      const next = new Set(current);
+      let changed = false;
+
+      for (const projectPath of next) {
+        if (!projects.some((project) => project.path === projectPath)) {
+          next.delete(projectPath);
+          changed = true;
+        }
+      }
+
+      if (activeProjectPath && !next.has(activeProjectPath)) {
+        next.add(activeProjectPath);
+        changed = true;
+      }
+
+      return changed ? next : current;
+    });
+  }, [activeProjectPath, projects]);
 
   const appFooterLabel = useMemo(
     () => `\u00A9 ${currentYear} ea-code${appVersion ? `\u00B7v${appVersion}` : ""}`,
@@ -111,7 +143,7 @@ export function Sidebar({
   }
 
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col overflow-hidden border-r border-edge bg-panel">
+    <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-edge bg-panel">
       {/* Header */}
       <div className="flex items-center justify-between px-3 pt-8 pb-3">
         <span className="text-sm font-medium text-fg">Projects</span>
@@ -161,182 +193,76 @@ export function Sidebar({
           const isActive = project.path === activeProjectPath;
           const conversations = conversationIndex[project.path] ?? [];
           const projectHasRunningConversation = hasRunningConversation(conversations);
+          const projectExpanded = expandedProjects.has(project.path);
           return (
-            <div key={project.path} className="group/project mb-2">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => void onSelectProject(project.path)}
-                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 pr-16 text-left text-sm transition-colors ${
-                    isActive
-                      ? "bg-elevated text-fg"
-                      : "text-fg-muted hover:bg-elevated hover:text-fg"
-                  }`}
-                  title={project.path}
-                >
-                  <svg className="h-4 w-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  </svg>
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate font-medium">{folderName(project.path)}</span>
-                    {projectHasRunningConversation && (
-                      <span
-                        className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#1eb75f] shadow-[0_0_0_3px_rgba(30,183,95,0.16)] animate-pulse"
-                        title="A conversation is running in this project"
-                      />
-                    )}
-                  </span>
-                </button>
+            <div key={project.path} className="mb-2">
+              <SidebarProjectRow
+                projectPath={project.path}
+                projectLabel={projectDisplayName(project)}
+                isActive={isActive}
+                expanded={projectExpanded}
+                hasConversations={conversations.length > 0}
+                hasRunningConversation={projectHasRunningConversation}
+                onProjectClick={() => {
+                  if (isActive) {
+                    setExpandedProjects((current) => {
+                      const next = new Set(current);
+                      if (next.has(project.path)) {
+                        next.delete(project.path);
+                      } else {
+                        next.add(project.path);
+                      }
+                      return next;
+                    });
+                    return;
+                  }
 
-                <div
-                  className={`absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1 transition-opacity ${
-                    projectPendingRemoval === project.path ? "opacity-100" : "opacity-0 group-hover/project:opacity-100"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setProjectPendingRemoval(null);
-                      setConversationPendingRemoval(null);
-                      void onCreateConversation(project.path);
-                    }}
-                    className="rounded p-1 text-fg-faint transition-colors hover:bg-active hover:text-fg"
-                    title="New conversation"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                  </button>
-                  {onRemoveProject && (
-                    projectPendingRemoval === project.path ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setProjectPendingRemoval(null);
-                            setConversationPendingRemoval(null);
-                          }}
-                          className="rounded px-2 py-1 text-[10px] font-medium text-fg-muted transition-colors hover:bg-active hover:text-fg"
-                          title="Cancel project removal"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setProjectPendingRemoval(null);
-                            setConversationPendingRemoval(null);
-                            onRemoveProject(project.path);
-                          }}
-                          className="rounded bg-[#3a1418] px-2 py-1 text-[10px] font-medium text-[#ff8f98] transition-colors hover:bg-[#521a21] hover:text-[#ffd7dc]"
-                          title={`Remove ${folderName(project.path)}`}
-                        >
-                          Delete
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setProjectPendingRemoval(project.path);
-                          setConversationPendingRemoval(null);
-                        }}
-                        className="rounded p-1 text-fg-faint transition-colors hover:bg-active hover:text-fg"
-                        title="Remove project"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
-                    )
-                  )}
-                </div>
-              </div>
+                  setExpandedProjects((current) => {
+                    if (current.has(project.path)) {
+                      return current;
+                    }
 
-              {conversations.length > 0 && (
+                    const next = new Set(current);
+                    next.add(project.path);
+                    return next;
+                  });
+                  void onSelectProject(project.path);
+                }}
+                onCreateConversation={() => {
+                  void onCreateConversation(project.path);
+                }}
+                onRemoveProject={onRemoveProject
+                  ? () => {
+                      onRemoveProject(project.path);
+                    }
+                  : undefined}
+                onRenameProject={onRenameProject
+                  ? (name) => {
+                      onRenameProject(project.path, name);
+                    }
+                  : undefined}
+                onArchiveProject={onArchiveProject
+                  ? () => {
+                      onArchiveProject(project.path);
+                    }
+                  : undefined}
+              />
+
+              {conversations.length > 0 && projectExpanded && (
                 <div className="mt-1 space-y-1 pl-5">
-                  {conversations.map((conversation) => {
-                    const isConversationActive = isActive && conversation.id === activeConversationId;
-                    return (
-                      <div key={conversation.id} className="group/conversation relative">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void onSelectConversation(project.path, conversation.id);
-                          }}
-                          className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 pr-8 text-left transition-colors ${
-                            isConversationActive
-                              ? "bg-[#252527] text-fg"
-                              : "text-[#a3a3aa] hover:bg-[#1d1d1f] hover:text-fg"
-                          }`}
-                        >
-                          <span className="flex min-w-0 items-center gap-2">
-                            {conversation.status === "running" && (
-                              <span
-                                className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#1eb75f] shadow-[0_0_0_3px_rgba(30,183,95,0.16)] animate-pulse"
-                                title="Conversation running"
-                              />
-                            )}
-                            <span className="truncate text-sm">{conversation.title}</span>
-                          </span>
-                          <span className="shrink-0 text-xs text-fg-subtle">
-                            {formatRelativeTime(conversation.updatedAt)}
-                          </span>
-                        </button>
-                        {onRemoveConversation && (
-                          conversationPendingRemoval === `${project.path}::${conversation.id}` ? (
-                            <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1 opacity-100">
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setConversationPendingRemoval(null);
-                                }}
-                                className="rounded px-2 py-1 text-[10px] font-medium text-fg-muted transition-colors hover:bg-active hover:text-fg"
-                                title="Cancel conversation removal"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setConversationPendingRemoval(null);
-                                  onRemoveConversation(project.path, conversation.id);
-                                }}
-                                className="rounded bg-[#3a1418] px-2 py-1 text-[10px] font-medium text-[#ff8f98] transition-colors hover:bg-[#521a21] hover:text-[#ffd7dc]"
-                                title={`Delete ${conversation.title}`}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setConversationPendingRemoval(`${project.path}::${conversation.id}`);
-                                setProjectPendingRemoval(null);
-                              }}
-                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-fg-faint opacity-0 transition-opacity hover:bg-active hover:text-fg group-hover/conversation:opacity-100"
-                              title="Delete conversation"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                              </svg>
-                            </button>
-                          )
-                        )}
-                      </div>
-                    );
-                  })}
+                  {conversations.map((conversation) => (
+                    <SidebarConversationRow
+                      key={conversation.id}
+                      conversation={conversation}
+                      isActive={isActive && conversation.id === activeConversationId}
+                      projectPath={project.path}
+                      onSelectConversation={onSelectConversation}
+                      onRenameConversation={onRenameConversation ?? (() => undefined)}
+                      onArchiveConversation={onArchiveConversation ?? (() => undefined)}
+                      onRemoveConversation={onRemoveConversation ?? (() => undefined)}
+                      onSetConversationPinned={onSetConversationPinned ?? (() => undefined)}
+                    />
+                  ))}
                 </div>
               )}
             </div>

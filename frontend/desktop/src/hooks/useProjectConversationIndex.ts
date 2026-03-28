@@ -10,10 +10,17 @@ type ConversationIndex = Record<string, ConversationSummary[]>;
 interface UseProjectConversationIndexReturn {
   index: ConversationIndex;
   removeConversation: (workspacePath: string, conversationId: string) => void;
+  upsertConversation: (conversation: ConversationSummary) => void;
 }
 
 function sortConversations(items: ConversationSummary[]): ConversationSummary[] {
-  return [...items].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return [...items].sort((left, right) => {
+    const pinOrder = Number(Boolean(right.pinnedAt)) - Number(Boolean(left.pinnedAt));
+    if (pinOrder !== 0) {
+      return pinOrder;
+    }
+    return right.updatedAt.localeCompare(left.updatedAt);
+  });
 }
 
 export function useProjectConversationIndex(projects: ProjectEntry[]): UseProjectConversationIndexReturn {
@@ -66,6 +73,27 @@ export function useProjectConversationIndex(projects: ProjectEntry[]): UseProjec
 
   return {
     index,
+    upsertConversation: (conversation: ConversationSummary) => {
+      if (conversation.archivedAt) {
+        setIndex((previous) => ({
+          ...previous,
+          [conversation.workspacePath]: (previous[conversation.workspacePath] ?? [])
+            .filter((item) => item.id !== conversation.id),
+        }));
+        return;
+      }
+
+      setIndex((previous) => ({
+        ...previous,
+        [conversation.workspacePath]: sortConversations(
+          upsertByKey(
+            previous[conversation.workspacePath] ?? [],
+            conversation,
+            (item) => item.id,
+          ),
+        ),
+      }));
+    },
     removeConversation: (workspacePath: string, conversationId: string) => {
       setIndex((previous) => ({
         ...previous,

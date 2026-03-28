@@ -242,6 +242,8 @@ pub fn create_conversation(
             last_provider_session_ref: None,
             active_job_id: None,
             error: None,
+            archived_at: None,
+            pinned_at: None,
         };
         write_summary_unlocked(&summary)?;
         write_messages_unlocked(workspace_path, &summary.id, &[])?;
@@ -275,10 +277,18 @@ pub fn list_conversations(workspace_path: &str) -> Result<Vec<ConversationSummar
             };
             let mut summary = read_summary_unlocked(workspace_path, &conversation_id)?;
             reconcile_stale_running_unlocked(&mut summary)?;
-            summaries.push(summary);
+            if summary.archived_at.is_none() {
+                summaries.push(summary);
+            }
         }
 
-        summaries.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+        summaries.sort_by(|left, right| {
+            right
+                .pinned_at
+                .is_some()
+                .cmp(&left.pinned_at.is_some())
+                .then_with(|| right.updated_at.cmp(&left.updated_at))
+        });
         Ok(summaries)
     })
 }
@@ -433,13 +443,66 @@ pub fn delete_conversation(workspace_path: &str, conversation_id: &str) -> Resul
     })
 }
 
+pub fn rename_conversation(
+    workspace_path: &str,
+    conversation_id: &str,
+    title: &str,
+) -> Result<ConversationSummary, String> {
+    let trimmed = title.split_whitespace().collect::<Vec<_>>().join(" ");
+    if trimmed.is_empty() {
+        return Err("Conversation title must not be empty".to_string());
+    }
+
+    with_conversations_lock(|| {
+        let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
+        summary.title = trimmed;
+        summary.updated_at = now_rfc3339();
+        write_summary_unlocked(&summary)?;
+        Ok(summary)
+    })
+}
+
+pub fn archive_conversation(
+    workspace_path: &str,
+    conversation_id: &str,
+) -> Result<ConversationSummary, String> {
+    with_conversations_lock(|| {
+        let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
+        if summary.status == ConversationStatus::Running {
+            return Err("Cannot archive a running conversation".to_string());
+        }
+
+        if summary.archived_at.is_none() {
+            summary.archived_at = Some(now_rfc3339());
+            summary.updated_at = now_rfc3339();
+            write_summary_unlocked(&summary)?;
+        }
+
+        Ok(summary)
+    })
+}
+
+pub fn set_conversation_pinned(
+    workspace_path: &str,
+    conversation_id: &str,
+    pinned: bool,
+) -> Result<ConversationSummary, String> {
+    with_conversations_lock(|| {
+        let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
+        summary.pinned_at = if pinned { Some(now_rfc3339()) } else { None };
+        write_summary_unlocked(&summary)?;
+        Ok(summary)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
 
     use super::{
-        create_conversation, delete_conversation, finish_turn, get_conversation,
-        list_conversations, mark_turn_running, track_running_conversation,
+        archive_conversation, create_conversation, delete_conversation, finish_turn,
+        get_conversation, list_conversations, mark_turn_running, rename_conversation,
+        set_conversation_pinned, track_running_conversation,
     };
     use crate::models::{AgentSelection, ConversationStatus};
 
@@ -675,5 +738,125 @@ mod tests {
         )
         .expect("conversations should list");
         assert!(listed.is_empty());
+    }
+
+    #[test]
+    fn renames_conversation() {
+        let workspace = TestWorkspace::new();
+        let conversation = create_conversation(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            AgentSelection {
+                provider: "codex".to_string(),
+                model: "gpt-5.4".to_string(),
+            },
+            Some("Original title"),
+        )
+        .expect("conversation should be created");
+
+        let renamed = rename_conversation(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            &conversation.summary.id,
+            "Renamed conversation",
+        )
+        .expect("conversation should rename");
+
+        assert_eq!(renamed.title, "Renamed conversation");
+    }
+
+    #[test]
+    fn archives_conversation_and_hides_it_from_listing() {
+        let workspace = TestWorkspace::new();
+        let conversation = create_conversation(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            AgentSelection {
+                provider: "codex".to_string(),
+                model: "gpt-5.4".to_string(),
+            },
+            Some("Archive me"),
+        )
+        .expect("conversation should be created");
+
+        let archived = archive_conversation(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            &conversation.summary.id,
+        )
+        .expect("conversation should archive");
+
+        assert!(archived.archived_at.is_some());
+
+        let listed = list_conversations(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+        )
+        .expect("conversations should list");
+        assert!(listed.is_empty());
+    }
+
+    #[test]
+    fn pins_conversation_and_lists_it_first() {
+        let workspace = TestWorkspace::new();
+        let first = create_conversation(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            AgentSelection {
+                provider: "codex".to_string(),
+                model: "gpt-5.4".to_string(),
+            },
+            Some("First conversation"),
+        )
+        .expect("first conversation should be created");
+
+        let second = create_conversation(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            AgentSelection {
+                provider: "codex".to_string(),
+                model: "gpt-5.4".to_string(),
+            },
+            Some("Second conversation"),
+        )
+        .expect("second conversation should be created");
+
+        let pinned = set_conversation_pinned(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            &first.summary.id,
+            true,
+        )
+        .expect("conversation should pin");
+
+        assert!(pinned.pinned_at.is_some());
+
+        let listed = list_conversations(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+        )
+        .expect("conversations should list");
+
+        assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].id, first.summary.id);
+        assert_eq!(listed[1].id, second.summary.id);
     }
 }

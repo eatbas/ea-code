@@ -19,7 +19,10 @@ pub fn list_projects() -> Result<Vec<ProjectEntry>, String> {
         let projects: Vec<ProjectEntry> = serde_json::from_str(&contents)
             .map_err(|e| format!("Failed to parse projects file: {e}"))?;
 
-        Ok(projects)
+        Ok(projects
+            .into_iter()
+            .filter(|project| project.archived_at.is_none())
+            .collect())
     })
 }
 
@@ -43,10 +46,13 @@ pub fn upsert(
         let now = now_rfc3339();
 
         if let Some(existing) = projects.iter_mut().find(|p| p.path == path) {
-            existing.name = name.to_string();
+            if existing.name.trim().is_empty() {
+                existing.name = name.to_string();
+            }
             existing.is_git_repo = is_git_repo;
             existing.branch = branch.map(|b| b.to_string());
             existing.last_opened = Some(now);
+            existing.archived_at = None;
         } else {
             projects.push(ProjectEntry {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -56,6 +62,7 @@ pub fn upsert(
                 created_at: now,
                 is_git_repo,
                 branch: branch.map(|b| b.to_string()),
+                archived_at: None,
             });
         }
 
@@ -117,5 +124,63 @@ pub fn delete_project(project_path: &str) -> Result<(), String> {
             .map_err(|e| format!("Failed to serialise projects: {e}"))?;
 
         atomic_write(&file_path, &json)
+    })
+}
+
+pub fn rename_project(project_path: &str, name: &str) -> Result<ProjectEntry, String> {
+    let trimmed = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    if trimmed.is_empty() {
+        return Err("Project name must not be empty".to_string());
+    }
+
+    with_projects_lock(|| {
+        let file_path = config_dir()?.join(PROJECTS_FILE);
+        if !file_path.exists() {
+            return Err("Project list not found".to_string());
+        }
+
+        let contents = std::fs::read_to_string(&file_path)
+            .map_err(|e| format!("Failed to read projects file: {e}"))?;
+        let mut projects: Vec<ProjectEntry> = serde_json::from_str(&contents).unwrap_or_default();
+
+        let Some(project) = projects.iter_mut().find(|p| p.path == project_path) else {
+            return Err("Project not found".to_string());
+        };
+
+        project.name = trimmed;
+        project.archived_at = None;
+        let updated = project.clone();
+
+        let json = serde_json::to_string_pretty(&projects)
+            .map_err(|e| format!("Failed to serialise projects: {e}"))?;
+        atomic_write(&file_path, &json)?;
+        Ok(updated)
+    })
+}
+
+pub fn archive_project(project_path: &str) -> Result<ProjectEntry, String> {
+    with_projects_lock(|| {
+        let file_path = config_dir()?.join(PROJECTS_FILE);
+        if !file_path.exists() {
+            return Err("Project list not found".to_string());
+        }
+
+        let contents = std::fs::read_to_string(&file_path)
+            .map_err(|e| format!("Failed to read projects file: {e}"))?;
+        let mut projects: Vec<ProjectEntry> = serde_json::from_str(&contents).unwrap_or_default();
+
+        let Some(project) = projects.iter_mut().find(|p| p.path == project_path) else {
+            return Err("Project not found".to_string());
+        };
+
+        if project.archived_at.is_none() {
+            project.archived_at = Some(now_rfc3339());
+        }
+        let updated = project.clone();
+
+        let json = serde_json::to_string_pretty(&projects)
+            .map_err(|e| format!("Failed to serialise projects: {e}"))?;
+        atomic_write(&file_path, &json)?;
+        Ok(updated)
     })
 }

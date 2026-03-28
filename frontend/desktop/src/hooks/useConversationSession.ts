@@ -9,10 +9,13 @@ import type {
 } from "../types";
 import { CONVERSATION_EVENTS } from "../constants/events";
 import {
+  archiveConversation,
   createConversation,
   deleteConversation,
   getConversation,
   listWorkspaceConversations,
+  renameConversation,
+  setConversationPinned,
   sendConversationTurn,
   stopConversation,
 } from "../lib/desktopApi";
@@ -33,7 +36,10 @@ interface UseConversationSessionReturn {
   startNewConversation: () => void;
   sendPrompt: (prompt: string, agent: AgentSelection) => Promise<void>;
   stopActiveConversation: () => Promise<void>;
-  deleteConversationById: (conversationId: string) => Promise<void>;
+  deleteConversationById: (conversationId: string) => Promise<boolean>;
+  renameConversationById: (conversationId: string, title: string) => Promise<ConversationSummary | null>;
+  archiveConversationById: (conversationId: string) => Promise<ConversationSummary | null>;
+  setConversationPinnedById: (conversationId: string, pinned: boolean) => Promise<ConversationSummary | null>;
 }
 
 export interface ConversationSelectionIntent {
@@ -56,7 +62,13 @@ function mergeSummary(
 }
 
 function sortConversations(items: ConversationSummary[]): ConversationSummary[] {
-  return [...items].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return [...items].sort((left, right) => {
+    const pinOrder = Number(Boolean(right.pinnedAt)) - Number(Boolean(left.pinnedAt));
+    if (pinOrder !== 0) {
+      return pinOrder;
+    }
+    return right.updatedAt.localeCompare(left.updatedAt);
+  });
 }
 
 function promptDraftKey(workspacePath: string, conversationId?: string | null): string {
@@ -305,9 +317,9 @@ export function useConversationSession(
     }
   }, [activeConversation, toast, workspace]);
 
-  const deleteConversationById = useCallback(async (conversationId: string): Promise<void> => {
+  const deleteConversationById = useCallback(async (conversationId: string): Promise<boolean> => {
     if (!workspace) {
-      return;
+      return false;
     }
 
     try {
@@ -326,8 +338,100 @@ export function useConversationSession(
       setActiveConversation((previous) => (
         previous?.summary.id === conversationId ? null : previous
       ));
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete conversation.");
+      return false;
+    }
+  }, [toast, workspace]);
+
+  const renameConversationById = useCallback(async (
+    conversationId: string,
+    title: string,
+  ): Promise<ConversationSummary | null> => {
+    if (!workspace) {
+      return null;
+    }
+
+    try {
+      const summary = await renameConversation(workspace.path, conversationId, title);
+      setConversations((previous) => sortConversations(
+        upsertByKey(
+          previous,
+          mergeSummary(previous.find((item) => item.id === summary.id), summary),
+          (item) => item.id,
+        ),
+      ));
+      setActiveConversation((previous) => previous?.summary.id === summary.id
+        ? {
+            ...previous,
+            summary: mergeSummary(previous.summary, summary),
+          }
+        : previous);
+      return summary;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to rename conversation.");
+      return null;
+    }
+  }, [toast, workspace]);
+
+  const archiveConversationById = useCallback(async (
+    conversationId: string,
+  ): Promise<ConversationSummary | null> => {
+    if (!workspace) {
+      return null;
+    }
+
+    try {
+      const summary = await archiveConversation(workspace.path, conversationId);
+      setConversations((previous) => previous.filter((conversation) => conversation.id !== conversationId));
+      setDrafts((previous) => {
+        const next = { ...previous };
+        delete next[conversationId];
+        return next;
+      });
+      setPromptDrafts((previous) => {
+        const next = { ...previous };
+        delete next[promptDraftKey(workspace.path, conversationId)];
+        return next;
+      });
+      setActiveConversation((previous) => (
+        previous?.summary.id === conversationId ? null : previous
+      ));
+      return summary;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to archive conversation.");
+      return null;
+    }
+  }, [toast, workspace]);
+
+  const setConversationPinnedById = useCallback(async (
+    conversationId: string,
+    pinned: boolean,
+  ): Promise<ConversationSummary | null> => {
+    if (!workspace) {
+      return null;
+    }
+
+    try {
+      const summary = await setConversationPinned(workspace.path, conversationId, pinned);
+      setConversations((previous) => sortConversations(
+        upsertByKey(
+          previous,
+          mergeSummary(previous.find((item) => item.id === summary.id), summary),
+          (item) => item.id,
+        ),
+      ));
+      setActiveConversation((previous) => previous?.summary.id === summary.id
+        ? {
+            ...previous,
+            summary: mergeSummary(previous.summary, summary),
+          }
+        : previous);
+      return summary;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update pin.");
+      return null;
     }
   }, [toast, workspace]);
 
@@ -365,5 +469,8 @@ export function useConversationSession(
     sendPrompt,
     stopActiveConversation,
     deleteConversationById,
+    renameConversationById,
+    archiveConversationById,
+    setConversationPinnedById,
   };
 }

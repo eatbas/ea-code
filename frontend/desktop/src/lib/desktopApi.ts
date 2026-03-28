@@ -32,6 +32,14 @@ export function deleteProject(projectPath: string): Promise<void> {
   return invokeCommand<void>("delete_project", { projectPath });
 }
 
+export function renameProject(projectPath: string, name: string): Promise<ProjectEntry> {
+  return invokeCommand<ProjectEntry>("rename_project", { projectPath, name });
+}
+
+export function archiveProject(projectPath: string): Promise<ProjectEntry> {
+  return invokeCommand<ProjectEntry>("archive_project", { projectPath });
+}
+
 export function openInVsCode(path: string): Promise<void> {
   return invokeCommand<void>("open_in_vscode", { path });
 }
@@ -118,4 +126,38 @@ export function stopConversation(workspacePath: string, conversationId: string):
 
 export function deleteConversation(workspacePath: string, conversationId: string): Promise<void> {
   return invokeCommand<void>("delete_conversation", { workspacePath, conversationId });
+}
+
+export function renameConversation(
+  workspacePath: string,
+  conversationId: string,
+  title: string,
+): Promise<ConversationSummary> {
+  return invokeCommand<ConversationSummary>("rename_conversation", {
+    workspacePath,
+    conversationId,
+    title,
+  });
+}
+
+export function archiveConversation(
+  workspacePath: string,
+  conversationId: string,
+): Promise<ConversationSummary> {
+  return invokeCommand<ConversationSummary>("archive_conversation", {
+    workspacePath,
+    conversationId,
+  });
+}
+
+export function setConversationPinned(
+  workspacePath: string,
+  conversationId: string,
+  pinned: boolean,
+): Promise<ConversationSummary> {
+  return invokeCommand<ConversationSummary>("set_conversation_pinned", {
+    workspacePath,
+    conversationId,
+    pinned,
+  });
 }

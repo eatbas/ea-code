@@ -2,8 +2,10 @@ import { useCallback, useEffect, useReducer } from "react";
 import type { ProjectEntry, WorkspaceInfo } from "../types";
 import { useToast } from "../components/shared/Toast";
 import {
+  archiveProject as archiveProjectBookmark,
   deleteProject as deleteProjectBookmark,
   listProjects,
+  renameProject as renameProjectBookmark,
   selectProjectFolder,
   selectWorkspace,
 } from "../lib/desktopApi";
@@ -27,6 +29,8 @@ export interface UseWorkspaceSessionReturn extends WorkspaceSessionState {
   selectFolder: () => Promise<void>;
   refreshProjects: () => Promise<void>;
   deleteProject: (projectPath: string) => Promise<void>;
+  renameProject: (projectPath: string, name: string) => Promise<void>;
+  archiveProject: (projectPath: string) => Promise<void>;
 }
 
 export function createWorkspaceSessionInitialState(): WorkspaceSessionState {
@@ -141,6 +145,26 @@ export function useWorkspaceSession(): UseWorkspaceSessionReturn {
     }
   }, [refreshProjects, toast]);
 
+  const renameProject = useCallback(async (projectPath: string, name: string): Promise<void> => {
+    try {
+      await renameProjectBookmark(projectPath, name);
+      await refreshProjects();
+      toast.success("Project renamed.");
+    } catch {
+      toast.error("Failed to rename project.");
+    }
+  }, [refreshProjects, toast]);
+
+  const archiveProject = useCallback(async (projectPath: string): Promise<void> => {
+    try {
+      await archiveProjectBookmark(projectPath);
+      await refreshProjects();
+      toast.success("Project archived.");
+    } catch {
+      toast.error("Failed to archive project.");
+    }
+  }, [refreshProjects, toast]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -179,5 +203,7 @@ export function useWorkspaceSession(): UseWorkspaceSessionReturn {
     selectFolder,
     refreshProjects,
     deleteProject,
+    renameProject,
+    archiveProject,
   };
 }

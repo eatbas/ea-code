@@ -26,6 +26,8 @@ export interface ConversationSummary {
   lastProviderSessionRef: string | null;
   activeJobId: string | null;
   error: string | null;
+  archivedAt: string | null;
+  pinnedAt: string | null;
 }
 
 export interface ConversationDetail {

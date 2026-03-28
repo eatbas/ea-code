@@ -34,7 +34,12 @@ export function IdleView({
     toast.error("Failed to open project action.");
   }, [toast]);
 
-  const workspaceLabel = workspace ? folderName(workspace.path) : "";
+  const workspaceEntry = workspace
+    ? projects.find((project) => project.path === workspace.path)
+    : null;
+  const workspaceLabel = workspaceEntry
+    ? projectDisplayName(workspaceEntry)
+    : workspace ? folderName(workspace.path) : "";
 
   return (
     <div className="flex h-full flex-col bg-surface">

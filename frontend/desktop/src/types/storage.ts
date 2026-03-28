@@ -14,6 +14,8 @@ export interface ProjectEntry {
   lastOpened?: string;
   /** When the project entry was first created (RFC 3339). */
   createdAt: string;
+  /** When the project entry was archived, if hidden from the active list. */
+  archivedAt?: string;
 }
 
 /** Workspace validation result. */

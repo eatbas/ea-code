@@ -160,3 +160,29 @@ pub async fn delete_conversation(
 ) -> Result<(), String> {
     persistence::delete_conversation(&workspace_path, &conversation_id)
 }
+
+#[tauri::command]
+pub async fn rename_conversation(
+    workspace_path: String,
+    conversation_id: String,
+    title: String,
+) -> Result<ConversationSummary, String> {
+    persistence::rename_conversation(&workspace_path, &conversation_id, &title)
+}
+
+#[tauri::command]
+pub async fn archive_conversation(
+    workspace_path: String,
+    conversation_id: String,
+) -> Result<ConversationSummary, String> {
+    persistence::archive_conversation(&workspace_path, &conversation_id)
+}
+
+#[tauri::command]
+pub async fn set_conversation_pinned(
+    workspace_path: String,
+    conversation_id: String,
+    pinned: bool,
+) -> Result<ConversationSummary, String> {
+    persistence::set_conversation_pinned(&workspace_path, &conversation_id, pinned)
+}

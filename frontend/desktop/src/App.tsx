@@ -14,7 +14,14 @@ import { AppContentRouter } from "./components/AppContentRouter";
 import { UpdateInstallBanner } from "./components/shared/UpdateInstallBanner";
 import { PrerequisiteBanner } from "./components/shared/PrerequisiteBanner";
 import { ProjectLoadingOverlay } from "./components/shared/ProjectLoadingOverlay";
-import { deleteConversation, openInVsCode, openProjectFolder } from "./lib/desktopApi";
+import {
+  archiveConversation,
+  deleteConversation,
+  openInVsCode,
+  openProjectFolder,
+  renameConversation,
+  setConversationPinned,
+} from "./lib/desktopApi";
 import { useToast } from "./components/shared/Toast";
 
 function App(): ReactNode {
@@ -26,6 +33,8 @@ function App(): ReactNode {
     selectFolder,
     projects,
     deleteProject,
+    renameProject,
+    archiveProject,
   } = useWorkspaceSession();
   const { status: updateStatus, updateVersion } = useUpdateCheck(false);
   const { status: prereqs, dismissed: prereqsDismissed, dismiss: dismissPrereqs } = usePrerequisites();
@@ -41,9 +50,13 @@ function App(): ReactNode {
     sendPrompt,
     stopActiveConversation,
     deleteConversationById,
+    renameConversationById,
+    archiveConversationById,
+    setConversationPinnedById,
   } = useConversationSession(workspace, conversationSelection);
   const {
     index: conversationIndex,
+    upsertConversation: upsertConversationInIndex,
     removeConversation: removeConversationFromIndex,
   } = useProjectConversationIndex(projects);
 
@@ -87,14 +100,65 @@ function App(): ReactNode {
 
   async function handleDeleteConversation(projectPath: string, conversationId: string): Promise<void> {
     try {
+      let deleted = false;
       if (workspace?.path === projectPath) {
-        await deleteConversationById(conversationId);
+        deleted = await deleteConversationById(conversationId);
       } else {
         await deleteConversation(projectPath, conversationId);
+        deleted = true;
       }
-      removeConversationFromIndex(projectPath, conversationId);
+      if (deleted) {
+        removeConversationFromIndex(projectPath, conversationId);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete conversation.");
+    }
+  }
+
+  async function handleRenameConversation(
+    projectPath: string,
+    conversationId: string,
+    title: string,
+  ): Promise<void> {
+    try {
+      const summary = workspace?.path === projectPath
+        ? await renameConversationById(conversationId, title)
+        : await renameConversation(projectPath, conversationId, title);
+      if (summary) {
+        upsertConversationInIndex(summary);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to rename conversation.");
+    }
+  }
+
+  async function handleArchiveConversation(projectPath: string, conversationId: string): Promise<void> {
+    try {
+      const summary = workspace?.path === projectPath
+        ? await archiveConversationById(conversationId)
+        : await archiveConversation(projectPath, conversationId);
+      if (summary) {
+        removeConversationFromIndex(projectPath, conversationId);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to archive conversation.");
+    }
+  }
+
+  async function handleSetConversationPinned(
+    projectPath: string,
+    conversationId: string,
+    pinned: boolean,
+  ): Promise<void> {
+    try {
+      const summary = workspace?.path === projectPath
+        ? await setConversationPinnedById(conversationId, pinned)
+        : await setConversationPinned(projectPath, conversationId, pinned);
+      if (summary) {
+        upsertConversationInIndex(summary);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update pin.");
     }
   }
 
@@ -117,8 +181,23 @@ function App(): ReactNode {
           onRemoveProject={(projectPath) => {
             void deleteProject(projectPath);
           }}
+          onRenameProject={(projectPath, name) => {
+            void renameProject(projectPath, name);
+          }}
+          onArchiveProject={(projectPath) => {
+            void archiveProject(projectPath);
+          }}
           onRemoveConversation={(projectPath, conversationId) => {
             void handleDeleteConversation(projectPath, conversationId);
+          }}
+          onRenameConversation={(projectPath, conversationId, title) => {
+            void handleRenameConversation(projectPath, conversationId, title);
+          }}
+          onArchiveConversation={(projectPath, conversationId) => {
+            void handleArchiveConversation(projectPath, conversationId);
+          }}
+          onSetConversationPinned={(projectPath, conversationId, pinned) => {
+            void handleSetConversationPinned(projectPath, conversationId, pinned);
           }}
         />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
