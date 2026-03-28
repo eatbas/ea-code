@@ -15,6 +15,8 @@ interface PipelineAgentRowProps {
   /** Show remove button. */
   removable?: boolean;
   onRemove?: () => void;
+  /** Provider names already taken by sibling rows (excluded from the dropdown). */
+  excludeProviders?: ReadonlySet<string>;
 }
 
 export function PipelineAgentRow({
@@ -26,6 +28,7 @@ export function PipelineAgentRow({
   onChange,
   removable = false,
   onRemove,
+  excludeProviders,
 }: PipelineAgentRowProps): ReactNode {
   const selectedProvider = providers.find((p) => p.name === agent.provider) ?? providers[0];
   const providerValue = selectedProvider?.name ?? "";
@@ -34,8 +37,10 @@ export function PipelineAgentRow({
     : selectedProvider?.models[0] ?? "";
   const modelOptions = modelOptionsFromProvider(selectedProvider);
   const providerOptions = useMemo(
-    () => providers.map((p) => ({ value: p.name, label: providerDisplayName(p.name) })),
-    [providers],
+    () => providers
+      .filter((p) => !excludeProviders || !excludeProviders.has(p.name) || p.name === agent.provider)
+      .map((p) => ({ value: p.name, label: providerDisplayName(p.name) })),
+    [providers, excludeProviders, agent.provider],
   );
 
   const providerKey = `${slotKey}-provider`;

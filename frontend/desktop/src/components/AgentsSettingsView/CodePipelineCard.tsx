@@ -55,7 +55,10 @@ export function CodePipelineCard({
   }
 
   function addPlanner(): void {
-    savePlanners([...pipeline.planners, defaultAgent(providers)]);
+    const usedProviders = new Set(pipeline.planners.map((p) => p.provider));
+    const unused = providers.find((p) => !usedProviders.has(p.name));
+    if (!unused) return;
+    savePlanners([...pipeline.planners, { provider: unused.name, model: unused.models[0] ?? "" }]);
   }
 
   function removePlanner(index: number): void {
@@ -92,6 +95,7 @@ export function CodePipelineCard({
         onAdd={addPlanner}
         addLabel="Add Planner / Reviewer"
         firstHint="merges plans"
+        uniqueProviders
         coderAgent={pipeline.coder}
         coderProviders={providers}
         onCoderChange={(agent) => save({ ...pipeline, coder: agent })}
@@ -113,6 +117,8 @@ interface StageSectionProps {
   addLabel: string;
   /** Hint shown next to the first agent row. */
   firstHint?: string;
+  /** Enforce unique providers across agent rows. */
+  uniqueProviders?: boolean;
   /** Coder agent rendered on the first row's right side. */
   coderAgent?: PipelineAgent;
   coderProviders?: ProviderInfo[];
@@ -131,10 +137,15 @@ function StageSection({
   onAdd,
   addLabel,
   firstHint,
+  uniqueProviders,
   coderAgent,
   coderProviders,
   onCoderChange,
 }: StageSectionProps): ReactNode {
+  const usedProviders = uniqueProviders
+    ? new Set(agents.map((a) => a.provider))
+    : undefined;
+
   return (
     <div className="mt-6 flex items-start gap-14">
       {/* Planners / Reviewers column */}
@@ -154,6 +165,7 @@ function StageSection({
                 onChange={(next) => onUpdate(index, next)}
                 removable={agents.length > 1}
                 onRemove={() => onRemove(index)}
+                excludeProviders={usedProviders}
               />
               {index === 0 && firstHint && (
                 <span className="whitespace-nowrap text-[10px] italic text-fg-faint">
@@ -166,7 +178,8 @@ function StageSection({
         <button
           type="button"
           onClick={onAdd}
-          className="mt-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-fg-muted transition-colors hover:bg-elevated hover:text-fg"
+          disabled={uniqueProviders && agents.length >= providers.length}
+          className="mt-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-fg-muted transition-colors hover:bg-elevated hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" />
