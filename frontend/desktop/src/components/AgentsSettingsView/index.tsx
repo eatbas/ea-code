@@ -77,11 +77,16 @@ export function AgentsSettingsView({
             </p>
           </div>
 
-          {/* Default Agent */}
+          {/* Simple Task — default agent */}
           <div className="rounded-lg border border-edge bg-panel p-5">
-            <h2 className="text-sm font-semibold text-fg">Default Agent</h2>
-            <p className="mt-1 text-xs text-fg-muted">
-              New conversations will start with this provider and model.
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-6 items-center rounded-full border border-edge bg-elevated px-2.5 text-[11px] font-medium text-fg">
+                Simple Task
+              </span>
+              <span className="text-xs text-fg-faint">Default pipeline</span>
+            </div>
+            <p className="mt-3 text-xs text-fg-muted">
+              Choose the default provider and model for new conversations.
               You can override the selection per conversation in the composer.
             </p>
 
@@ -128,22 +133,6 @@ export function AgentsSettingsView({
                 least one provider is installed and has enabled models.
               </p>
             )}
-          </div>
-
-          {/* Simple Task pipeline */}
-          <div className="rounded-lg border border-edge bg-panel p-5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-6 items-center rounded-full border border-edge bg-elevated px-2.5 text-[11px] font-medium text-fg">
-                Simple Task
-              </span>
-              <span className="text-xs text-fg-faint">Default pipeline</span>
-            </div>
-            <p className="mt-3 text-xs text-fg-muted leading-5">
-              The Simple Task pipeline sends prompts to a single agent and
-              streams the response. New conversations use the default agent
-              above; the agent can be changed per conversation in the composer
-              toolbar.
-            </p>
           </div>
         </div>
       </div>
