@@ -3,12 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { ActiveView, ConversationSummary, ProjectEntry } from "../types";
 import { SidebarCollapsed } from "./SidebarCollapsed";
-import { SidebarConversationRow } from "./SidebarConversationRow";
-import { SidebarProjectRow } from "./SidebarProjectRow";
+import { SidebarProjectList } from "./SidebarProjectList";
 import { SidebarSettings } from "./SidebarSettings";
-import { projectDisplayName } from "../utils/formatters";
 
-/** Data-driven settings navigation items. */
 const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[] = [
   {
     view: "cli-setup",
@@ -17,10 +14,6 @@ const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[
   },
 ];
 
-function hasRunningConversation(conversations: ConversationSummary[]): boolean {
-  return conversations.some((conversation) => conversation.status === "running");
-}
-
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
@@ -28,15 +21,19 @@ interface SidebarProps {
   onNavigate: (view: ActiveView) => void;
   projects: ProjectEntry[];
   conversationIndex: Record<string, ConversationSummary[]>;
+  loadedProjectPaths: ReadonlySet<string>;
+  loadingProjectPaths: ReadonlySet<string>;
   activeProjectPath?: string;
   activeConversationId?: string | null;
-  onSelectProject: (projectPath: string) => void | Promise<void>;
+  onLoadProjectConversations: (projectPath: string) => Promise<void>;
   onSelectConversation: (projectPath: string, conversationId: string) => void | Promise<void>;
   onCreateConversation: (projectPath: string) => void | Promise<void>;
   onAddProject: () => void;
+  onReorderProjects: (orderedProjectPaths: string[]) => Promise<void>;
   onRemoveProject?: (projectPath: string) => void;
   onRenameProject?: (projectPath: string, name: string) => void;
   onArchiveProject?: (projectPath: string) => void;
+  onUnarchiveProject?: (projectPath: string) => void;
   onRemoveConversation?: (projectPath: string, conversationId: string) => void;
   onRenameConversation?: (projectPath: string, conversationId: string, title: string) => void;
   onArchiveConversation?: (projectPath: string, conversationId: string) => void;
@@ -44,7 +41,6 @@ interface SidebarProps {
   onSetConversationPinned?: (projectPath: string, conversationId: string, pinned: boolean) => void;
 }
 
-/** Collapsible left sidebar with project list and settings sub-navigation. */
 export function Sidebar({
   collapsed,
   onToggle,
@@ -52,15 +48,19 @@ export function Sidebar({
   onNavigate,
   projects,
   conversationIndex,
+  loadedProjectPaths,
+  loadingProjectPaths,
   activeProjectPath,
   activeConversationId,
-  onSelectProject,
+  onLoadProjectConversations,
   onSelectConversation,
   onCreateConversation,
   onAddProject,
+  onReorderProjects,
   onRemoveProject,
   onRenameProject,
   onArchiveProject,
+  onUnarchiveProject,
   onRemoveConversation,
   onRenameConversation,
   onArchiveConversation,
@@ -69,8 +69,7 @@ export function Sidebar({
 }: SidebarProps): ReactNode {
   const isSettings = activeView === "cli-setup";
   const [appVersion, setAppVersion] = useState<string | null>(null);
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
-  const [projectsShowingArchived, setProjectsShowingArchived] = useState<Set<string>>(new Set());
+  const [showArchivedProjects, setShowArchivedProjects] = useState<boolean>(false);
   const currentYear = new Date().getFullYear();
 
   useEffect(() => {
@@ -93,40 +92,13 @@ export function Sidebar({
     };
   }, []);
 
-  useEffect(() => {
-    setExpandedProjects((current) => {
-      const next = new Set(current);
-      let changed = false;
-
-      for (const projectPath of next) {
-        if (!projects.some((project) => project.path === projectPath)) {
-          next.delete(projectPath);
-          changed = true;
-        }
-      }
-
-      if (activeProjectPath && !next.has(activeProjectPath)) {
-        next.add(activeProjectPath);
-        changed = true;
-      }
-
-      return changed ? next : current;
-    });
-  }, [activeProjectPath, projects]);
-
-  useEffect(() => {
-    setProjectsShowingArchived((current) => {
-      const validProjectPaths = new Set(projects.map((project) => project.path));
-      const next = new Set(
-        [...current].filter((projectPath) => validProjectPaths.has(projectPath)),
-      );
-      return next.size === current.size ? current : next;
-    });
-  }, [projects]);
-
   const appFooterLabel = useMemo(
     () => `\u00A9 ${currentYear} ea-code${appVersion ? `\u00B7v${appVersion}` : ""}`,
     [appVersion, currentYear],
+  );
+  const visibleProjects = useMemo(
+    () => showArchivedProjects ? projects : projects.filter((project) => !project.archivedAt),
+    [projects, showArchivedProjects],
   );
 
   function handleSettingsClick(): void {
@@ -157,7 +129,6 @@ export function Sidebar({
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-edge bg-panel">
-      {/* Header */}
       <div className="flex items-center justify-between px-3 pt-8 pb-3">
         <span className="text-sm font-medium text-fg">Projects</span>
         <div className="flex items-center gap-1">
@@ -170,6 +141,21 @@ export function Sidebar({
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowArchivedProjects((current) => !current)}
+            className={`rounded p-1.5 transition-colors ${
+              showArchivedProjects
+                ? "bg-elevated text-fg"
+                : "text-fg-muted hover:bg-elevated hover:text-fg"
+            }`}
+            title={showArchivedProjects ? "Hide archived projects" : "Show archived projects"}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+              <circle cx="12" cy="12" r="3" />
             </svg>
           </button>
           <button
@@ -197,113 +183,30 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Project list */}
-      <div className="flex-1 overflow-y-auto px-2">
-        {projects.length === 0 && (
-          <p className="px-2 py-4 text-center text-xs text-fg-faint">No projects yet. Add a project to get started.</p>
-        )}
-        {projects.map((project) => {
-          const isActive = project.path === activeProjectPath;
-          const conversations = conversationIndex[project.path] ?? [];
-          const showingArchived = projectsShowingArchived.has(project.path);
-          const visibleConversations = showingArchived
-            ? conversations
-            : conversations.filter((conversation) => !conversation.archivedAt);
-          const projectHasRunningConversation = hasRunningConversation(visibleConversations);
-          const projectExpanded = expandedProjects.has(project.path);
-          return (
-            <div key={project.path} className="mb-2">
-              <SidebarProjectRow
-                projectPath={project.path}
-                projectLabel={projectDisplayName(project)}
-                isActive={isActive}
-                expanded={projectExpanded}
-                hasConversations={conversations.length > 0}
-                hasRunningConversation={projectHasRunningConversation}
-                showingArchived={showingArchived}
-                onProjectClick={() => {
-                  if (isActive) {
-                    setExpandedProjects((current) => {
-                      const next = new Set(current);
-                      if (next.has(project.path)) {
-                        next.delete(project.path);
-                      } else {
-                        next.add(project.path);
-                      }
-                      return next;
-                    });
-                    return;
-                  }
+      <SidebarProjectList
+        activeView={activeView}
+        projects={projects}
+        visibleProjects={visibleProjects}
+        conversationIndex={conversationIndex}
+        loadedProjectPaths={loadedProjectPaths}
+        loadingProjectPaths={loadingProjectPaths}
+        activeProjectPath={activeProjectPath}
+        activeConversationId={activeConversationId}
+        onLoadProjectConversations={onLoadProjectConversations}
+        onSelectConversation={onSelectConversation}
+        onCreateConversation={onCreateConversation}
+        onReorderProjects={onReorderProjects}
+        onRemoveProject={onRemoveProject}
+        onRenameProject={onRenameProject}
+        onArchiveProject={onArchiveProject}
+        onUnarchiveProject={onUnarchiveProject}
+        onRemoveConversation={onRemoveConversation}
+        onRenameConversation={onRenameConversation}
+        onArchiveConversation={onArchiveConversation}
+        onUnarchiveConversation={onUnarchiveConversation}
+        onSetConversationPinned={onSetConversationPinned}
+      />
 
-                  setExpandedProjects((current) => {
-                    if (current.has(project.path)) {
-                      return current;
-                    }
-
-                    const next = new Set(current);
-                    next.add(project.path);
-                    return next;
-                  });
-                  void onSelectProject(project.path);
-                }}
-                onCreateConversation={() => {
-                  void onCreateConversation(project.path);
-                }}
-                onToggleShowArchived={() => {
-                  setProjectsShowingArchived((current) => {
-                    const next = new Set(current);
-                    if (next.has(project.path)) {
-                      next.delete(project.path);
-                    } else {
-                      next.add(project.path);
-                    }
-                    return next;
-                  });
-                }}
-                onRemoveProject={onRemoveProject
-                  ? () => {
-                      onRemoveProject(project.path);
-                    }
-                  : undefined}
-                onRenameProject={onRenameProject
-                  ? (name) => {
-                      onRenameProject(project.path, name);
-                    }
-                  : undefined}
-                onArchiveProject={onArchiveProject
-                  ? () => {
-                      onArchiveProject(project.path);
-                    }
-                  : undefined}
-              />
-
-              {conversations.length > 0 && projectExpanded && (
-                <div className="mt-1 space-y-1">
-                  {visibleConversations.length === 0 && (
-                    <p className="px-3 py-2 text-xs text-fg-faint">Archived conversations hidden</p>
-                  )}
-                  {visibleConversations.map((conversation) => (
-                    <SidebarConversationRow
-                      key={conversation.id}
-                      conversation={conversation}
-                      isActive={isActive && conversation.id === activeConversationId}
-                      projectPath={project.path}
-                      onSelectConversation={onSelectConversation}
-                      onRenameConversation={onRenameConversation ?? (() => undefined)}
-                      onArchiveConversation={onArchiveConversation ?? (() => undefined)}
-                      onUnarchiveConversation={onUnarchiveConversation ?? (() => undefined)}
-                      onRemoveConversation={onRemoveConversation ?? (() => undefined)}
-                      onSetConversationPinned={onSetConversationPinned ?? (() => undefined)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Footer */}
       <div className="border-t border-edge px-3 py-3">
         <p className="w-full text-center text-[10px] text-fg-faint" title={appFooterLabel}>
           {appFooterLabel}

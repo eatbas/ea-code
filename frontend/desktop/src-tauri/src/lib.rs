@@ -48,6 +48,8 @@ pub fn run() {
             commands::workspace::delete_project,
             commands::workspace::rename_project,
             commands::workspace::archive_project,
+            commands::workspace::unarchive_project,
+            commands::workspace::reorder_projects,
             commands::workspace::open_project_folder,
             commands::workspace::open_in_vscode,
             commands::settings::get_settings,

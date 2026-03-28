@@ -7,14 +7,16 @@ interface SidebarProjectRowProps {
   projectLabel: string;
   isActive: boolean;
   expanded: boolean;
+  isArchived: boolean;
   hasConversations: boolean;
   hasRunningConversation: boolean;
-  showingArchived: boolean;
+  showingArchivedConversations: boolean;
   onProjectClick: () => void;
   onCreateConversation: () => void;
-  onToggleShowArchived?: () => void;
+  onToggleShowArchivedConversations?: () => void;
   onRenameProject?: (name: string) => void;
   onArchiveProject?: () => void;
+  onUnarchiveProject?: () => void;
   onRemoveProject?: () => void;
 }
 
@@ -23,14 +25,16 @@ export function SidebarProjectRow({
   projectLabel,
   isActive,
   expanded,
+  isArchived,
   hasConversations,
   hasRunningConversation,
-  showingArchived,
+  showingArchivedConversations,
   onProjectClick,
   onCreateConversation,
-  onToggleShowArchived,
+  onToggleShowArchivedConversations,
   onRenameProject,
   onArchiveProject,
+  onUnarchiveProject,
   onRemoveProject,
 }: SidebarProjectRowProps): ReactNode {
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -115,13 +119,23 @@ export function SidebarProjectRow({
       <button
         type="button"
         onClick={onProjectClick}
-        className={`relative mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-lg py-1.5 pr-16 pl-3 text-left text-sm transition-colors ${
+        className={`relative mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-lg py-1.5 pr-16 text-left text-sm transition-colors ${
+          hasRunningConversation ? "pl-9" : "pl-3"
+        } ${
           isActive
             ? "bg-elevated text-fg"
-            : "text-fg-muted hover:bg-elevated hover:text-fg"
+            : isArchived
+              ? "text-fg-faint hover:bg-elevated hover:text-fg-muted"
+              : "text-fg-muted hover:bg-elevated hover:text-fg"
         }`}
         title={projectPath}
       >
+        {hasRunningConversation && (
+          <span
+            className="absolute top-1/2 left-3 inline-flex h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-[#1eb75f] shadow-[0_0_0_3px_rgba(30,183,95,0.16)] animate-pulse"
+            title="A conversation is running in this project"
+          />
+        )}
         <span className="relative h-4 w-4 shrink-0">
           <svg
             className={`absolute inset-0 h-4 w-4 transition-opacity ${
@@ -158,11 +172,10 @@ export function SidebarProjectRow({
         </span>
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate font-medium">{projectLabel}</span>
-          {hasRunningConversation && (
-            <span
-              className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#1eb75f] shadow-[0_0_0_3px_rgba(30,183,95,0.16)] animate-pulse"
-              title="A conversation is running in this project"
-            />
+          {isArchived && (
+            <span className="rounded-full border border-edge px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-fg-faint">
+              Archived
+            </span>
           )}
         </span>
       </button>
@@ -199,7 +212,7 @@ export function SidebarProjectRow({
               {confirmAction === "archive" ? "Archive" : "Delete"}
             </button>
           </div>
-        ) : (onRenameProject || onArchiveProject || onRemoveProject) && (
+        ) : (onRenameProject || onArchiveProject || onUnarchiveProject || onRemoveProject) && (
           <>
             <button
               type="button"
@@ -221,23 +234,23 @@ export function SidebarProjectRow({
 
             {menuOpen && (
               <div className="absolute top-full right-0 z-20 mt-2 min-w-40 rounded-xl border border-edge bg-[#232325] p-1 shadow-[0_14px_30px_rgba(0,0,0,0.35)]">
-                {onToggleShowArchived && (
+                {onToggleShowArchivedConversations && (
                   <button
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
                       setMenuOpen(false);
-                      onToggleShowArchived();
+                      onToggleShowArchivedConversations();
                     }}
                     className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-elevated ${
-                      showingArchived ? "text-fg" : "text-fg-muted"
+                      showingArchivedConversations ? "text-fg" : "text-fg-muted"
                     }`}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
                       <circle cx="12" cy="12" r="3" />
                     </svg>
-                    {showingArchived ? "Hide archived" : "Show archived"}
+                    {showingArchivedConversations ? "Hide archived" : "Show archived"}
                   </button>
                 )}
                 {onRenameProject && (
@@ -257,7 +270,7 @@ export function SidebarProjectRow({
                     Rename project
                   </button>
                 )}
-                {onArchiveProject && (
+                {!isArchived && onArchiveProject && (
                   <button
                     type="button"
                     onClick={(event) => {
@@ -272,6 +285,24 @@ export function SidebarProjectRow({
                       <path d="M5 8h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2Z" />
                     </svg>
                     Archive project
+                  </button>
+                )}
+                {isArchived && onUnarchiveProject && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMenuOpen(false);
+                      onUnarchiveProject();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-fg transition-colors hover:bg-elevated"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V15" />
+                      <path d="m7 10 5-5 5 5" />
+                      <path d="M12 5v12" />
+                    </svg>
+                    Unarchive project
                   </button>
                 )}
                 {onRemoveProject && (

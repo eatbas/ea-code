@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applyProjectOrder,
   createWorkspaceSessionInitialState,
   workspaceSessionReducer,
   type WorkspaceSessionState,
@@ -71,4 +72,29 @@ test("workspace session reducer keeps the previous workspace on open error", () 
   assert.equal(next.workspace?.path, "/tmp/demo");
   assert.equal(next.error, "Permission denied");
   assert.equal(next.openingWorkspace, false);
+});
+
+test("applyProjectOrder reorders projects only when given a complete valid path list", () => {
+  const projects = [
+    {
+      id: "one",
+      path: "/tmp/one",
+      name: "one",
+      isGitRepo: true,
+      createdAt: "2026-03-27T09:00:00Z",
+    },
+    {
+      id: "two",
+      path: "/tmp/two",
+      name: "two",
+      isGitRepo: false,
+      createdAt: "2026-03-27T09:00:00Z",
+    },
+  ];
+
+  const reordered = applyProjectOrder(projects, ["/tmp/two", "/tmp/one"]);
+  assert.deepEqual(reordered.map((project) => project.path), ["/tmp/two", "/tmp/one"]);
+
+  const unchanged = applyProjectOrder(projects, ["/tmp/one"]);
+  assert.equal(unchanged, projects);
 });

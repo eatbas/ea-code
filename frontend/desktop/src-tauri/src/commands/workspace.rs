@@ -98,8 +98,10 @@ pub async fn check_prerequisites() -> Result<PrerequisiteStatus, String> {
 
 /// Lists all known project bookmarks.
 #[tauri::command]
-pub async fn list_projects() -> Result<Vec<crate::models::ProjectEntry>, String> {
-    storage::projects::list_projects()
+pub async fn list_projects(
+    include_archived: Option<bool>,
+) -> Result<Vec<crate::models::ProjectEntry>, String> {
+    storage::projects::list_projects(include_archived.unwrap_or(false))
 }
 
 /// Deletes a project bookmark by path.
@@ -116,6 +118,20 @@ pub async fn rename_project(project_path: String, name: String) -> Result<crate:
 #[tauri::command]
 pub async fn archive_project(project_path: String) -> Result<crate::models::ProjectEntry, String> {
     storage::projects::archive_project(&project_path)
+}
+
+#[tauri::command]
+pub async fn unarchive_project(
+    project_path: String,
+) -> Result<crate::models::ProjectEntry, String> {
+    storage::projects::unarchive_project(&project_path)
+}
+
+#[tauri::command]
+pub async fn reorder_projects(
+    ordered_project_paths: Vec<String>,
+) -> Result<Vec<crate::models::ProjectEntry>, String> {
+    storage::projects::reorder_projects(&ordered_project_paths)
 }
 
 /// Opens the given workspace path in VS Code.

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { useAppViewState } from "./hooks/useAppViewState";
 import {
@@ -33,9 +33,11 @@ function App(): ReactNode {
     openWorkspace,
     selectFolder,
     projects,
+    reorderProjects,
     deleteProject,
     renameProject,
     archiveProject,
+    unarchiveProject,
   } = useWorkspaceSession();
   const { status: updateStatus, updateVersion } = useUpdateCheck(false);
   const { status: prereqs, dismissed: prereqsDismissed, dismiss: dismissPrereqs } = usePrerequisites();
@@ -58,9 +60,16 @@ function App(): ReactNode {
   } = useConversationSession(workspace, conversationSelection);
   const {
     index: conversationIndex,
+    loadedProjectPaths,
+    loadingProjectPaths,
+    ensureLoaded: ensureProjectConversationsLoaded,
     upsertConversation: upsertConversationInIndex,
     removeConversation: removeConversationFromIndex,
   } = useProjectConversationIndex(projects);
+  const activeProjects = useMemo(
+    () => projects.filter((project) => !project.archivedAt),
+    [projects],
+  );
 
   const {
     activeView,
@@ -187,12 +196,15 @@ function App(): ReactNode {
           onNavigate={setActiveView}
           projects={projects}
           conversationIndex={conversationIndex}
+          loadedProjectPaths={loadedProjectPaths}
+          loadingProjectPaths={loadingProjectPaths}
           activeProjectPath={workspace?.path}
           activeConversationId={activeConversation?.summary.id ?? null}
-          onSelectProject={handleSelectProjectWithDefault}
+          onLoadProjectConversations={ensureProjectConversationsLoaded}
           onSelectConversation={handleOpenConversation}
           onCreateConversation={handleCreateConversation}
           onAddProject={selectFolder}
+          onReorderProjects={reorderProjects}
           onRemoveProject={(projectPath) => {
             void deleteProject(projectPath);
           }}
@@ -201,6 +213,9 @@ function App(): ReactNode {
           }}
           onArchiveProject={(projectPath) => {
             void archiveProject(projectPath);
+          }}
+          onUnarchiveProject={(projectPath) => {
+            void unarchiveProject(projectPath);
           }}
           onRemoveConversation={(projectPath, conversationId) => {
             void handleDeleteConversation(projectPath, conversationId);
@@ -230,7 +245,7 @@ function App(): ReactNode {
             onPromptDraftChange={updateActivePromptDraft}
             onSendConversationPrompt={sendPrompt}
             onStopConversation={stopActiveConversation}
-            projects={projects}
+            projects={activeProjects}
             onSelectProject={handleSelectProjectWithDefault}
             onAddProject={selectFolder}
             onOpenProjectFolder={openProjectFolder}

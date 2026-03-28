@@ -5,9 +5,11 @@ import {
   archiveProject as archiveProjectBookmark,
   deleteProject as deleteProjectBookmark,
   listProjects,
+  reorderProjects as reorderProjectBookmarks,
   renameProject as renameProjectBookmark,
   selectProjectFolder,
   selectWorkspace,
+  unarchiveProject as unarchiveProjectBookmark,
 } from "../lib/desktopApi";
 
 export interface WorkspaceSessionState {
@@ -28,9 +30,34 @@ export interface UseWorkspaceSessionReturn extends WorkspaceSessionState {
   openWorkspace: (path: string) => Promise<void>;
   selectFolder: () => Promise<void>;
   refreshProjects: () => Promise<void>;
+  reorderProjects: (orderedProjectPaths: string[]) => Promise<void>;
   deleteProject: (projectPath: string) => Promise<void>;
   renameProject: (projectPath: string, name: string) => Promise<void>;
   archiveProject: (projectPath: string) => Promise<void>;
+  unarchiveProject: (projectPath: string) => Promise<void>;
+}
+
+export function applyProjectOrder(
+  projects: ProjectEntry[],
+  orderedProjectPaths: string[],
+): ProjectEntry[] {
+  if (
+    orderedProjectPaths.length !== projects.length
+    || new Set(orderedProjectPaths).size !== orderedProjectPaths.length
+  ) {
+    return projects;
+  }
+
+  const projectMap = new Map(projects.map((project) => [project.path, project] as const));
+  if (projectMap.size !== orderedProjectPaths.length) {
+    return projects;
+  }
+
+  const reordered = orderedProjectPaths
+    .map((projectPath) => projectMap.get(projectPath))
+    .filter((project): project is ProjectEntry => project !== undefined);
+
+  return reordered.length === projects.length ? reordered : projects;
 }
 
 export function createWorkspaceSessionInitialState(): WorkspaceSessionState {
@@ -89,7 +116,7 @@ export function useWorkspaceSession(): UseWorkspaceSessionReturn {
 
   const refreshProjects = useCallback(async (): Promise<void> => {
     try {
-      dispatch({ type: "set-projects", projects: await listProjects() });
+      dispatch({ type: "set-projects", projects: await listProjects(true) });
     } catch {
       // Project list is non-critical; leave the existing snapshot in place.
     }
@@ -135,6 +162,21 @@ export function useWorkspaceSession(): UseWorkspaceSessionReturn {
     }
   }, [openWorkspace, toast]);
 
+  const reorderProjects = useCallback(async (orderedProjectPaths: string[]): Promise<void> => {
+    const reorderedProjects = applyProjectOrder(state.projects, orderedProjectPaths);
+    if (reorderedProjects === state.projects) {
+      return;
+    }
+
+    dispatch({ type: "set-projects", projects: reorderedProjects });
+    try {
+      await reorderProjectBookmarks(orderedProjectPaths);
+    } catch {
+      await refreshProjects();
+      toast.error("Failed to reorder projects.");
+    }
+  }, [refreshProjects, state.projects, toast]);
+
   const deleteProject = useCallback(async (projectPath: string): Promise<void> => {
     try {
       await deleteProjectBookmark(projectPath);
@@ -165,18 +207,28 @@ export function useWorkspaceSession(): UseWorkspaceSessionReturn {
     }
   }, [refreshProjects, toast]);
 
+  const unarchiveProject = useCallback(async (projectPath: string): Promise<void> => {
+    try {
+      await unarchiveProjectBookmark(projectPath);
+      await refreshProjects();
+      toast.success("Project unarchived.");
+    } catch {
+      toast.error("Failed to unarchive project.");
+    }
+  }, [refreshProjects, toast]);
+
   useEffect(() => {
     let cancelled = false;
 
     async function restoreWorkspaceSession(): Promise<void> {
       try {
-        const projects = await listProjects();
+        const projects = await listProjects(true);
         if (cancelled) {
           return;
         }
 
         dispatch({ type: "set-projects", projects });
-        const latestProjectPath = projects[0]?.path;
+        const latestProjectPath = projects.find((project) => !project.archivedAt)?.path;
         if (!latestProjectPath) {
           return;
         }
@@ -202,8 +254,10 @@ export function useWorkspaceSession(): UseWorkspaceSessionReturn {
     openWorkspace,
     selectFolder,
     refreshProjects,
+    reorderProjects,
     deleteProject,
     renameProject,
     archiveProject,
+    unarchiveProject,
   };
 }

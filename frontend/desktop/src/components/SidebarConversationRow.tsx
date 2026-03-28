@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { Pin } from "lucide-react";
 import type { ConversationSummary } from "../types";
 import { useClickOutside } from "../hooks/useClickOutside";
 import { formatRelativeTime } from "../utils/formatters";
@@ -117,6 +118,8 @@ export function SidebarConversationRow({
   }
 
   const isArchived = Boolean(conversation.archivedAt);
+  const isRunning = conversation.status === "running";
+  const showPinnedMarker = Boolean(conversation.pinnedAt) && !isRunning;
 
   if (renaming) {
     return (
@@ -170,32 +173,47 @@ export function SidebarConversationRow({
 
   return (
     <div className="group/conversation relative">
-      <div className="absolute top-1/2 left-3 z-[1] h-4 w-4 -translate-y-1/2">
+      <div className={`absolute top-1/2 left-3 z-[1] h-4 -translate-y-1/2 ${isRunning ? "w-7" : "w-4"}`}>
+        {isRunning && (
+          <span
+            className="pointer-events-none absolute top-1/2 left-0 inline-flex h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-[#1eb75f] shadow-[0_0_0_3px_rgba(30,183,95,0.16)] animate-pulse"
+            title="Conversation running"
+          />
+        )}
         <button
           type="button"
           onClick={(event) => {
             event.stopPropagation();
             void handleTogglePin();
           }}
-          className={`flex h-4 w-4 items-center justify-center rounded transition-opacity hover:bg-active ${
-            conversation.pinnedAt
-              ? "text-[#f3d36d] opacity-100 hover:text-[#ffe39a]"
+          className={`absolute top-0 flex h-4 w-4 items-center justify-center rounded transition-opacity hover:bg-active ${
+            isRunning ? "left-3" : "left-0"
+          } ${
+            showPinnedMarker
+              ? "text-[#4bd67b] opacity-100 hover:text-[#74e39a]"
+              : isRunning && conversation.pinnedAt
+                ? "text-[#4bd67b] opacity-0 group-hover/conversation:opacity-100 hover:text-[#74e39a]"
               : "text-fg-faint opacity-0 hover:text-fg group-hover/conversation:opacity-100"
           }`}
-          title={conversation.pinnedAt ? "Unpin thread" : "Pin thread"}
+          title={conversation.pinnedAt ? "Unpin conversation" : "Pin conversation"}
           disabled={busyAction !== null}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill={conversation.pinnedAt ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 17v5" />
-            <path d="M8 3h8l-1 6 3 3H6l3-3-1-6Z" />
-          </svg>
+          {showPinnedMarker ? (
+            <Pin
+              size={11}
+              strokeWidth={2}
+              className="-rotate-[28deg]"
+              fill="currentColor"
+            />
+          ) : (
+            <Pin
+              size={11}
+              strokeWidth={2}
+              className="-rotate-[28deg]"
+              fill="none"
+            />
+          )}
         </button>
-        {conversation.status === "running" && (
-          <span
-            className="absolute right-0 bottom-0 inline-flex h-2.5 w-2.5 rounded-full bg-[#1eb75f] shadow-[0_0_0_3px_rgba(30,183,95,0.16)] animate-pulse"
-            title="Conversation running"
-          />
-        )}
       </div>
 
       <button
@@ -203,7 +221,7 @@ export function SidebarConversationRow({
         onClick={() => {
           void onSelectConversation(projectPath, conversation.id);
         }}
-        className={`relative mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-lg py-1.5 pl-9 text-left transition-[padding,color,background-color] ${
+        className={`relative mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-lg py-1.5 ${isRunning ? "pl-11" : "pl-9"} text-left transition-[padding,color,background-color] ${
           menuOpen ? "pr-[3.75rem]" : "pr-3 group-hover/conversation:pr-[3.75rem]"
         } ${
           isActive

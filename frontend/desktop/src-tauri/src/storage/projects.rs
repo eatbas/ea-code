@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::models::ProjectEntry;
 
 use super::{atomic_write, config_dir, now_rfc3339, with_projects_lock};
@@ -5,7 +7,7 @@ use super::{atomic_write, config_dir, now_rfc3339, with_projects_lock};
 const PROJECTS_FILE: &str = "projects.json";
 
 /// Reads all projects from projects.json.
-pub fn list_projects() -> Result<Vec<ProjectEntry>, String> {
+pub fn list_projects(include_archived: bool) -> Result<Vec<ProjectEntry>, String> {
     with_projects_lock(|| {
         let path = config_dir()?.join(PROJECTS_FILE);
 
@@ -21,7 +23,7 @@ pub fn list_projects() -> Result<Vec<ProjectEntry>, String> {
 
         Ok(projects
             .into_iter()
-            .filter(|project| project.archived_at.is_none())
+            .filter(|project| include_archived || project.archived_at.is_none())
             .collect())
     })
 }
@@ -182,5 +184,70 @@ pub fn archive_project(project_path: &str) -> Result<ProjectEntry, String> {
             .map_err(|e| format!("Failed to serialise projects: {e}"))?;
         atomic_write(&file_path, &json)?;
         Ok(updated)
+    })
+}
+
+pub fn unarchive_project(project_path: &str) -> Result<ProjectEntry, String> {
+    with_projects_lock(|| {
+        let file_path = config_dir()?.join(PROJECTS_FILE);
+        if !file_path.exists() {
+            return Err("Project list not found".to_string());
+        }
+
+        let contents = std::fs::read_to_string(&file_path)
+            .map_err(|e| format!("Failed to read projects file: {e}"))?;
+        let mut projects: Vec<ProjectEntry> = serde_json::from_str(&contents).unwrap_or_default();
+
+        let Some(project) = projects.iter_mut().find(|p| p.path == project_path) else {
+            return Err("Project not found".to_string());
+        };
+
+        project.archived_at = None;
+        let updated = project.clone();
+
+        let json = serde_json::to_string_pretty(&projects)
+            .map_err(|e| format!("Failed to serialise projects: {e}"))?;
+        atomic_write(&file_path, &json)?;
+        Ok(updated)
+    })
+}
+
+pub fn reorder_projects(ordered_project_paths: &[String]) -> Result<Vec<ProjectEntry>, String> {
+    with_projects_lock(|| {
+        let file_path = config_dir()?.join(PROJECTS_FILE);
+        if !file_path.exists() {
+            return Err("Project list not found".to_string());
+        }
+
+        let contents = std::fs::read_to_string(&file_path)
+            .map_err(|e| format!("Failed to read projects file: {e}"))?;
+        let projects: Vec<ProjectEntry> = serde_json::from_str(&contents).unwrap_or_default();
+
+        if ordered_project_paths.len() != projects.len() {
+            return Err("Project reorder payload does not match saved projects".to_string());
+        }
+
+        let mut remaining_projects: HashMap<String, ProjectEntry> = projects
+            .into_iter()
+            .map(|project| (project.path.clone(), project))
+            .collect();
+
+        let mut reordered = Vec::with_capacity(ordered_project_paths.len());
+        for project_path in ordered_project_paths {
+            let Some(project) = remaining_projects.remove(project_path) else {
+                return Err(format!("Project not found in reorder request: {project_path}"));
+            };
+            reordered.push(project);
+        }
+
+        if !remaining_projects.is_empty() {
+            return Err("Project reorder payload is missing saved projects".to_string());
+        }
+
+        let json = serde_json::to_string_pretty(&reordered)
+            .map_err(|e| format!("Failed to serialise projects: {e}"))?;
+        atomic_write(&file_path, &json)?;
+
+        Ok(reordered)
     })
 }

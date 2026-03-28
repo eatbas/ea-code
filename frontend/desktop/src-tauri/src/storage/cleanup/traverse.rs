@@ -18,7 +18,7 @@ pub fn traverse_runs<F>(callback: &mut F) -> Result<(), String>
 where
     F: FnMut(&Path, &str, &str, &str) -> Result<(), String>,
 {
-    let projects = crate::storage::projects::list_projects().unwrap_or_default();
+    let projects = crate::storage::projects::list_projects(true).unwrap_or_default();
 
     for project in &projects {
         let workspace = Path::new(&project.path);
@@ -108,7 +108,7 @@ where
     S: FnMut(&Path, &str, &str) -> Result<(), String>,
     R: FnMut(&Path, &str, &str, &str) -> Result<(), String>,
 {
-    let projects = crate::storage::projects::list_projects().unwrap_or_default();
+    let projects = crate::storage::projects::list_projects(true).unwrap_or_default();
 
     for project in &projects {
         let workspace = Path::new(&project.path);

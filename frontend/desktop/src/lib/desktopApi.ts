@@ -24,8 +24,8 @@ export function selectWorkspace(path: string): Promise<WorkspaceInfo> {
   return invokeCommand<WorkspaceInfo>("select_workspace", { path });
 }
 
-export function listProjects(): Promise<ProjectEntry[]> {
-  return invokeCommand<ProjectEntry[]>("list_projects");
+export function listProjects(includeArchived = false): Promise<ProjectEntry[]> {
+  return invokeCommand<ProjectEntry[]>("list_projects", { includeArchived });
 }
 
 export function deleteProject(projectPath: string): Promise<void> {
@@ -38,6 +38,14 @@ export function renameProject(projectPath: string, name: string): Promise<Projec
 
 export function archiveProject(projectPath: string): Promise<ProjectEntry> {
   return invokeCommand<ProjectEntry>("archive_project", { projectPath });
+}
+
+export function unarchiveProject(projectPath: string): Promise<ProjectEntry> {
+  return invokeCommand<ProjectEntry>("unarchive_project", { projectPath });
+}
+
+export function reorderProjects(orderedProjectPaths: string[]): Promise<ProjectEntry[]> {
+  return invokeCommand<ProjectEntry[]>("reorder_projects", { orderedProjectPaths });
 }
 
 export function openInVsCode(path: string): Promise<void> {
