@@ -220,7 +220,7 @@ export function useWorkspaceSession(): UseWorkspaceSessionReturn {
   useEffect(() => {
     let cancelled = false;
 
-    async function restoreWorkspaceSession(): Promise<void> {
+    async function loadProjects(): Promise<void> {
       try {
         const projects = await listProjects(true);
         if (cancelled) {
@@ -228,26 +228,17 @@ export function useWorkspaceSession(): UseWorkspaceSessionReturn {
         }
 
         dispatch({ type: "set-projects", projects });
-        const latestProjectPath = projects.find((project) => !project.archivedAt)?.path;
-        if (!latestProjectPath) {
-          return;
-        }
-
-        await openWorkspaceInternal(latestProjectPath, {
-          notifyError: false,
-          refreshProjects: false,
-        });
       } catch {
-        // Ignore restore failures and start from an empty session.
+        // Ignore load failures and start from an empty session.
       }
     }
 
-    void restoreWorkspaceSession();
+    void loadProjects();
 
     return () => {
       cancelled = true;
     };
-  }, [openWorkspaceInternal]);
+  }, []);
 
   return {
     ...state,

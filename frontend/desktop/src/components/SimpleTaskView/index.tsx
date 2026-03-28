@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AppSettings,
   AgentSelection,
@@ -14,6 +14,7 @@ import { formatAssistantLabel, sortProvidersByDisplayName } from "../shared/cons
 import { WorkspaceFooter } from "../shared/WorkspaceFooter";
 import { useToast } from "../shared/Toast";
 import { getEnabledModels } from "../../utils/modelSettings";
+import { parseAgentSelection } from "../../utils/agentSettings";
 
 interface SimpleTaskViewProps {
   workspace: WorkspaceInfo;
@@ -46,6 +47,7 @@ export function SimpleTaskView({
   const { providers, checkHealth } = useApiHealth();
   const { settings } = useSettings();
   const [selectedAgent, setSelectedAgent] = useState<AgentSelection | null>(null);
+  const prevConversationIdRef = useRef<string | null>(null);
 
   const availableProviders = useMemo(
     () => sortProvidersByDisplayName(filterProvidersBySettings(providers, settings)),
@@ -56,11 +58,28 @@ export function SimpleTaskView({
     checkHealth();
   }, [checkHealth, workspace.path]);
 
+  // Reset selection when leaving an existing conversation so the
+  // default agent is re-applied for the next new conversation.
+  useEffect(() => {
+    const currentId = activeConversation?.summary.id ?? null;
+    const prevId = prevConversationIdRef.current;
+    prevConversationIdRef.current = currentId;
+
+    if (prevId !== null && currentId !== prevId) {
+      setSelectedAgent(null);
+    }
+  }, [activeConversation]);
+
   useEffect(() => {
     if (activeConversation) {
       setSelectedAgent(activeConversation.summary.agent);
       return;
     }
+
+    // Wait for settings to load before making any selection so we
+    // don't fall back to the first provider before the default is known.
+    if (!settings) return;
+
     const selectionIsValid = selectedAgent
       ? availableProviders.some((provider) => (
         provider.name === selectedAgent.provider
@@ -68,13 +87,28 @@ export function SimpleTaskView({
       ))
       : false;
 
-    if ((!selectedAgent || !selectionIsValid) && availableProviders[0]) {
+    if (selectionIsValid) return;
+
+    // Try the configured default agent from settings.
+    const defaultAgent = parseAgentSelection(settings.defaultAgent);
+    if (defaultAgent) {
+      const defaultProvider = availableProviders.find(
+        (p) => p.name === defaultAgent.provider,
+      );
+      if (defaultProvider?.models.includes(defaultAgent.model)) {
+        setSelectedAgent(defaultAgent);
+        return;
+      }
+    }
+
+    // Fall back to first available provider/model.
+    if (availableProviders[0]) {
       setSelectedAgent({
         provider: availableProviders[0].name,
         model: availableProviders[0].models[0] ?? "",
       });
     }
-  }, [activeConversation, availableProviders, selectedAgent]);
+  }, [activeConversation, availableProviders, selectedAgent, settings]);
 
   const activeRunning = activeConversation?.summary.status === "running";
 
@@ -161,9 +195,9 @@ export function SimpleTaskView({
             <div className="mx-auto flex h-full max-w-3xl items-center justify-center">
               <div className="rounded-3xl border border-edge bg-panel px-8 py-10 text-center shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
                 <img src="/logo.png" alt="EA Code logo" className="mx-auto mb-4 h-14 w-14 object-contain" />
-                <p className="text-xl font-semibold text-fg">Start a new simple task</p>
+                <p className="text-xl font-semibold text-fg">Start a new conversation</p>
                 <p className="mt-2 text-sm text-fg-muted">
-                  Pick an agent in the composer and send the first prompt to create a conversation.
+                  Pick an agent in the composer and send the first prompt to start a conversation.
                 </p>
               </div>
             </div>

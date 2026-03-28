@@ -8,11 +8,20 @@ import { SidebarSettings } from "./SidebarSettings";
 
 const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; iconPath: string }[] = [
   {
+    view: "agents",
+    label: "Agents",
+    iconPath: '<rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><path d="M15 2v2" /><path d="M15 20v2" /><path d="M2 15h2" /><path d="M2 9h2" /><path d="M20 15h2" /><path d="M20 9h2" /><path d="M9 2v2" /><path d="M9 20v2" />',
+  },
+  {
     view: "cli-setup",
     label: "CLI Setup",
     iconPath: '<polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />',
   },
 ];
+
+const SETTINGS_VIEWS: ReadonlySet<ActiveView> = new Set(
+  SETTINGS_NAV_ITEMS.map((item) => item.view),
+);
 
 interface SidebarProps {
   collapsed: boolean;
@@ -67,7 +76,7 @@ export function Sidebar({
   onUnarchiveConversation,
   onSetConversationPinned,
 }: SidebarProps): ReactNode {
-  const isSettings = activeView === "cli-setup";
+  const isSettings = SETTINGS_VIEWS.has(activeView);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [showArchivedProjects, setShowArchivedProjects] = useState<boolean>(false);
   const currentYear = new Date().getFullYear();
@@ -102,7 +111,7 @@ export function Sidebar({
   );
 
   function handleSettingsClick(): void {
-    onNavigate(isSettings ? "home" : "cli-setup");
+    onNavigate(isSettings ? "home" : SETTINGS_NAV_ITEMS[0].view);
   }
 
   if (collapsed) {

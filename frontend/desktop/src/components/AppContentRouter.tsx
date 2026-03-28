@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { ActiveView, ConversationDetail, WorkspaceInfo, ProjectEntry, AgentSelection } from "../types";
 import { IdleView } from "./IdleView";
+import { AgentsSettingsRoute } from "./AgentsSettingsView/Route";
 import { CliSetupRoute } from "./CliSetupView/Route";
 import { SimpleTaskView } from "./SimpleTaskView";
 
@@ -40,6 +41,10 @@ export function AppContentRouter({
   onOpenProjectFolder,
   onOpenInVsCode,
 }: AppContentRouterProps): ReactNode {
+  if (activeView === "agents") {
+    return <AgentsSettingsRoute />;
+  }
+
   if (activeView === "cli-setup") {
     return <CliSetupRoute />;
   }
