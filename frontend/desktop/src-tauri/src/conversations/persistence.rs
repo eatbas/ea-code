@@ -251,7 +251,10 @@ pub fn create_conversation(
     })
 }
 
-pub fn list_conversations(workspace_path: &str) -> Result<Vec<ConversationSummary>, String> {
+pub fn list_conversations(
+    workspace_path: &str,
+    include_archived: bool,
+) -> Result<Vec<ConversationSummary>, String> {
     with_conversations_lock(|| {
         let dir = conversations_dir(workspace_path);
         if !dir.exists() {
@@ -277,7 +280,7 @@ pub fn list_conversations(workspace_path: &str) -> Result<Vec<ConversationSummar
             };
             let mut summary = read_summary_unlocked(workspace_path, &conversation_id)?;
             reconcile_stale_running_unlocked(&mut summary)?;
-            if summary.archived_at.is_none() {
+            if include_archived || summary.archived_at.is_none() {
                 summaries.push(summary);
             }
         }
@@ -482,6 +485,22 @@ pub fn archive_conversation(
     })
 }
 
+pub fn unarchive_conversation(
+    workspace_path: &str,
+    conversation_id: &str,
+) -> Result<ConversationSummary, String> {
+    with_conversations_lock(|| {
+        let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
+        if summary.archived_at.is_some() {
+            summary.archived_at = None;
+            summary.updated_at = now_rfc3339();
+            write_summary_unlocked(&summary)?;
+        }
+
+        Ok(summary)
+    })
+}
+
 pub fn set_conversation_pinned(
     workspace_path: &str,
     conversation_id: &str,
@@ -502,7 +521,7 @@ mod tests {
     use super::{
         archive_conversation, create_conversation, delete_conversation, finish_turn,
         get_conversation, list_conversations, mark_turn_running, rename_conversation,
-        set_conversation_pinned, track_running_conversation,
+        set_conversation_pinned, track_running_conversation, unarchive_conversation,
     };
     use crate::models::{AgentSelection, ConversationStatus};
 
@@ -549,6 +568,7 @@ mod tests {
                 .path()
                 .to_str()
                 .expect("workspace path should be utf-8"),
+            false,
         )
         .expect("conversations should list");
 
@@ -735,6 +755,7 @@ mod tests {
                 .path()
                 .to_str()
                 .expect("workspace path should be utf-8"),
+            false,
         )
         .expect("conversations should list");
         assert!(listed.is_empty());
@@ -801,9 +822,98 @@ mod tests {
                 .path()
                 .to_str()
                 .expect("workspace path should be utf-8"),
+            false,
         )
         .expect("conversations should list");
         assert!(listed.is_empty());
+    }
+
+    #[test]
+    fn includes_archived_conversations_when_requested() {
+        let workspace = TestWorkspace::new();
+        let conversation = create_conversation(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            AgentSelection {
+                provider: "codex".to_string(),
+                model: "gpt-5.4".to_string(),
+            },
+            Some("Archive but keep visible"),
+        )
+        .expect("conversation should be created");
+
+        let archived = archive_conversation(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            &conversation.summary.id,
+        )
+        .expect("conversation should archive");
+
+        let listed = list_conversations(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            true,
+        )
+        .expect("conversations should list");
+
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, archived.id);
+        assert!(listed[0].archived_at.is_some());
+    }
+
+    #[test]
+    fn unarchives_conversation_and_returns_it_to_default_listing() {
+        let workspace = TestWorkspace::new();
+        let conversation = create_conversation(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            AgentSelection {
+                provider: "codex".to_string(),
+                model: "gpt-5.4".to_string(),
+            },
+            Some("Bring me back"),
+        )
+        .expect("conversation should be created");
+
+        archive_conversation(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            &conversation.summary.id,
+        )
+        .expect("conversation should archive");
+
+        let unarchived = unarchive_conversation(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            &conversation.summary.id,
+        )
+        .expect("conversation should unarchive");
+
+        assert!(unarchived.archived_at.is_none());
+
+        let listed = list_conversations(
+            workspace
+                .path()
+                .to_str()
+                .expect("workspace path should be utf-8"),
+            false,
+        )
+        .expect("conversations should list");
+
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, conversation.summary.id);
     }
 
     #[test]
@@ -852,6 +962,7 @@ mod tests {
                 .path()
                 .to_str()
                 .expect("workspace path should be utf-8"),
+            false,
         )
         .expect("conversations should list");
 

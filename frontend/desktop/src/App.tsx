@@ -21,6 +21,7 @@ import {
   openProjectFolder,
   renameConversation,
   setConversationPinned,
+  unarchiveConversation,
 } from "./lib/desktopApi";
 import { useToast } from "./components/shared/Toast";
 
@@ -52,6 +53,7 @@ function App(): ReactNode {
     deleteConversationById,
     renameConversationById,
     archiveConversationById,
+    unarchiveConversationById,
     setConversationPinnedById,
   } = useConversationSession(workspace, conversationSelection);
   const {
@@ -138,7 +140,7 @@ function App(): ReactNode {
         ? await archiveConversationById(conversationId)
         : await archiveConversation(projectPath, conversationId);
       if (summary) {
-        removeConversationFromIndex(projectPath, conversationId);
+        upsertConversationInIndex(summary);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to archive conversation.");
@@ -159,6 +161,19 @@ function App(): ReactNode {
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update pin.");
+    }
+  }
+
+  async function handleUnarchiveConversation(projectPath: string, conversationId: string): Promise<void> {
+    try {
+      const summary = workspace?.path === projectPath
+        ? await unarchiveConversationById(conversationId)
+        : await unarchiveConversation(projectPath, conversationId);
+      if (summary) {
+        upsertConversationInIndex(summary);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to unarchive conversation.");
     }
   }
 
@@ -195,6 +210,9 @@ function App(): ReactNode {
           }}
           onArchiveConversation={(projectPath, conversationId) => {
             void handleArchiveConversation(projectPath, conversationId);
+          }}
+          onUnarchiveConversation={(projectPath, conversationId) => {
+            void handleUnarchiveConversation(projectPath, conversationId);
           }}
           onSetConversationPinned={(projectPath, conversationId, pinned) => {
             void handleSetConversationPinned(projectPath, conversationId, pinned);

@@ -68,6 +68,7 @@ pub fn run() {
             conversations::commands::delete_conversation,
             conversations::commands::rename_conversation,
             conversations::commands::archive_conversation,
+            conversations::commands::unarchive_conversation,
             conversations::commands::set_conversation_pinned,
         ])
         .build(tauri::generate_context!())

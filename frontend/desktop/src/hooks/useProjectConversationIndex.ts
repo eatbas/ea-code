@@ -15,6 +15,10 @@ interface UseProjectConversationIndexReturn {
 
 function sortConversations(items: ConversationSummary[]): ConversationSummary[] {
   return [...items].sort((left, right) => {
+    const archiveOrder = Number(Boolean(left.archivedAt)) - Number(Boolean(right.archivedAt));
+    if (archiveOrder !== 0) {
+      return archiveOrder;
+    }
     const pinOrder = Number(Boolean(right.pinnedAt)) - Number(Boolean(left.pinnedAt));
     if (pinOrder !== 0) {
       return pinOrder;
@@ -52,7 +56,7 @@ export function useProjectConversationIndex(projects: ProjectEntry[]): UseProjec
     async function loadConversations(): Promise<void> {
       const entries = await Promise.all(projects.map(async (project) => {
         try {
-          const conversations = await listWorkspaceConversations(project.path);
+          const conversations = await listWorkspaceConversations(project.path, true);
           return [project.path, sortConversations(conversations)] as const;
         } catch {
           return [project.path, []] as const;
@@ -74,15 +78,6 @@ export function useProjectConversationIndex(projects: ProjectEntry[]): UseProjec
   return {
     index,
     upsertConversation: (conversation: ConversationSummary) => {
-      if (conversation.archivedAt) {
-        setIndex((previous) => ({
-          ...previous,
-          [conversation.workspacePath]: (previous[conversation.workspacePath] ?? [])
-            .filter((item) => item.id !== conversation.id),
-        }));
-        return;
-      }
-
       setIndex((previous) => ({
         ...previous,
         [conversation.workspacePath]: sortConversations(

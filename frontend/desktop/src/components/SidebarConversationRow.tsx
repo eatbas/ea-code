@@ -15,6 +15,7 @@ interface SidebarConversationRowProps {
     title: string,
   ) => void | Promise<void>;
   onArchiveConversation: (projectPath: string, conversationId: string) => void | Promise<void>;
+  onUnarchiveConversation: (projectPath: string, conversationId: string) => void | Promise<void>;
   onRemoveConversation: (projectPath: string, conversationId: string) => void | Promise<void>;
   onSetConversationPinned: (
     projectPath: string,
@@ -30,6 +31,7 @@ export function SidebarConversationRow({
   onSelectConversation,
   onRenameConversation,
   onArchiveConversation,
+  onUnarchiveConversation,
   onRemoveConversation,
   onSetConversationPinned,
 }: SidebarConversationRowProps): ReactNode {
@@ -39,7 +41,7 @@ export function SidebarConversationRow({
   const [renaming, setRenaming] = useState<boolean>(false);
   const [confirmAction, setConfirmAction] = useState<"archive" | "remove" | null>(null);
   const [renameValue, setRenameValue] = useState<string>(conversation.title);
-  const [busyAction, setBusyAction] = useState<"rename" | "archive" | "remove" | "pin" | null>(null);
+  const [busyAction, setBusyAction] = useState<"rename" | "archive" | "unarchive" | "remove" | "pin" | null>(null);
 
   useClickOutside(menuRef, () => setMenuOpen(false), menuOpen);
 
@@ -95,6 +97,16 @@ export function SidebarConversationRow({
     }
   }
 
+  async function handleUnarchive(): Promise<void> {
+    setBusyAction("unarchive");
+    try {
+      await onUnarchiveConversation(projectPath, conversation.id);
+      setMenuOpen(false);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   async function handleTogglePin(): Promise<void> {
     setBusyAction("pin");
     try {
@@ -103,6 +115,8 @@ export function SidebarConversationRow({
       setBusyAction(null);
     }
   }
+
+  const isArchived = Boolean(conversation.archivedAt);
 
   if (renaming) {
     return (
@@ -194,16 +208,23 @@ export function SidebarConversationRow({
         } ${
           isActive
             ? "bg-[#252527] text-fg"
-            : "text-[#a3a3aa] hover:bg-[#1d1d1f] hover:text-fg"
+            : isArchived
+              ? "text-fg-faint hover:bg-[#1d1d1f] hover:text-fg-muted"
+              : "text-[#a3a3aa] hover:bg-[#1d1d1f] hover:text-fg"
         }`}
       >
         <span className="min-w-0 flex-1 truncate text-sm">
           {conversation.title}
         </span>
-        <span className={`shrink-0 text-xs text-fg-subtle transition-opacity duration-150 ${
+        <span className={`flex shrink-0 items-center gap-2 text-xs text-fg-subtle transition-opacity duration-150 ${
           confirmAction ? "opacity-0" : "opacity-100"
         }`}>
-          {formatRelativeTime(conversation.updatedAt)}
+          {isArchived && (
+            <span className="rounded-full border border-edge px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-fg-faint">
+              Archived
+            </span>
+          )}
+          <span>{formatRelativeTime(conversation.updatedAt)}</span>
         </span>
       </button>
 
@@ -261,21 +282,23 @@ export function SidebarConversationRow({
               <circle cx="19" cy="12" r="1.8" />
             </svg>
           </button>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              setMenuOpen(false);
-              setConfirmAction("archive");
-            }}
-            className="rounded p-1 text-fg-faint opacity-0 transition-colors transition-opacity hover:bg-[#3a1418] hover:text-[#ffb4bb] group-hover/conversation:opacity-100"
-            title="Archive thread"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="4" rx="1" />
-              <path d="M5 8h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2Z" />
-            </svg>
-          </button>
+          {!isArchived && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setMenuOpen(false);
+                setConfirmAction("archive");
+              }}
+              className="rounded p-1 text-fg-faint opacity-0 transition-colors transition-opacity hover:bg-[#3a1418] hover:text-[#ffb4bb] group-hover/conversation:opacity-100"
+              title="Archive thread"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="4" rx="1" />
+                <path d="M5 8h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2Z" />
+              </svg>
+            </button>
+          )}
 
           {menuOpen && (
             <div className="absolute top-full right-0 z-20 mt-2 min-w-40 rounded-xl border border-edge bg-[#232325] p-1 shadow-[0_14px_30px_rgba(0,0,0,0.35)]">
@@ -295,6 +318,24 @@ export function SidebarConversationRow({
                 </svg>
                 Rename
               </button>
+              {isArchived && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleUnarchive();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-fg transition-colors hover:bg-elevated"
+                  disabled={busyAction !== null}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V15" />
+                    <path d="m7 10 5-5 5 5" />
+                    <path d="M12 5v12" />
+                  </svg>
+                  Unarchive
+                </button>
+              )}
               <button
                 type="button"
                 onClick={(event) => {

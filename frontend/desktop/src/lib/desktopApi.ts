@@ -88,8 +88,14 @@ export function updateApiCli(provider: string): Promise<void> {
   return invokeCommand<void>("update_api_cli", { provider });
 }
 
-export function listWorkspaceConversations(workspacePath: string): Promise<ConversationSummary[]> {
-  return invokeCommand<ConversationSummary[]>("list_workspace_conversations", { workspacePath });
+export function listWorkspaceConversations(
+  workspacePath: string,
+  includeArchived = false,
+): Promise<ConversationSummary[]> {
+  return invokeCommand<ConversationSummary[]>("list_workspace_conversations", {
+    workspacePath,
+    includeArchived,
+  });
 }
 
 export function createConversation(
@@ -145,6 +151,16 @@ export function archiveConversation(
   conversationId: string,
 ): Promise<ConversationSummary> {
   return invokeCommand<ConversationSummary>("archive_conversation", {
+    workspacePath,
+    conversationId,
+  });
+}
+
+export function unarchiveConversation(
+  workspacePath: string,
+  conversationId: string,
+): Promise<ConversationSummary> {
+  return invokeCommand<ConversationSummary>("unarchive_conversation", {
     workspacePath,
     conversationId,
   });

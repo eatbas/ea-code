@@ -9,8 +9,10 @@ interface SidebarProjectRowProps {
   expanded: boolean;
   hasConversations: boolean;
   hasRunningConversation: boolean;
+  showingArchived: boolean;
   onProjectClick: () => void;
   onCreateConversation: () => void;
+  onToggleShowArchived?: () => void;
   onRenameProject?: (name: string) => void;
   onArchiveProject?: () => void;
   onRemoveProject?: () => void;
@@ -23,8 +25,10 @@ export function SidebarProjectRow({
   expanded,
   hasConversations,
   hasRunningConversation,
+  showingArchived,
   onProjectClick,
   onCreateConversation,
+  onToggleShowArchived,
   onRenameProject,
   onArchiveProject,
   onRemoveProject,
@@ -217,6 +221,25 @@ export function SidebarProjectRow({
 
             {menuOpen && (
               <div className="absolute top-full right-0 z-20 mt-2 min-w-40 rounded-xl border border-edge bg-[#232325] p-1 shadow-[0_14px_30px_rgba(0,0,0,0.35)]">
+                {onToggleShowArchived && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMenuOpen(false);
+                      onToggleShowArchived();
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-elevated ${
+                      showingArchived ? "text-fg" : "text-fg-muted"
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    {showingArchived ? "Hide archived" : "Show archived"}
+                  </button>
+                )}
                 {onRenameProject && (
                   <button
                     type="button"

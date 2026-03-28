@@ -18,6 +18,7 @@ import {
   setConversationPinned,
   sendConversationTurn,
   stopConversation,
+  unarchiveConversation,
 } from "../lib/desktopApi";
 import { useTauriEventListeners } from "./useTauriEventListeners";
 import { upsertByKey } from "./useEventResource";
@@ -39,6 +40,7 @@ interface UseConversationSessionReturn {
   deleteConversationById: (conversationId: string) => Promise<boolean>;
   renameConversationById: (conversationId: string, title: string) => Promise<ConversationSummary | null>;
   archiveConversationById: (conversationId: string) => Promise<ConversationSummary | null>;
+  unarchiveConversationById: (conversationId: string) => Promise<ConversationSummary | null>;
   setConversationPinnedById: (conversationId: string, pinned: boolean) => Promise<ConversationSummary | null>;
 }
 
@@ -435,6 +437,35 @@ export function useConversationSession(
     }
   }, [toast, workspace]);
 
+  const unarchiveConversationById = useCallback(async (
+    conversationId: string,
+  ): Promise<ConversationSummary | null> => {
+    if (!workspace) {
+      return null;
+    }
+
+    try {
+      const summary = await unarchiveConversation(workspace.path, conversationId);
+      setConversations((previous) => sortConversations(
+        upsertByKey(
+          previous,
+          mergeSummary(previous.find((item) => item.id === summary.id), summary),
+          (item) => item.id,
+        ),
+      ));
+      setActiveConversation((previous) => previous?.summary.id === summary.id
+        ? {
+            ...previous,
+            summary: mergeSummary(previous.summary, summary),
+          }
+        : previous);
+      return summary;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to unarchive conversation.");
+      return null;
+    }
+  }, [toast, workspace]);
+
   const activeDraft = useMemo(() => (
     activeConversation ? drafts[activeConversation.summary.id] ?? "" : ""
   ), [activeConversation, drafts]);
@@ -471,6 +502,7 @@ export function useConversationSession(
     deleteConversationById,
     renameConversationById,
     archiveConversationById,
+    unarchiveConversationById,
     setConversationPinnedById,
   };
 }

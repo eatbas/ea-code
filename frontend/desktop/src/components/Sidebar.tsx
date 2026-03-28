@@ -40,6 +40,7 @@ interface SidebarProps {
   onRemoveConversation?: (projectPath: string, conversationId: string) => void;
   onRenameConversation?: (projectPath: string, conversationId: string, title: string) => void;
   onArchiveConversation?: (projectPath: string, conversationId: string) => void;
+  onUnarchiveConversation?: (projectPath: string, conversationId: string) => void;
   onSetConversationPinned?: (projectPath: string, conversationId: string, pinned: boolean) => void;
 }
 
@@ -63,11 +64,13 @@ export function Sidebar({
   onRemoveConversation,
   onRenameConversation,
   onArchiveConversation,
+  onUnarchiveConversation,
   onSetConversationPinned,
 }: SidebarProps): ReactNode {
   const isSettings = activeView === "cli-setup";
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [projectsShowingArchived, setProjectsShowingArchived] = useState<Set<string>>(new Set());
   const currentYear = new Date().getFullYear();
 
   useEffect(() => {
@@ -110,6 +113,16 @@ export function Sidebar({
       return changed ? next : current;
     });
   }, [activeProjectPath, projects]);
+
+  useEffect(() => {
+    setProjectsShowingArchived((current) => {
+      const validProjectPaths = new Set(projects.map((project) => project.path));
+      const next = new Set(
+        [...current].filter((projectPath) => validProjectPaths.has(projectPath)),
+      );
+      return next.size === current.size ? current : next;
+    });
+  }, [projects]);
 
   const appFooterLabel = useMemo(
     () => `\u00A9 ${currentYear} ea-code${appVersion ? `\u00B7v${appVersion}` : ""}`,
@@ -192,7 +205,11 @@ export function Sidebar({
         {projects.map((project) => {
           const isActive = project.path === activeProjectPath;
           const conversations = conversationIndex[project.path] ?? [];
-          const projectHasRunningConversation = hasRunningConversation(conversations);
+          const showingArchived = projectsShowingArchived.has(project.path);
+          const visibleConversations = showingArchived
+            ? conversations
+            : conversations.filter((conversation) => !conversation.archivedAt);
+          const projectHasRunningConversation = hasRunningConversation(visibleConversations);
           const projectExpanded = expandedProjects.has(project.path);
           return (
             <div key={project.path} className="mb-2">
@@ -203,6 +220,7 @@ export function Sidebar({
                 expanded={projectExpanded}
                 hasConversations={conversations.length > 0}
                 hasRunningConversation={projectHasRunningConversation}
+                showingArchived={showingArchived}
                 onProjectClick={() => {
                   if (isActive) {
                     setExpandedProjects((current) => {
@@ -231,6 +249,17 @@ export function Sidebar({
                 onCreateConversation={() => {
                   void onCreateConversation(project.path);
                 }}
+                onToggleShowArchived={() => {
+                  setProjectsShowingArchived((current) => {
+                    const next = new Set(current);
+                    if (next.has(project.path)) {
+                      next.delete(project.path);
+                    } else {
+                      next.add(project.path);
+                    }
+                    return next;
+                  });
+                }}
                 onRemoveProject={onRemoveProject
                   ? () => {
                       onRemoveProject(project.path);
@@ -250,7 +279,10 @@ export function Sidebar({
 
               {conversations.length > 0 && projectExpanded && (
                 <div className="mt-1 space-y-1">
-                  {conversations.map((conversation) => (
+                  {visibleConversations.length === 0 && (
+                    <p className="px-3 py-2 text-xs text-fg-faint">Archived conversations hidden</p>
+                  )}
+                  {visibleConversations.map((conversation) => (
                     <SidebarConversationRow
                       key={conversation.id}
                       conversation={conversation}
@@ -259,6 +291,7 @@ export function Sidebar({
                       onSelectConversation={onSelectConversation}
                       onRenameConversation={onRenameConversation ?? (() => undefined)}
                       onArchiveConversation={onArchiveConversation ?? (() => undefined)}
+                      onUnarchiveConversation={onUnarchiveConversation ?? (() => undefined)}
                       onRemoveConversation={onRemoveConversation ?? (() => undefined)}
                       onSetConversationPinned={onSetConversationPinned ?? (() => undefined)}
                     />

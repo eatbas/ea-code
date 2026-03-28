@@ -39,8 +39,9 @@ async fn wait_for_stoppable_conversation(
 #[tauri::command]
 pub async fn list_workspace_conversations(
     workspace_path: String,
+    include_archived: Option<bool>,
 ) -> Result<Vec<ConversationSummary>, String> {
-    persistence::list_conversations(&workspace_path)
+    persistence::list_conversations(&workspace_path, include_archived.unwrap_or(false))
 }
 
 #[tauri::command]
@@ -176,6 +177,14 @@ pub async fn archive_conversation(
     conversation_id: String,
 ) -> Result<ConversationSummary, String> {
     persistence::archive_conversation(&workspace_path, &conversation_id)
+}
+
+#[tauri::command]
+pub async fn unarchive_conversation(
+    workspace_path: String,
+    conversation_id: String,
+) -> Result<ConversationSummary, String> {
+    persistence::unarchive_conversation(&workspace_path, &conversation_id)
 }
 
 #[tauri::command]
