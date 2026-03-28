@@ -83,7 +83,6 @@ export function AgentsSettingsView({
               <span className="inline-flex h-6 items-center rounded-full border border-edge bg-elevated px-2.5 text-[11px] font-medium text-fg">
                 Simple Task
               </span>
-              <span className="text-xs text-fg-faint">Default pipeline</span>
             </div>
             <p className="mt-3 text-xs text-fg-muted">
               Choose the default provider and model for new conversations.
