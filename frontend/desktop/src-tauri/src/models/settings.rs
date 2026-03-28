@@ -7,6 +7,23 @@ use super::agents::{
     AgentBackend,
 };
 
+/// A single agent slot within a pipeline stage.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineAgent {
+    pub provider: String,
+    pub model: String,
+}
+
+/// Configuration for the multi-stage code pipeline.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodePipelineSettings {
+    pub planners: Vec<PipelineAgent>,
+    pub coder: PipelineAgent,
+    pub reviewers: Vec<PipelineAgent>,
+}
+
 /// Application settings persisted locally.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +60,9 @@ pub struct AppSettings {
     /// Python interpreter path override (empty = auto-detect).
     #[serde(default)]
     pub python_path: String,
+    /// Code pipeline configuration (None = not configured).
+    #[serde(default)]
+    pub code_pipeline: Option<CodePipelineSettings>,
 }
 
 fn default_theme() -> String {
@@ -67,6 +87,7 @@ impl Default for AppSettings {
             provider_models: HashMap::new(),
             hive_api_port: 0,
             python_path: String::new(),
+            code_pipeline: None,
         }
     }
 }

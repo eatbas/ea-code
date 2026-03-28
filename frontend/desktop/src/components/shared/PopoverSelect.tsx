@@ -64,7 +64,7 @@ export function PopoverSelect({
     : "top-full mt-2";
   const alignClasses = align === "right" ? "right-0" : "left-0";
   const resolvedTriggerClassName = triggerClassName
-    ?? "flex h-9 items-center gap-2 rounded-full border border-edge-strong bg-[#1a1a1c] px-3 text-xs font-medium text-fg shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition-all hover:border-[#5a5a61] hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55";
+    ?? "flex h-9 items-center gap-2 rounded-lg border border-edge-strong bg-[#1a1a1c] px-3 text-xs font-medium text-fg shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition-all hover:border-[#5a5a61] hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55";
   const resolvedMenuClassName = menuClassName
     ?? "w-max min-w-full rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur";
 

@@ -10,6 +10,7 @@ import {
 import { getEnabledModels } from "../../utils/modelSettings";
 import { parseAgentSelection, serialiseAgentSelection } from "../../utils/agentSettings";
 import { useToast } from "../shared/Toast";
+import { CodePipelineCard } from "./CodePipelineCard";
 
 interface AgentsSettingsViewProps {
   settings: AppSettings;
@@ -73,24 +74,27 @@ export function AgentsSettingsView({
           <div>
             <h1 className="text-xl font-bold text-fg">Agents</h1>
             <p className="mt-1 text-sm text-fg-muted">
-              Configure the default agent used for new conversations.
+              Configure agent pipelines for your conversations.
             </p>
           </div>
 
           {/* Simple Task — default agent */}
           <div className="rounded-lg border border-edge bg-panel p-5">
             <div className="flex items-center gap-2">
-              <span className="inline-flex h-6 items-center rounded-full border border-edge bg-elevated px-2.5 text-[11px] font-medium text-fg">
+              <span className="inline-flex items-center rounded-lg border border-edge bg-elevated px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-fg">
                 Simple Task
               </span>
             </div>
             <p className="mt-3 text-xs text-fg-muted">
-              Choose the default provider and model for new conversations.
-              You can override the selection per conversation in the composer.
+              Send prompts to a single agent and stream the response.
             </p>
 
             {availableProviders.length > 0 ? (
-              <div className="mt-4 flex items-center gap-3">
+              <div className="mt-5">
+                <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-fg">
+                  Default Agent
+                </p>
+                <div className="flex items-center gap-3">
                 <PopoverSelect
                   value={resolvedAgent?.provider ?? ""}
                   options={providerOptions}
@@ -125,6 +129,7 @@ export function AgentsSettingsView({
                     });
                   }}
                 />
+                </div>
               </div>
             ) : (
               <p className="mt-4 text-xs text-fg-faint">
@@ -133,6 +138,13 @@ export function AgentsSettingsView({
               </p>
             )}
           </div>
+
+          {/* Code Pipeline */}
+          <CodePipelineCard
+            settings={settings}
+            providers={availableProviders}
+            onSave={onSave}
+          />
         </div>
       </div>
     </div>

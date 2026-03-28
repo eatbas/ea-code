@@ -1,3 +1,19 @@
+/** A single agent slot within a pipeline stage. */
+export interface PipelineAgent {
+  provider: string;
+  model: string;
+}
+
+/** Configuration for the multi-stage code pipeline. */
+export interface CodePipelineSettings {
+  /** Agents that plan in parallel, each producing Plan-N.md. */
+  planners: PipelineAgent[];
+  /** Single agent that writes code (also used by the fixer via resume). */
+  coder: PipelineAgent;
+  /** Agents that review the code. */
+  reviewers: PipelineAgent[];
+}
+
 /** Application settings persisted locally. */
 export interface AppSettings {
   /** UI theme preference. */
@@ -25,6 +41,8 @@ export interface AppSettings {
   hiveApiPort: number;
   /** Python interpreter path override (empty = auto-detect). */
   pythonPath: string;
+  /** Code pipeline configuration (null = not configured). */
+  codePipeline: CodePipelineSettings | null;
 }
 
 /** Default settings values. */
@@ -44,4 +62,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   providerModels: {},
   hiveApiPort: 0,
   pythonPath: "",
+  codePipeline: null,
 };
