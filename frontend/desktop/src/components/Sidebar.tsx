@@ -249,7 +249,7 @@ export function Sidebar({
               />
 
               {conversations.length > 0 && projectExpanded && (
-                <div className="mt-1 space-y-1 pl-5">
+                <div className="mt-1 space-y-1">
                   {conversations.map((conversation) => (
                     <SidebarConversationRow
                       key={conversation.id}
