@@ -244,51 +244,51 @@ export function ConversationComposer({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-lg border border-edge bg-[#111112] px-1.5 py-1 shadow-[0_14px_28px_rgba(0,0,0,0.18)]">
-              <PopoverSelect
-                value={selectedProviderValue}
-                options={providerOptions}
-                placeholder="Brand"
-                disabled={locked || providerOptions.length === 0}
-                direction="up"
-                align="left"
-                open={openSelect === "provider"}
-                onOpenChange={(open) => setOpenSelect(open ? "provider" : null)}
-                triggerClassName="flex h-7 min-w-[6.75rem] items-center gap-2 rounded-lg border border-edge-strong bg-[#1a1a1c] px-2.5 text-[11px] font-semibold text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#5a5a61] hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55"
-                menuClassName="min-w-[11rem] rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
-                onChange={(nextValue) => {
-                  const nextProvider = availableProviders.find((provider) => provider.name === nextValue);
-                  if (!nextProvider) {
-                    return;
-                  }
-                  onAgentChange({
-                    provider: nextProvider.name,
-                    model: nextProvider.models[0] ?? "",
-                  });
-                }}
-              />
-              <span className="px-0.5 text-[#66666d]">·</span>
-              <PopoverSelect
-                value={selectedModelValue}
-                options={modelOptions}
-                placeholder="Model"
-                disabled={locked || modelOptions.length === 0}
-                direction="up"
-                align="right"
-                open={openSelect === "model"}
-                onOpenChange={(open) => setOpenSelect(open ? "model" : null)}
-                triggerClassName="flex h-7 max-w-44 min-w-[7.25rem] items-center gap-2 rounded-lg border border-[#295638] bg-[#0f1d15] px-2.5 text-[11px] font-semibold text-[#9be7b4] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#37744a] hover:bg-[#13241a] disabled:cursor-not-allowed disabled:opacity-55"
-                menuClassName="min-w-[12rem] rounded-2xl border border-[#295638] bg-[#101a14] p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
-                onChange={(nextValue) => {
-                  if (!agent) {
-                    return;
-                  }
-                  onAgentChange({
-                    provider: agent.provider,
-                    model: nextValue,
-                  });
-                }}
-              />
+            <div className={`flex items-center gap-1.5 rounded-lg border border-edge bg-[#111112] px-1.5 py-1 shadow-[0_14px_28px_rgba(0,0,0,0.18)] ${pipelineMode !== "simple" ? "invisible" : ""}`}>
+                <PopoverSelect
+                  value={selectedProviderValue}
+                  options={providerOptions}
+                  placeholder="Brand"
+                  disabled={locked || providerOptions.length === 0}
+                  direction="up"
+                  align="left"
+                  open={openSelect === "provider"}
+                  onOpenChange={(open) => setOpenSelect(open ? "provider" : null)}
+                  triggerClassName="flex h-7 min-w-[6.75rem] items-center gap-2 rounded-lg border border-edge-strong bg-[#1a1a1c] px-2.5 text-[11px] font-semibold text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#5a5a61] hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55"
+                  menuClassName="min-w-[11rem] rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
+                  onChange={(nextValue) => {
+                    const nextProvider = availableProviders.find((provider) => provider.name === nextValue);
+                    if (!nextProvider) {
+                      return;
+                    }
+                    onAgentChange({
+                      provider: nextProvider.name,
+                      model: nextProvider.models[0] ?? "",
+                    });
+                  }}
+                />
+                <span className="px-0.5 text-[#66666d]">·</span>
+                <PopoverSelect
+                  value={selectedModelValue}
+                  options={modelOptions}
+                  placeholder="Model"
+                  disabled={locked || modelOptions.length === 0}
+                  direction="up"
+                  align="right"
+                  open={openSelect === "model"}
+                  onOpenChange={(open) => setOpenSelect(open ? "model" : null)}
+                  triggerClassName="flex h-7 max-w-44 min-w-[7.25rem] items-center gap-2 rounded-lg border border-[#295638] bg-[#0f1d15] px-2.5 text-[11px] font-semibold text-[#9be7b4] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-[#37744a] hover:bg-[#13241a] disabled:cursor-not-allowed disabled:opacity-55"
+                  menuClassName="min-w-[12rem] rounded-2xl border border-[#295638] bg-[#101a14] p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
+                  onChange={(nextValue) => {
+                    if (!agent) {
+                      return;
+                    }
+                    onAgentChange({
+                      provider: agent.provider,
+                      model: nextValue,
+                    });
+                  }}
+                />
             </div>
 
             <button
