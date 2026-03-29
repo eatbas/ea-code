@@ -64,6 +64,7 @@ fn emit_stage_status(
     stage_name: &str,
     status: ConversationStatus,
     agent_label: &str,
+    text: Option<String>,
 ) -> Result<(), String> {
     app.emit(
         EVENT_PIPELINE_STAGE_STATUS,
@@ -73,6 +74,7 @@ fn emit_stage_status(
             stage_name: stage_name.to_string(),
             status,
             agent_label: agent_label.to_string(),
+            text,
         },
     )
     .map_err(|e| format!("Failed to emit pipeline stage status: {e}"))
@@ -111,6 +113,28 @@ fn build_planner_prompt(planner_number: usize, plan_dir: &str, user_prompt: &str
     )
 }
 
+fn build_plan_merge_prompt(planner_count: usize, plan_dir: &str, merged_dir: &str) -> String {
+    let mut file_list = String::new();
+    for n in 1..=planner_count {
+        file_list.push_str(&format!("- {plan_dir}/Plan-{n}.md\n"));
+    }
+    format!(
+        "You are the Plan Merge agent. The planning phase is complete.\n\n\
+         The following plan files were created by individual planners:\n\
+         {files}\n\
+         These are the plans you can find under the plan folder. \
+         Read them all and create a merged plan that combines the best approaches from each.\n\n\
+         IMPORTANT RULES:\n\
+         - Create ONLY a merged plan. Do NOT write any code.\n\
+         - Save the merged plan as a markdown file to: {merged}/plan_merged.md\n\
+         - Structure the merged plan with clear phases, numbered steps, and file paths where applicable.\n\
+         - Resolve any conflicts or overlaps between the individual plans.\n\
+         - Focus on architecture, data flow, and implementation order.",
+        files = file_list.trim_end(),
+        merged = merged_dir,
+    )
+}
+
 fn agent_label(agent: &PipelineAgent) -> String {
     format!("{} / {}", agent.provider, agent.model)
 }
@@ -140,6 +164,7 @@ async fn run_single_planner(
         &stage_name,
         ConversationStatus::Running,
         &label,
+        None,
     ) {
         let record = PipelineStageRecord {
             stage_index,
@@ -180,6 +205,7 @@ async fn run_single_planner(
             &stage_name,
             ConversationStatus::Failed,
             &label,
+            None,
         );
         (
             PipelineStageRecord {
@@ -313,6 +339,14 @@ async fn run_single_planner(
         }
     };
 
+    // When completed, read the plan file content and send it with the
+    // status event so the frontend replaces the SSE chatter immediately.
+    let file_text = if plan_created {
+        std::fs::read_to_string(&plan_file).ok()
+    } else {
+        None
+    };
+
     let _ = emit_stage_status(
         &app,
         &conversation_id,
@@ -320,6 +354,7 @@ async fn run_single_planner(
         &stage_name,
         final_status.clone(),
         &label,
+        file_text.clone(),
     );
 
     let captured_session_ref = session_ref.lock().ok().and_then(|g| g.clone());
@@ -333,7 +368,8 @@ async fn run_single_planner(
         stage_name: stage_name.clone(),
         agent_label: label.clone(),
         status: final_status.clone(),
-        text: accumulated_text,
+        // Prefer the plan file content over SSE output for persistence.
+        text: file_text.unwrap_or(accumulated_text),
         started_at: Some(started_at),
         finished_at: Some(now_rfc3339()),
         job_id: captured_job,
@@ -354,6 +390,266 @@ async fn run_single_planner(
         Err((
             record,
             format!("Planner {planner_number} did not produce a plan"),
+        ))
+    } else {
+        Ok(record)
+    }
+}
+
+/// Run the plan-merge stage. Resumes the first planner's hive-api session
+/// and instructs it to read all individual plans and produce a merged plan.
+pub async fn run_plan_merge(
+    app: AppHandle,
+    conversation_id: String,
+    workspace_path: String,
+    abort: Arc<AtomicBool>,
+    job_id_slot: Arc<std::sync::Mutex<Option<String>>>,
+    output_buffer: Arc<std::sync::Mutex<String>>,
+    planner_count: usize,
+    provider_session_ref: String,
+    agent: PipelineAgent,
+) -> Result<PipelineStageRecord, (PipelineStageRecord, String)> {
+    let stage_index = planner_count;
+    let stage_name = "Plan Merge".to_string();
+    let label = agent_label(&agent);
+    let started_at = now_rfc3339();
+
+    let conv_dir = format!("{workspace_path}/.ea-code/conversations/{conversation_id}");
+    let plan_dir = format!("{conv_dir}/plan");
+    let merged_dir = format!("{conv_dir}/plan_merged");
+
+    if let Err(e) = std::fs::create_dir_all(&merged_dir) {
+        let record = PipelineStageRecord {
+            stage_index,
+            stage_name,
+            agent_label: label,
+            status: ConversationStatus::Failed,
+            text: String::new(),
+            started_at: Some(started_at),
+            finished_at: Some(now_rfc3339()),
+            job_id: None,
+            provider_session_ref: None,
+        };
+        return Err((record, format!("Failed to create plan_merged directory: {e}")));
+    }
+
+    if let Err(e) = emit_stage_status(
+        &app,
+        &conversation_id,
+        stage_index,
+        &stage_name,
+        ConversationStatus::Running,
+        &label,
+        None,
+    ) {
+        let record = PipelineStageRecord {
+            stage_index,
+            stage_name,
+            agent_label: label,
+            status: ConversationStatus::Failed,
+            text: String::new(),
+            started_at: Some(started_at),
+            finished_at: Some(now_rfc3339()),
+            job_id: None,
+            provider_session_ref: None,
+        };
+        return Err((record, e));
+    }
+
+    let prompt = build_plan_merge_prompt(planner_count, &plan_dir, &merged_dir);
+    let request = HiveChatRequest {
+        provider: &agent.provider,
+        model: &agent.model,
+        workspace_path: &workspace_path,
+        mode: "resume",
+        prompt: &prompt,
+        provider_session_ref: Some(&provider_session_ref),
+        stream: true,
+        provider_options: HashMap::new(),
+    };
+
+    let make_failed_record = |err_msg: &str| -> (PipelineStageRecord, String) {
+        let _ = emit_stage_status(
+            &app,
+            &conversation_id,
+            stage_index,
+            &stage_name,
+            ConversationStatus::Failed,
+            &label,
+            None,
+        );
+        (
+            PipelineStageRecord {
+                stage_index,
+                stage_name: stage_name.clone(),
+                agent_label: label.clone(),
+                status: ConversationStatus::Failed,
+                text: String::new(),
+                started_at: Some(started_at.clone()),
+                finished_at: Some(now_rfc3339()),
+                job_id: None,
+                provider_session_ref: None,
+            },
+            err_msg.to_string(),
+        )
+    };
+
+    let url = format!("{}/v1/chat", hive_api_base_url());
+    let response = match shared_client().post(&url).json(&request).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            return Err(make_failed_record(&format!(
+                "Plan Merge failed to contact hive-api: {e}"
+            )));
+        }
+    };
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(make_failed_record(&format!(
+            "Plan Merge: hive-api HTTP {status}: {body}"
+        )));
+    }
+
+    // Watch for the merged plan file.
+    let merged_file = format!("{merged_dir}/plan_merged.md");
+    let file_ready = Arc::new(AtomicBool::new(false));
+    let file_ready_writer = file_ready.clone();
+    let merged_file_clone = merged_file.clone();
+    let merge_stop = Arc::new(AtomicBool::new(false));
+    let merge_stop_writer = merge_stop.clone();
+    let global_abort_for_watcher = abort.clone();
+    tokio::spawn(async move {
+        loop {
+            sleep(Duration::from_secs(2)).await;
+            if global_abort_for_watcher.load(Ordering::Acquire) {
+                return;
+            }
+            if Path::new(&merged_file_clone).exists() {
+                sleep(Duration::from_secs(3)).await;
+                file_ready_writer.store(true, Ordering::Release);
+                merge_stop_writer.store(true, Ordering::Release);
+                return;
+            }
+        }
+    });
+
+    // Propagate global abort to the merge stop signal.
+    let merge_stop_monitor = merge_stop.clone();
+    let abort_monitor = abort.clone();
+    tokio::spawn(async move {
+        while !merge_stop_monitor.load(Ordering::Acquire) {
+            if abort_monitor.load(Ordering::Acquire) {
+                merge_stop_monitor.store(true, Ordering::Release);
+                return;
+            }
+            sleep(Duration::from_millis(200)).await;
+        }
+    });
+
+    let app_ref = app.clone();
+    let conv_id = conversation_id.clone();
+    let job_id_writer = job_id_slot.clone();
+    let buf_writer = output_buffer.clone();
+    let abort_for_run_started = abort.clone();
+    let merge_stop_for_run_started = merge_stop.clone();
+    let session_ref: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(None));
+    let session_ref_writer = session_ref.clone();
+    let result = consume_hive_sse(response, &merge_stop, |event| match event {
+        HiveSseEvent::OutputDelta { text } => {
+            if let Ok(mut buf) = buf_writer.lock() {
+                if !buf.is_empty() {
+                    buf.push('\n');
+                }
+                buf.push_str(text);
+            }
+            emit_stage_delta(&app_ref, &conv_id, stage_index, text)
+        }
+        HiveSseEvent::RunStarted { job_id } => {
+            if let Ok(mut guard) = job_id_writer.lock() {
+                *guard = Some(job_id.clone());
+            }
+            if abort_for_run_started.load(Ordering::Acquire) {
+                merge_stop_for_run_started.store(true, Ordering::Release);
+                request_hive_stop(job_id.clone());
+            }
+            Ok(())
+        }
+        HiveSseEvent::ProviderSession {
+            provider_session_ref,
+        } => {
+            if let Ok(mut guard) = session_ref_writer.lock() {
+                *guard = Some(provider_session_ref.clone());
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    })
+    .await;
+
+    let plan_created =
+        file_ready.load(Ordering::Acquire) || Path::new(&merged_file).exists();
+
+    let final_status = if abort.load(Ordering::Acquire) {
+        ConversationStatus::Stopped
+    } else if plan_created {
+        ConversationStatus::Completed
+    } else {
+        match &result {
+            Ok(r) => r.status.clone(),
+            Err(_) => ConversationStatus::Failed,
+        }
+    };
+
+    // When completed, read the merged plan file and send it with the
+    // status event so the frontend replaces the SSE chatter immediately.
+    let file_text = if plan_created {
+        std::fs::read_to_string(&merged_file).ok()
+    } else {
+        None
+    };
+
+    let _ = emit_stage_status(
+        &app,
+        &conversation_id,
+        stage_index,
+        &stage_name,
+        final_status.clone(),
+        &label,
+        file_text.clone(),
+    );
+
+    let captured_session_ref = session_ref.lock().ok().and_then(|g| g.clone());
+    let captured_job = job_id_slot.lock().ok().and_then(|g| g.clone());
+    let accumulated_text = output_buffer
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default();
+    let record = PipelineStageRecord {
+        stage_index,
+        stage_name: stage_name.clone(),
+        agent_label: label.clone(),
+        status: final_status.clone(),
+        text: file_text.unwrap_or(accumulated_text),
+        started_at: Some(started_at),
+        finished_at: Some(now_rfc3339()),
+        job_id: captured_job,
+        provider_session_ref: captured_session_ref,
+    };
+
+    if let Err(e) = super::persistence::update_pipeline_stage(
+        &workspace_path,
+        &conversation_id,
+        &record,
+    ) {
+        eprintln!("[pipeline] Failed to save stage state for {stage_name}: {e}");
+    }
+
+    if final_status == ConversationStatus::Failed {
+        Err((
+            record,
+            "Plan Merge did not produce a merged plan".to_string(),
         ))
     } else {
         Ok(record)
@@ -450,6 +746,17 @@ pub async fn run_pipeline_planners(
 
         if already_completed {
             if let Some(record) = previous_stages.as_ref().and_then(|s| s.get(i)) {
+                // Re-emit status with plan file text so the frontend sees
+                // completed stages even after a reset (e.g. Resume click).
+                let _ = emit_stage_status(
+                    &app,
+                    &conversation_id,
+                    i,
+                    &record.stage_name,
+                    record.status.clone(),
+                    &record.agent_label,
+                    if record.text.is_empty() { None } else { Some(record.text.clone()) },
+                );
                 completed_records.push(record.clone());
             }
             continue;

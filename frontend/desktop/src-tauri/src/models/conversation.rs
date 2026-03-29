@@ -81,6 +81,10 @@ pub struct PipelineStageStatusEvent {
     pub stage_name: String,
     pub status: ConversationStatus,
     pub agent_label: String,
+    /// When a stage completes, this carries the authoritative plan file
+    /// content so the frontend can replace the accumulated SSE output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

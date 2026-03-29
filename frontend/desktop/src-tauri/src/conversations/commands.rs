@@ -7,11 +7,12 @@ use tauri::Emitter;
 
 use crate::models::{
     AgentSelection, ConversationDetail, ConversationStatus, ConversationStatusEvent,
-    ConversationSummary, PipelineState,
+    ConversationSummary, PipelineStageRecord, PipelineStageStatusEvent, PipelineState,
 };
+use crate::storage::now_rfc3339;
 
 use super::chat;
-use super::events::EVENT_CONVERSATION_STATUS;
+use super::events::{EVENT_CONVERSATION_STATUS, EVENT_PIPELINE_STAGE_STATUS};
 use super::persistence;
 use super::pipeline;
 
@@ -257,10 +258,14 @@ pub async fn start_pipeline(
 
     let planners = pipeline_config.planners;
     let planner_count = planners.len();
+    // Allocate planner_count + 1 slots: one extra for the Plan Merge stage.
     let job_id_slots =
-        persistence::register_pipeline_job_slots(&workspace_path, &conversation_id, planner_count)?;
+        persistence::register_pipeline_job_slots(&workspace_path, &conversation_id, planner_count + 1)?;
     let stage_buffers =
-        persistence::register_pipeline_stage_buffers(&workspace_path, &conversation_id, planner_count)?;
+        persistence::register_pipeline_stage_buffers(&workspace_path, &conversation_id, planner_count + 1)?;
+
+    // Keep the first planner's config for the merge phase.
+    let merge_agent = planners[0].clone();
 
     let app_handle = app.clone();
     let ws = workspace_path.clone();
@@ -289,29 +294,92 @@ pub async fn start_pipeline(
             Err(e) => eprintln!("[pipeline] Failed to set running status: {e}"),
         }
 
-        let result = pipeline::run_pipeline_planners(
+        let planner_result = pipeline::run_pipeline_planners(
             app_handle.clone(),
             conv_id.clone(),
             ws.clone(),
             planners,
             user_prompt,
             abort.clone(),
-            job_id_slots,
+            job_id_slots[..planner_count].to_vec(),
             None,
-            stage_buffers,
+            stage_buffers[..planner_count].to_vec(),
         )
         .await;
 
-        // Check abort flag to avoid overwriting a Stopped status that
-        // stop_pipeline already set.
+        // Chain the plan-merge phase if planners succeeded.
+        let merge_result = if planner_result.is_ok()
+            && !abort.load(std::sync::atomic::Ordering::Acquire)
+        {
+            // Get the first planner's provider_session_ref from saved state.
+            let loaded = persistence::load_pipeline_state(&ws, &conv_id)
+                .ok()
+                .flatten();
+            let session_ref = loaded
+                .as_ref()
+                .and_then(|s| s.stages.first().and_then(|st| st.provider_session_ref.clone()));
+
+            if let Some(ref_val) = session_ref {
+                // Add the Plan Merge stage record to pipeline.json so that
+                // update_pipeline_stage can find it at the correct index.
+                if let Some(mut state) = loaded {
+                    let merge_label = format!(
+                        "{} / {}",
+                        merge_agent.provider, merge_agent.model
+                    );
+                    state.stages.push(PipelineStageRecord {
+                        stage_index: planner_count,
+                        stage_name: "Plan Merge".to_string(),
+                        agent_label: merge_label,
+                        status: ConversationStatus::Running,
+                        text: String::new(),
+                        started_at: Some(now_rfc3339()),
+                        finished_at: None,
+                        job_id: None,
+                        provider_session_ref: None,
+                    });
+                    let _ = persistence::save_pipeline_state(&ws, &conv_id, &state);
+                }
+
+                let merge_slot = job_id_slots.get(planner_count).cloned().unwrap_or_default();
+                let merge_buf = stage_buffers.get(planner_count).cloned().unwrap_or_default();
+                Some(
+                    pipeline::run_plan_merge(
+                        app_handle.clone(),
+                        conv_id.clone(),
+                        ws.clone(),
+                        abort.clone(),
+                        merge_slot,
+                        merge_buf,
+                        planner_count,
+                        ref_val,
+                        merge_agent,
+                    )
+                    .await,
+                )
+            } else {
+                eprintln!("[pipeline] No provider_session_ref from first planner; skipping merge");
+                None
+            }
+        } else {
+            None
+        };
+
         let final_status = if abort.load(std::sync::atomic::Ordering::Acquire) {
             ConversationStatus::Stopped
-        } else if result.is_ok() {
-            ConversationStatus::Completed
-        } else {
+        } else if planner_result.is_err() {
             ConversationStatus::Failed
+        } else {
+            match &merge_result {
+                Some(Ok(_)) => ConversationStatus::Completed,
+                Some(Err(_)) => ConversationStatus::Failed,
+                None if planner_result.is_ok() => ConversationStatus::Completed,
+                None => ConversationStatus::Failed,
+            }
         };
-        let error = result.err();
+        let error = planner_result.err().or_else(|| {
+            merge_result.and_then(|r| r.err().map(|(_, e)| e))
+        });
 
         match persistence::set_status(&ws, &conv_id, final_status, error) {
             Ok(summary) => {
@@ -397,10 +465,22 @@ pub async fn resume_pipeline(
     let previous_stages = state.stages;
     let planners = pipeline_config.planners;
     let planner_count = planners.len();
+    let merge_agent = planners[0].clone();
+
+    // Allocate planner_count + 1 slots: one extra for the Plan Merge stage.
     let job_id_slots =
-        persistence::register_pipeline_job_slots(&workspace_path, &conversation_id, planner_count)?;
+        persistence::register_pipeline_job_slots(&workspace_path, &conversation_id, planner_count + 1)?;
     let stage_buffers =
-        persistence::register_pipeline_stage_buffers(&workspace_path, &conversation_id, planner_count)?;
+        persistence::register_pipeline_stage_buffers(&workspace_path, &conversation_id, planner_count + 1)?;
+
+    // Determine whether all planner stages are already completed and only the
+    // merge stage needs (re-)running.
+    let all_planners_done = previous_stages.iter()
+        .take(planner_count)
+        .all(|s| s.status == ConversationStatus::Completed);
+    let merge_needs_run = previous_stages.get(planner_count)
+        .map(|s| s.status != ConversationStatus::Completed)
+        .unwrap_or(true); // No merge stage yet means it needs to run.
 
     let app_handle = app.clone();
     let ws = workspace_path.clone();
@@ -428,27 +508,125 @@ pub async fn resume_pipeline(
             Err(e) => eprintln!("[pipeline] Failed to set running status: {e}"),
         }
 
-        let result = pipeline::run_pipeline_planners(
-            app_handle.clone(),
-            conv_id.clone(),
-            ws.clone(),
-            planners,
-            user_prompt,
-            abort.clone(),
-            job_id_slots,
-            Some(previous_stages),
-            stage_buffers,
-        )
-        .await;
+        // Run planners if any still need to complete.
+        let planner_result = if all_planners_done {
+            // Planners are already done — re-emit their status and text so
+            // the frontend (which was reset) sees them as completed.
+            if let Ok(Some(saved)) = persistence::load_pipeline_state(&ws, &conv_id) {
+                for stage in saved.stages.iter().take(planner_count) {
+                    let _ = app_handle.emit(
+                        EVENT_PIPELINE_STAGE_STATUS,
+                        PipelineStageStatusEvent {
+                            conversation_id: conv_id.clone(),
+                            stage_index: stage.stage_index,
+                            stage_name: stage.stage_name.clone(),
+                            status: stage.status.clone(),
+                            agent_label: stage.agent_label.clone(),
+                            text: if stage.text.is_empty() { None } else { Some(stage.text.clone()) },
+                        },
+                    );
+                }
+            }
+            Ok(())
+        } else {
+            pipeline::run_pipeline_planners(
+                app_handle.clone(),
+                conv_id.clone(),
+                ws.clone(),
+                planners,
+                user_prompt,
+                abort.clone(),
+                job_id_slots[..planner_count].to_vec(),
+                Some(previous_stages),
+                stage_buffers[..planner_count].to_vec(),
+            )
+            .await
+        };
+
+        // Chain the plan-merge phase if planners succeeded and merge needs running.
+        let merge_result = if planner_result.is_ok()
+            && merge_needs_run
+            && !abort.load(std::sync::atomic::Ordering::Acquire)
+        {
+            let loaded = persistence::load_pipeline_state(&ws, &conv_id)
+                .ok()
+                .flatten();
+            let session_ref = loaded
+                .as_ref()
+                .and_then(|s| s.stages.first().and_then(|st| st.provider_session_ref.clone()));
+
+            if let Some(ref_val) = session_ref {
+                // Ensure the Plan Merge stage record exists in pipeline.json
+                // so that update_pipeline_stage can update it at the correct index.
+                if let Some(mut state) = loaded {
+                    // Only add the record if it doesn't already exist (e.g. retrying
+                    // a failed merge should not duplicate it).
+                    if !state.stages.iter().any(|s| s.stage_name == "Plan Merge") {
+                        let merge_label = format!(
+                            "{} / {}",
+                            merge_agent.provider, merge_agent.model
+                        );
+                        state.stages.push(PipelineStageRecord {
+                            stage_index: planner_count,
+                            stage_name: "Plan Merge".to_string(),
+                            agent_label: merge_label,
+                            status: ConversationStatus::Running,
+                            text: String::new(),
+                            started_at: Some(now_rfc3339()),
+                            finished_at: None,
+                            job_id: None,
+                            provider_session_ref: None,
+                        });
+                    } else {
+                        // Mark the existing merge stage as running again.
+                        if let Some(merge) = state.stages.iter_mut().find(|s| s.stage_name == "Plan Merge") {
+                            merge.status = ConversationStatus::Running;
+                            merge.started_at = Some(now_rfc3339());
+                            merge.finished_at = None;
+                        }
+                    }
+                    let _ = persistence::save_pipeline_state(&ws, &conv_id, &state);
+                }
+
+                let merge_slot = job_id_slots.get(planner_count).cloned().unwrap_or_default();
+                let merge_buf = stage_buffers.get(planner_count).cloned().unwrap_or_default();
+                Some(
+                    pipeline::run_plan_merge(
+                        app_handle.clone(),
+                        conv_id.clone(),
+                        ws.clone(),
+                        abort.clone(),
+                        merge_slot,
+                        merge_buf,
+                        planner_count,
+                        ref_val,
+                        merge_agent,
+                    )
+                    .await,
+                )
+            } else {
+                eprintln!("[pipeline] No provider_session_ref from first planner; skipping merge");
+                None
+            }
+        } else {
+            None
+        };
 
         let final_status = if abort.load(std::sync::atomic::Ordering::Acquire) {
             ConversationStatus::Stopped
-        } else if result.is_ok() {
-            ConversationStatus::Completed
-        } else {
+        } else if planner_result.is_err() {
             ConversationStatus::Failed
+        } else {
+            match &merge_result {
+                Some(Ok(_)) => ConversationStatus::Completed,
+                Some(Err(_)) => ConversationStatus::Failed,
+                None if planner_result.is_ok() => ConversationStatus::Completed,
+                None => ConversationStatus::Failed,
+            }
         };
-        let error = result.err();
+        let error = planner_result.err().or_else(|| {
+            merge_result.and_then(|r| r.err().map(|(_, e)| e))
+        });
 
         match persistence::set_status(&ws, &conv_id, final_status, error) {
             Ok(summary) => {

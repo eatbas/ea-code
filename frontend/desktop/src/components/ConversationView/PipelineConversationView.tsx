@@ -32,22 +32,28 @@ export function PipelineConversationView({
   onStop,
 }: PipelineConversationViewProps): ReactNode {
   const [plannersOpen, setPlannersOpen] = useState(true);
+  const [mergeOpen, setMergeOpen] = useState(true);
 
-  // Determine how many planners we have (parallel stages).
-  // For now all stages from the backend are planners.
-  const plannerStages = stages;
+  // Separate planner stages from the merge stage.
+  const plannerStages = stages.filter((s) => s.stageName !== "Plan Merge");
+  const mergeStage = stages.find((s) => s.stageName === "Plan Merge") ?? null;
+
   const hasStages = plannerStages.length > 0;
-  const hasFailed = hasStages && plannerStages.some((s) => s.status === "failed");
-  const hasStopped = hasStages && plannerStages.some((s) => s.status === "stopped");
-  const allDone = hasStages && plannerStages.every((s) => (
+  const allPlannersDone = hasStages && plannerStages.every((s) => (
+    s.status === "completed" || s.status === "failed" || s.status === "stopped"
+  ));
+  const hasFailed = stages.some((s) => s.status === "failed");
+  const hasStopped = stages.some((s) => s.status === "stopped");
+  const allDone = stages.length > 0 && stages.every((s) => (
     s.status === "completed" || s.status === "failed" || s.status === "stopped"
   ));
   const canResume = allDone && !running;
+  const mergeCompleted = mergeStage?.status === "completed";
   const statusBarLabel = currentStageName || (running
     ? "Starting..."
     : hasStopped
       ? "Stopped"
-      : hasStages
+      : stages.length > 0
         ? "Finished"
         : "Starting...");
 
@@ -89,16 +95,38 @@ export function PipelineConversationView({
             </div>
           )}
 
-          {/* Placeholder for future stages */}
-          {hasStages && !running && (
-            <>
+          {/* Plan Merge stage */}
+          {mergeStage ? (
+            <PipelineStageSection
+              label="Plan Merge"
+              agentLabel={mergeStage.agentLabel}
+              status={mergeStage.status}
+              open={mergeOpen}
+              onOpenChange={setMergeOpen}
+              startedAt={mergeStage.startedAt}
+              finishedAt={mergeStage.finishedAt}
+            >
+              <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap">
+                {mergeStage.text || (mergeStage.status === "failed"
+                  ? "This stage did not produce output."
+                  : mergeStage.status === "completed"
+                  ? "Merged plan file was not found."
+                  : "Merging plans...")}
+              </p>
+            </PipelineStageSection>
+          ) : (
+            allPlannersDone && !running && (
               <PipelineStageSection label="Plan Merge" status="pending">
                 <p className="text-xs text-fg-faint">Waiting for planners to finish...</p>
               </PipelineStageSection>
-              <PipelineStageSection label="Coder" status="pending">
-                <p className="text-xs text-fg-faint">Waiting for merged plan...</p>
-              </PipelineStageSection>
-            </>
+            )
+          )}
+
+          {/* Coder placeholder — only after merge completes */}
+          {mergeCompleted && (
+            <PipelineStageSection label="Coder" status="pending">
+              <p className="text-xs text-fg-faint">Waiting for merged plan...</p>
+            </PipelineStageSection>
           )}
 
           {!hasStages && (

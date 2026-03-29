@@ -51,6 +51,8 @@ export interface PipelineStageStatusEvent {
   stageName: string;
   status: ConversationStatus;
   agentLabel: string;
+  /** When a stage completes, carries the plan file content to replace SSE output. */
+  text?: string;
 }
 
 export interface PipelineStageOutputDelta {

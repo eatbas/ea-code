@@ -1025,18 +1025,48 @@ pub fn update_pipeline_stage(
 /// exists — this handles the window between a planner finishing and the next
 /// `save_pipeline_state` call.
 fn hydrate_stage_text(workspace_path: &str, conversation_id: &str, state: &mut PipelineState) {
-    let plan_dir = conversation_dir(workspace_path, conversation_id).join("plan");
+    let conv_dir = conversation_dir(workspace_path, conversation_id);
+    let plan_dir = conv_dir.join("plan");
+    let merged_file = conv_dir.join("plan_merged").join("plan_merged.md");
+
     for stage in &mut state.stages {
+        // Hydrate planner stages from plan/Plan-{n}.md.
         let plan_file = plan_dir.join(format!("Plan-{}.md", stage.stage_index + 1));
         if let Ok(contents) = std::fs::read_to_string(&plan_file) {
-            // The plan file is the authoritative deliverable — always prefer
-            // it over SSE output text that may be stored in the record.
             stage.text = contents;
-            // A plan file on disk proves the planner finished its work, even
-            // if pipeline.json still says "Running" (stale state).
             if stage.status == ConversationStatus::Running {
                 stage.status = ConversationStatus::Completed;
             }
+        }
+
+        // Hydrate the Plan Merge stage from plan_merged/plan_merged.md.
+        if stage.stage_name == "Plan Merge" {
+            if let Ok(contents) = std::fs::read_to_string(&merged_file) {
+                stage.text = contents;
+                if stage.status == ConversationStatus::Running {
+                    stage.status = ConversationStatus::Completed;
+                }
+            }
+        }
+    }
+
+    // If the merged plan file exists on disk but no Plan Merge stage record
+    // is present (e.g. pipeline.json was saved before the merge stage was
+    // added), insert the stage so the frontend can display it.
+    let has_merge_stage = state.stages.iter().any(|s| s.stage_name == "Plan Merge");
+    if !has_merge_stage {
+        if let Ok(contents) = std::fs::read_to_string(&merged_file) {
+            state.stages.push(PipelineStageRecord {
+                stage_index: state.stages.len(),
+                stage_name: "Plan Merge".to_string(),
+                agent_label: String::new(),
+                status: ConversationStatus::Completed,
+                text: contents,
+                started_at: None,
+                finished_at: None,
+                job_id: None,
+                provider_session_ref: None,
+            });
         }
     }
 }
@@ -1096,6 +1126,23 @@ fn reconstruct_pipeline_from_artifacts(
     }
 
     stages.sort_by_key(|s| s.stage_index);
+
+    // Check for a merged plan file and add a Plan Merge stage if found.
+    let merged_file = conv_dir.join("plan_merged").join("plan_merged.md");
+    if merged_file.exists() {
+        let text = std::fs::read_to_string(&merged_file).unwrap_or_default();
+        stages.push(PipelineStageRecord {
+            stage_index: stages.len(),
+            stage_name: "Plan Merge".to_string(),
+            agent_label: String::new(),
+            status: ConversationStatus::Completed,
+            text,
+            started_at: None,
+            finished_at: None,
+            job_id: None,
+            provider_session_ref: None,
+        });
+    }
 
     let state = PipelineState {
         user_prompt,

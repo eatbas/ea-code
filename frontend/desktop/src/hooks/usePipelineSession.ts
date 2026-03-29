@@ -95,7 +95,9 @@ export function usePipelineSession(
         stageName: event.stageName,
         agentLabel: event.agentLabel,
         status: mappedStatus,
-        text: existing.text,
+        // When the backend sends plan file content with a completed status,
+        // replace the accumulated SSE output so the user sees the actual plan.
+        text: event.text ?? existing.text,
         startedAt: existing.startedAt ?? (mappedStatus === "running" ? now : undefined),
         finishedAt: mappedStatus === "completed" || mappedStatus === "failed" ? now : undefined,
       };
