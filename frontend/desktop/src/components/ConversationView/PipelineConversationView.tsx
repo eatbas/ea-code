@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { RotateCcw, Square } from "lucide-react";
 import type { PipelineStageState } from "../../hooks/usePipelineSession";
 import { PipelineStageSection } from "./PipelineStageSection";
 import { PipelineStatusBar } from "./PipelineStatusBar";
@@ -135,40 +134,19 @@ export function PipelineConversationView({
             </div>
           )}
 
-          {/* Resume / Stop controls */}
-          {canResume && onResume && (
-            <div className="flex items-center justify-center gap-3 py-2">
-              <button
-                type="button"
-                onClick={onResume}
-                className="inline-flex items-center gap-2 rounded-lg border border-edge bg-elevated px-4 py-2 text-xs font-semibold text-fg transition-colors hover:bg-active"
-              >
-                <RotateCcw size={12} />
-                {hasFailed ? "Retry Pipeline" : "Resume Pipeline"}
-              </button>
-            </div>
-          )}
-          {running && onStop && (
-            <div className="flex items-center justify-center gap-3 py-2">
-              <button
-                type="button"
-                onClick={onStop}
-                className="inline-flex items-center gap-2 rounded-lg border border-error-border bg-error-bg px-4 py-2 text-xs font-semibold text-error-text transition-colors hover:opacity-80"
-              >
-                <Square size={10} fill="currentColor" />
-                Stop Pipeline
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Status bar */}
+      {/* Status bar — always visible at the bottom with Stop/Resume */}
       {pipelineStartedAt && (
         <PipelineStatusBar
           stageName={statusBarLabel}
           running={running}
           startedAt={pipelineStartedAt}
+          canResume={canResume}
+          hasFailed={hasFailed}
+          onResume={onResume}
+          onStop={onStop}
         />
       )}
     </>

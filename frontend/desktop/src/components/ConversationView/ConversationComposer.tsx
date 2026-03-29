@@ -199,13 +199,14 @@ export function ConversationComposer({
   }
 
   return (
-    <div className="bg-surface px-5 pb-2 pt-4">
+    <div className="bg-surface px-5 pb-2 pt-1">
       <div className="rounded-[20px] border border-edge bg-panel shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
         <label className="block">
           <span className="sr-only">Prompt</span>
           <textarea
             ref={textareaRef}
             value={prompt}
+            disabled={pipelineRunning}
             onChange={(event) => {
               onPromptChange(event.target.value);
               if (historyIndex !== -1) {
@@ -215,8 +216,8 @@ export function ConversationComposer({
             }}
             onKeyDown={handlePromptKeyDown}
             rows={1}
-            placeholder="Describe the task you want the agent to handle."
-            className="w-full resize-none bg-transparent px-4 py-3 text-sm leading-6 text-fg placeholder:text-fg-faint focus:outline-none"
+            placeholder={pipelineRunning ? "Pipeline is running..." : "Describe the task you want the agent to handle."}
+            className={`w-full resize-none bg-transparent px-4 py-3 text-sm leading-6 text-fg placeholder:text-fg-faint focus:outline-none ${pipelineRunning ? "cursor-not-allowed opacity-50" : ""}`}
           />
         </label>
 

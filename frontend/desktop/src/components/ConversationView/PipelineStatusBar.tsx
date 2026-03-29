@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { RotateCcw, Square } from "lucide-react";
 
 interface PipelineStatusBarProps {
   /** Name of the currently active stage (e.g. "Planner 1", "Code Fix"). */
@@ -10,6 +11,14 @@ interface PipelineStatusBarProps {
   startedAt: number;
   /** Epoch ms when the pipeline finished (stops the total timer). */
   finishedAt?: number;
+  /** Whether the pipeline can be resumed (all stages terminal, not running). */
+  canResume?: boolean;
+  /** Whether any stages failed. */
+  hasFailed?: boolean;
+  /** Called when the user clicks Resume / Retry. */
+  onResume?: () => void;
+  /** Called when the user clicks Stop. */
+  onStop?: () => void;
 }
 
 function formatElapsed(ms: number): string {
@@ -27,6 +36,10 @@ export function PipelineStatusBar({
   running,
   startedAt,
   finishedAt,
+  canResume,
+  hasFailed,
+  onResume,
+  onStop,
 }: PipelineStatusBarProps): ReactNode {
   const [now, setNow] = useState(Date.now());
 
@@ -46,16 +59,38 @@ export function PipelineStatusBar({
           <div className="h-full w-1/3 animate-[flowRight_2s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-transparent via-running-dot to-transparent" />
         </div>
       )}
-      <div className="flex items-center justify-between py-0.5">
+      <div className="flex items-center justify-between py-2">
         <div className="flex items-center gap-1.5">
           {running && (
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-running-dot" />
           )}
-          <span className={`text-[10px] font-semibold ${running ? "animate-pulse text-running-dot" : "text-fg-muted"}`}>
+          <span className={`text-xs font-semibold ${running ? "animate-pulse text-running-dot" : "text-fg-muted"}`}>
             {stageName}
           </span>
         </div>
-        <span className="text-[10px] font-mono text-fg-faint">
+        <div className="flex items-center gap-2.5">
+          {running && onStop && (
+            <button
+              type="button"
+              onClick={onStop}
+              className="inline-flex items-center gap-2 rounded-lg border border-error-border bg-error-bg px-4 py-1.5 text-xs font-semibold text-error-text transition-colors hover:opacity-80"
+            >
+              <Square size={10} fill="currentColor" />
+              Stop Pipeline
+            </button>
+          )}
+          {canResume && onResume && (
+            <button
+              type="button"
+              onClick={onResume}
+              className="inline-flex items-center gap-2 rounded-lg border border-edge bg-elevated px-4 py-1.5 text-xs font-semibold text-fg transition-colors hover:bg-active"
+            >
+              <RotateCcw size={10} />
+              {hasFailed ? "Retry Pipeline" : "Resume Pipeline"}
+            </button>
+          )}
+        </div>
+        <span className="text-xs font-mono text-fg-faint">
           Total: {elapsed}
         </span>
       </div>
