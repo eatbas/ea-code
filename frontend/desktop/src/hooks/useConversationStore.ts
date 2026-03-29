@@ -49,6 +49,22 @@ interface UseConversationStoreReturn {
   setConversationSelection: (intent: ConversationSelectionIntent | null) => void;
 }
 
+function sameSelectionIntent(
+  left: ConversationSelectionIntent | null,
+  right: ConversationSelectionIntent | null,
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+
+  return left.workspacePath === right.workspacePath
+    && left.mode === right.mode
+    && (left.conversationId ?? null) === (right.conversationId ?? null);
+}
+
 /**
  * Unified conversation store that composes `useConversationSession` (active
  * workspace detail + streaming) with `useProjectConversationIndex` (sidebar
@@ -62,7 +78,7 @@ export function useConversationStore(
   workspace: WorkspaceInfo | null,
 ): UseConversationStoreReturn {
   const toast = useToast();
-  const [conversationSelection, setConversationSelection] =
+  const [conversationSelection, setConversationSelectionState] =
     useState<ConversationSelectionIntent | null>(null);
 
   const {
@@ -170,6 +186,10 @@ export function useConversationStore(
         "Failed to update pin."),
 
     conversationSelection,
-    setConversationSelection,
+    setConversationSelection: (intent) => {
+      setConversationSelectionState((previous) => (
+        sameSelectionIntent(previous, intent) ? previous : intent
+      ));
+    },
   };
 }

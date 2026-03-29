@@ -72,11 +72,15 @@ pub fn run() {
             conversations::commands::archive_conversation,
             conversations::commands::unarchive_conversation,
             conversations::commands::set_conversation_pinned,
+            conversations::commands::start_pipeline,
+            conversations::commands::stop_pipeline,
+            conversations::commands::resume_pipeline,
+            conversations::commands::get_pipeline_state,
         ])
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");
 
-    spawn_sidecar_startup(sidecar.clone());
+    spawn_sidecar_startup(app.handle().clone(), sidecar.clone());
 
     app.run(move |_app_handle, event| {
         if let tauri::RunEvent::ExitRequested { .. } = event {

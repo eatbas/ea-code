@@ -8,6 +8,8 @@ import { ConversationView } from "./ConversationView";
 interface AppContentRouterProps {
   activeView: ActiveView;
   workspace: WorkspaceInfo | null;
+  sidecarReady: boolean | null;
+  viewResetToken: number;
   activeConversation: ConversationDetail | null;
   activeDraft: string;
   activePromptDraft: string;
@@ -27,6 +29,8 @@ interface AppContentRouterProps {
 export function AppContentRouter({
   activeView,
   workspace,
+  sidecarReady,
+  viewResetToken,
   activeConversation,
   activeDraft,
   activePromptDraft,
@@ -53,6 +57,8 @@ export function AppContentRouter({
     return (
       <ConversationView
         workspace={workspace}
+        sidecarReady={sidecarReady}
+        viewResetToken={viewResetToken}
         activeConversation={activeConversation}
         activeDraft={activeDraft}
         activePromptDraft={activePromptDraft}

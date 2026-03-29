@@ -72,3 +72,49 @@ pub struct ConversationStatusEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<ConversationMessage>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineStageStatusEvent {
+    pub conversation_id: String,
+    pub stage_index: usize,
+    pub stage_name: String,
+    pub status: ConversationStatus,
+    pub agent_label: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineStageOutputDelta {
+    pub conversation_id: String,
+    pub stage_index: usize,
+    pub text: String,
+}
+
+/// Persisted state of a single pipeline stage.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineStageRecord {
+    pub stage_index: usize,
+    pub stage_name: String,
+    pub agent_label: String,
+    pub status: ConversationStatus,
+    pub text: String,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+    /// Hive-API job ID for this stage's run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job_id: Option<String>,
+    /// Provider session ref for resuming this stage.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_session_ref: Option<String>,
+}
+
+/// Persisted pipeline state saved alongside conversation.json.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineState {
+    pub user_prompt: String,
+    pub pipeline_mode: String,
+    pub stages: Vec<PipelineStageRecord>,
+}

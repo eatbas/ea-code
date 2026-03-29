@@ -5,6 +5,7 @@ import type {
   AppSettings,
   ConversationDetail,
   ConversationSummary,
+  PipelineState,
   PrerequisiteStatus,
   ProjectEntry,
   WorkspaceInfo,
@@ -131,6 +132,46 @@ export function sendConversationTurn(
     workspacePath,
     conversationId,
     prompt,
+  });
+}
+
+export function startPipeline(
+  workspacePath: string,
+  prompt: string,
+): Promise<ConversationDetail> {
+  return invokeCommand<ConversationDetail>("start_pipeline", {
+    workspacePath,
+    prompt,
+  });
+}
+
+export function stopPipeline(
+  workspacePath: string,
+  conversationId: string,
+): Promise<ConversationSummary> {
+  return invokeCommand<ConversationSummary>("stop_pipeline", {
+    workspacePath,
+    conversationId,
+  });
+}
+
+export function resumePipeline(
+  workspacePath: string,
+  conversationId: string,
+): Promise<ConversationDetail> {
+  return invokeCommand<ConversationDetail>("resume_pipeline", {
+    workspacePath,
+    conversationId,
+  });
+}
+
+export function getPipelineState(
+  workspacePath: string,
+  conversationId: string,
+): Promise<PipelineState | null> {
+  return invokeCommand<PipelineState | null>("get_pipeline_state", {
+    workspacePath,
+    conversationId,
   });
 }
 

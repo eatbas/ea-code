@@ -3,10 +3,17 @@ use tauri::AppHandle;
 use tokio::time::{sleep, Duration, Instant};
 
 use crate::commands::api_health::hive_api_base_url;
-use crate::models::{AgentSelection, ConversationDetail, ConversationStatus, ConversationSummary};
+use tauri::Emitter;
+
+use crate::models::{
+    AgentSelection, ConversationDetail, ConversationStatus, ConversationStatusEvent,
+    ConversationSummary, PipelineState,
+};
 
 use super::chat;
+use super::events::EVENT_CONVERSATION_STATUS;
 use super::persistence;
+use super::pipeline;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,6 +23,28 @@ struct StopResponse {
 
 const STOP_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 const STOP_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const PIPELINE_STOP_WAIT_TIMEOUT: Duration = Duration::from_secs(3);
+
+async fn send_hive_stop_request(
+    client: &reqwest::Client,
+    job_id: &str,
+) -> Result<(), String> {
+    let url = format!("{}/v1/chat/{job_id}/stop", hive_api_base_url());
+    let response = client
+        .post(url)
+        .send()
+        .await
+        .map_err(|error| format!("Failed to stop hive job {job_id}: {error}"))?;
+    if response.status().is_success() {
+        return Ok(());
+    }
+
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    Err(format!(
+        "Failed to stop hive job {job_id}: HTTP {status} — {body}"
+    ))
+}
 
 async fn wait_for_stoppable_conversation(
     workspace_path: &str,
@@ -194,4 +223,276 @@ pub async fn set_conversation_pinned(
     pinned: bool,
 ) -> Result<ConversationSummary, String> {
     persistence::set_conversation_pinned(&workspace_path, &conversation_id, pinned)
+}
+
+#[tauri::command]
+pub async fn start_pipeline(
+    app: AppHandle,
+    workspace_path: String,
+    prompt: String,
+) -> Result<ConversationDetail, String> {
+    let trimmed = prompt.trim();
+    if trimmed.is_empty() {
+        return Err("Prompt must not be empty".to_string());
+    }
+
+    let settings = crate::storage::settings::read_settings()?;
+    let pipeline_config = settings
+        .code_pipeline
+        .ok_or("Code pipeline is not configured. Set it up in Agents settings.".to_string())?;
+
+    // Use the first planner as the conversation agent for display purposes.
+    let agent = pipeline_config
+        .planners
+        .first()
+        .map(|p| AgentSelection {
+            provider: p.provider.clone(),
+            model: p.model.clone(),
+        })
+        .ok_or("No planners configured".to_string())?;
+
+    let detail = persistence::create_conversation(&workspace_path, agent, Some(trimmed))?;
+    let conversation_id = detail.summary.id.clone();
+    let abort = persistence::register_abort_flag(&workspace_path, &conversation_id)?;
+
+    let planners = pipeline_config.planners;
+    let planner_count = planners.len();
+    let job_id_slots =
+        persistence::register_pipeline_job_slots(&workspace_path, &conversation_id, planner_count)?;
+    let stage_buffers =
+        persistence::register_pipeline_stage_buffers(&workspace_path, &conversation_id, planner_count)?;
+
+    let app_handle = app.clone();
+    let ws = workspace_path.clone();
+    let conv_id = conversation_id.clone();
+    let user_prompt = trimmed.to_string();
+
+    tokio::spawn(async move {
+        let _guard = match persistence::track_running_conversation(&ws, &conv_id) {
+            Ok(guard) => guard,
+            Err(e) => {
+                eprintln!("[pipeline] Failed to track running conversation: {e}");
+                return;
+            }
+        };
+
+        match persistence::set_status(&ws, &conv_id, ConversationStatus::Running, None) {
+            Ok(summary) => {
+                let _ = app_handle.emit(
+                    EVENT_CONVERSATION_STATUS,
+                    ConversationStatusEvent {
+                        conversation: summary,
+                        message: None,
+                    },
+                );
+            }
+            Err(e) => eprintln!("[pipeline] Failed to set running status: {e}"),
+        }
+
+        let result = pipeline::run_pipeline_planners(
+            app_handle.clone(),
+            conv_id.clone(),
+            ws.clone(),
+            planners,
+            user_prompt,
+            abort.clone(),
+            job_id_slots,
+            None,
+            stage_buffers,
+        )
+        .await;
+
+        // Check abort flag to avoid overwriting a Stopped status that
+        // stop_pipeline already set.
+        let final_status = if abort.load(std::sync::atomic::Ordering::Acquire) {
+            ConversationStatus::Stopped
+        } else if result.is_ok() {
+            ConversationStatus::Completed
+        } else {
+            ConversationStatus::Failed
+        };
+        let error = result.err();
+
+        match persistence::set_status(&ws, &conv_id, final_status, error) {
+            Ok(summary) => {
+                let _ = app_handle.emit(
+                    EVENT_CONVERSATION_STATUS,
+                    ConversationStatusEvent {
+                        conversation: summary,
+                        message: None,
+                    },
+                );
+            }
+            Err(e) => eprintln!("[pipeline] Failed to set final status: {e}"),
+        }
+
+        let _ = persistence::remove_pipeline_stage_buffers(&ws, &conv_id);
+        let _ = persistence::remove_pipeline_job_slots(&ws, &conv_id);
+        let _ = persistence::remove_abort_flag(&ws, &conv_id);
+    });
+
+    Ok(detail)
+}
+
+#[tauri::command]
+pub async fn stop_pipeline(
+    workspace_path: String,
+    conversation_id: String,
+) -> Result<ConversationSummary, String> {
+    // Set the local abort flag so SSE consumers exit immediately.
+    persistence::trigger_abort(&workspace_path, &conversation_id)?;
+
+    // Stop every job we can see now, then poll briefly for late-arriving
+    // run_started events so planners that publish a job ID just after the
+    // user presses Stop are also cancelled.
+    let deadline = Instant::now() + PIPELINE_STOP_WAIT_TIMEOUT;
+    let client = reqwest::Client::new();
+    let mut stopped_job_ids = std::collections::HashSet::new();
+
+    loop {
+        let job_ids = persistence::get_pipeline_job_ids(&workspace_path, &conversation_id)?;
+        for job_id in job_ids {
+            if stopped_job_ids.insert(job_id.clone()) {
+                if let Err(e) = send_hive_stop_request(&client, &job_id).await {
+                    eprintln!("[pipeline] {e}");
+                }
+            }
+        }
+
+        if Instant::now() >= deadline {
+            break;
+        }
+
+        sleep(STOP_WAIT_POLL_INTERVAL).await;
+    }
+
+    persistence::mark_running_pipeline_stages_stopped(&workspace_path, &conversation_id)?;
+
+    persistence::set_status(
+        &workspace_path,
+        &conversation_id,
+        ConversationStatus::Stopped,
+        None,
+    )
+}
+
+#[tauri::command]
+pub async fn resume_pipeline(
+    app: AppHandle,
+    workspace_path: String,
+    conversation_id: String,
+) -> Result<ConversationDetail, String> {
+    let state = persistence::load_pipeline_state(&workspace_path, &conversation_id)?
+        .ok_or("No pipeline state found for this conversation")?;
+
+    let settings = crate::storage::settings::read_settings()?;
+    let pipeline_config = settings
+        .code_pipeline
+        .ok_or("Code pipeline is not configured. Set it up in Agents settings.".to_string())?;
+
+    let detail = persistence::get_conversation(&workspace_path, &conversation_id)?;
+    let abort = persistence::register_abort_flag(&workspace_path, &conversation_id)?;
+
+    let user_prompt = state.user_prompt;
+    let previous_stages = state.stages;
+    let planners = pipeline_config.planners;
+    let planner_count = planners.len();
+    let job_id_slots =
+        persistence::register_pipeline_job_slots(&workspace_path, &conversation_id, planner_count)?;
+    let stage_buffers =
+        persistence::register_pipeline_stage_buffers(&workspace_path, &conversation_id, planner_count)?;
+
+    let app_handle = app.clone();
+    let ws = workspace_path.clone();
+    let conv_id = conversation_id.clone();
+
+    tokio::spawn(async move {
+        let _guard = match persistence::track_running_conversation(&ws, &conv_id) {
+            Ok(guard) => guard,
+            Err(e) => {
+                eprintln!("[pipeline] Failed to track running conversation: {e}");
+                return;
+            }
+        };
+
+        match persistence::set_status(&ws, &conv_id, ConversationStatus::Running, None) {
+            Ok(summary) => {
+                let _ = app_handle.emit(
+                    EVENT_CONVERSATION_STATUS,
+                    ConversationStatusEvent {
+                        conversation: summary,
+                        message: None,
+                    },
+                );
+            }
+            Err(e) => eprintln!("[pipeline] Failed to set running status: {e}"),
+        }
+
+        let result = pipeline::run_pipeline_planners(
+            app_handle.clone(),
+            conv_id.clone(),
+            ws.clone(),
+            planners,
+            user_prompt,
+            abort.clone(),
+            job_id_slots,
+            Some(previous_stages),
+            stage_buffers,
+        )
+        .await;
+
+        let final_status = if abort.load(std::sync::atomic::Ordering::Acquire) {
+            ConversationStatus::Stopped
+        } else if result.is_ok() {
+            ConversationStatus::Completed
+        } else {
+            ConversationStatus::Failed
+        };
+        let error = result.err();
+
+        match persistence::set_status(&ws, &conv_id, final_status, error) {
+            Ok(summary) => {
+                let _ = app_handle.emit(
+                    EVENT_CONVERSATION_STATUS,
+                    ConversationStatusEvent {
+                        conversation: summary,
+                        message: None,
+                    },
+                );
+            }
+            Err(e) => eprintln!("[pipeline] Failed to set final status: {e}"),
+        }
+
+        let _ = persistence::remove_pipeline_stage_buffers(&ws, &conv_id);
+        let _ = persistence::remove_pipeline_job_slots(&ws, &conv_id);
+        let _ = persistence::remove_abort_flag(&ws, &conv_id);
+    });
+
+    Ok(detail)
+}
+
+#[tauri::command]
+pub async fn get_pipeline_state(
+    workspace_path: String,
+    conversation_id: String,
+) -> Result<Option<PipelineState>, String> {
+    let mut state = persistence::load_pipeline_state(&workspace_path, &conversation_id)?;
+
+    // Merge live SSE output text from in-memory buffers for stages that are
+    // still running (their text field is empty because they haven't written a
+    // plan file yet). This lets the frontend show accumulated output even
+    // after the user navigated away and back.
+    if let Some(ref mut s) = state {
+        let live_texts =
+            persistence::get_pipeline_stage_texts(&workspace_path, &conversation_id)?;
+        for (i, text) in live_texts.into_iter().enumerate() {
+            if let Some(stage) = s.stages.get_mut(i) {
+                if stage.text.is_empty() && !text.is_empty() {
+                    stage.text = text;
+                }
+            }
+        }
+    }
+
+    Ok(state)
 }

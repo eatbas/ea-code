@@ -91,6 +91,9 @@ export function useConversationSession(
   const [stoppingConversationId, setStoppingConversationId] = useState<string | null>(null);
   const previousWorkspacePathRef = useRef<string | null>(null);
   const stoppingConversationIdRef = useRef<string | null>(null);
+  const selectionWorkspacePath = selectionIntent?.workspacePath ?? null;
+  const selectionMode = selectionIntent?.mode ?? null;
+  const selectionConversationId = selectionIntent?.conversationId ?? null;
 
   useTauriEventListeners({
     listeners: [
@@ -210,7 +213,7 @@ export function useConversationSession(
     return () => {
       cancelled = true;
     };
-  }, [selectionIntent, toast, workspace]);
+  }, [selectionConversationId, selectionMode, selectionWorkspacePath, toast, workspace]);
 
   const openConversation = useCallback(async (conversationId: string): Promise<void> => {
     if (!workspace) {

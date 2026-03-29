@@ -235,7 +235,9 @@ pub fn reorder_projects(ordered_project_paths: &[String]) -> Result<Vec<ProjectE
         let mut reordered = Vec::with_capacity(ordered_project_paths.len());
         for project_path in ordered_project_paths {
             let Some(project) = remaining_projects.remove(project_path) else {
-                return Err(format!("Project not found in reorder request: {project_path}"));
+                return Err(format!(
+                    "Project not found in reorder request: {project_path}"
+                ));
             };
             reordered.push(project);
         }

@@ -13,9 +13,14 @@ import { WorkspaceFooter } from "../shared/WorkspaceFooter";
 import { useFooterErrorHandler } from "../../hooks/useFooterErrorHandler";
 import { filterProvidersBySettings } from "../../utils/modelSettings";
 import { parseAgentSelection } from "../../utils/agentSettings";
+import { usePipelineSession } from "../../hooks/usePipelineSession";
+import { getPipelineState, resumePipeline, startPipeline, stopPipeline } from "../../lib/desktopApi";
+import { PipelineConversationView } from "./PipelineConversationView";
 
 interface ConversationViewProps {
   workspace: WorkspaceInfo;
+  sidecarReady: boolean | null;
+  viewResetToken: number;
   activeConversation: ConversationDetail | null;
   activeDraft: string;
   activePromptDraft: string;
@@ -30,6 +35,8 @@ interface ConversationViewProps {
 
 export function ConversationView({
   workspace,
+  sidecarReady,
+  viewResetToken,
   activeConversation,
   activeDraft,
   activePromptDraft,
@@ -45,7 +52,11 @@ export function ConversationView({
   const { settings } = useSettings();
   const [selectedAgent, setSelectedAgent] = useState<AgentSelection | null>(null);
   const [pipelineMode, setPipelineMode] = useState<PipelineMode>("auto");
+  const [pipelinePrompt, setPipelinePrompt] = useState<string>("");
+  const [pipelineConversationId, setPipelineConversationId] = useState<string | null>(null);
   const prevConversationIdRef = useRef<string | null>(null);
+  const prevResetTokenRef = useRef(viewResetToken);
+  const pipeline = usePipelineSession(pipelineConversationId);
 
   const availableProviders = useMemo(
     () => sortProvidersByDisplayName(filterProvidersBySettings(providers, settings)),
@@ -56,17 +67,42 @@ export function ConversationView({
     checkHealth();
   }, [checkHealth, workspace.path]);
 
-  // Reset selection when leaving an existing conversation so the
-  // default agent is re-applied for the next new conversation.
+  // Reset selection and pipeline state when leaving an existing conversation
+  // so the default agent is re-applied for the next new conversation.
+  // Also reset when viewResetToken changes (new-conversation or delete pressed
+  // while activeConversation is already null — React can't detect null→null).
   useEffect(() => {
     const currentId = activeConversation?.summary.id ?? null;
     const prevId = prevConversationIdRef.current;
+    const tokenChanged = viewResetToken !== prevResetTokenRef.current;
     prevConversationIdRef.current = currentId;
+    prevResetTokenRef.current = viewResetToken;
 
-    if (prevId !== null && currentId !== prevId) {
+    if ((prevId !== null && currentId !== prevId) || tokenChanged) {
       setSelectedAgent(null);
+      pipeline.reset();
+      setPipelinePrompt("");
+      setPipelineConversationId(null);
+      setPipelineMode("auto");
     }
-  }, [activeConversation]);
+  }, [activeConversation, viewResetToken]);
+
+  // Load saved pipeline state when opening a conversation.
+  useEffect(() => {
+    if (!activeConversation) return;
+    let cancelled = false;
+    void getPipelineState(workspace.path, activeConversation.summary.id).then((state) => {
+      if (cancelled || !state) return;
+      const isStillRunning = activeConversation.summary.status === "running";
+      // Set the conversation ID first so the event filter ref is populated
+      // before loadFromSaved potentially marks the pipeline as running.
+      setPipelineConversationId(activeConversation.summary.id);
+      pipeline.loadFromSaved(state, isStillRunning);
+      setPipelinePrompt(state.userPrompt);
+      setPipelineMode("code");
+    });
+    return () => { cancelled = true; };
+  }, [activeConversation?.summary.id, workspace.path]);
 
   useEffect(() => {
     if (activeConversation) {
@@ -111,12 +147,48 @@ export function ConversationView({
   const activeRunning = activeConversation?.summary.status === "running";
 
   const handleSend = useCallback(async (prompt: string) => {
+    if (pipelineMode === "code") {
+      pipeline.reset();
+      setPipelinePrompt(prompt);
+      const detail = await startPipeline(workspace.path, prompt);
+      setPipelineConversationId(detail.summary.id);
+      return;
+    }
     const agent = activeConversation?.summary.agent ?? selectedAgent;
     if (!agent) {
       return;
     }
     await onSendPrompt(prompt, agent);
-  }, [activeConversation, selectedAgent, onSendPrompt]);
+  }, [pipelineMode, activeConversation, selectedAgent, onSendPrompt, workspace.path, pipeline]);
+
+  const handleStop = useCallback(async () => {
+    if (pipelineConversationId) {
+      await stopPipeline(workspace.path, pipelineConversationId);
+      // Don't reset — the backend emits a conversation_status event with
+      // "stopped" which the pipeline hook handles. Resetting here would
+      // wipe the stages and jump to the "new conversation" view.
+      return;
+    }
+    await onStopConversation();
+  }, [pipeline, pipelineConversationId, workspace.path, onStopConversation]);
+
+  const handleResume = useCallback(async () => {
+    if (!pipelineConversationId) return;
+    pipeline.reset();
+    await resumePipeline(workspace.path, pipelineConversationId);
+  }, [pipelineConversationId, workspace.path, pipeline]);
+
+  const handleNewPipeline = useCallback(() => {
+    pipeline.reset();
+    setPipelineConversationId(null);
+    setPipelinePrompt("");
+    setPipelineMode("code");
+  }, [pipeline]);
+
+  const pipelineDone = pipeline.stages.length > 0 && !pipeline.running
+    && pipeline.stages.every((s) => (
+      s.status === "completed" || s.status === "failed" || s.status === "stopped"
+    ));
 
   const handleFooterError = useFooterErrorHandler();
 
@@ -145,27 +217,45 @@ export function ConversationView({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+        {pipeline.stages.length > 0 || pipeline.running || pipeline.userPrompt ? (
+          <PipelineConversationView
+            userPrompt={pipelinePrompt || pipeline.userPrompt}
+            stages={pipeline.stages}
+            running={pipeline.running}
+            currentStageName={pipeline.currentStageName}
+            pipelineStartedAt={pipeline.pipelineStartedAt}
+            onResume={handleResume}
+            onStop={handleStop}
+          />
+        ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
           {activeConversation ? (
             <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
               {activeConversation.messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`max-w-3xl rounded-2xl px-4 py-3 text-sm leading-6 ${
-                    message.role === "user"
-                      ? "ml-auto border border-edge-strong bg-elevated text-fg"
-                      : "mr-auto border border-edge bg-panel text-fg"
-                  }`}
+                  className={`flex max-w-3xl flex-col ${message.role === "user" ? "ml-auto items-end" : "mr-auto items-end"}`}
                 >
-                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
-                    {message.role === "assistant" && activeConversation
-                      ? `Assistant - ${formatAssistantLabel(
-                        activeConversation.summary.agent.provider,
-                        activeConversation.summary.agent.model,
-                      )}`
-                      : message.role}
+                  <div
+                    className={`rounded-2xl px-4 py-3 text-sm leading-6 ${
+                      message.role === "user"
+                        ? "border border-edge-strong bg-elevated text-fg"
+                        : "border border-edge bg-panel text-fg"
+                    }`}
+                  >
+                    <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
+                      {message.role === "assistant" && activeConversation
+                        ? `Assistant - ${formatAssistantLabel(
+                          activeConversation.summary.agent.provider,
+                          activeConversation.summary.agent.model,
+                        )}`
+                        : message.role}
+                    </p>
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  </div>
+                  <p className="mt-1 px-1 text-[10px] text-fg-muted">
+                    {new Date(message.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
                   </p>
-                  <p className="whitespace-pre-wrap">{message.content}</p>
                 </div>
               ))}
               {activeDraft && (
@@ -199,6 +289,7 @@ export function ConversationView({
             </div>
           )}
         </div>
+        )}
 
         <ConversationComposer
           providers={availableProviders}
@@ -209,12 +300,17 @@ export function ConversationView({
           sending={sending}
           stopping={stopping}
           activeRunning={Boolean(activeRunning)}
+          pipelineRunning={pipeline.running}
           pipelineMode={pipelineMode}
+          pipelineDone={pipelineDone}
+          sidecarReady={sidecarReady}
           onPipelineModeChange={setPipelineMode}
           onAgentChange={setSelectedAgent}
           onPromptChange={onPromptDraftChange}
           onSend={handleSend}
-          onStop={onStopConversation}
+          onStop={handleStop}
+          onResumePipeline={handleResume}
+          onNewPipeline={handleNewPipeline}
         />
 
         <div className="px-5 pb-3 pt-0">
@@ -231,4 +327,3 @@ export function ConversationView({
     </div>
   );
 }
-

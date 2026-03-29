@@ -4,6 +4,11 @@
  * `commands/api_health.rs` and `commands/cli/health.rs`.
  */
 
+/** Sidecar lifecycle event (emitted by `bootstrap.rs`). */
+export const SIDECAR_EVENTS = {
+  READY: "sidecar_ready",
+} as const;
+
 /** hive-api events (emitted by `commands/api_health.rs`). */
 export const API_EVENTS = {
   HEALTH_STATUS: "api_health_status",
@@ -17,6 +22,12 @@ export const API_EVENTS = {
 export const CONVERSATION_EVENTS = {
   STATUS: "conversation_status",
   OUTPUT_DELTA: "conversation_output_delta",
+} as const;
+
+/** Pipeline stage events (emitted by `conversations/pipeline.rs`). */
+export const PIPELINE_EVENTS = {
+  STAGE_STATUS: "pipeline_stage_status",
+  STAGE_OUTPUT_DELTA: "pipeline_stage_output_delta",
 } as const;
 
 /** CLI health events (emitted by `commands/cli/health.rs`). */

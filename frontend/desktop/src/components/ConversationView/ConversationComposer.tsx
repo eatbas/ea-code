@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { ArrowRight, Square } from "lucide-react";
+import { ArrowRight, Plus, RotateCcw, Square } from "lucide-react";
 import type { AgentSelection, ProviderInfo } from "../../types";
 import { useAutoResizeTextarea } from "../../hooks/useAutoResizeTextarea";
 import { PopoverSelect } from "../shared/PopoverSelect";
@@ -27,12 +27,19 @@ interface ConversationComposerProps {
   sending: boolean;
   stopping: boolean;
   activeRunning: boolean;
+  pipelineRunning: boolean;
   pipelineMode: PipelineMode;
+  /** Whether a previous pipeline run has finished (completed or failed). */
+  pipelineDone: boolean;
+  /** `null` = still starting, `true` = ready, `false` = failed. */
+  sidecarReady: boolean | null;
   onPipelineModeChange: (mode: PipelineMode) => void;
   onAgentChange: (agent: AgentSelection) => void;
   onPromptChange: (prompt: string) => void;
   onSend: (prompt: string) => Promise<void>;
   onStop: () => Promise<void>;
+  onResumePipeline?: () => void;
+  onNewPipeline?: () => void;
 }
 
 export function ConversationComposer({
@@ -44,12 +51,17 @@ export function ConversationComposer({
   sending,
   stopping,
   activeRunning,
+  pipelineRunning,
   pipelineMode,
+  pipelineDone,
+  sidecarReady,
   onPipelineModeChange,
   onAgentChange,
   onPromptChange,
   onSend,
   onStop,
+  onResumePipeline,
+  onNewPipeline,
 }: ConversationComposerProps): ReactNode {
   const [openSelect, setOpenSelect] = useState<"pipeline" | "provider" | "model" | null>(null);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
@@ -179,7 +191,7 @@ export function ConversationComposer({
 
     event.preventDefault();
 
-    if (sending || stopping || activeRunning || !agent || prompt.trim().length === 0) {
+    if (sending || stopping || activeRunning || !agent || prompt.trim().length === 0 || sidecarReady !== true) {
       return;
     }
 
@@ -276,24 +288,46 @@ export function ConversationComposer({
                 />
             </div>
 
+            {pipelineDone && !pipelineRunning && onResumePipeline && (
+              <button
+                type="button"
+                onClick={onResumePipeline}
+                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-edge bg-elevated px-2.5 text-[11px] font-semibold text-fg transition-colors hover:bg-active"
+                title="Resume pipeline"
+              >
+                <RotateCcw size={10} />
+                Resume
+              </button>
+            )}
+            {pipelineDone && !pipelineRunning && onNewPipeline && (
+              <button
+                type="button"
+                onClick={onNewPipeline}
+                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-edge bg-elevated px-2.5 text-[11px] font-semibold text-fg transition-colors hover:bg-active"
+                title="Start a new pipeline"
+              >
+                <Plus size={10} />
+                New Pipeline
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
-                if (activeRunning) {
+                if (activeRunning || pipelineRunning) {
                   void onStop();
                   return;
                 }
                 void handleSubmit();
               }}
-              disabled={activeRunning ? stopping : stopping || sending || !agent || prompt.trim().length === 0}
+              disabled={(activeRunning || pipelineRunning) ? stopping : stopping || sending || (pipelineMode === "simple" && !agent) || prompt.trim().length === 0 || sidecarReady !== true}
               className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                activeRunning
+                activeRunning || pipelineRunning
                   ? "bg-stop-bg text-stop-text hover:bg-stop-bg-hover"
                   : "bg-running-dot text-send-text hover:bg-send-bg-hover"
               }`}
-              title={activeRunning ? (stopping ? "Stopping..." : "Stop") : sending ? "Sending..." : "Send"}
+              title={(activeRunning || pipelineRunning) ? (stopping ? "Stopping..." : "Stop") : sidecarReady !== true ? "Waiting for Hive API..." : sending ? "Sending..." : "Send"}
             >
-              {activeRunning ? (
+              {(activeRunning || pipelineRunning) ? (
                 stopping ? (
                   <span className="text-[10px] font-semibold">...</span>
                 ) : (

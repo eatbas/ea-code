@@ -44,3 +44,35 @@ export interface ConversationStatusEvent {
   conversation: ConversationSummary;
   message?: ConversationMessage;
 }
+
+export interface PipelineStageStatusEvent {
+  conversationId: string;
+  stageIndex: number;
+  stageName: string;
+  status: ConversationStatus;
+  agentLabel: string;
+}
+
+export interface PipelineStageOutputDelta {
+  conversationId: string;
+  stageIndex: number;
+  text: string;
+}
+
+export interface PipelineStageRecord {
+  stageIndex: number;
+  stageName: string;
+  agentLabel: string;
+  status: ConversationStatus;
+  text: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  jobId?: string | null;
+  providerSessionRef?: string | null;
+}
+
+export interface PipelineState {
+  userPrompt: string;
+  pipelineMode: string;
+  stages: PipelineStageRecord[];
+}

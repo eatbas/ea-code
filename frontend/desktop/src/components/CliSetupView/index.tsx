@@ -20,6 +20,7 @@ const REFRESH_COOLDOWN_MS = 60_000;
 interface CliSetupViewProps {
   settings: AppSettings;
   apiHealth: ApiHealth | null;
+  sidecarReady: boolean | null;
   providers: ProviderInfo[];
   apiVersions: ApiCliVersionInfo[];
   versionsLoading: boolean;
@@ -33,6 +34,7 @@ interface CliSetupViewProps {
 export function CliSetupView({
   settings,
   apiHealth,
+  sidecarReady,
   providers,
   apiVersions,
   versionsLoading,
@@ -121,24 +123,39 @@ export function CliSetupView({
           </div>
           {/* Hive-API status */}
           <div className="flex items-center gap-3 rounded-lg border border-edge bg-panel px-4 py-3">
-            <span
-              className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
-                apiHealth?.connected ? "bg-success" : "bg-danger"
-              }`}
-            />
-            <div className="flex flex-1 items-center justify-between">
-              <div>
-                <span className="text-sm font-medium text-fg">Hive API</span>
-                <span className="ml-2 text-xs text-fg-faint">
-                  {apiHealth?.connected
-                    ? `Connected${apiHealth.droneCount != null ? ` · ${apiHealth.droneCount} drone${apiHealth.droneCount !== 1 ? "s" : ""}` : ""}`
-                    : apiHealth?.error ?? "Not connected"}
-                </span>
-              </div>
-              {apiHealth?.connected && apiHealth.url && (
-                <span className="text-xs font-mono text-fg-faint">{apiHealth.url}</span>
-              )}
-            </div>
+            {sidecarReady === null && !apiHealth ? (
+              <>
+                <span className="inline-block h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-fg-faint" />
+                <div className="flex flex-1 flex-col gap-1">
+                  <span className="text-sm font-medium text-fg">Hive API</span>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-edge">
+                    <div className="h-full animate-[hive-loading_1.5s_ease-in-out_infinite] rounded-full bg-fg-muted" />
+                  </div>
+                  <span className="text-xs text-fg-faint">Starting up...</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <span
+                  className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+                    apiHealth?.connected ? "bg-success" : "bg-danger"
+                  }`}
+                />
+                <div className="flex flex-1 items-center justify-between">
+                  <div>
+                    <span className="text-sm font-medium text-fg">Hive API</span>
+                    <span className="ml-2 text-xs text-fg-faint">
+                      {apiHealth?.connected
+                        ? `Connected${apiHealth.droneCount != null ? ` · ${apiHealth.droneCount} drone${apiHealth.droneCount !== 1 ? "s" : ""}` : ""}`
+                        : apiHealth?.error ?? "Not connected"}
+                    </span>
+                  </div>
+                  {apiHealth?.connected && apiHealth.url && (
+                    <span className="text-xs font-mono text-fg-faint">{apiHealth.url}</span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {providers.length > 0 && (

@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::StreamExt;
 use serde::Deserialize;
+use tokio::time::{sleep, Duration};
 
 use crate::models::ConversationStatus;
 
@@ -73,6 +74,19 @@ struct FailedPayload {
     exit_code: Option<i32>,
 }
 
+/// Polls the abort flag every 100ms and returns once it becomes true.
+/// Used with `tokio::select!` to race against the SSE stream so the
+/// consumer exits immediately when the user presses Stop — even if the
+/// stream is blocked waiting for data from hive-api.
+async fn wait_for_abort(abort: &AtomicBool) {
+    loop {
+        if abort.load(Ordering::Acquire) {
+            return;
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+}
+
 pub async fn consume_hive_sse<F>(
     response: reqwest::Response,
     abort: &AtomicBool,
@@ -88,17 +102,28 @@ where
     let mut job_id: Option<String> = None;
     let mut terminal_result: Option<SseResult> = None;
 
-    while let Some(chunk_result) = stream.next().await {
-        if abort.load(Ordering::Acquire) {
-            return Ok(SseResult {
-                final_text: collected_text,
-                provider_session_ref: session_ref,
-                exit_code: None,
-                status: ConversationStatus::Stopped,
-                error: None,
-                job_id,
-            });
-        }
+    loop {
+        // Race: exit immediately when the abort flag is set, even if the
+        // SSE stream is blocked waiting for the next chunk from hive-api.
+        let chunk_opt = tokio::select! {
+            biased;
+            _ = wait_for_abort(abort) => {
+                return Ok(SseResult {
+                    final_text: collected_text,
+                    provider_session_ref: session_ref,
+                    exit_code: None,
+                    status: ConversationStatus::Stopped,
+                    error: None,
+                    job_id,
+                });
+            }
+            chunk = stream.next() => chunk,
+        };
+
+        let Some(chunk_result) = chunk_opt else {
+            break;
+        };
+
         let chunk = chunk_result.map_err(|error| format!("Failed to read hive stream: {error}"))?;
         buffer.push_str(&String::from_utf8_lossy(&chunk));
 

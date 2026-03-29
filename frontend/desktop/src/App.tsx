@@ -4,6 +4,7 @@ import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { useAppViewState } from "./hooks/useAppViewState";
 import { useConversationStore } from "./hooks/useConversationStore";
 import { usePrerequisites } from "./hooks/usePrerequisites";
+import { useSidecarReady } from "./hooks/useSidecarReady";
 import { useWorkspaceSession } from "./hooks/useWorkspaceSession";
 import { Sidebar } from "./components/Sidebar";
 import { AppContentRouter } from "./components/AppContentRouter";
@@ -25,9 +26,11 @@ function App(): ReactNode {
     archiveProject,
     unarchiveProject,
   } = useWorkspaceSession();
+  const { sidecarReady } = useSidecarReady();
   const { status: updateStatus, updateVersion } = useUpdateCheck(false);
   const { status: prereqs, dismissed: prereqsDismissed, dismiss: dismissPrereqs } = usePrerequisites();
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [viewResetToken, setViewResetToken] = useState(0);
 
   const store = useConversationStore(projects, workspace);
 
@@ -63,6 +66,7 @@ function App(): ReactNode {
   }
 
   async function handleCreateConversation(projectPath: string): Promise<void> {
+    setViewResetToken((n) => n + 1);
     store.setConversationSelection({
       workspacePath: projectPath,
       mode: "new",
@@ -72,6 +76,11 @@ function App(): ReactNode {
       return;
     }
     setActiveView("home");
+  }
+
+  function handleRemoveConversation(projectPath: string, conversationId: string): void {
+    setViewResetToken((n) => n + 1);
+    store.deleteConversation(projectPath, conversationId);
   }
 
   return (
@@ -97,7 +106,7 @@ function App(): ReactNode {
           onRenameProject={(p, name) => { void renameProject(p, name); }}
           onArchiveProject={(p) => { void archiveProject(p); }}
           onUnarchiveProject={(p) => { void unarchiveProject(p); }}
-          onRemoveConversation={store.deleteConversation}
+          onRemoveConversation={handleRemoveConversation}
           onRenameConversation={store.renameConversation}
           onArchiveConversation={store.archiveConversation}
           onUnarchiveConversation={store.unarchiveConversation}
@@ -107,6 +116,8 @@ function App(): ReactNode {
           <AppContentRouter
             activeView={activeView}
             workspace={workspace}
+            sidecarReady={sidecarReady}
+            viewResetToken={viewResetToken}
             activeConversation={store.activeConversation}
             activeDraft={store.activeDraft}
             activePromptDraft={store.activePromptDraft}

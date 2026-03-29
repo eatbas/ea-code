@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useApiCliVersions } from "../../hooks/useApiCliVersions";
 import { useApiHealth } from "../../hooks/useApiHealth";
 import { useCliHealth } from "../../hooks/useCliHealth";
+import { useSidecarReady } from "../../hooks/useSidecarReady";
 import { useSettings } from "../../hooks/useSettings";
 import { CliSetupView } from ".";
 
@@ -10,6 +11,7 @@ export function CliSetupRoute(): ReactNode {
   const { settings, loading, saveSettings } = useSettings();
   const { checkHealth: checkCliHealth } = useCliHealth();
   const { health: apiHealth, providers, checkHealth: checkApiHealth } = useApiHealth();
+  const { sidecarReady } = useSidecarReady();
   const {
     versions: apiVersions,
     loading: apiVersionsLoading,
@@ -39,6 +41,7 @@ export function CliSetupRoute(): ReactNode {
     <CliSetupView
       settings={settings}
       apiHealth={apiHealth}
+      sidecarReady={sidecarReady}
       providers={providers}
       apiVersions={apiVersions}
       versionsLoading={apiVersionsLoading}

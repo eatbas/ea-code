@@ -111,7 +111,10 @@ pub async fn delete_project(project_path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn rename_project(project_path: String, name: String) -> Result<crate::models::ProjectEntry, String> {
+pub async fn rename_project(
+    project_path: String,
+    name: String,
+) -> Result<crate::models::ProjectEntry, String> {
     storage::projects::rename_project(&project_path, &name)
 }
 
