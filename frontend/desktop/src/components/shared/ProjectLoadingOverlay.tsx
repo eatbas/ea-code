@@ -6,7 +6,7 @@ export function ProjectLoadingOverlay(): ReactNode {
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/35">
       <div className="flex min-w-[230px] flex-col items-center gap-3 rounded-2xl border border-edge bg-overlay-bg px-8 py-7 shadow-2xl">
         <img
-          src="/logo.png"
+          src="/logo_2.png"
           alt="Maestro logo"
           className="h-12 w-12 object-contain"
         />
