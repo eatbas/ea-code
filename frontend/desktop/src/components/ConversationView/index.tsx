@@ -14,8 +14,17 @@ import { useFooterErrorHandler } from "../../hooks/useFooterErrorHandler";
 import { filterProvidersBySettings } from "../../utils/modelSettings";
 import { parseAgentSelection } from "../../utils/agentSettings";
 import { usePipelineSession } from "../../hooks/usePipelineSession";
-import { getPipelineState, resumePipeline, startPipeline, stopPipeline } from "../../lib/desktopApi";
+import { usePlanReview } from "../../hooks/usePlanReview";
+import {
+  acceptPlan,
+  getPipelineState,
+  resumePipeline,
+  sendPlanEditFeedback,
+  startPipeline,
+  stopPipeline,
+} from "../../lib/desktopApi";
 import { PipelineConversationView } from "./PipelineConversationView";
+import { PlanReviewCard } from "./PlanReviewCard";
 
 interface ConversationViewProps {
   workspace: WorkspaceInfo;
@@ -58,6 +67,19 @@ export function ConversationView({
   const prevResetTokenRef = useRef(viewResetToken);
   const pipeline = usePipelineSession(pipelineConversationId);
 
+  const planReview = usePlanReview({
+    awaitingReview: pipeline.awaitingReview,
+    running: pipeline.running,
+    onAccept: async () => {
+      if (!pipelineConversationId) return;
+      await acceptPlan(workspace.path, pipelineConversationId);
+    },
+    onSubmitFeedback: async (feedback: string) => {
+      if (!pipelineConversationId) return;
+      await sendPlanEditFeedback(workspace.path, pipelineConversationId, feedback);
+    },
+  });
+
   const availableProviders = useMemo(
     () => sortProvidersByDisplayName(filterProvidersBySettings(providers, settings)),
     [providers, settings],
@@ -81,6 +103,7 @@ export function ConversationView({
     if ((prevId !== null && currentId !== prevId) || tokenChanged) {
       setSelectedAgent(null);
       pipeline.reset();
+      planReview.reset();
       setPipelinePrompt("");
       setPipelineConversationId(null);
       setPipelineMode("auto");
@@ -97,7 +120,7 @@ export function ConversationView({
       // Set the conversation ID first so the event filter ref is populated
       // before loadFromSaved potentially marks the pipeline as running.
       setPipelineConversationId(activeConversation.summary.id);
-      pipeline.loadFromSaved(state, isStillRunning);
+      pipeline.loadFromSaved(state, isStillRunning, activeConversation.summary.status);
       setPipelinePrompt(state.userPrompt);
       setPipelineMode("code");
     });
@@ -149,6 +172,7 @@ export function ConversationView({
   const handleSend = useCallback(async (prompt: string) => {
     if (pipelineMode === "code") {
       pipeline.reset();
+      planReview.reset();
       setPipelinePrompt(prompt);
       const detail = await startPipeline(workspace.path, prompt);
       setPipelineConversationId(detail.summary.id);
@@ -159,14 +183,11 @@ export function ConversationView({
       return;
     }
     await onSendPrompt(prompt, agent);
-  }, [pipelineMode, activeConversation, selectedAgent, onSendPrompt, workspace.path, pipeline]);
+  }, [pipelineMode, activeConversation, selectedAgent, onSendPrompt, workspace.path, pipeline, planReview]);
 
   const handleStop = useCallback(async () => {
     if (pipelineConversationId) {
       await stopPipeline(workspace.path, pipelineConversationId);
-      // Don't reset — the backend emits a conversation_status event with
-      // "stopped" which the pipeline hook handles. Resetting here would
-      // wipe the stages and jump to the "new conversation" view.
       return;
     }
     await onStopConversation();
@@ -174,18 +195,22 @@ export function ConversationView({
 
   const handleResume = useCallback(async () => {
     if (!pipelineConversationId) return;
-    pipeline.reset();
+    pipeline.softReset();
+    planReview.reset();
     await resumePipeline(workspace.path, pipelineConversationId);
-  }, [pipelineConversationId, workspace.path, pipeline]);
+  }, [pipelineConversationId, workspace.path, pipeline, planReview]);
 
   const handleNewPipeline = useCallback(() => {
     pipeline.reset();
+    planReview.reset();
     setPipelineConversationId(null);
     setPipelinePrompt("");
     setPipelineMode("code");
-  }, [pipeline]);
+  }, [pipeline, planReview]);
 
+  // awaiting_review is NOT "done" — it's a special intermediate state.
   const pipelineDone = pipeline.stages.length > 0 && !pipeline.running
+    && !pipeline.awaitingReview
     && pipeline.stages.every((s) => (
       s.status === "completed" || s.status === "failed" || s.status === "stopped"
     ));
@@ -226,6 +251,7 @@ export function ConversationView({
             pipelineStartedAt={pipeline.pipelineStartedAt}
             onResume={handleResume}
             onStop={handleStop}
+            planReviewPhase={planReview.phase}
           />
         ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
@@ -291,27 +317,40 @@ export function ConversationView({
         </div>
         )}
 
-        <ConversationComposer
-          providers={availableProviders}
-          agent={activeConversation?.summary.agent ?? selectedAgent}
-          prompt={activePromptDraft}
-          promptHistory={promptHistory}
-          locked={Boolean(activeConversation)}
-          sending={sending}
-          stopping={stopping}
-          activeRunning={Boolean(activeRunning)}
-          pipelineRunning={pipeline.running}
-          pipelineMode={pipelineMode}
-          pipelineDone={pipelineDone}
-          sidecarReady={sidecarReady}
-          onPipelineModeChange={setPipelineMode}
-          onAgentChange={setSelectedAgent}
-          onPromptChange={onPromptDraftChange}
-          onSend={handleSend}
-          onStop={handleStop}
-          onResumePipeline={handleResume}
-          onNewPipeline={handleNewPipeline}
-        />
+        {(planReview.phase === "reviewing" || planReview.phase === "editing")
+        ? (
+          <PlanReviewCard
+            planText={pipeline.stages.find((s) => s.stageName === "Plan Merge")?.text ?? ""}
+            phase={planReview.phase}
+            countdown={planReview.countdown}
+            onAccept={planReview.accept}
+            onEdit={planReview.startEdit}
+            onSubmitFeedback={planReview.submitFeedback}
+          />
+        ) : (
+          <ConversationComposer
+            providers={availableProviders}
+            agent={activeConversation?.summary.agent ?? selectedAgent}
+            prompt={activePromptDraft}
+            promptHistory={promptHistory}
+            locked={Boolean(activeConversation)}
+            sending={sending}
+            stopping={stopping}
+            activeRunning={Boolean(activeRunning)}
+            pipelineRunning={pipeline.running}
+            pipelineMode={pipelineMode}
+            pipelineDone={pipelineDone}
+            sidecarReady={sidecarReady}
+            onPipelineModeChange={setPipelineMode}
+            onAgentChange={setSelectedAgent}
+            onPromptChange={onPromptDraftChange}
+            onSend={handleSend}
+            onStop={handleStop}
+            onResumePipeline={handleResume}
+            onNewPipeline={handleNewPipeline}
+            planReviewPhase={planReview.phase}
+          />
+        )}
 
         <div className="px-5 pb-3 pt-0">
           <div className="mx-auto flex w-full max-w-5xl">

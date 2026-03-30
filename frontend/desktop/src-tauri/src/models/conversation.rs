@@ -15,6 +15,7 @@ pub enum ConversationStatus {
     Completed,
     Failed,
     Stopped,
+    AwaitingReview,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -112,6 +113,28 @@ pub struct PipelineStageRecord {
     /// Provider session ref for resuming this stage.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_session_ref: Option<String>,
+}
+
+impl PipelineStageRecord {
+    /// Construct a failed stage record with empty text and no job/session refs.
+    pub fn failed(
+        stage_index: usize,
+        stage_name: String,
+        agent_label: String,
+        started_at: Option<String>,
+    ) -> Self {
+        Self {
+            stage_index,
+            stage_name,
+            agent_label,
+            status: ConversationStatus::Failed,
+            text: String::new(),
+            started_at,
+            finished_at: Some(crate::storage::now_rfc3339()),
+            job_id: None,
+            provider_session_ref: None,
+        }
+    }
 }
 
 /// Persisted pipeline state saved alongside conversation.json.

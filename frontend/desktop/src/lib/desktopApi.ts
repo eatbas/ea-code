@@ -77,6 +77,10 @@ export function checkCliHealth(settings: AppSettings): Promise<void> {
   return invokeCommand<void>("check_cli_health", { settings });
 }
 
+export function checkSidecarReady(): Promise<boolean> {
+  return invokeCommand<boolean>("check_sidecar_ready");
+}
+
 export function checkApiHealth(): Promise<void> {
   return invokeCommand<void>("check_api_health");
 }
@@ -172,6 +176,28 @@ export function getPipelineState(
   return invokeCommand<PipelineState | null>("get_pipeline_state", {
     workspacePath,
     conversationId,
+  });
+}
+
+export function acceptPlan(
+  workspacePath: string,
+  conversationId: string,
+): Promise<ConversationSummary> {
+  return invokeCommand<ConversationSummary>("accept_plan", {
+    workspacePath,
+    conversationId,
+  });
+}
+
+export function sendPlanEditFeedback(
+  workspacePath: string,
+  conversationId: string,
+  feedback: string,
+): Promise<ConversationDetail> {
+  return invokeCommand<ConversationDetail>("send_plan_edit_feedback", {
+    workspacePath,
+    conversationId,
+    feedback,
   });
 }
 

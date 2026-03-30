@@ -1,40 +1,19 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
-use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::commands::api_health::hive_api_base_url;
+use crate::http::hive_client;
 use crate::models::{
     ConversationDetail, ConversationOutputDelta, ConversationStatus, ConversationStatusEvent,
 };
 
 use super::events::{EVENT_CONVERSATION_OUTPUT_DELTA, EVENT_CONVERSATION_STATUS};
+use super::hive_request::HiveChatRequest;
 use super::persistence;
 use super::sse::{consume_hive_sse, HiveSseEvent, SseResult};
-
-fn shared_hive_client() -> &'static reqwest::Client {
-    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .build()
-            .expect("failed to build hive client")
-    })
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "snake_case")]
-struct HiveChatRequest<'a> {
-    provider: &'a str,
-    model: &'a str,
-    workspace_path: &'a str,
-    mode: &'a str,
-    prompt: &'a str,
-    provider_session_ref: Option<&'a str>,
-    stream: bool,
-    provider_options: HashMap<String, String>,
-}
 
 fn emit_status(app: &AppHandle, event: ConversationStatusEvent) -> Result<(), String> {
     app.emit(EVENT_CONVERSATION_STATUS, event)
@@ -102,7 +81,7 @@ pub async fn run_conversation_turn(
     };
 
     let url = format!("{}/v1/chat", hive_api_base_url());
-    let response = match shared_hive_client().post(url).json(&request).send().await {
+    let response = match hive_client().post(url).json(&request).send().await {
         Ok(response) => response,
         Err(error) => {
             return finish_with_failure(

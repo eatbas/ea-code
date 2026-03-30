@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type {
+  ConversationStatus,
   ConversationStatusEvent,
   PipelineState,
   PipelineStageStatusEvent,
@@ -32,10 +33,14 @@ export interface UsePipelineSessionReturn {
   stages: PipelineStageState[];
   pipelineStartedAt: number | undefined;
   running: boolean;
+  awaitingReview: boolean;
   currentStageName: string;
   userPrompt: string;
+  /** Full reset — clears all stages and state. */
   reset: () => void;
-  loadFromSaved: (state: PipelineState, stillRunning?: boolean) => void;
+  /** Soft reset — keeps existing stages but resets running/review flags. */
+  softReset: () => void;
+  loadFromSaved: (state: PipelineState, stillRunning?: boolean, conversationStatus?: ConversationStatus) => void;
 }
 
 /**
@@ -49,6 +54,7 @@ export function usePipelineSession(
 ): UsePipelineSessionReturn {
   const [stages, setStages] = useState<PipelineStageState[]>([]);
   const [running, setRunning] = useState(false);
+  const [awaitingReview, setAwaitingReview] = useState(false);
   const [currentStageName, setCurrentStageName] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
   const pipelineStartRef = useRef<number | undefined>(undefined);
@@ -65,9 +71,12 @@ export function usePipelineSession(
     const mappedStatus = mapStatus(event.status);
     const now = Date.now();
 
-    if (mappedStatus === "running" && !pipelineStartRef.current) {
-      pipelineStartRef.current = now;
+    if (mappedStatus === "running") {
+      if (!pipelineStartRef.current) {
+        pipelineStartRef.current = now;
+      }
       setRunning(true);
+      setAwaitingReview(false);
     }
 
     // Track all running stage names.
@@ -98,7 +107,7 @@ export function usePipelineSession(
         // When the backend sends plan file content with a completed status,
         // replace the accumulated SSE output so the user sees the actual plan.
         text: event.text ?? existing.text,
-        startedAt: existing.startedAt ?? (mappedStatus === "running" ? now : undefined),
+        startedAt: mappedStatus === "running" ? (existing.status === "running" ? existing.startedAt ?? now : now) : existing.startedAt,
         finishedAt: mappedStatus === "completed" || mappedStatus === "failed" ? now : undefined,
       };
       return copy;
@@ -127,10 +136,19 @@ export function usePipelineSession(
     if (event.conversation.id !== conversationIdRef.current) return;
 
     const status = event.conversation.status;
-    if (status === "completed" || status === "failed" || status === "stopped") {
+    if (status === "awaiting_review") {
       setRunning(false);
+      setAwaitingReview(true);
+      runningNamesRef.current.clear();
+      setCurrentStageName("Review Plan");
+    } else if (status === "completed" || status === "failed" || status === "stopped") {
+      setRunning(false);
+      setAwaitingReview(false);
       runningNamesRef.current.clear();
       setCurrentStageName(status === "stopped" ? "Stopped" : "");
+    } else if (status === "running") {
+      setRunning(true);
+      setAwaitingReview(false);
     }
   }, []);
 
@@ -145,13 +163,26 @@ export function usePipelineSession(
   const reset = useCallback(() => {
     setStages([]);
     setRunning(false);
+    setAwaitingReview(false);
     setCurrentStageName("");
     setUserPrompt("");
     pipelineStartRef.current = undefined;
     runningNamesRef.current.clear();
   }, []);
 
-  const loadFromSaved = useCallback((state: PipelineState, stillRunning = false) => {
+  /** Keep existing stages intact but reset running/review flags. */
+  const softReset = useCallback(() => {
+    setRunning(false);
+    setAwaitingReview(false);
+    setCurrentStageName("");
+    runningNamesRef.current.clear();
+  }, []);
+
+  const loadFromSaved = useCallback((
+    state: PipelineState,
+    stillRunning = false,
+    conversationStatus?: ConversationStatus,
+  ) => {
     setUserPrompt(state.userPrompt);
     const loaded: PipelineStageState[] = state.stages.map((s) => ({
       stageName: s.stageName,
@@ -163,6 +194,7 @@ export function usePipelineSession(
     }));
     setStages(loaded);
     setRunning(stillRunning);
+    setAwaitingReview(conversationStatus === "awaiting_review");
 
     const firstStarted = loaded
       .map((s) => s.startedAt)
@@ -174,6 +206,9 @@ export function usePipelineSession(
       const names = loaded.filter((s) => s.status === "running").map((s) => s.stageName);
       runningNamesRef.current = new Set(names);
       setCurrentStageName(names.join(", "));
+    } else if (conversationStatus === "awaiting_review") {
+      runningNamesRef.current.clear();
+      setCurrentStageName("Review Plan");
     } else {
       runningNamesRef.current.clear();
       if (loaded.some((s) => s.status === "stopped")) {
@@ -189,9 +224,11 @@ export function usePipelineSession(
     stages,
     pipelineStartedAt: pipelineStartRef.current,
     running,
+    awaitingReview,
     currentStageName,
     userPrompt,
     reset,
+    softReset,
     loadFromSaved,
   };
 }

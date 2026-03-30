@@ -2,6 +2,7 @@ mod bootstrap;
 mod commands;
 mod conversations;
 mod git;
+pub mod http;
 mod models;
 pub mod platform;
 pub mod sidecar;
@@ -58,24 +59,27 @@ pub fn run() {
             commands::cli::health::get_cli_versions,
             commands::cli::health::update_cli,
             commands::cli::availability::invalidate_cli_cache,
+            commands::api_health::check_sidecar_ready,
             commands::api_health::check_api_health,
             commands::api_health::get_api_providers,
             commands::api_health::get_api_cli_versions,
             commands::api_health::update_api_cli,
-            conversations::commands::list_workspace_conversations,
-            conversations::commands::create_conversation,
-            conversations::commands::get_conversation,
-            conversations::commands::send_conversation_turn,
-            conversations::commands::stop_conversation,
-            conversations::commands::delete_conversation,
-            conversations::commands::rename_conversation,
-            conversations::commands::archive_conversation,
-            conversations::commands::unarchive_conversation,
-            conversations::commands::set_conversation_pinned,
-            conversations::commands::start_pipeline,
-            conversations::commands::stop_pipeline,
-            conversations::commands::resume_pipeline,
-            conversations::commands::get_pipeline_state,
+            conversations::commands::conversation_handlers::list_workspace_conversations,
+            conversations::commands::conversation_handlers::create_conversation,
+            conversations::commands::conversation_handlers::get_conversation,
+            conversations::commands::conversation_handlers::send_conversation_turn,
+            conversations::commands::conversation_handlers::stop_conversation,
+            conversations::commands::conversation_handlers::delete_conversation,
+            conversations::commands::conversation_handlers::rename_conversation,
+            conversations::commands::conversation_handlers::archive_conversation,
+            conversations::commands::conversation_handlers::unarchive_conversation,
+            conversations::commands::conversation_handlers::set_conversation_pinned,
+            conversations::commands::pipeline_handlers::start_pipeline,
+            conversations::commands::pipeline_handlers::stop_pipeline,
+            conversations::commands::pipeline_handlers::resume_pipeline,
+            conversations::commands::pipeline_handlers::get_pipeline_state,
+            conversations::commands::pipeline_handlers::accept_plan,
+            conversations::commands::pipeline_handlers::send_plan_edit_feedback,
         ])
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");

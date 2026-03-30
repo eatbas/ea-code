@@ -3,7 +3,7 @@ export interface AgentSelection {
   model: string;
 }
 
-export type ConversationStatus = "idle" | "running" | "completed" | "failed" | "stopped";
+export type ConversationStatus = "idle" | "running" | "completed" | "failed" | "stopped" | "awaiting_review";
 
 export type ConversationMessageRole = "user" | "assistant";
 

@@ -1,23 +1,9 @@
-use std::sync::OnceLock;
-use std::time::Duration;
-
-/// Shared HTTP client for version-fetching operations.
-/// Reuses TCP connections and TLS sessions across calls.
-fn shared_client() -> &'static reqwest::Client {
-    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .user_agent("ea-code")
-            .build()
-            .expect("failed to build HTTP client")
-    })
-}
+use crate::http::version_client;
 
 /// Fetches JSON from `url` and extracts a version string by traversing the
 /// given `json_path` keys.  Shared implementation behind the npm / PyPI helpers.
 async fn fetch_version(url: &str, json_path: &[&str]) -> Option<String> {
-    let resp = shared_client().get(url).send().await.ok()?;
+    let resp = version_client().get(url).send().await.ok()?;
     if !resp.status().is_success() {
         return None;
     }

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { PipelineStageState } from "../../hooks/usePipelineSession";
+import type { PlanReviewPhase } from "../../hooks/usePlanReview";
 import { PipelineStageSection } from "./PipelineStageSection";
 import { PipelineStatusBar } from "./PipelineStatusBar";
 
@@ -19,6 +20,8 @@ interface PipelineConversationViewProps {
   onResume?: () => void;
   /** Called when the user clicks Stop. */
   onStop?: () => void;
+  /** Plan review phase. */
+  planReviewPhase?: PlanReviewPhase;
 }
 
 export function PipelineConversationView({
@@ -29,6 +32,7 @@ export function PipelineConversationView({
   pipelineStartedAt,
   onResume,
   onStop,
+  planReviewPhase,
 }: PipelineConversationViewProps): ReactNode {
   const [plannersOpen, setPlannersOpen] = useState(true);
   const [mergeOpen, setMergeOpen] = useState(true);
@@ -46,8 +50,8 @@ export function PipelineConversationView({
   const allDone = stages.length > 0 && stages.every((s) => (
     s.status === "completed" || s.status === "failed" || s.status === "stopped"
   ));
-  const canResume = allDone && !running;
-  const mergeCompleted = mergeStage?.status === "completed";
+  const canResume = allDone && !running && planReviewPhase !== "reviewing" && planReviewPhase !== "editing" && planReviewPhase !== "submitting_edit";
+  const planAccepted = planReviewPhase === "accepted";
   const statusBarLabel = currentStageName || (running
     ? "Starting..."
     : hasStopped
@@ -121,10 +125,10 @@ export function PipelineConversationView({
             )
           )}
 
-          {/* Coder placeholder — only after merge completes */}
-          {mergeCompleted && (
+          {/* Coder placeholder — only after plan is accepted */}
+          {planAccepted && (
             <PipelineStageSection label="Coder" status="pending">
-              <p className="text-xs text-fg-faint">Waiting for merged plan...</p>
+              <p className="text-xs text-fg-faint">Plan accepted. Coder stage pending...</p>
             </PipelineStageSection>
           )}
 
@@ -137,7 +141,7 @@ export function PipelineConversationView({
         </div>
       </div>
 
-      {/* Status bar — always visible at the bottom with Stop/Resume */}
+      {/* Status bar — always visible at the bottom with Stop/Resume/Review */}
       {pipelineStartedAt && (
         <PipelineStatusBar
           stageName={statusBarLabel}
@@ -147,6 +151,7 @@ export function PipelineConversationView({
           hasFailed={hasFailed}
           onResume={onResume}
           onStop={onStop}
+          reviewPhase={planReviewPhase}
         />
       )}
     </>

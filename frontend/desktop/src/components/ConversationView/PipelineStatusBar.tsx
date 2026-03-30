@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { RotateCcw, Square } from "lucide-react";
+import type { PlanReviewPhase } from "../../hooks/usePlanReview";
 
 interface PipelineStatusBarProps {
   /** Name of the currently active stage (e.g. "Planner 1", "Code Fix"). */
@@ -19,6 +20,8 @@ interface PipelineStatusBarProps {
   onResume?: () => void;
   /** Called when the user clicks Stop. */
   onStop?: () => void;
+  /** Plan review phase. */
+  reviewPhase?: PlanReviewPhase;
 }
 
 function formatElapsed(ms: number): string {
@@ -40,6 +43,7 @@ export function PipelineStatusBar({
   hasFailed,
   onResume,
   onStop,
+  reviewPhase,
 }: PipelineStatusBarProps): ReactNode {
   const [now, setNow] = useState(Date.now());
 
@@ -50,6 +54,62 @@ export function PipelineStatusBar({
   }, [running]);
 
   const elapsed = formatElapsed((finishedAt ?? now) - startedAt);
+  const isReviewing = reviewPhase === "reviewing";
+  const isSubmittingEdit = reviewPhase === "submitting_edit";
+
+  // Centre content for the status bar.
+  // Running state always takes priority so the Stop button and green
+  // light are visible when the merge re-runs after feedback.
+  const centreContent = (): ReactNode => {
+    if (running) {
+      return (
+        <div className="flex items-center gap-2.5">
+          {onStop && (
+            <button
+              type="button"
+              onClick={onStop}
+              className="inline-flex items-center gap-2 rounded-lg border border-error-border bg-error-bg px-4 py-1.5 text-xs font-semibold text-error-text transition-colors hover:opacity-80"
+            >
+              <Square size={10} fill="currentColor" />
+              Stop Pipeline
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    if (isReviewing) {
+      return (
+        <span className="text-xs font-semibold text-fg-muted">
+          Review Plan
+        </span>
+      );
+    }
+
+    if (isSubmittingEdit) {
+      return (
+        <span className="text-xs font-semibold animate-pulse text-fg-muted">
+          Updating plan...
+        </span>
+      );
+    }
+
+    // Default: Resume button.
+    return (
+      <div className="flex items-center gap-2.5">
+        {canResume && onResume && (
+          <button
+            type="button"
+            onClick={onResume}
+            className="inline-flex items-center gap-2 rounded-lg border border-edge bg-elevated px-4 py-1.5 text-xs font-semibold text-fg transition-colors hover:bg-active"
+          >
+            <RotateCcw size={10} />
+            {hasFailed ? "Retry Pipeline" : "Resume Pipeline"}
+          </button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="relative overflow-hidden bg-surface px-9">
@@ -68,28 +128,7 @@ export function PipelineStatusBar({
             {stageName}
           </span>
         </div>
-        <div className="flex items-center gap-2.5">
-          {running && onStop && (
-            <button
-              type="button"
-              onClick={onStop}
-              className="inline-flex items-center gap-2 rounded-lg border border-error-border bg-error-bg px-4 py-1.5 text-xs font-semibold text-error-text transition-colors hover:opacity-80"
-            >
-              <Square size={10} fill="currentColor" />
-              Stop Pipeline
-            </button>
-          )}
-          {canResume && onResume && (
-            <button
-              type="button"
-              onClick={onResume}
-              className="inline-flex items-center gap-2 rounded-lg border border-edge bg-elevated px-4 py-1.5 text-xs font-semibold text-fg transition-colors hover:bg-active"
-            >
-              <RotateCcw size={10} />
-              {hasFailed ? "Retry Pipeline" : "Resume Pipeline"}
-            </button>
-          )}
-        </div>
+        {centreContent()}
         <span className="text-xs font-mono text-fg-faint">
           Total: {elapsed}
         </span>

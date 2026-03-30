@@ -1,4 +1,3 @@
-use std::sync::OnceLock;
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -6,6 +5,7 @@ use tauri::{AppHandle, State};
 
 use crate::commands::emitter::{emit_done, emit_items};
 use crate::commands::AppState;
+use crate::http::api_client;
 use crate::models::{ApiCliVersionInfo, ApiHealthStatus, ProviderInfo};
 
 pub const EVENT_API_HEALTH: &str = "api_health_status";
@@ -35,16 +35,6 @@ struct CliVersionResponse {
     current_version: Option<String>,
     latest_version: Option<String>,
     needs_update: bool,
-}
-
-fn shared_client() -> &'static reqwest::Client {
-    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(Duration::from_secs(120))
-            .build()
-            .expect("failed to build HTTP client")
-    })
 }
 
 pub fn hive_api_base_url() -> String {
@@ -102,11 +92,18 @@ fn map_health_failure(
     }
 }
 
+/// Returns `true` when the hive-api sidecar is reachable right now.
+/// Used by the frontend to recover from a missed `sidecar_ready` event.
+#[tauri::command]
+pub async fn check_sidecar_ready(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(state.sidecar.is_healthy().await)
+}
+
 #[tauri::command]
 pub async fn check_api_health(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let _ = state.sidecar.ensure_running().await;
     let base_url = hive_api_base_url();
-    let client = shared_client();
+    let client = api_client();
     let url = format!("{base_url}/health");
 
     let status = match client
@@ -138,7 +135,7 @@ pub async fn check_api_health(app: AppHandle, state: State<'_, AppState>) -> Res
 pub async fn get_api_providers(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let _ = state.sidecar.ensure_running().await;
     let base_url = hive_api_base_url();
-    let client = shared_client();
+    let client = api_client();
     let url = format!("{base_url}/v1/providers?all=true");
 
     match client
@@ -178,7 +175,7 @@ pub async fn get_api_cli_versions(
 ) -> Result<(), String> {
     let _ = state.sidecar.ensure_running().await;
     let base_url = hive_api_base_url();
-    let client = shared_client();
+    let client = api_client();
     let url = format!("{base_url}/v1/cli-versions");
 
     match client
@@ -219,7 +216,7 @@ pub async fn update_api_cli(
 ) -> Result<(), String> {
     state.sidecar.ensure_running().await?;
     let base_url = hive_api_base_url();
-    let client = shared_client();
+    let client = api_client();
     let url = format!("{base_url}/v1/cli-versions/{provider}/update");
 
     match client

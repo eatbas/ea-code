@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { ArrowRight, Plus, RotateCcw, Square } from "lucide-react";
+import type { PlanReviewPhase } from "../../hooks/usePlanReview";
 import type { AgentSelection, ProviderInfo } from "../../types";
 import { useAutoResizeTextarea } from "../../hooks/useAutoResizeTextarea";
 import { PopoverSelect } from "../shared/PopoverSelect";
@@ -40,6 +41,7 @@ interface ConversationComposerProps {
   onStop: () => Promise<void>;
   onResumePipeline?: () => void;
   onNewPipeline?: () => void;
+  planReviewPhase?: PlanReviewPhase;
 }
 
 export function ConversationComposer({
@@ -62,6 +64,7 @@ export function ConversationComposer({
   onStop,
   onResumePipeline,
   onNewPipeline,
+  planReviewPhase,
 }: ConversationComposerProps): ReactNode {
   const [openSelect, setOpenSelect] = useState<"pipeline" | "provider" | "model" | null>(null);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
@@ -198,6 +201,12 @@ export function ConversationComposer({
     void handleSubmit();
   }
 
+  const isReviewing = planReviewPhase === "reviewing";
+  const isEditing = planReviewPhase === "editing";
+  const isSubmittingEdit = planReviewPhase === "submitting_edit";
+  const inReviewFlow = isReviewing || isEditing || isSubmittingEdit;
+  const composerDisabled = pipelineRunning || inReviewFlow;
+
   return (
     <div className="bg-surface px-5 pb-2 pt-1">
       <div className="rounded-[20px] border border-edge bg-panel shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
@@ -206,7 +215,7 @@ export function ConversationComposer({
           <textarea
             ref={textareaRef}
             value={prompt}
-            disabled={pipelineRunning}
+            disabled={composerDisabled}
             onChange={(event) => {
               onPromptChange(event.target.value);
               if (historyIndex !== -1) {
@@ -217,10 +226,12 @@ export function ConversationComposer({
             onKeyDown={handlePromptKeyDown}
             rows={1}
             placeholder={pipelineRunning ? "Pipeline is running..." : "Describe the task you want the agent to handle."}
-            className={`w-full resize-none bg-transparent px-4 py-3 text-sm leading-6 text-fg placeholder:text-fg-faint focus:outline-none ${pipelineRunning ? "cursor-not-allowed opacity-50" : ""}`}
+            className={`w-full resize-none bg-transparent px-4 py-3 text-sm leading-6 text-fg placeholder:text-fg-faint focus:outline-none ${composerDisabled ? "cursor-not-allowed opacity-50" : ""}`}
           />
         </label>
 
+        {/* Hide toolbar during any review flow */}
+        {inReviewFlow ? null : (
         <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-edge px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-2">
             <PopoverSelect
@@ -342,6 +353,7 @@ export function ConversationComposer({
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
