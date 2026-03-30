@@ -43,7 +43,7 @@ pub struct SseResult {
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 struct RunStartedPayload {
-    job_id: String,
+    score_id: String,
 }
 
 #[derive(Default, Deserialize)]
@@ -235,7 +235,7 @@ fn parse_frame(frame: &str) -> Result<Option<SymphonySseEvent>, String> {
         "run_started" => Ok(Some(SymphonySseEvent::RunStarted {
             score_id: serde_json::from_str::<RunStartedPayload>(&payload)
                 .map_err(|error| format!("Failed to parse run_started payload: {error}"))?
-                .job_id,
+                .score_id,
         })),
         "provider_session" => Ok(Some(SymphonySseEvent::ProviderSession {
             provider_session_ref: serde_json::from_str::<ProviderSessionPayload>(&payload)
