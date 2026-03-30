@@ -17,7 +17,7 @@ fn ensure_symphony_checkout() -> Result<(), String> {
         .and_then(|path| path.parent())
         .ok_or_else(|| "Cannot determine repository root for symphony resources".to_string())?;
 
-    let symphony_dir = repo_root.join("hive-api");
+    let symphony_dir = repo_root.join("symphony-api");
     let gitmodules = repo_root.join(".gitmodules");
 
     println!("cargo:rerun-if-changed={}", gitmodules.display());
@@ -42,7 +42,7 @@ fn ensure_symphony_checkout() -> Result<(), String> {
     println!("cargo:warning=Initialising symphony submodule for Tauri resources");
 
     let status = Command::new("git")
-        .args(["submodule", "update", "--init", "--recursive", "hive-api"])
+        .args(["submodule", "update", "--init", "--recursive", "symphony-api"])
         .current_dir(repo_root)
         .status()
         .map_err(|error| format!("Failed to initialise symphony submodule: {error}"))?;

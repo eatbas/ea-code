@@ -37,9 +37,9 @@
     "createUpdaterArtifacts": true,
     "targets": ["nsis", "dmg"],
     "resources": {
-      "../../../hive-api/src/": "symphony/src/",
-      "../../../hive-api/pyproject.toml": "symphony/pyproject.toml",
-      "../../../hive-api/config.toml": "symphony/config.toml"
+      "../../../symphony-api/src/": "symphony/src/",
+      "../../../symphony-api/pyproject.toml": "symphony/pyproject.toml",
+      "../../../symphony-api/config.toml": "symphony/config.toml"
     },
     "windows": {
       "nsis": {
