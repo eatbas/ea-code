@@ -1,3 +1,3 @@
-[submodule "hive-api"]
-	path = hive-api
-	url = https://github.com/eatbas/symphony.git
+[submodule "symphony-api"]
+	path = symphony-api
+	url = https://github.com/eatbas/symphony-api.git
