@@ -84,7 +84,7 @@ export function Features() {
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-muted leading-relaxed">
             Stop switching between terminals and re-explaining context.
-            EA Code gives you a single interface to configure, run, and
+            Maestro gives you a single interface to configure, run, and
             monitor multi-agent development workflows.
           </p>
         </div>

@@ -174,7 +174,7 @@ fn recover_summary_unlocked(
         updated_at,
         message_count: messages.len(),
         last_provider_session_ref: None,
-        active_job_id: None,
+        active_score_id: None,
         error: (status == ConversationStatus::Failed)
             .then(|| RECOVERED_SUMMARY_ERROR.to_string()),
         archived_at: None,
@@ -227,7 +227,7 @@ pub(super) fn reconcile_stale_running_unlocked(
     }
 
     summary.status = ConversationStatus::Failed;
-    summary.active_job_id = None;
+    summary.active_score_id = None;
     summary.error = Some(STALE_RUNNING_ERROR.to_string());
     summary.updated_at = now_rfc3339();
     write_summary_unlocked(summary)?;

@@ -14,7 +14,7 @@ mod tests;
 pub use crud::{
     archive_conversation, cleanup_orphaned_conversations, create_conversation,
     delete_conversation, finish_turn, get_conversation, list_conversations, mark_turn_running,
-    rename_conversation, set_active_job_id, set_conversation_pinned, set_provider_session_ref,
+    rename_conversation, set_active_score_id, set_conversation_pinned, set_provider_session_ref,
     set_status, unarchive_conversation,
 };
 
@@ -24,9 +24,9 @@ pub use pipeline_state::{
 };
 
 pub use registries::{
-    get_pipeline_job_ids, get_pipeline_stage_texts, register_abort_flag,
-    register_pipeline_job_slots, register_pipeline_stage_buffers, remove_abort_flag,
-    remove_pipeline_job_slots, remove_pipeline_stage_buffers, track_running_conversation,
+    get_pipeline_score_ids, get_pipeline_stage_texts, register_abort_flag,
+    register_pipeline_score_slots, register_pipeline_stage_buffers, remove_abort_flag,
+    remove_pipeline_score_slots, remove_pipeline_stage_buffers, track_running_conversation,
     trigger_abort,
 };
 

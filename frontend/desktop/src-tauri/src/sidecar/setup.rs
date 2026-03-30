@@ -9,27 +9,27 @@ pub(crate) struct PreparedEnvironment {
     pub setup_complete: bool,
 }
 
-pub(crate) async fn prepare_hive_environment(
-    hive_dir: &Path,
+pub(crate) async fn prepare_symphony_environment(
+    symphony_dir: &Path,
     setup_complete: bool,
 ) -> Result<PreparedEnvironment, String> {
     let python = find_python().await?;
-    let venv_dir = hive_dir.join(".venv");
+    let venv_dir = symphony_dir.join(".venv");
 
     if !venv_is_valid(&venv_dir).await {
-        eprintln!("[sidecar] Creating hive-api virtual environment…");
+        eprintln!("[sidecar] Creating symphony virtual environment…");
         let status = python
             .venv_command(&venv_dir)
             .status()
             .await
             .map_err(|error| format!("Failed to create venv: {error}"))?;
         if !status.success() {
-            return Err("Failed to create hive-api virtual environment".into());
+            return Err("Failed to create symphony virtual environment".into());
         }
     }
 
     let venv_python = venv_python(&venv_dir);
-    let setup_complete = ensure_dependencies(&venv_python, hive_dir, setup_complete).await?;
+    let setup_complete = ensure_dependencies(&venv_python, symphony_dir, setup_complete).await?;
 
     Ok(PreparedEnvironment {
         venv_python,
@@ -39,24 +39,24 @@ pub(crate) async fn prepare_hive_environment(
 
 async fn ensure_dependencies(
     venv_python: &Path,
-    hive_dir: &Path,
+    symphony_dir: &Path,
     setup_complete: bool,
 ) -> Result<bool, String> {
     if setup_complete {
         return Ok(true);
     }
 
-    if !hive_dir.join("pyproject.toml").exists() {
+    if !symphony_dir.join("pyproject.toml").exists() {
         return Err(format!(
-            "hive-api source not found at {}. Run `git submodule update --init`.",
-            hive_dir.display()
+            "symphony source not found at {}. Run `git submodule update --init`.",
+            symphony_dir.display()
         ));
     }
 
-    eprintln!("[sidecar] Installing hive-api dependencies…");
+    eprintln!("[sidecar] Installing symphony dependencies…");
     let _ = Command::new(venv_python)
         .args(["-m", "pip", "install", "--quiet", "--upgrade", "pip"])
-        .current_dir(hive_dir)
+        .current_dir(symphony_dir)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .status()
@@ -64,7 +64,7 @@ async fn ensure_dependencies(
 
     let output = Command::new(venv_python)
         .args(["-m", "pip", "install", "--quiet", "-e", "."])
-        .current_dir(hive_dir)
+        .current_dir(symphony_dir)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .output()
@@ -73,7 +73,7 @@ async fn ensure_dependencies(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Failed to install hive-api dependencies: {stderr}"));
+        return Err(format!("Failed to install symphony dependencies: {stderr}"));
     }
 
     Ok(true)

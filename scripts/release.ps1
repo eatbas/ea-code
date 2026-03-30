@@ -1,4 +1,4 @@
-# EA Code Release Script (PowerShell)
+# Maestro Release Script (PowerShell)
 # Usage: .\scripts\release.ps1 [version|patch|minor|major]
 
 param(
@@ -90,4 +90,4 @@ Write-Host "[6/6] Pushed commit and tag to origin/main" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "Release $Tag triggered. Monitor at:" -ForegroundColor Cyan
-Write-Host "  https://github.com/eatbas/ea-code/actions" -ForegroundColor Yellow
+Write-Host "  https://github.com/eatbas/maestro/actions" -ForegroundColor Yellow

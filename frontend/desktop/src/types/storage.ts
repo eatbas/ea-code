@@ -24,5 +24,5 @@ export interface WorkspaceInfo {
   isGitRepo: boolean;
   isDirty?: boolean;
   branch?: string;
-  eaCodeIgnored?: boolean;
+  maestroIgnored?: boolean;
 }

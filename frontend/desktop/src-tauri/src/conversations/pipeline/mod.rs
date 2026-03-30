@@ -21,7 +21,7 @@ pub async fn run_plan_merge_with_feedback(
     conversation_id: String,
     workspace_path: String,
     abort: Arc<AtomicBool>,
-    job_id_slot: Arc<std::sync::Mutex<Option<String>>>,
+    score_id_slot: Arc<std::sync::Mutex<Option<String>>>,
     output_buffer: Arc<std::sync::Mutex<String>>,
     planner_count: usize,
     provider_session_ref: String,
@@ -29,28 +29,28 @@ pub async fn run_plan_merge_with_feedback(
     feedback: String,
 ) -> Result<PipelineStageRecord, (PipelineStageRecord, String)> {
     run_plan_merge_inner(
-        app, conversation_id, workspace_path, abort, job_id_slot,
+        app, conversation_id, workspace_path, abort, score_id_slot,
         output_buffer, planner_count, provider_session_ref, agent,
         Some(feedback),
     )
     .await
 }
 
-/// Run the plan-merge stage. Resumes the first planner's hive-api session
+/// Run the plan-merge stage. Resumes the first planner's Symphony session
 /// and instructs it to read all individual plans and produce a merged plan.
 pub async fn run_plan_merge(
     app: AppHandle,
     conversation_id: String,
     workspace_path: String,
     abort: Arc<AtomicBool>,
-    job_id_slot: Arc<std::sync::Mutex<Option<String>>>,
+    score_id_slot: Arc<std::sync::Mutex<Option<String>>>,
     output_buffer: Arc<std::sync::Mutex<String>>,
     planner_count: usize,
     provider_session_ref: String,
     agent: PipelineAgent,
 ) -> Result<PipelineStageRecord, (PipelineStageRecord, String)> {
     run_plan_merge_inner(
-        app, conversation_id, workspace_path, abort, job_id_slot,
+        app, conversation_id, workspace_path, abort, score_id_slot,
         output_buffer, planner_count, provider_session_ref, agent,
         None,
     )
@@ -62,7 +62,7 @@ async fn run_plan_merge_inner(
     conversation_id: String,
     workspace_path: String,
     abort: Arc<AtomicBool>,
-    job_id_slot: Arc<std::sync::Mutex<Option<String>>>,
+    score_id_slot: Arc<std::sync::Mutex<Option<String>>>,
     output_buffer: Arc<std::sync::Mutex<String>>,
     planner_count: usize,
     provider_session_ref: String,
@@ -72,7 +72,7 @@ async fn run_plan_merge_inner(
     let stage_index = planner_count;
     let label = agent_label(&agent);
 
-    let conv_dir = format!("{workspace_path}/.ea-code/conversations/{conversation_id}");
+    let conv_dir = format!("{workspace_path}/.maestro/conversations/{conversation_id}");
     let plan_dir = format!("{conv_dir}/plan");
     let merged_dir = format!("{conv_dir}/plan_merged");
 
@@ -115,7 +115,7 @@ async fn run_plan_merge_inner(
             agent_label: label,
         },
         abort,
-        job_id_slot,
+        score_id_slot,
         output_buffer,
     )
     .await
@@ -129,11 +129,11 @@ pub async fn run_pipeline_planners(
     planners: Vec<PipelineAgent>,
     user_prompt: String,
     abort: Arc<AtomicBool>,
-    job_id_slots: Vec<Arc<std::sync::Mutex<Option<String>>>>,
+    score_id_slots: Vec<Arc<std::sync::Mutex<Option<String>>>>,
     previous_stages: Option<Vec<PipelineStageRecord>>,
     stage_buffers: Vec<Arc<std::sync::Mutex<String>>>,
 ) -> Result<(), String> {
-    let conv_dir = format!("{workspace_path}/.ea-code/conversations/{conversation_id}");
+    let conv_dir = format!("{workspace_path}/.maestro/conversations/{conversation_id}");
 
     // Save user prompt in its own folder.
     let prompt_dir = format!("{conv_dir}/prompt");
@@ -169,7 +169,7 @@ pub async fn run_pipeline_planners(
                     text: String::new(),
                     started_at: Some(now_rfc3339()),
                     finished_at: None,
-                    job_id: None,
+                    score_id: None,
                     provider_session_ref: None,
                 }
             }
@@ -215,7 +215,7 @@ pub async fn run_pipeline_planners(
             .and_then(|s| s.get(i))
             .and_then(|s| s.provider_session_ref.clone());
 
-        let job_slot = job_id_slots.get(i).cloned().unwrap_or_default();
+        let job_slot = score_id_slots.get(i).cloned().unwrap_or_default();
         let out_buf = stage_buffers.get(i).cloned().unwrap_or_default();
         let app_c = app.clone();
         let conv_id = conversation_id.clone();

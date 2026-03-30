@@ -3,8 +3,8 @@ use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Emitter};
 use tokio::time::{sleep, Duration, Instant};
 
-use crate::commands::api_health::hive_api_base_url;
-use crate::http::hive_client;
+use crate::commands::api_health::symphony_base_url;
+use crate::http::symphony_client;
 use crate::models::{
     AgentSelection, ConversationDetail, ConversationStatus, ConversationStatusEvent,
     ConversationSummary, PipelineState,
@@ -22,16 +22,16 @@ use super::pipeline_orchestration::{
 const STOP_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const PIPELINE_STOP_WAIT_TIMEOUT: Duration = Duration::from_secs(3);
 
-async fn send_hive_stop_request(
+async fn send_symphony_stop_request(
     client: &reqwest::Client,
-    job_id: &str,
+    score_id: &str,
 ) -> Result<(), String> {
-    let url = format!("{}/v1/chat/{job_id}/stop", hive_api_base_url());
+    let url = format!("{}/v1/chat/{score_id}/stop", symphony_base_url());
     let response = client
         .post(url)
         .send()
         .await
-        .map_err(|error| format!("Failed to stop hive job {job_id}: {error}"))?;
+        .map_err(|error| format!("Failed to stop symphony score {score_id}: {error}"))?;
     if response.status().is_success() {
         return Ok(());
     }
@@ -39,7 +39,7 @@ async fn send_hive_stop_request(
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     Err(format!(
-        "Failed to stop hive job {job_id}: HTTP {status} — {body}"
+        "Failed to stop symphony score {score_id}: HTTP {status} — {body}"
     ))
 }
 
@@ -79,7 +79,7 @@ pub async fn start_pipeline(
         let planner_result = pipeline::run_pipeline_planners(
             app_handle.clone(), conv_id.clone(), ws.clone(),
             setup.planners, user_prompt, setup.abort.clone(),
-            setup.job_id_slots[..setup.planner_count].to_vec(), None,
+            setup.score_id_slots[..setup.planner_count].to_vec(), None,
             setup.stage_buffers[..setup.planner_count].to_vec(),
         )
         .await;
@@ -90,7 +90,7 @@ pub async fn start_pipeline(
             run_merge_chain(
                 app_handle.clone(), conv_id.clone(), ws.clone(), setup.abort.clone(),
                 setup.merge_agent, setup.planner_count,
-                &setup.job_id_slots, &setup.stage_buffers,
+                &setup.score_id_slots, &setup.stage_buffers,
             )
             .await
         } else {
@@ -113,14 +113,14 @@ pub async fn stop_pipeline(
     persistence::trigger_abort(&workspace_path, &conversation_id)?;
 
     let deadline = Instant::now() + PIPELINE_STOP_WAIT_TIMEOUT;
-    let client = hive_client();
-    let mut stopped_job_ids = std::collections::HashSet::new();
+    let client = symphony_client();
+    let mut stopped_score_ids = std::collections::HashSet::new();
 
     loop {
-        let job_ids = persistence::get_pipeline_job_ids(&workspace_path, &conversation_id)?;
-        for job_id in job_ids {
-            if stopped_job_ids.insert(job_id.clone()) {
-                if let Err(e) = send_hive_stop_request(&client, &job_id).await {
+        let score_ids = persistence::get_pipeline_score_ids(&workspace_path, &conversation_id)?;
+        for score_id in score_ids {
+            if stopped_score_ids.insert(score_id.clone()) {
+                if let Err(e) = send_symphony_stop_request(&client, &score_id).await {
                     eprintln!("[pipeline] {e}");
                 }
             }
@@ -183,7 +183,7 @@ pub async fn resume_pipeline(
             pipeline::run_pipeline_planners(
                 app_handle.clone(), conv_id.clone(), ws.clone(),
                 setup.planners, user_prompt, setup.abort.clone(),
-                setup.job_id_slots[..setup.planner_count].to_vec(), Some(previous_stages),
+                setup.score_id_slots[..setup.planner_count].to_vec(), Some(previous_stages),
                 setup.stage_buffers[..setup.planner_count].to_vec(),
             )
             .await
@@ -196,7 +196,7 @@ pub async fn resume_pipeline(
             run_merge_chain(
                 app_handle.clone(), conv_id.clone(), ws.clone(), setup.abort.clone(),
                 setup.merge_agent, setup.planner_count,
-                &setup.job_id_slots, &setup.stage_buffers,
+                &setup.score_id_slots, &setup.stage_buffers,
             )
             .await
         } else {
@@ -300,7 +300,7 @@ pub async fn send_plan_edit_feedback(
         let merge_label = format!("{} / {}", setup.merge_agent.provider, setup.merge_agent.model);
         ensure_merge_stage_record(&ws, &conv_id, setup.planner_count, &merge_label);
 
-        let merge_slot = setup.job_id_slots.get(setup.planner_count).cloned().unwrap_or_default();
+        let merge_slot = setup.score_id_slots.get(setup.planner_count).cloned().unwrap_or_default();
         let merge_buf = setup.stage_buffers.get(setup.planner_count).cloned().unwrap_or_default();
 
         re_emit_completed_stages(&app_handle, &conv_id, &ws, setup.planner_count);

@@ -24,7 +24,7 @@ export interface ConversationSummary {
   updatedAt: string;
   messageCount: number;
   lastProviderSessionRef: string | null;
-  activeJobId: string | null;
+  activeScoreId: string | null;
   error: string | null;
   archivedAt: string | null;
   pinnedAt: string | null;
@@ -69,7 +69,7 @@ export interface PipelineStageRecord {
   text: string;
   startedAt: string | null;
   finishedAt: string | null;
-  jobId?: string | null;
+  scoreId?: string | null;
   providerSessionRef?: string | null;
 }
 

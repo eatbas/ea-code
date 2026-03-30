@@ -1,13 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "EA Code",
+  "productName": "Maestro",
   "version": "0.6.3",
-  "identifier": "com.eatbas.ea-code",
+  "identifier": "com.eatbas.maestro",
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMyN0NEQzlCRDY5MkM0NkYKUldSdnhKTFdtOXg4TXVvblRLSFpqTEpFM0ZUaXhjcnkxbENlcTB6MmpmRzhLTGpmRHhNYkU5L3MK",
       "endpoints": [
-        "https://github.com/eatbas/ea-code/releases/latest/download/latest.json"
+        "https://github.com/eatbas/maestro/releases/latest/download/latest.json"
       ]
     }
   },
@@ -20,7 +20,7 @@
   "app": {
     "windows": [
       {
-        "title": "EA Code — AI Orchestrator",
+        "title": "Maestro — AI Orchestrator",
         "center": true,
         "width": 1280,
         "height": 800,
@@ -37,9 +37,9 @@
     "createUpdaterArtifacts": true,
     "targets": ["nsis", "dmg"],
     "resources": {
-      "../../../hive-api/src/": "hive-api/src/",
-      "../../../hive-api/pyproject.toml": "hive-api/pyproject.toml",
-      "../../../hive-api/config.toml": "hive-api/config.toml"
+      "../../../hive-api/src/": "symphony/src/",
+      "../../../hive-api/pyproject.toml": "symphony/pyproject.toml",
+      "../../../hive-api/config.toml": "symphony/config.toml"
     },
     "windows": {
       "nsis": {

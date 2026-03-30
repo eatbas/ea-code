@@ -1,6 +1,6 @@
 /// File-based storage module.
 ///
-/// Global data (settings) lives under `~/.ea-code/`.
+/// Global data (settings) lives under `~/.maestro/`.
 /// Uses atomic writes (write to .tmp, then rename) for all JSON files.
 pub mod cleanup;
 pub mod projects;
@@ -36,10 +36,10 @@ pub fn with_conversations_lock<T, F: FnOnce() -> Result<T, String>>(f: F) -> Res
     f()
 }
 
-/// Returns the config directory: `~/.ea-code/`
+/// Returns the config directory: `~/.maestro/`
 pub fn config_dir() -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or_else(|| "Unable to determine home directory".to_string())?;
-    Ok(home.join(".ea-code"))
+    Ok(home.join(".maestro"))
 }
 
 /// Atomically writes content to a file.
@@ -129,7 +129,7 @@ pub fn recover_orphaned_backups() -> Result<(), String> {
     Ok(())
 }
 
-/// Ensures global config directories exist under `~/.ea-code/`.
+/// Ensures global config directories exist under `~/.maestro/`.
 pub fn ensure_dirs() -> Result<(), String> {
     let base = config_dir()?;
 

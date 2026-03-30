@@ -40,8 +40,8 @@ pub async fn workspace_info(path: &str) -> WorkspaceInfo {
     } else {
         None
     };
-    let ea_code_ignored = if is_repo {
-        Some(is_ea_code_ignored(path).await)
+    let maestro_ignored = if is_repo {
+        Some(is_maestro_ignored(path).await)
     } else {
         None
     };
@@ -51,16 +51,16 @@ pub async fn workspace_info(path: &str) -> WorkspaceInfo {
         is_git_repo: is_repo,
         is_dirty,
         branch,
-        ea_code_ignored,
+        maestro_ignored,
     }
 }
 
-async fn is_ea_code_ignored(path: &str) -> bool {
-    if is_path_ignored(path, ".ea-code").await.unwrap_or(false) {
+async fn is_maestro_ignored(path: &str) -> bool {
+    if is_path_ignored(path, ".maestro").await.unwrap_or(false) {
         return true;
     }
 
-    workspace_has_ea_code_gitignore_entry(path).unwrap_or(false)
+    workspace_has_maestro_gitignore_entry(path).unwrap_or(false)
 }
 
 /// Runs a git command, routing through Git Bash on Windows via the shared
@@ -75,7 +75,7 @@ pub async fn is_path_ignored(path: &str, relative_path: &str) -> Result<bool, St
     Ok(output.status.success())
 }
 
-fn workspace_has_ea_code_gitignore_entry(workspace_path: &str) -> Result<bool, String> {
+fn workspace_has_maestro_gitignore_entry(workspace_path: &str) -> Result<bool, String> {
     let gitignore_path = Path::new(workspace_path).join(".gitignore");
     if !gitignore_path.exists() {
         return Ok(false);
@@ -86,12 +86,12 @@ fn workspace_has_ea_code_gitignore_entry(workspace_path: &str) -> Result<bool, S
 
     Ok(existing.lines().any(|line| {
         let trimmed = line.trim();
-        trimmed == ".ea-code" || trimmed == ".ea-code/"
+        trimmed == ".maestro" || trimmed == ".maestro/"
     }))
 }
 
-/// Ensures the workspace root `.gitignore` contains `.ea-code/`.
-pub fn ensure_ea_code_gitignore_entry(workspace_path: &str) -> Result<(), String> {
+/// Ensures the workspace root `.gitignore` contains `.maestro/`.
+pub fn ensure_maestro_gitignore_entry(workspace_path: &str) -> Result<(), String> {
     let gitignore_path = Path::new(workspace_path).join(".gitignore");
     let existing = if gitignore_path.exists() {
         std::fs::read_to_string(&gitignore_path)
@@ -100,7 +100,7 @@ pub fn ensure_ea_code_gitignore_entry(workspace_path: &str) -> Result<(), String
         String::new()
     };
 
-    let already_present = workspace_has_ea_code_gitignore_entry(workspace_path)?;
+    let already_present = workspace_has_maestro_gitignore_entry(workspace_path)?;
     if already_present {
         return Ok(());
     }
@@ -109,7 +109,7 @@ pub fn ensure_ea_code_gitignore_entry(workspace_path: &str) -> Result<(), String
     if !updated.is_empty() && !updated.ends_with('\n') {
         updated.push('\n');
     }
-    updated.push_str(".ea-code/\n");
+    updated.push_str(".maestro/\n");
 
     std::fs::write(&gitignore_path, updated)
         .map_err(|error| format!("Failed to write {}: {error}", gitignore_path.display()))

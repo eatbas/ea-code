@@ -1,19 +1,19 @@
 use std::path::{Path, PathBuf};
 
-/// Returns `true` if the directory looks like an initialised hive-api checkout
+/// Returns `true` if the directory looks like an initialised symphony checkout
 /// (i.e. contains `pyproject.toml`).
-pub fn hive_dir_has_source(dir: &Path) -> bool {
+pub fn symphony_dir_has_source(dir: &Path) -> bool {
     dir.join("pyproject.toml").exists()
 }
 
-/// Locate the hive-api directory relative to the project root.
+/// Locate the symphony directory relative to the project root.
 ///
-/// In development, this is `{repo_root}/hive-api/`.
+/// In development, this is `{repo_root}/symphony/`.
 /// In a bundled release, it would be inside the Tauri resource directory.
 ///
 /// If the directory exists but the git submodule is not initialised (no
 /// `pyproject.toml`), attempts `git submodule update --init` automatically.
-pub fn find_hive_dir() -> Result<PathBuf, String> {
+pub fn find_symphony_dir() -> Result<PathBuf, String> {
     // Development: walk up from src-tauri to find repo root
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // manifest_dir = frontend/desktop/src-tauri
@@ -24,25 +24,25 @@ pub fn find_hive_dir() -> Result<PathBuf, String> {
         .and_then(|p| p.parent()) // repo root
         .ok_or_else(|| "Cannot determine repository root".to_string())?;
 
-    let hive_dir = repo_root.join("hive-api");
-    if hive_dir.is_dir() {
-        if hive_dir_has_source(&hive_dir) {
-            return Ok(hive_dir);
+    let symphony_dir = repo_root.join("symphony");
+    if symphony_dir.is_dir() {
+        if symphony_dir_has_source(&symphony_dir) {
+            return Ok(symphony_dir);
         }
 
         // Directory exists but source is missing — try initialising the submodule.
-        eprintln!("[sidecar] hive-api directory exists but source is missing — running git submodule update --init");
+        eprintln!("[sidecar] symphony directory exists but source is missing — running git submodule update --init");
         let status = std::process::Command::new("git")
-            .args(["submodule", "update", "--init", "hive-api"])
+            .args(["submodule", "update", "--init", "symphony"])
             .current_dir(repo_root)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .status();
 
         match status {
-            Ok(s) if s.success() && hive_dir_has_source(&hive_dir) => {
-                eprintln!("[sidecar] hive-api submodule initialised successfully");
-                return Ok(hive_dir);
+            Ok(s) if s.success() && symphony_dir_has_source(&symphony_dir) => {
+                eprintln!("[sidecar] symphony submodule initialised successfully");
+                return Ok(symphony_dir);
             }
             Ok(s) => {
                 eprintln!("[sidecar] git submodule update --init exited with {s}");
@@ -52,7 +52,7 @@ pub fn find_hive_dir() -> Result<PathBuf, String> {
             }
         }
 
-        return Err("hive-api directory exists but has no source code. \
+        return Err("symphony directory exists but has no source code. \
              Run `git submodule update --init` from the repository root."
             .into());
     }
@@ -63,21 +63,21 @@ pub fn find_hive_dir() -> Result<PathBuf, String> {
         let exe = exe.canonicalize().unwrap_or(exe);
         if let Some(exe_dir) = exe.parent() {
             // Windows: resources sit next to the exe
-            let bundled = exe_dir.join("hive-api");
-            if bundled.is_dir() && hive_dir_has_source(&bundled) {
+            let bundled = exe_dir.join("symphony");
+            if bundled.is_dir() && symphony_dir_has_source(&bundled) {
                 return Ok(bundled);
             }
 
             // macOS: resources are at Contents/Resources/ (exe is at Contents/MacOS/)
             #[cfg(target_os = "macos")]
             if let Some(contents_dir) = exe_dir.parent() {
-                let mac_resources = contents_dir.join("Resources").join("hive-api");
-                if mac_resources.is_dir() && hive_dir_has_source(&mac_resources) {
+                let mac_resources = contents_dir.join("Resources").join("symphony");
+                if mac_resources.is_dir() && symphony_dir_has_source(&mac_resources) {
                     return Ok(mac_resources);
                 }
             }
         }
     }
 
-    Err("hive-api directory not found. Ensure the git submodule is initialised.".into())
+    Err("symphony directory not found. Ensure the git submodule is initialised.".into())
 }

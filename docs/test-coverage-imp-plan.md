@@ -1,6 +1,6 @@
 # Test Coverage Implementation Plan
 
-> Generated 2026-03-24 | Scope: `frontend/desktop/` (Rust + TypeScript) | Excludes: `hive-api/` (already tested)
+> Generated 2026-03-24 | Scope: `frontend/desktop/` (Rust + TypeScript) | Excludes: Symphony backend (already tested)
 
 ## Current State
 

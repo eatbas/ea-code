@@ -66,15 +66,15 @@ pub(crate) fn run_startup_maintenance() {
 }
 
 pub(crate) fn build_sidecar() -> SidecarManager {
-    let hive_api_port = storage::settings::read_settings()
-        .map(|settings| settings.hive_api_port)
+    let symphony_port = storage::settings::read_settings()
+        .map(|settings| settings.symphony_port)
         .unwrap_or(0);
 
-    match sidecar::find_hive_dir() {
-        Ok(hive_dir) => SidecarManager::new(hive_dir, hive_api_port),
+    match sidecar::find_symphony_dir() {
+        Ok(symphony_dir) => SidecarManager::new(symphony_dir, symphony_port),
         Err(error) => {
-            eprintln!("Warning: {error} — hive-api sidecar will not auto-start");
-            SidecarManager::new(PathBuf::from("hive-api"), hive_api_port)
+            eprintln!("Warning: {error} — symphony sidecar will not auto-start");
+            SidecarManager::new(PathBuf::from("symphony"), symphony_port)
         }
     }
 }
@@ -82,7 +82,7 @@ pub(crate) fn build_sidecar() -> SidecarManager {
 pub(crate) fn spawn_sidecar_startup(app: AppHandle, sidecar: SidecarManager) {
     tauri::async_runtime::spawn(async move {
         if let Err(error) = sidecar.start().await {
-            eprintln!("Warning: failed to start hive-api sidecar: {error}");
+            eprintln!("Warning: failed to start symphony sidecar: {error}");
             let _ = app.emit(
                 EVENT_SIDECAR_READY,
                 SidecarReadyPayload {
@@ -93,7 +93,7 @@ pub(crate) fn spawn_sidecar_startup(app: AppHandle, sidecar: SidecarManager) {
             return;
         }
         if let Err(error) = sidecar.wait_until_healthy().await {
-            eprintln!("Warning: hive-api sidecar not healthy: {error}");
+            eprintln!("Warning: symphony sidecar not healthy: {error}");
             let _ = app.emit(
                 EVENT_SIDECAR_READY,
                 SidecarReadyPayload {
@@ -117,7 +117,7 @@ pub(crate) fn stop_sidecar(sidecar: &SidecarManager) {
     let cloned = sidecar.clone();
     tauri::async_runtime::block_on(async move {
         if let Err(error) = cloned.stop().await {
-            eprintln!("Warning: failed to stop hive-api sidecar: {error}");
+            eprintln!("Warning: failed to stop symphony sidecar: {error}");
         }
     });
 }

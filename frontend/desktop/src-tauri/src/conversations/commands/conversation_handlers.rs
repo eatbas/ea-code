@@ -2,7 +2,7 @@ use serde::Deserialize;
 use tauri::AppHandle;
 use tokio::time::{sleep, Duration, Instant};
 
-use crate::http::hive_client;
+use crate::http::symphony_client;
 use crate::models::{
     AgentSelection, ConversationDetail, ConversationStatus, ConversationSummary,
 };
@@ -26,7 +26,7 @@ async fn wait_for_stoppable_conversation(
 
     loop {
         let summary = persistence::get_conversation(workspace_path, conversation_id)?.summary;
-        if summary.active_job_id.is_some() || summary.status != ConversationStatus::Running {
+        if summary.active_score_id.is_some() || summary.status != ConversationStatus::Running {
             return Ok(summary);
         }
         if Instant::now() >= deadline {
@@ -111,11 +111,11 @@ pub async fn stop_conversation(
     conversation_id: String,
 ) -> Result<ConversationSummary, String> {
     let mut summary = persistence::get_conversation(&workspace_path, &conversation_id)?.summary;
-    if summary.status == ConversationStatus::Running && summary.active_job_id.is_none() {
+    if summary.status == ConversationStatus::Running && summary.active_score_id.is_none() {
         summary = wait_for_stoppable_conversation(&workspace_path, &conversation_id).await?;
     }
 
-    let Some(job_id) = summary.active_job_id.clone() else {
+    let Some(score_id) = summary.active_score_id.clone() else {
         if summary.status == ConversationStatus::Running {
             return Err("The run is still starting and cannot be stopped yet. Please try again in a moment.".to_string());
         }
@@ -125,10 +125,10 @@ pub async fn stop_conversation(
     persistence::trigger_abort(&workspace_path, &conversation_id)?;
 
     let url = format!(
-        "{}/v1/chat/{job_id}/stop",
-        crate::commands::api_health::hive_api_base_url()
+        "{}/v1/chat/{score_id}/stop",
+        crate::commands::api_health::symphony_base_url()
     );
-    let response = hive_client()
+    let response = symphony_client()
         .post(url)
         .send()
         .await

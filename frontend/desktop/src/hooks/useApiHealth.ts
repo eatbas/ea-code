@@ -11,7 +11,7 @@ interface UseApiHealthReturn {
   checkHealth: () => void;
 }
 
-/** Hook to check hive-api health and provider availability (event-driven). */
+/** Hook to check Symphony health and provider availability (event-driven). */
 export function useApiHealth(): UseApiHealthReturn {
   const { state: health } = useEventValue<ApiHealth | null>({
     initialValue: null,

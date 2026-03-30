@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 
-set "TOOL=%EA_CODE_CLANG_TOOL%"
+set "TOOL=%MAESTRO_CLANG_TOOL%"
 if "%TOOL%"=="" (
   echo Missing clang tool name. 1>&2
   exit /b 1
@@ -9,7 +9,7 @@ if "%TOOL%"=="" (
 
 set "COMPILER="
 
-if defined EA_CODE_LLVM_BIN call :probe "%EA_CODE_LLVM_BIN%"
+if defined MAESTRO_LLVM_BIN call :probe "%MAESTRO_LLVM_BIN%"
 if defined LLVM_HOME call :probe "%LLVM_HOME%\bin"
 if defined VCToolsInstallDir call :probe "%VCToolsInstallDir%Llvm\bin"
 if defined VCINSTALLDIR call :probe "%VCINSTALLDIR%Tools\Llvm\bin"
@@ -29,7 +29,7 @@ for %%V in (2022 2019) do (
 )
 
 if not defined COMPILER (
-  echo EA Code could not locate %TOOL%. Install LLVM or Visual Studio C++ Clang tools, or set EA_CODE_LLVM_BIN to the LLVM bin directory. 1>&2
+  echo Maestro could not locate %TOOL%. Install LLVM or Visual Studio C++ Clang tools, or set MAESTRO_LLVM_BIN to the LLVM bin directory. 1>&2
   exit /b 1
 )
 

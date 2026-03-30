@@ -37,7 +37,7 @@ pub fn create_conversation(
             updated_at: now,
             message_count: 0,
             last_provider_session_ref: None,
-            active_job_id: None,
+            active_score_id: None,
             error: None,
             archived_at: None,
             pinned_at: None,
@@ -193,7 +193,7 @@ pub fn mark_turn_running(
         }
         summary.status = ConversationStatus::Running;
         summary.updated_at = now_rfc3339();
-        summary.active_job_id = None;
+        summary.active_score_id = None;
         summary.error = None;
 
         write_messages_unlocked(workspace_path, conversation_id, &messages)?;
@@ -203,14 +203,14 @@ pub fn mark_turn_running(
     })
 }
 
-pub fn set_active_job_id(
+pub fn set_active_score_id(
     workspace_path: &str,
     conversation_id: &str,
-    job_id: Option<String>,
+    score_id: Option<String>,
 ) -> Result<ConversationSummary, String> {
     with_conversations_lock(|| {
         let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
-        summary.active_job_id = job_id;
+        summary.active_score_id = score_id;
         summary.updated_at = now_rfc3339();
         write_summary_unlocked(&summary)?;
         Ok(summary)
@@ -241,7 +241,7 @@ pub fn set_status(
         let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
         summary.status = status;
         summary.updated_at = now_rfc3339();
-        summary.active_job_id = None;
+        summary.active_score_id = None;
         summary.error = error;
         write_summary_unlocked(&summary)?;
         Ok(summary)
@@ -278,7 +278,7 @@ pub fn finish_turn(
         summary.message_count = messages.len();
         summary.status = status;
         summary.updated_at = now_rfc3339();
-        summary.active_job_id = None;
+        summary.active_score_id = None;
         if provider_session_ref.is_some() {
             summary.last_provider_session_ref = provider_session_ref;
         }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# EA Code Release Script (Bash)
+# Maestro Release Script (Bash)
 # Usage: ./scripts/release.sh [version|patch|minor|major]
 
 set -euo pipefail
@@ -83,4 +83,4 @@ echo "[6/6] Pushed commit and tag to origin/main"
 
 echo
 echo "Release $TAG triggered. Monitor at:"
-echo "  https://github.com/eatbas/ea-code/actions"
+echo "  https://github.com/eatbas/maestro/actions"

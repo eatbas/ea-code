@@ -1,7 +1,7 @@
 import { Github } from "lucide-react";
 import { useReleaseInfo } from "../hooks/useReleaseInfo";
 
-const GITHUB_RELEASES = "https://github.com/eatbas/ea-code/releases/latest";
+const GITHUB_RELEASES = "https://github.com/eatbas/maestro/releases/latest";
 
 function WindowsIcon({ className }: { className?: string }) {
   return (
@@ -35,7 +35,7 @@ export function CTA() {
             <span className="text-accent">Start Orchestrating.</span>
           </h2>
           <p className="mx-auto mt-4 max-w-md text-muted leading-relaxed">
-            Download EA Code and turn the AI CLIs you already pay for
+            Download Maestro and turn the AI CLIs you already pay for
             into a coordinated, self-improving development team.
           </p>
           {version && (
@@ -57,7 +57,7 @@ export function CTA() {
               Download for Mac
             </a>
             <a
-              href="https://github.com/eatbas/ea-code"
+              href="https://github.com/eatbas/maestro"
               className="inline-flex items-center gap-2 rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted transition-colors duration-200 hover:border-muted hover:text-white cursor-pointer"
             >
               <Github className="h-4 w-4" />

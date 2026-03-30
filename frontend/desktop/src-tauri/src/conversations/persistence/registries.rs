@@ -95,7 +95,7 @@ pub fn remove_abort_flag(workspace_path: &str, conversation_id: &str) -> Result<
 }
 
 // ---------------------------------------------------------------------------
-// Pipeline job-ID registry — tracks live hive-api job IDs so stop_pipeline
+// Pipeline score-ID registry — tracks live Symphony score IDs so stop_pipeline
 // can cancel them on the server side.
 // ---------------------------------------------------------------------------
 
@@ -105,10 +105,10 @@ fn pipeline_jobs() -> &'static Mutex<HashMap<String, Vec<Arc<std::sync::Mutex<Op
     JOBS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Pre-allocate empty job-ID slots for each planner. Call *before* spawning
-/// the pipeline task so that `get_pipeline_job_ids` can read them even if
+/// Pre-allocate empty score-ID slots for each planner. Call *before* spawning
+/// the pipeline task so that `get_pipeline_score_ids` can read them even if
 /// `stop_pipeline` is called immediately.
-pub fn register_pipeline_job_slots(
+pub fn register_pipeline_score_slots(
     workspace_path: &str,
     conversation_id: &str,
     count: usize,
@@ -119,20 +119,20 @@ pub fn register_pipeline_job_slots(
         .collect();
     pipeline_jobs()
         .lock()
-        .map_err(|e| format!("Failed to register pipeline job slots: {e}"))?
+        .map_err(|e| format!("Failed to register pipeline score slots: {e}"))?
         .insert(key, slots.clone());
     Ok(slots)
 }
 
-/// Return every non-empty job ID currently registered for this pipeline.
-pub fn get_pipeline_job_ids(
+/// Return every non-empty score ID currently registered for this pipeline.
+pub fn get_pipeline_score_ids(
     workspace_path: &str,
     conversation_id: &str,
 ) -> Result<Vec<String>, String> {
     let key = running_conversation_key(workspace_path, conversation_id);
     let guard = pipeline_jobs()
         .lock()
-        .map_err(|e| format!("Failed to read pipeline job slots: {e}"))?;
+        .map_err(|e| format!("Failed to read pipeline score slots: {e}"))?;
     let Some(slots) = guard.get(&key) else {
         return Ok(Vec::new());
     };
@@ -142,15 +142,15 @@ pub fn get_pipeline_job_ids(
         .collect())
 }
 
-/// Remove all job-ID slots for a finished pipeline.
-pub fn remove_pipeline_job_slots(
+/// Remove all score-ID slots for a finished pipeline.
+pub fn remove_pipeline_score_slots(
     workspace_path: &str,
     conversation_id: &str,
 ) -> Result<(), String> {
     let key = running_conversation_key(workspace_path, conversation_id);
     pipeline_jobs()
         .lock()
-        .map_err(|e| format!("Failed to remove pipeline job slots: {e}"))?
+        .map_err(|e| format!("Failed to remove pipeline score slots: {e}"))?
         .remove(&key);
     Ok(())
 }

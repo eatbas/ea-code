@@ -28,7 +28,7 @@ pub(super) struct PipelineConfig {
 /// Pre-allocated runtime state shared by all pipeline handler spawn blocks.
 pub(super) struct PipelineSetup {
     pub abort: Arc<AtomicBool>,
-    pub job_id_slots: Vec<Arc<std::sync::Mutex<Option<String>>>>,
+    pub score_id_slots: Vec<Arc<std::sync::Mutex<Option<String>>>>,
     pub stage_buffers: Vec<Arc<std::sync::Mutex<String>>>,
     pub planners: Vec<PipelineAgent>,
     pub planner_count: usize,
@@ -69,7 +69,7 @@ pub(super) fn prepare_pipeline_with_config(
     } = config;
 
     let abort = persistence::register_abort_flag(workspace_path, conversation_id)?;
-    let job_id_slots = persistence::register_pipeline_job_slots(
+    let score_id_slots = persistence::register_pipeline_score_slots(
         workspace_path, conversation_id, planner_count + 1,
     )?;
     let stage_buffers = persistence::register_pipeline_stage_buffers(
@@ -78,7 +78,7 @@ pub(super) fn prepare_pipeline_with_config(
 
     Ok(PipelineSetup {
         abort,
-        job_id_slots,
+        score_id_slots,
         stage_buffers,
         planners,
         planner_count,
@@ -154,7 +154,7 @@ pub(super) fn emit_final_status(
 /// Remove all pipeline runtime registries for a finished conversation.
 pub(super) fn pipeline_cleanup(ws: &str, conv_id: &str) {
     let _ = persistence::remove_pipeline_stage_buffers(ws, conv_id);
-    let _ = persistence::remove_pipeline_job_slots(ws, conv_id);
+    let _ = persistence::remove_pipeline_score_slots(ws, conv_id);
     let _ = persistence::remove_abort_flag(ws, conv_id);
 }
 
@@ -237,7 +237,7 @@ pub(super) fn ensure_merge_stage_record(
                 text: String::new(),
                 started_at: Some(now_rfc3339()),
                 finished_at: None,
-                job_id: None,
+                score_id: None,
                 provider_session_ref: None,
             });
         } else if let Some(merge) = state
@@ -262,7 +262,7 @@ pub(super) async fn run_merge_chain(
     abort: Arc<AtomicBool>,
     merge_agent: crate::models::PipelineAgent,
     planner_count: usize,
-    job_id_slots: &[Arc<std::sync::Mutex<Option<String>>>],
+    score_id_slots: &[Arc<std::sync::Mutex<Option<String>>>],
     stage_buffers: &[Arc<std::sync::Mutex<String>>],
 ) -> Option<Result<PipelineStageRecord, (PipelineStageRecord, String)>> {
     let loaded = persistence::load_pipeline_state(&ws, &conv_id)
@@ -283,7 +283,7 @@ pub(super) async fn run_merge_chain(
     let merge_label = format!("{} / {}", merge_agent.provider, merge_agent.model);
     ensure_merge_stage_record(&ws, &conv_id, planner_count, &merge_label);
 
-    let merge_slot = job_id_slots.get(planner_count).cloned().unwrap_or_default();
+    let merge_slot = score_id_slots.get(planner_count).cloned().unwrap_or_default();
     let merge_buf = stage_buffers.get(planner_count).cloned().unwrap_or_default();
 
     Some(

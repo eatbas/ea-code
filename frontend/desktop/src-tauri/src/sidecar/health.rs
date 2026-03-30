@@ -22,14 +22,14 @@ pub(crate) async fn wait_for_health_with_config(
     loop {
         if let Ok(response) = client.get(&url).send().await {
             if response.status().is_success() {
-                eprintln!("[sidecar] hive-api is healthy");
+                eprintln!("[sidecar] symphony is healthy");
                 return Ok(());
             }
         }
 
         if tokio::time::Instant::now() >= deadline {
             return Err(format!(
-                "hive-api did not become healthy within {}s",
+                "symphony did not become healthy within {}s",
                 timeout.as_secs_f32()
             ));
         }

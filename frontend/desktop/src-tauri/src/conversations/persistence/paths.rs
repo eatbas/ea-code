@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
-pub(super) const CONVERSATIONS_DIR: &str = ".ea-code/conversations";
+pub(super) const CONVERSATIONS_DIR: &str = ".maestro/conversations";
 pub(super) const CONVERSATION_FILE: &str = "conversation.json";
 pub(super) const MESSAGES_FILE: &str = "messages.jsonl";
 pub(super) const PIPELINE_FILE: &str = "pipeline.json";
-pub(super) const STALE_RUNNING_ERROR: &str = "ea-code closed while this task was running";
+pub(super) const STALE_RUNNING_ERROR: &str = "maestro closed while this task was running";
 pub(super) const RECOVERED_SUMMARY_ERROR: &str =
     "Recovered conversation metadata after an incomplete write";
 

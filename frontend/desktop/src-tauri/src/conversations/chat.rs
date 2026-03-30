@@ -4,16 +4,16 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter};
 
-use crate::commands::api_health::hive_api_base_url;
-use crate::http::hive_client;
+use crate::commands::api_health::symphony_base_url;
+use crate::http::symphony_client;
 use crate::models::{
     ConversationDetail, ConversationOutputDelta, ConversationStatus, ConversationStatusEvent,
 };
 
 use super::events::{EVENT_CONVERSATION_OUTPUT_DELTA, EVENT_CONVERSATION_STATUS};
-use super::hive_request::HiveChatRequest;
+use super::symphony_request::SymphonyChatRequest;
 use super::persistence;
-use super::sse::{consume_hive_sse, HiveSseEvent, SseResult};
+use super::sse::{consume_symphony_sse, SymphonySseEvent, SseResult};
 
 fn emit_status(app: &AppHandle, event: ConversationStatusEvent) -> Result<(), String> {
     app.emit(EVENT_CONVERSATION_STATUS, event)
@@ -69,7 +69,7 @@ pub async fn run_conversation_turn(
     } else {
         "new"
     };
-    let request = HiveChatRequest {
+    let request = SymphonyChatRequest {
         provider: &summary.agent.provider,
         model: &summary.agent.model,
         workspace_path: &summary.workspace_path,
@@ -80,8 +80,8 @@ pub async fn run_conversation_turn(
         provider_options: HashMap::new(),
     };
 
-    let url = format!("{}/v1/chat", hive_api_base_url());
-    let response = match hive_client().post(url).json(&request).send().await {
+    let url = format!("{}/v1/chat", symphony_base_url());
+    let response = match symphony_client().post(url).json(&request).send().await {
         Ok(response) => response,
         Err(error) => {
             return finish_with_failure(
@@ -89,7 +89,7 @@ pub async fn run_conversation_turn(
                 &workspace_path,
                 &conversation_id,
                 None,
-                format!("Failed to contact hive-api: {error}"),
+                format!("Failed to contact symphony: {error}"),
             )
             .await;
         }
@@ -103,18 +103,18 @@ pub async fn run_conversation_turn(
             &workspace_path,
             &conversation_id,
             None,
-            format!("hive-api returned HTTP {status}: {body}"),
+            format!("symphony returned HTTP {status}: {body}"),
         )
         .await;
     }
 
     let mut streamed_text = String::new();
-    let stream_result = consume_hive_sse(response, &abort, |event| match event {
-        HiveSseEvent::RunStarted { job_id } => {
-            let summary = persistence::set_active_job_id(
+    let stream_result = consume_symphony_sse(response, &abort, |event| match event {
+        SymphonySseEvent::RunStarted { score_id } => {
+            let summary = persistence::set_active_score_id(
                 &workspace_path,
                 &conversation_id,
-                Some(job_id.clone()),
+                Some(score_id.clone()),
             )?;
             emit_status(
                 &app,
@@ -124,7 +124,7 @@ pub async fn run_conversation_turn(
                 },
             )
         }
-        HiveSseEvent::ProviderSession {
+        SymphonySseEvent::ProviderSession {
             provider_session_ref,
         } => {
             let summary = persistence::set_provider_session_ref(
@@ -140,14 +140,14 @@ pub async fn run_conversation_turn(
                 },
             )
         }
-        HiveSseEvent::OutputDelta { text } => {
+        SymphonySseEvent::OutputDelta { text } => {
             if !streamed_text.is_empty() {
                 streamed_text.push('\n');
             }
             streamed_text.push_str(text);
             emit_output_delta(&app, &conversation_id, text)
         }
-        HiveSseEvent::Completed { .. } | HiveSseEvent::Failed { .. } | HiveSseEvent::Stopped => {
+        SymphonySseEvent::Completed { .. } | SymphonySseEvent::Failed { .. } | SymphonySseEvent::Stopped => {
             Ok(())
         }
     })
@@ -165,7 +165,7 @@ pub async fn run_conversation_turn(
                     exit_code: None,
                     status: ConversationStatus::Stopped,
                     error: None,
-                    job_id: None,
+                    score_id: None,
                 }
             } else {
                 return finish_with_failure(

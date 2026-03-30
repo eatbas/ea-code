@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// hive-api health response shape.
+/// Symphony health response shape.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiHealthStatus {
@@ -9,12 +9,12 @@ pub struct ApiHealthStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub drone_count: Option<u32>,
+    pub musician_count: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 
-/// Provider availability info from hive-api.
+/// Provider availability info from Symphony.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderInfo {
@@ -23,7 +23,7 @@ pub struct ProviderInfo {
     pub models: Vec<String>,
 }
 
-/// CLI version info from hive-api.
+/// CLI version info from Symphony.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiCliVersionInfo {
@@ -46,7 +46,7 @@ mod tests {
             connected: true,
             url: "http://127.0.0.1:8719".to_string(),
             status: Some("ok".to_string()),
-            drone_count: Some(3),
+            musician_count: Some(3),
             error: None,
         })
         .expect("health status should serialise");
@@ -54,7 +54,7 @@ mod tests {
         assert_eq!(value["connected"], true);
         assert_eq!(value["url"], "http://127.0.0.1:8719");
         assert_eq!(value["status"], "ok");
-        assert_eq!(value["droneCount"], 3);
+        assert_eq!(value["musicianCount"], 3);
         assert!(value.get("error").is_none());
     }
 

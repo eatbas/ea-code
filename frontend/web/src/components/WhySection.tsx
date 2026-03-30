@@ -60,7 +60,7 @@ export function WhySection() {
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-muted leading-relaxed">
             When a single model plans, codes, reviews, and judges its own
-            work, mistakes compound. EA Code splits the job across
+            work, mistakes compound. Maestro splits the job across
             multiple agents so each one keeps the others honest.
           </p>
         </div>
@@ -72,7 +72,7 @@ export function WhySection() {
               Single Agent
             </span>
             <span className="font-mono text-xs font-bold uppercase tracking-widest text-accent">
-              EA Code
+              Maestro
             </span>
           </div>
 

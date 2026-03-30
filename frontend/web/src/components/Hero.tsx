@@ -35,7 +35,7 @@ export function Hero() {
             </h1>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted md:text-xl mx-auto lg:mx-0">
               You already have Claude, Codex, Gemini, Kimi, and OpenCode.
-              EA Code orchestrates those subscriptions into one pipeline, so
+              Maestro orchestrates those subscriptions into one pipeline, so
               each model can plan, code, and review where it performs best,
               helping you ship higher-quality code than a single agent alone.
             </p>
@@ -67,7 +67,7 @@ export function Hero() {
                   <img
                     key={src}
                     src={src}
-                    alt={`ea-code screenshot ${i + 1}`}
+                    alt={`maestro screenshot ${i + 1}`}
                     className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
                       i === current ? "opacity-100" : "opacity-0"
                     }`}
@@ -124,7 +124,7 @@ export function Hero() {
           </button>
           <img
             src={SCREENSHOTS[current]}
-            alt={`ea-code screenshot ${current + 1}`}
+            alt={`maestro screenshot ${current + 1}`}
             className="max-h-[90vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />

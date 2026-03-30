@@ -62,9 +62,9 @@ pub struct AppSettings {
     /// Per-provider enabled models (e.g. {"copilot": "claude-sonnet-4.6,gpt-5.4"}).
     #[serde(default)]
     pub provider_models: HashMap<String, String>,
-    /// Port for the hive-api sidecar (0 = use default 8719).
+    /// Port for the Symphony sidecar (0 = use default 8719).
     #[serde(default)]
-    pub hive_api_port: u16,
+    pub symphony_port: u16,
     /// Python interpreter path override (empty = auto-detect).
     #[serde(default)]
     pub python_path: String,
@@ -96,7 +96,7 @@ impl Default for AppSettings {
             kimi_model: AgentBackend::Kimi.default_model().to_string(),
             opencode_model: AgentBackend::OpenCode.default_model().to_string(),
             provider_models: HashMap::new(),
-            hive_api_port: 0,
+            symphony_port: 0,
             python_path: String::new(),
             orchestrator: None,
             code_pipeline: None,

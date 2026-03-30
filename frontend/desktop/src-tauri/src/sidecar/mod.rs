@@ -5,7 +5,7 @@ mod process;
 pub mod python;
 mod setup;
 
-pub use discovery::find_hive_dir;
+pub use discovery::find_symphony_dir;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,14 +13,14 @@ use std::sync::Arc;
 use tokio::process::Child;
 use tokio::sync::Mutex;
 
-use cleanup::kill_orphaned_hive_api;
+use cleanup::kill_orphaned_symphony;
 use process::{
-    build_base_url, inspect_child_state, normalise_port, requires_restart, spawn_hive_api_process,
-    stop_hive_api_process, RestartState,
+    build_base_url, inspect_child_state, normalise_port, requires_restart, spawn_symphony_process,
+    stop_symphony_process, RestartState,
 };
-use setup::prepare_hive_environment;
+use setup::prepare_symphony_environment;
 
-/// Manages the hive-api sidecar process lifecycle.
+/// Manages the Symphony sidecar process lifecycle.
 #[derive(Clone)]
 pub struct SidecarManager {
     inner: Arc<Mutex<SidecarInner>>,
@@ -29,18 +29,18 @@ pub struct SidecarManager {
 struct SidecarInner {
     child: Option<Child>,
     port: u16,
-    hive_dir: PathBuf,
+    symphony_dir: PathBuf,
     setup_complete: bool,
 }
 
 impl SidecarManager {
     /// Create a new manager. Call `start()` to actually launch the process.
-    pub fn new(hive_dir: PathBuf, port: u16) -> Self {
+    pub fn new(symphony_dir: PathBuf, port: u16) -> Self {
         Self {
             inner: Arc::new(Mutex::new(SidecarInner {
                 child: None,
                 port: normalise_port(port),
-                hive_dir,
+                symphony_dir,
                 setup_complete: false,
             })),
         }
@@ -60,13 +60,13 @@ impl SidecarManager {
             return Ok(());
         }
 
-        kill_orphaned_hive_api(inner.port).await;
+        kill_orphaned_symphony(inner.port).await;
 
-        let prepared = prepare_hive_environment(&inner.hive_dir, inner.setup_complete).await?;
+        let prepared = prepare_symphony_environment(&inner.symphony_dir, inner.setup_complete).await?;
         let child =
-            spawn_hive_api_process(&prepared.venv_python, &inner.hive_dir, inner.port).await?;
+            spawn_symphony_process(&prepared.venv_python, &inner.symphony_dir, inner.port).await?;
 
-        eprintln!("[sidecar] hive-api process spawned on port {}", inner.port);
+        eprintln!("[sidecar] symphony process spawned on port {}", inner.port);
         inner.setup_complete = prepared.setup_complete;
         inner.child = Some(child);
 
@@ -92,11 +92,11 @@ impl SidecarManager {
                     let state = inspect_child_state(child);
                     match state {
                         RestartState::Exited => {
-                            eprintln!("[sidecar] hive-api exited unexpectedly — restarting");
+                            eprintln!("[sidecar] symphony exited unexpectedly — restarting");
                             inner.child = None;
                         }
                         RestartState::Unknown => {
-                            eprintln!("[sidecar] Failed to check hive-api status — restarting");
+                            eprintln!("[sidecar] Failed to check symphony status — restarting");
                             inner.child = None;
                         }
                         RestartState::Missing | RestartState::Running => {}
@@ -119,8 +119,8 @@ impl SidecarManager {
     pub async fn stop(&self) -> Result<(), String> {
         let mut inner = self.inner.lock().await;
         if let Some(mut child) = inner.child.take() {
-            eprintln!("[sidecar] Stopping hive-api…");
-            stop_hive_api_process(&mut child).await;
+            eprintln!("[sidecar] Stopping symphony…");
+            stop_symphony_process(&mut child).await;
         }
         Ok(())
     }

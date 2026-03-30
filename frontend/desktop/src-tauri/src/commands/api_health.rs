@@ -14,12 +14,12 @@ pub const EVENT_API_PROVIDERS_DONE: &str = "api_providers_check_complete";
 pub const EVENT_API_CLI_VERSION: &str = "api_cli_version_info";
 pub const EVENT_API_CLI_VERSIONS_DONE: &str = "api_versions_check_complete";
 
-const DEFAULT_HIVE_API_PORT: u16 = 8719;
+const DEFAULT_SYMPHONY_PORT: u16 = 8719;
 
 #[derive(Deserialize)]
 struct HealthResponse {
     status: String,
-    drone_count: Option<u32>,
+    musician_count: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -37,16 +37,16 @@ struct CliVersionResponse {
     needs_update: bool,
 }
 
-pub fn hive_api_base_url() -> String {
+pub fn symphony_base_url() -> String {
     let port = crate::storage::settings::read_settings()
         .map(|settings| {
-            if settings.hive_api_port == 0 {
-                DEFAULT_HIVE_API_PORT
+            if settings.symphony_port == 0 {
+                DEFAULT_SYMPHONY_PORT
             } else {
-                settings.hive_api_port
+                settings.symphony_port
             }
         })
-        .unwrap_or(DEFAULT_HIVE_API_PORT);
+        .unwrap_or(DEFAULT_SYMPHONY_PORT);
     format!("http://127.0.0.1:{port}")
 }
 
@@ -73,7 +73,7 @@ fn map_health_success(base_url: String, body: HealthResponse) -> ApiHealthStatus
         connected: true,
         url: base_url,
         status: Some(body.status),
-        drone_count: body.drone_count,
+        musician_count: body.musician_count,
         error: None,
     }
 }
@@ -87,12 +87,12 @@ fn map_health_failure(
         connected: false,
         url: base_url,
         status,
-        drone_count: None,
+        musician_count: None,
         error,
     }
 }
 
-/// Returns `true` when the hive-api sidecar is reachable right now.
+/// Returns `true` when the symphony sidecar is reachable right now.
 /// Used by the frontend to recover from a missed `sidecar_ready` event.
 #[tauri::command]
 pub async fn check_sidecar_ready(state: State<'_, AppState>) -> Result<bool, String> {
@@ -102,7 +102,7 @@ pub async fn check_sidecar_ready(state: State<'_, AppState>) -> Result<bool, Str
 #[tauri::command]
 pub async fn check_api_health(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let _ = state.sidecar.ensure_running().await;
-    let base_url = hive_api_base_url();
+    let base_url = symphony_base_url();
     let client = api_client();
     let url = format!("{base_url}/health");
 
@@ -115,14 +115,14 @@ pub async fn check_api_health(app: AppHandle, state: State<'_, AppState>) -> Res
         Ok(response) if response.status().is_success() => {
             let body = response.json().await.unwrap_or(HealthResponse {
                 status: "ok".to_string(),
-                drone_count: None,
+                musician_count: None,
             });
             map_health_success(base_url, body)
         }
         Ok(response) => map_health_failure(
             base_url,
             Some(format!("HTTP {}", response.status())),
-            Some(format!("hive-api returned {}", response.status())),
+            Some(format!("symphony returned {}", response.status())),
         ),
         Err(error) => map_health_failure(base_url, None, Some(error.to_string())),
     };
@@ -134,7 +134,7 @@ pub async fn check_api_health(app: AppHandle, state: State<'_, AppState>) -> Res
 #[tauri::command]
 pub async fn get_api_providers(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let _ = state.sidecar.ensure_running().await;
-    let base_url = hive_api_base_url();
+    let base_url = symphony_base_url();
     let client = api_client();
     let url = format!("{base_url}/v1/providers?all=true");
 
@@ -174,7 +174,7 @@ pub async fn get_api_cli_versions(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let _ = state.sidecar.ensure_running().await;
-    let base_url = hive_api_base_url();
+    let base_url = symphony_base_url();
     let client = api_client();
     let url = format!("{base_url}/v1/cli-versions");
 
@@ -215,7 +215,7 @@ pub async fn update_api_cli(
     provider: String,
 ) -> Result<(), String> {
     state.sidecar.ensure_running().await?;
-    let base_url = hive_api_base_url();
+    let base_url = symphony_base_url();
     let client = api_client();
     let url = format!("{base_url}/v1/cli-versions/{provider}/update");
 

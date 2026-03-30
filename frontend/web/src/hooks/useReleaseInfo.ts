@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 
 const GITHUB_API =
-  "https://api.github.com/repos/eatbas/ea-code/releases/latest";
+  "https://api.github.com/repos/eatbas/maestro/releases/latest";
 
 interface ReleaseAsset {
   filename: string;

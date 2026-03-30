@@ -236,9 +236,9 @@ export function ConversationView({
           )}
         </div>
 
-        {workspace.isGitRepo && workspace.eaCodeIgnored === false && (
+        {workspace.isGitRepo && workspace.maestroIgnored === false && (
           <div className="border-b border-warning-border bg-new-btn-bg-hover px-5 py-3 text-sm text-warning-text">
-            `.ea-code/` is not currently ignored in this repository. ea-code will attempt to add it to `.gitignore`.
+            `.maestro/` is not currently ignored in this repository. Maestro will attempt to add it to `.gitignore`.
           </div>
         )}
 
@@ -306,7 +306,7 @@ export function ConversationView({
           ) : (
             <div className="mx-auto flex h-full max-w-3xl items-center justify-center">
               <div className="rounded-3xl border border-edge bg-panel px-8 py-10 text-center shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
-                <img src="/logo.png" alt="EA Code logo" className="mx-auto mb-4 h-14 w-14 object-contain" />
+                <img src="/logo.png" alt="Maestro logo" className="mx-auto mb-4 h-14 w-14 object-contain" />
                 <p className="text-xl font-semibold text-fg">Start a new conversation</p>
                 <p className="mt-2 text-sm text-fg-muted">
                   Pick an agent in the composer and send the first prompt to start a conversation.

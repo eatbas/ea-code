@@ -12,7 +12,7 @@ interface UseApiCliVersionsReturn {
   updateCli: (provider: string) => Promise<void>;
 }
 
-/** Hook for CLI version info from hive-api (event-driven). */
+/** Hook for CLI version info from Symphony (event-driven). */
 export function useApiCliVersions(): UseApiCliVersionsReturn {
   const [updating, setUpdating] = useState<string | null>(null);
   const {

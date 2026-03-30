@@ -7,7 +7,7 @@ export function ProjectLoadingOverlay(): ReactNode {
       <div className="flex min-w-[230px] flex-col items-center gap-3 rounded-2xl border border-edge bg-overlay-bg px-8 py-7 shadow-2xl">
         <img
           src="/logo.png"
-          alt="EA Code logo"
+          alt="Maestro logo"
           className="h-12 w-12 object-contain"
         />
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-edge border-t-fg" />

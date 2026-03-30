@@ -42,9 +42,9 @@ export function IdleView({
   return (
     <div className="flex h-full flex-col bg-surface">
       <div className="flex flex-1 flex-col items-center justify-center gap-4">
-        <img src="/logo.png" alt="EA Code logo" className="h-40 w-40" />
+        <img src="/logo.png" alt="Maestro logo" className="h-40 w-40" />
 
-        <h1 className="text-3xl font-bold text-fg">ea-code</h1>
+        <h1 className="text-3xl font-bold text-fg">maestro</h1>
 
         <div ref={dropdownRef} className="relative">
           <button

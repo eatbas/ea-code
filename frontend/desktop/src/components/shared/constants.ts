@@ -23,7 +23,7 @@ export function backendOptionsFromProviders(
   }));
 }
 
-/** Returns model options for a provider from the hive-api provider list. */
+/** Returns model options for a provider from the Symphony provider list. */
 export function modelOptionsFromProvider(
   provider: ProviderInfo | undefined,
 ): { value: string; label: string }[] {

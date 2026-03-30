@@ -76,7 +76,7 @@ export function Sidebar({
   const currentYear = new Date().getFullYear();
 
   const appFooterLabel = useMemo(
-    () => `\u00A9 ${currentYear} ea-code${appVersion ? `\u00B7v${appVersion}` : ""}`,
+    () => `\u00A9 ${currentYear} maestro${appVersion ? `\u00B7v${appVersion}` : ""}`,
     [appVersion, currentYear],
   );
   const visibleProjects = useMemo(

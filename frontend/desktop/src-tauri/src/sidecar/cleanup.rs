@@ -1,6 +1,6 @@
 use tokio::process::Command;
 
-pub(crate) async fn kill_orphaned_hive_api(port: u16) {
+pub(crate) async fn kill_orphaned_symphony(port: u16) {
     let port_str = port.to_string();
 
     #[cfg(not(target_os = "windows"))]

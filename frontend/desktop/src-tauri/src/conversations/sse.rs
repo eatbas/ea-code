@@ -7,9 +7,9 @@ use tokio::time::{sleep, Duration};
 use crate::models::ConversationStatus;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum HiveSseEvent {
+pub enum SymphonySseEvent {
     RunStarted {
-        job_id: String,
+        score_id: String,
     },
     ProviderSession {
         provider_session_ref: String,
@@ -37,7 +37,7 @@ pub struct SseResult {
     pub exit_code: Option<i32>,
     pub status: ConversationStatus,
     pub error: Option<String>,
-    pub job_id: Option<String>,
+    pub score_id: Option<String>,
 }
 
 #[derive(Default, Deserialize)]
@@ -77,7 +77,7 @@ struct FailedPayload {
 /// Polls the abort flag every 100ms and returns once it becomes true.
 /// Used with `tokio::select!` to race against the SSE stream so the
 /// consumer exits immediately when the user presses Stop — even if the
-/// stream is blocked waiting for data from hive-api.
+/// stream is blocked waiting for data from Symphony.
 async fn wait_for_abort(abort: &AtomicBool) {
     loop {
         if abort.load(Ordering::Acquire) {
@@ -87,24 +87,24 @@ async fn wait_for_abort(abort: &AtomicBool) {
     }
 }
 
-pub async fn consume_hive_sse<F>(
+pub async fn consume_symphony_sse<F>(
     response: reqwest::Response,
     abort: &AtomicBool,
     mut on_event: F,
 ) -> Result<SseResult, String>
 where
-    F: FnMut(&HiveSseEvent) -> Result<(), String>,
+    F: FnMut(&SymphonySseEvent) -> Result<(), String>,
 {
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
     let mut collected_text = String::new();
     let mut session_ref: Option<String> = None;
-    let mut job_id: Option<String> = None;
+    let mut score_id: Option<String> = None;
     let mut terminal_result: Option<SseResult> = None;
 
     loop {
         // Race: exit immediately when the abort flag is set, even if the
-        // SSE stream is blocked waiting for the next chunk from hive-api.
+        // SSE stream is blocked waiting for the next chunk from Symphony.
         let chunk_opt = tokio::select! {
             biased;
             _ = wait_for_abort(abort) => {
@@ -114,7 +114,7 @@ where
                     exit_code: None,
                     status: ConversationStatus::Stopped,
                     error: None,
-                    job_id,
+                    score_id,
                 });
             }
             chunk = stream.next() => chunk,
@@ -124,7 +124,7 @@ where
             break;
         };
 
-        let chunk = chunk_result.map_err(|error| format!("Failed to read hive stream: {error}"))?;
+        let chunk = chunk_result.map_err(|error| format!("Failed to read Symphony stream: {error}"))?;
         buffer.push_str(&String::from_utf8_lossy(&chunk));
 
         while let Some(frame_end) = buffer.find("\n\n") {
@@ -136,23 +136,23 @@ where
             };
 
             match &event {
-                HiveSseEvent::RunStarted {
-                    job_id: current_job_id,
+                SymphonySseEvent::RunStarted {
+                    score_id: current_score_id,
                 } => {
-                    job_id = Some(current_job_id.clone());
+                    score_id = Some(current_score_id.clone());
                 }
-                HiveSseEvent::ProviderSession {
+                SymphonySseEvent::ProviderSession {
                     provider_session_ref,
                 } => {
                     session_ref = Some(provider_session_ref.clone());
                 }
-                HiveSseEvent::OutputDelta { text } => {
+                SymphonySseEvent::OutputDelta { text } => {
                     if !collected_text.is_empty() {
                         collected_text.push('\n');
                     }
                     collected_text.push_str(text);
                 }
-                HiveSseEvent::Completed {
+                SymphonySseEvent::Completed {
                     final_text,
                     provider_session_ref,
                     exit_code,
@@ -170,10 +170,10 @@ where
                         exit_code: Some(*exit_code),
                         status: ConversationStatus::Completed,
                         error: None,
-                        job_id: job_id.clone(),
+                        score_id: score_id.clone(),
                     });
                 }
-                HiveSseEvent::Failed {
+                SymphonySseEvent::Failed {
                     error,
                     provider_session_ref,
                     exit_code,
@@ -186,17 +186,17 @@ where
                         exit_code: *exit_code,
                         status: ConversationStatus::Failed,
                         error: Some(error.clone()),
-                        job_id: job_id.clone(),
+                        score_id: score_id.clone(),
                     });
                 }
-                HiveSseEvent::Stopped => {
+                SymphonySseEvent::Stopped => {
                     terminal_result = Some(SseResult {
                         final_text: collected_text.clone(),
                         provider_session_ref: session_ref.clone(),
                         exit_code: None,
                         status: ConversationStatus::Stopped,
                         error: None,
-                        job_id: job_id.clone(),
+                        score_id: score_id.clone(),
                     });
                 }
             }
@@ -204,15 +204,15 @@ where
             on_event(&event)?;
             if terminal_result.is_some() {
                 return terminal_result
-                    .ok_or_else(|| "Missing terminal hive stream state".to_string());
+                    .ok_or_else(|| "Missing terminal Symphony stream state".to_string());
             }
         }
     }
 
-    Err("Hive stream ended before a terminal event was received".to_string())
+    Err("Symphony stream ended before a terminal event was received".to_string())
 }
 
-fn parse_frame(frame: &str) -> Result<Option<HiveSseEvent>, String> {
+fn parse_frame(frame: &str) -> Result<Option<SymphonySseEvent>, String> {
     let mut event_name: Option<&str> = None;
     let mut data_lines: Vec<&str> = Vec::new();
 
@@ -232,17 +232,17 @@ fn parse_frame(frame: &str) -> Result<Option<HiveSseEvent>, String> {
     let payload = data_lines.join("\n");
 
     match event_name {
-        "run_started" => Ok(Some(HiveSseEvent::RunStarted {
-            job_id: serde_json::from_str::<RunStartedPayload>(&payload)
+        "run_started" => Ok(Some(SymphonySseEvent::RunStarted {
+            score_id: serde_json::from_str::<RunStartedPayload>(&payload)
                 .map_err(|error| format!("Failed to parse run_started payload: {error}"))?
                 .job_id,
         })),
-        "provider_session" => Ok(Some(HiveSseEvent::ProviderSession {
+        "provider_session" => Ok(Some(SymphonySseEvent::ProviderSession {
             provider_session_ref: serde_json::from_str::<ProviderSessionPayload>(&payload)
                 .map_err(|error| format!("Failed to parse provider_session payload: {error}"))?
                 .provider_session_ref,
         })),
-        "output_delta" => Ok(Some(HiveSseEvent::OutputDelta {
+        "output_delta" => Ok(Some(SymphonySseEvent::OutputDelta {
             text: serde_json::from_str::<OutputDeltaPayload>(&payload)
                 .map_err(|error| format!("Failed to parse output_delta payload: {error}"))?
                 .text,
@@ -250,7 +250,7 @@ fn parse_frame(frame: &str) -> Result<Option<HiveSseEvent>, String> {
         "completed" => {
             let parsed = serde_json::from_str::<CompletedPayload>(&payload)
                 .map_err(|error| format!("Failed to parse completed payload: {error}"))?;
-            Ok(Some(HiveSseEvent::Completed {
+            Ok(Some(SymphonySseEvent::Completed {
                 final_text: parsed.final_text,
                 provider_session_ref: parsed.provider_session_ref,
                 exit_code: parsed.exit_code,
@@ -259,20 +259,20 @@ fn parse_frame(frame: &str) -> Result<Option<HiveSseEvent>, String> {
         "failed" => {
             let parsed = serde_json::from_str::<FailedPayload>(&payload)
                 .map_err(|error| format!("Failed to parse failed payload: {error}"))?;
-            Ok(Some(HiveSseEvent::Failed {
+            Ok(Some(SymphonySseEvent::Failed {
                 error: parsed.error,
                 provider_session_ref: parsed.provider_session_ref,
                 exit_code: parsed.exit_code,
             }))
         }
-        "stopped" => Ok(Some(HiveSseEvent::Stopped)),
+        "stopped" => Ok(Some(SymphonySseEvent::Stopped)),
         _ => Ok(None),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_frame, HiveSseEvent};
+    use super::{parse_frame, SymphonySseEvent};
 
     #[test]
     fn parses_output_delta_frame() {
@@ -280,7 +280,7 @@ mod tests {
         let parsed = parse_frame(frame).expect("frame should parse");
         assert_eq!(
             parsed,
-            Some(HiveSseEvent::OutputDelta {
+            Some(SymphonySseEvent::OutputDelta {
                 text: "hello".to_string()
             })
         );
@@ -292,7 +292,7 @@ mod tests {
         let parsed = parse_frame(frame).expect("frame should parse");
         assert_eq!(
             parsed,
-            Some(HiveSseEvent::Completed {
+            Some(SymphonySseEvent::Completed {
                 final_text: "done".to_string(),
                 provider_session_ref: Some("abc".to_string()),
                 exit_code: 0,

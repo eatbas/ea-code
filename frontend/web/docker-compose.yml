@@ -1,9 +1,9 @@
 services:
-  ea-code-web:
+  maestro-web:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ea-code-web
+    container_name: maestro-web
     expose:
       - "80"
     restart: unless-stopped

@@ -6,16 +6,16 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::time::{sleep, Duration};
 
-use crate::commands::api_health::hive_api_base_url;
-use crate::http::hive_client;
+use crate::commands::api_health::symphony_base_url;
+use crate::http::symphony_client;
 use crate::models::{
     ConversationStatus, PipelineStageOutputDelta, PipelineStageRecord, PipelineStageStatusEvent,
 };
 use crate::storage::now_rfc3339;
 
 use super::super::events::{EVENT_PIPELINE_STAGE_OUTPUT_DELTA, EVENT_PIPELINE_STAGE_STATUS};
-use super::super::hive_request::HiveChatRequest;
-use super::super::sse::{consume_hive_sse, HiveSseEvent};
+use super::super::symphony_request::SymphonyChatRequest;
+use super::super::sse::{consume_symphony_sse, SymphonySseEvent};
 
 /// Configuration for a single pipeline stage execution.
 pub struct StageConfig {
@@ -31,18 +31,18 @@ pub struct StageConfig {
     pub agent_label: String,
 }
 
-pub(super) fn request_hive_stop(job_id: String) {
-    let client = hive_client().clone();
-    let url = format!("{}/v1/chat/{job_id}/stop", hive_api_base_url());
+pub(super) fn request_symphony_stop(score_id: String) {
+    let client = symphony_client().clone();
+    let url = format!("{}/v1/chat/{score_id}/stop", symphony_base_url());
     tokio::spawn(async move {
         match client.post(&url).send().await {
             Ok(response) if response.status().is_success() => {}
             Ok(response) => {
                 let status = response.status();
                 let body = response.text().await.unwrap_or_default();
-                eprintln!("[pipeline] Failed to stop hive job {job_id}: HTTP {status}: {body}");
+                eprintln!("[pipeline] Failed to stop symphony job {score_id}: HTTP {status}: {body}");
             }
-            Err(error) => eprintln!("[pipeline] Failed to stop hive job {job_id}: {error}"),
+            Err(error) => eprintln!("[pipeline] Failed to stop symphony job {score_id}: {error}"),
         }
     });
 }
@@ -87,7 +87,7 @@ fn emit_stage_delta(
     .map_err(|e| format!("Failed to emit pipeline stage delta: {e}"))
 }
 
-/// Execute a single pipeline stage: send a request to hive-api, stream SSE
+/// Execute a single pipeline stage: send a request to symphony, stream SSE
 /// output, watch for the expected plan file, and persist the result.
 ///
 /// This is the unified implementation shared by both planner stages and the
@@ -98,7 +98,7 @@ pub async fn run_stage(
     workspace_path: String,
     config: StageConfig,
     abort: Arc<AtomicBool>,
-    job_id_slot: Arc<std::sync::Mutex<Option<String>>>,
+    score_id_slot: Arc<std::sync::Mutex<Option<String>>>,
     output_buffer: Arc<std::sync::Mutex<String>>,
 ) -> Result<PipelineStageRecord, (PipelineStageRecord, String)> {
     let StageConfig {
@@ -126,8 +126,8 @@ pub async fn run_stage(
         ));
     }
 
-    // Build and send hive-api request.
-    let request = HiveChatRequest {
+    // Build and send symphony request.
+    let request = SymphonyChatRequest {
         provider: &provider,
         model: &model,
         workspace_path: &workspace_path,
@@ -151,12 +151,12 @@ pub async fn run_stage(
         )
     };
 
-    let url = format!("{}/v1/chat", hive_api_base_url());
-    let response = match hive_client().post(&url).json(&request).send().await {
+    let url = format!("{}/v1/chat", symphony_base_url());
+    let response = match symphony_client().post(&url).json(&request).send().await {
         Ok(r) => r,
         Err(e) => {
             return Err(emit_failed(&format!(
-                "{stage_name} failed to contact hive-api: {e}"
+                "{stage_name} failed to contact symphony: {e}"
             )));
         }
     };
@@ -165,7 +165,7 @@ pub async fn run_stage(
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         return Err(emit_failed(&format!(
-            "{stage_name}: hive-api HTTP {status}: {body}"
+            "{stage_name}: symphony HTTP {status}: {body}"
         )));
     }
 
@@ -211,7 +211,7 @@ pub async fn run_stage(
     // Consume SSE stream.
     let app_ref = app.clone();
     let conv_id = conversation_id.clone();
-    let job_id_writer = job_id_slot.clone();
+    let score_id_writer = score_id_slot.clone();
     let buf_writer = output_buffer.clone();
     let abort_for_run = abort.clone();
     let local_stop_for_run = local_stop.clone();
@@ -219,8 +219,8 @@ pub async fn run_stage(
         Arc::new(std::sync::Mutex::new(None));
     let session_ref_writer = session_ref.clone();
 
-    let result = consume_hive_sse(response, &local_stop, |event| match event {
-        HiveSseEvent::OutputDelta { text } => {
+    let result = consume_symphony_sse(response, &local_stop, |event| match event {
+        SymphonySseEvent::OutputDelta { text } => {
             if let Ok(mut buf) = buf_writer.lock() {
                 if !buf.is_empty() {
                     buf.push('\n');
@@ -229,17 +229,17 @@ pub async fn run_stage(
             }
             emit_stage_delta(&app_ref, &conv_id, stage_index, text)
         }
-        HiveSseEvent::RunStarted { job_id } => {
-            if let Ok(mut guard) = job_id_writer.lock() {
-                *guard = Some(job_id.clone());
+        SymphonySseEvent::RunStarted { score_id } => {
+            if let Ok(mut guard) = score_id_writer.lock() {
+                *guard = Some(score_id.clone());
             }
             if abort_for_run.load(Ordering::Acquire) {
                 local_stop_for_run.store(true, Ordering::Release);
-                request_hive_stop(job_id.clone());
+                request_symphony_stop(score_id.clone());
             }
             Ok(())
         }
-        HiveSseEvent::ProviderSession {
+        SymphonySseEvent::ProviderSession {
             provider_session_ref,
         } => {
             if let Ok(mut guard) = session_ref_writer.lock() {
@@ -279,7 +279,7 @@ pub async fn run_stage(
 
     // Build the persisted record.
     let captured_session_ref = session_ref.lock().ok().and_then(|g| g.clone());
-    let captured_job = job_id_slot.lock().ok().and_then(|g| g.clone());
+    let captured_job = score_id_slot.lock().ok().and_then(|g| g.clone());
     let accumulated_text = output_buffer
         .lock()
         .map(|g| g.clone())
@@ -293,7 +293,7 @@ pub async fn run_stage(
         text: file_text.unwrap_or(accumulated_text),
         started_at: Some(started_at),
         finished_at: Some(now_rfc3339()),
-        job_id: captured_job,
+        score_id: captured_job,
         provider_session_ref: captured_session_ref,
     };
 

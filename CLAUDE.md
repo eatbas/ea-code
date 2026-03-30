@@ -1,4 +1,4 @@
-# CLAUDE.md - EA Code Agent Instructions
+# CLAUDE.md - Maestro Agent Instructions
 
 This guidance applies to any AI agent editing this repository.
 
@@ -7,7 +7,7 @@ This guidance applies to any AI agent editing this repository.
 - The primary product is the desktop app in `frontend/desktop/`.
 - Desktop stack: Tauri v2, React 19, TypeScript 5.8, Tailwind CSS v4, Rust backend.
 - The repo also contains the marketing site in `frontend/web/` and release scripts in `scripts/`.
-- Current persistence is file-based under `~/.ea-code/`. Older SQLite and `~/.config/ea-code/` references are legacy migration context, not the live architecture.
+- Current persistence is file-based under `~/.maestro/`. Older SQLite and `~/.config/maestro/` references are legacy migration context, not the live architecture.
 
 ## Working Scope
 
@@ -121,4 +121,4 @@ Marketing site: React 19, TypeScript 5.8, Vite 7, Tailwind CSS v4, Lucide React 
 - Do not commit unless the user explicitly asks.
 - Do not add dependencies without justification.
 - Do not hand-edit generated output when a source file should be changed instead.
-- Do not treat old SQLite or `~/.config/ea-code/` references as the current architecture.
+- Do not treat old SQLite or `~/.config/maestro/` references as the current architecture.

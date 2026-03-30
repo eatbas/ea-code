@@ -1,4 +1,4 @@
-/** Supported CLI agent backends (dynamic — any provider name from hive-api). */
+/** Supported CLI agent backends (dynamic — any provider name from Symphony). */
 export type AgentBackend = string;
 
 /** CLI health check result returned from the backend. */
@@ -35,26 +35,26 @@ export interface PrerequisiteStatus {
   pythonVersion?: string;
   /** Windows-only — always `true` on macOS/Linux. */
   gitBashAvailable: boolean;
-  hiveApiSourceFound: boolean;
+  symphonySourceFound: boolean;
 }
 
-/** hive-api connection health status. */
+/** Symphony connection health status. */
 export interface ApiHealth {
   connected: boolean;
   url: string;
   status?: string;
-  droneCount?: number;
+  musicianCount?: number;
   error?: string;
 }
 
-/** Provider availability from hive-api. */
+/** Provider availability from Symphony. */
 export interface ProviderInfo {
   name: string;
   available: boolean;
   models: string[];
 }
 
-/** CLI version info from hive-api. */
+/** CLI version info from Symphony. */
 export interface ApiCliVersionInfo {
   provider: string;
   installedVersion?: string;

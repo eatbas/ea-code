@@ -9,7 +9,7 @@ export const SIDECAR_EVENTS = {
   READY: "sidecar_ready",
 } as const;
 
-/** hive-api events (emitted by `commands/api_health.rs`). */
+/** Symphony events (emitted by `commands/api_health.rs`). */
 export const API_EVENTS = {
   HEALTH_STATUS: "api_health_status",
   PROVIDER_INFO: "api_provider_info",

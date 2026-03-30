@@ -1,6 +1,6 @@
 <div align="center">
 
-# EA Code
+# Maestro
 
 ### Stop Paying for Five AI Subscriptions and Only Using One
 
@@ -8,9 +8,9 @@ You're subscribed to Claude, Gemini, Codex, Kimi, and OpenCode. But right now, y
 
 **What if they all worked together instead?**
 
-EA Code is a desktop app that wires your AI coding CLIs into a single orchestrated pipeline — where each agent plays the role it's best at, and the result is better than anything one model could produce alone.
+Maestro is a desktop app that wires your AI coding CLIs into a single orchestrated pipeline — where each agent plays the role it's best at, and the result is better than anything one model could produce alone.
 
-[Website](https://ea-code.atbas.xyz) &#8226; [Get Started](#getting-started) &#8226; [How It Works](#how-the-pipeline-works)
+[Website](https://maestro.atbas.xyz) &#8226; [Get Started](#getting-started) &#8226; [How It Works](#how-the-pipeline-works)
 
 </div>
 
@@ -24,7 +24,7 @@ That's expensive, slow, and exhausting.
 
 ## The Solution
 
-EA Code puts every AI CLI you already pay for into a structured pipeline:
+Maestro puts every AI CLI you already pay for into a structured pipeline:
 
 - **One agent sharpens your prompt** so the task is crystal clear
 - **Up to three agents plan in parallel** — you get multiple perspectives, not one guess
@@ -89,7 +89,7 @@ The judge isn't the same agent that wrote the code. That's the point — no mode
 
 ## Why This Beats Using One Agent
 
-| Single Agent | EA Code |
+| Single Agent | Maestro |
 |---|---|
 | One model plans, codes, reviews, and judges its own work | Different agents specialise in each role |
 | Blind spots go unnoticed | Parallel reviewers catch what one misses |
@@ -126,8 +126,8 @@ The judge isn't the same agent that wrote the code. That's the point — no mode
 ### Platform Notes
 
 - macOS (including Apple Silicon Mac mini): install Xcode Command Line Tools so `clang` is available.
-- Windows ARM64 and Windows x64: install LLVM or the Visual Studio C++ Clang tools. EA Code now auto-discovers common clang installs for both architectures during Rust builds.
-- If your Windows LLVM install lives in a non-standard location, set `EA_CODE_LLVM_BIN` to the LLVM `bin` directory before running Cargo or Tauri.
+- Windows ARM64 and Windows x64: install LLVM or the Visual Studio C++ Clang tools. Maestro now auto-discovers common clang installs for both architectures during Rust builds.
+- If your Windows LLVM install lives in a non-standard location, set `MAESTRO_LLVM_BIN` to the LLVM `bin` directory before running Cargo or Tauri.
 
 ### Run
 
@@ -149,11 +149,11 @@ npm run tauri build
 - **Desktop Shell**: [Tauri v2](https://tauri.app/) (lightweight, cross-platform)
 - **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS v4
 - **Backend**: Rust + Tokio async runtime
-- **Storage**: File-based (JSON/JSONL) under `~/.ea-code/` — no database required
+- **Storage**: File-based (JSON/JSONL) under `~/.maestro/` — no database required
 
 ## Local Data
 
-EA Code stores everything in `~/.ea-code/`. No hosted backend, no telemetry, no cloud dependency. Your code and context stay on your machine.
+Maestro stores everything in `~/.maestro/`. No hosted backend, no telemetry, no cloud dependency. Your code and context stay on your machine.
 
 ## Repo Layout
 
@@ -185,6 +185,6 @@ MIT
 
 **Stop switching tabs. Start orchestrating.**
 
-[ea-code.atbas.xyz](https://ea-code.atbas.xyz)
+[maestro.atbas.xyz](https://maestro.atbas.xyz)
 
 </div>

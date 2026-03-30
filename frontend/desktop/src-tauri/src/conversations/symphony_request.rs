@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-/// Shared request body for hive-api `/v1/chat` calls.
+/// Shared request body for Symphony `/v1/chat` calls.
 /// Used by both the single-turn chat path and the pipeline stage runner.
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
-pub struct HiveChatRequest<'a> {
+pub struct SymphonyChatRequest<'a> {
     pub provider: &'a str,
     pub model: &'a str,
     pub workspace_path: &'a str,

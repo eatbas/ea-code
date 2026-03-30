@@ -34,7 +34,7 @@ pub fn update_pipeline_stage(
 
         if let Some(stage) = state.stages.get_mut(record.stage_index) {
             stage.status = record.status.clone();
-            stage.job_id.clone_from(&record.job_id);
+            stage.score_id.clone_from(&record.score_id);
             stage
                 .provider_session_ref
                 .clone_from(&record.provider_session_ref);
@@ -86,7 +86,7 @@ fn hydrate_stage_text(workspace_path: &str, conversation_id: &str, state: &mut P
                 text: contents,
                 started_at: None,
                 finished_at: None,
-                job_id: None,
+                score_id: None,
                 provider_session_ref: None,
             });
         }
@@ -124,7 +124,7 @@ fn reconstruct_pipeline_from_artifacts(
                                 text,
                                 started_at: None,
                                 finished_at: None,
-                                job_id: None,
+                                score_id: None,
                                 provider_session_ref: None,
                             });
                         }
@@ -143,7 +143,7 @@ fn reconstruct_pipeline_from_artifacts(
             text: String::new(),
             started_at: None,
             finished_at: None,
-            job_id: None,
+            score_id: None,
             provider_session_ref: None,
         });
     }
@@ -161,7 +161,7 @@ fn reconstruct_pipeline_from_artifacts(
             text,
             started_at: None,
             finished_at: None,
-            job_id: None,
+            score_id: None,
             provider_session_ref: None,
         });
     }

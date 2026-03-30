@@ -6,19 +6,19 @@
 use std::sync::OnceLock;
 use std::time::Duration;
 
-/// General-purpose client for hive-api chat and pipeline requests.
+/// General-purpose client for Symphony chat and pipeline requests.
 /// No special timeout — individual callers apply per-request timeouts
 /// where needed (e.g. health checks use `.timeout(Duration::from_secs(3))`).
-pub fn hive_client() -> &'static reqwest::Client {
+pub fn symphony_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .build()
-            .expect("failed to build hive HTTP client")
+            .expect("failed to build Symphony HTTP client")
     })
 }
 
-/// Client for hive-api health, provider, and CLI version endpoints.
+/// Client for Symphony health, provider, and CLI version endpoints.
 /// Uses a 120-second timeout to accommodate slow update operations.
 pub fn api_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -37,7 +37,7 @@ pub fn version_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
-            .user_agent("ea-code")
+            .user_agent("maestro")
             .build()
             .expect("failed to build version HTTP client")
     })

@@ -15,7 +15,7 @@ interface UseSidecarReadyReturn {
 }
 
 /**
- * Tracks whether the hive-api sidecar is healthy.
+ * Tracks whether the Symphony sidecar is healthy.
  *
  * Listens for the one-shot `sidecar_ready` event AND polls the backend on
  * mount so the UI recovers if the event fired before the listener registered.

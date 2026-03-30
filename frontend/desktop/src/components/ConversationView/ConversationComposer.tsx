@@ -337,7 +337,7 @@ export function ConversationComposer({
                   ? "bg-stop-bg text-stop-text hover:bg-stop-bg-hover"
                   : "bg-running-dot text-send-text hover:bg-send-bg-hover"
               }`}
-              title={(activeRunning || pipelineRunning) ? (stopping ? "Stopping..." : "Stop") : sidecarReady !== true ? "Waiting for Hive API..." : sending ? "Sending..." : "Send"}
+              title={(activeRunning || pipelineRunning) ? (stopping ? "Stopping..." : "Stop") : sidecarReady !== true ? "Waiting for Symphony..." : sending ? "Sending..." : "Send"}
             >
               {(activeRunning || pipelineRunning) ? (
                 stopping ? (

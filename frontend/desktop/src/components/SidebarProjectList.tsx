@@ -21,7 +21,7 @@ import type { ActiveView, ConversationSummary, ProjectEntry } from "../types";
 import { projectDisplayName } from "../utils/formatters";
 import { SidebarSortableProjectItem } from "./SidebarSortableProjectItem";
 
-const EXPANDED_PROJECTS_STORAGE_KEY = "ea-code.sidebar.expanded-projects";
+const EXPANDED_PROJECTS_STORAGE_KEY = "maestro.sidebar.expanded-projects";
 
 interface SidebarProjectListProps {
   activeView: ActiveView;

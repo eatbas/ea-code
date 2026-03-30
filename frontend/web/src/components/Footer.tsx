@@ -5,11 +5,11 @@ export function Footer() {
     <footer className="border-t border-border py-10">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 md:flex-row">
         <span className="font-mono text-sm text-muted">
-          &copy; {year} EA Code. Open-source under MIT.
+          &copy; {year} Maestro. Open-source under MIT.
         </span>
         <div className="flex items-center gap-6">
           <a
-            href="https://github.com/eatbas/ea-code"
+            href="https://github.com/eatbas/maestro"
             className="text-sm text-muted transition-colors duration-200 hover:text-white cursor-pointer"
           >
             GitHub

@@ -10,7 +10,7 @@ pub struct WorkspaceInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ea_code_ignored: Option<bool>,
+    pub maestro_ignored: Option<bool>,
 }
 
 /// CLI health check result per binary.
@@ -60,5 +60,5 @@ pub struct PrerequisiteStatus {
     pub python_version: Option<String>,
     /// Windows-only — always `true` on macOS/Linux.
     pub git_bash_available: bool,
-    pub hive_api_source_found: bool,
+    pub symphony_source_found: bool,
 }

@@ -45,8 +45,8 @@ export interface AppSettings {
   opencodeModel: string;
   /** Per-provider enabled models (e.g. { copilot: "claude-sonnet-4.6,gpt-5.4" }). */
   providerModels: Record<string, string>;
-  /** Port for the hive-api sidecar (0 = default 8719). */
-  hiveApiPort: number;
+  /** Port for the Symphony sidecar (0 = default 8719). */
+  symphonyPort: number;
   /** Python interpreter path override (empty = auto-detect). */
   pythonPath: string;
   /** Orchestrator configuration (null = not configured). */
@@ -70,7 +70,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   kimiModel: "kimi-code/kimi-for-coding",
   opencodeModel: "opencode/glm-5",
   providerModels: {},
-  hiveApiPort: 0,
+  symphonyPort: 0,
   pythonPath: "",
   orchestrator: null,
   codePipeline: null,

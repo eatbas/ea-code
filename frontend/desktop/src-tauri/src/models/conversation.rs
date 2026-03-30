@@ -46,7 +46,7 @@ pub struct ConversationSummary {
     pub updated_at: String,
     pub message_count: usize,
     pub last_provider_session_ref: Option<String>,
-    pub active_job_id: Option<String>,
+    pub active_score_id: Option<String>,
     pub error: Option<String>,
     pub archived_at: Option<String>,
     pub pinned_at: Option<String>,
@@ -107,16 +107,16 @@ pub struct PipelineStageRecord {
     pub text: String,
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
-    /// Hive-API job ID for this stage's run.
+    /// Symphony score ID for this stage's run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub job_id: Option<String>,
+    pub score_id: Option<String>,
     /// Provider session ref for resuming this stage.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_session_ref: Option<String>,
 }
 
 impl PipelineStageRecord {
-    /// Construct a failed stage record with empty text and no job/session refs.
+    /// Construct a failed stage record with empty text and no score/session refs.
     pub fn failed(
         stage_index: usize,
         stage_name: String,
@@ -131,7 +131,7 @@ impl PipelineStageRecord {
             text: String::new(),
             started_at,
             finished_at: Some(crate::storage::now_rfc3339()),
-            job_id: None,
+            score_id: None,
             provider_session_ref: None,
         }
     }

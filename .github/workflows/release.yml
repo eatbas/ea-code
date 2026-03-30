@@ -59,7 +59,7 @@ jobs:
           projectPath: frontend/desktop
           args: --bundles nsis
           tagName: v__VERSION__
-          releaseName: "EA Code v__VERSION__"
+          releaseName: "Maestro v__VERSION__"
           releaseBody: "See the assets below to download the installer for your platform."
           releaseDraft: false
           prerelease: false
@@ -114,7 +114,7 @@ jobs:
           projectPath: frontend/desktop
           args: --target universal-apple-darwin --bundles dmg
           tagName: v__VERSION__
-          releaseName: "EA Code v__VERSION__"
+          releaseName: "Maestro v__VERSION__"
           releaseBody: "See the assets below to download the installer for your platform."
           releaseDraft: false
           prerelease: false

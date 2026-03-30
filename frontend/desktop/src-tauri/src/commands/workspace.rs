@@ -14,9 +14,9 @@ pub async fn select_workspace(path: String) -> Result<WorkspaceInfo, String> {
     }
 
     if crate::git::is_git_repo(&path).await {
-        if let Err(error) = crate::git::ensure_ea_code_gitignore_entry(&path) {
+        if let Err(error) = crate::git::ensure_maestro_gitignore_entry(&path) {
             eprintln!(
-                "[workspace] Failed to ensure .ea-code is ignored in {}: {error}",
+                "[workspace] Failed to ensure .maestro is ignored in {}: {error}",
                 path
             );
         }
@@ -44,7 +44,7 @@ pub async fn validate_environment(settings: AppSettings) -> Result<CliHealth, St
     check_cli_health_inner(&settings).await
 }
 
-/// Checks system-level prerequisites (Python, Git Bash on Windows, hive-api source).
+/// Checks system-level prerequisites (Python, Git Bash on Windows, symphony source).
 #[tauri::command]
 pub async fn check_prerequisites() -> Result<PrerequisiteStatus, String> {
     // Python check
@@ -85,14 +85,14 @@ pub async fn check_prerequisites() -> Result<PrerequisiteStatus, String> {
         true
     };
 
-    // hive-api source check.
-    let hive_api_source_found = crate::sidecar::find_hive_dir().is_ok();
+    // symphony source check.
+    let symphony_source_found = crate::sidecar::find_symphony_dir().is_ok();
 
     Ok(PrerequisiteStatus {
         python_available,
         python_version,
         git_bash_available,
-        hive_api_source_found,
+        symphony_source_found,
     })
 }
 

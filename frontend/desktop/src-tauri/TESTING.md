@@ -8,13 +8,13 @@ This document provides a comprehensive testing checklist for verifying the SQLit
 
 Before running the new version for the first time:
 
-- [ ] Backup existing `~/.config/ea-code/` directory:
+- [ ] Backup existing `~/.config/maestro/` directory:
   ```bash
-  cp -r ~/.config/ea-code ~/.config/ea-code.backup.$(date +%Y%m%d)
+  cp -r ~/.config/maestro ~/.config/maestro.backup.$(date +%Y%m%d)
   ```
 - [ ] Note existing settings (CLI paths, model selections)
 - [ ] Note existing sessions and their run counts
-- [ ] Ensure the old `ea-code.db` file exists (for migration verification)
+- [ ] Ensure the old `maestro.db` file exists (for migration verification)
 
 ---
 
@@ -25,12 +25,12 @@ Before running the new version for the first time:
 - [ ] App launches without errors
 - [ ] No panic messages in console
 - [ ] Settings are preserved (check CLI paths, model selections)
-- [ ] Legacy `ea-code.db` is preserved as backup (not deleted)
+- [ ] Legacy `maestro.db` is preserved as backup (not deleted)
 
 ### Settings Migration
 
 - [ ] Launch app with existing SQLite DB present
-- [ ] Verify `settings.json` is created in `~/.config/ea-code/`
+- [ ] Verify `settings.json` is created in `~/.config/maestro/`
 - [ ] Verify settings values match previous configuration
 - [ ] Verify `retention_days` defaults to 90 if not previously set
 
@@ -106,7 +106,7 @@ For a completed run, verify `events.jsonl` contains:
 Verify the following directory structure exists:
 
 ```
-~/.config/ea-code/
+~/.config/maestro/
 ├── settings.json           # App settings
 ├── skills/                 # Skill definitions
 │   ├── <skill-id>.json
@@ -137,45 +137,45 @@ Verify the following directory structure exists:
 ### Check Settings
 
 ```bash
-cat ~/.config/ea-code/settings.json | jq .
+cat ~/.config/maestro/settings.json | jq .
 ```
 
 ### Check Session Metadata
 
 ```bash
-cat ~/.config/ea-code/sessions/<session-id>/session.json | jq .
+cat ~/.config/maestro/sessions/<session-id>/session.json | jq .
 ```
 
 ### Check Run Summary
 
 ```bash
-cat ~/.config/ea-code/sessions/<session-id>/runs/<run-id>/summary.json | jq .
+cat ~/.config/maestro/sessions/<session-id>/runs/<run-id>/summary.json | jq .
 ```
 
 ### Check Event Log
 
 ```bash
 # View all events
-cat ~/.config/ea-code/sessions/<session-id>/runs/<run-id>/events.jsonl | jq .
+cat ~/.config/maestro/sessions/<session-id>/runs/<run-id>/events.jsonl | jq .
 
 # Count events
-wc -l ~/.config/ea-code/sessions/<session-id>/runs/<run-id>/events.jsonl
+wc -l ~/.config/maestro/sessions/<session-id>/runs/<run-id>/events.jsonl
 
 # Check for terminal event
-grep "run_end" ~/.config/ea-code/sessions/<session-id>/runs/<run-id>/events.jsonl
+grep "run_end" ~/.config/maestro/sessions/<session-id>/runs/<run-id>/events.jsonl
 ```
 
 ### List All Sessions
 
 ```bash
-ls -la ~/.config/ea-code/sessions/
+ls -la ~/.config/maestro/sessions/
 ```
 
 ### Calculate Storage Size
 
 ```bash
-du -sh ~/.config/ea-code/
-du -sh ~/.config/ea-code/sessions/*/
+du -sh ~/.config/maestro/
+du -sh ~/.config/maestro/sessions/*/
 ```
 
 ---
@@ -198,13 +198,13 @@ Compare before/after migration:
 
 ### Settings Not Migrated
 
-1. Check if `~/.config/ea-code/ea-code.db` exists
+1. Check if `~/.config/maestro/maestro.db` exists
 2. Check console for migration errors
 3. Manually copy settings from old DB if needed
 
 ### Sessions Not Appearing
 
-1. Verify `~/.config/ea-code/sessions/` exists
+1. Verify `~/.config/maestro/sessions/` exists
 2. Check each session has `session.json`
 3. Check for JSON parsing errors in console
 

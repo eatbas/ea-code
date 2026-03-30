@@ -121,15 +121,15 @@ export function CliSetupView({
               {versionsLoading ? "Checking..." : updating ? "Updating..." : "Refresh"}
             </button>
           </div>
-          {/* Hive-API status */}
+          {/* Symphony status */}
           <div className="flex items-center gap-3 rounded-lg border border-edge bg-panel px-4 py-3">
             {sidecarReady === null && !apiHealth ? (
               <>
                 <span className="inline-block h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-fg-faint" />
                 <div className="flex flex-1 flex-col gap-1">
-                  <span className="text-sm font-medium text-fg">Hive API</span>
+                  <span className="text-sm font-medium text-fg">Symphony</span>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-edge">
-                    <div className="h-full animate-[hive-loading_1.5s_ease-in-out_infinite] rounded-full bg-fg-muted" />
+                    <div className="h-full animate-[symphony-loading_1.5s_ease-in-out_infinite] rounded-full bg-fg-muted" />
                   </div>
                   <span className="text-xs text-fg-faint">Starting up...</span>
                 </div>
@@ -143,10 +143,10 @@ export function CliSetupView({
                 />
                 <div className="flex flex-1 items-center justify-between">
                   <div>
-                    <span className="text-sm font-medium text-fg">Hive API</span>
+                    <span className="text-sm font-medium text-fg">Symphony</span>
                     <span className="ml-2 text-xs text-fg-faint">
                       {apiHealth?.connected
-                        ? `Connected${apiHealth.droneCount != null ? ` · ${apiHealth.droneCount} drone${apiHealth.droneCount !== 1 ? "s" : ""}` : ""}`
+                        ? `Connected${apiHealth.musicianCount != null ? ` · ${apiHealth.musicianCount} musician${apiHealth.musicianCount !== 1 ? "s" : ""}` : ""}`
                         : apiHealth?.error ?? "Not connected"}
                     </span>
                   </div>
@@ -178,7 +178,7 @@ export function CliSetupView({
           )}
           {providers.length === 0 && !versionsLoading && (
             <p className="text-sm text-fg-faint">
-              No providers detected. Ensure the hive-api sidecar is running.
+              No providers detected. Ensure the Symphony sidecar is running.
             </p>
           )}
         </div>

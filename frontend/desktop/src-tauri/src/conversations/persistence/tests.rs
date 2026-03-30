@@ -13,7 +13,7 @@ struct TestWorkspace {
 
 impl TestWorkspace {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!("ea-code-test-{}", uuid::Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!("maestro-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&path).expect("temporary workspace should be created");
         Self { path }
     }
@@ -155,7 +155,7 @@ fn stale_running_conversations_reconcile_on_load() {
     assert_eq!(loaded.summary.status, ConversationStatus::Failed);
     assert_eq!(
         loaded.summary.error.as_deref(),
-        Some("ea-code closed while this task was running")
+        Some("maestro closed while this task was running")
     );
 }
 

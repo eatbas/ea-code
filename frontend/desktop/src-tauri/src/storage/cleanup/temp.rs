@@ -60,13 +60,13 @@ pub fn cleanup_stale_temp_files() -> Result<usize, String> {
     // 3. Recursively delete orphaned .tmp files anywhere under config dir
     cleaned += remove_tmp_files_recursive(&base);
 
-    // 4. Delete legacy SQLite files matching ea-code.db*
+    // 4. Delete legacy SQLite files matching maestro.db*
     if let Ok(entries) = std::fs::read_dir(&base) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name.starts_with("ea-code.db") {
+                    if name.starts_with("maestro.db") {
                         match std::fs::remove_file(&path) {
                             Ok(()) => {
                                 eprintln!("Cleanup: removed legacy SQLite file {}", path.display());

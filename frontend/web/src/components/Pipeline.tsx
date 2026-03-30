@@ -82,7 +82,7 @@ export function Pipeline() {
             <p className="mt-4 max-w-md text-muted leading-relaxed">
               Each run flows through up to 10 stages. Planning and review
               happen in parallel with multiple agents. If the Judge says
-              &ldquo;not done,&rdquo; EA Code loops back automatically —
+              &ldquo;not done,&rdquo; Maestro loops back automatically —
               refining, regenerating, and reviewing until the job is truly
               complete.
             </p>

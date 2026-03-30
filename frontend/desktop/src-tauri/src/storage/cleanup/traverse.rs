@@ -29,7 +29,7 @@ where
             continue;
         }
 
-        let sessions_dir = workspace.join(".ea-code").join("sessions");
+        let sessions_dir = workspace.join(".maestro").join("sessions");
         if !sessions_dir.is_dir() {
             continue;
         }

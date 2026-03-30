@@ -26,27 +26,27 @@ pub(crate) fn build_base_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}")
 }
 
-pub(crate) async fn spawn_hive_api_process(
+pub(crate) async fn spawn_symphony_process(
     venv_python: &Path,
-    hive_dir: &Path,
+    symphony_dir: &Path,
     port: u16,
 ) -> Result<Child, String> {
     let port_str = port.to_string();
-    let config_path = hive_dir.join("config.toml");
+    let config_path = symphony_dir.join("config.toml");
 
     let mut command = Command::new(venv_python);
     command
         .args([
             "-m",
             "uvicorn",
-            "hive_api.main:app",
+            "symphony.main:app",
             "--host",
             "127.0.0.1",
             "--port",
             &port_str,
         ])
-        .env("HIVE_API_CONFIG", &config_path)
-        .current_dir(hive_dir)
+        .env("SYMPHONY_CONFIG", &config_path)
+        .current_dir(symphony_dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
@@ -56,7 +56,7 @@ pub(crate) async fn spawn_hive_api_process(
 
     command
         .spawn()
-        .map_err(|error| format!("Failed to start hive-api: {error}"))
+        .map_err(|error| format!("Failed to start symphony: {error}"))
 }
 
 pub(crate) fn inspect_child_state(child: &mut Child) -> RestartState {
@@ -71,7 +71,7 @@ pub(crate) fn requires_restart(state: RestartState) -> bool {
     !matches!(state, RestartState::Running)
 }
 
-pub(crate) async fn stop_hive_api_process(child: &mut Child) {
+pub(crate) async fn stop_symphony_process(child: &mut Child) {
     #[cfg(target_os = "windows")]
     if let Some(pid) = child.id() {
         let _ = Command::new("taskkill")
@@ -91,13 +91,13 @@ pub(crate) async fn stop_hive_api_process(child: &mut Child) {
 
     match tokio::time::timeout(SHUTDOWN_GRACE, child.wait()).await {
         Ok(Ok(status)) => {
-            eprintln!("[sidecar] hive-api exited with status: {status}");
+            eprintln!("[sidecar] symphony exited with status: {status}");
         }
         Ok(Err(error)) => {
-            eprintln!("[sidecar] Error waiting for hive-api exit: {error}");
+            eprintln!("[sidecar] Error waiting for symphony exit: {error}");
         }
         Err(_) => {
-            eprintln!("[sidecar] hive-api did not exit in time — force killing");
+            eprintln!("[sidecar] symphony did not exit in time — force killing");
             #[cfg(not(target_os = "windows"))]
             if let Some(pid) = child.id() {
                 unsafe {
