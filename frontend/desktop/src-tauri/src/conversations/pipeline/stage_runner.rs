@@ -293,8 +293,49 @@ pub async fn run_stage(
         }
     };
 
+    // When the marker file is optional and wasn't written by the agent,
+    // auto-generate a fallback so the pipeline can proceed and the file
+    // is available for hydration on reload.
     let file_text = if file_exists {
         std::fs::read_to_string(&file_to_watch).ok()
+    } else if !file_required && final_status == ConversationStatus::Completed {
+        let accumulated = output_buffer
+            .lock()
+            .map(|g| g.clone())
+            .unwrap_or_default();
+
+        let fallback = if accumulated.trim().is_empty() {
+            format!(
+                "# {stage_name} — auto-generated summary\n\n\
+                 The {stage_name} stage completed but did not write a summary file.\n\
+                 The agent may have performed its work without producing explicit output."
+            )
+        } else {
+            format!(
+                "# {stage_name} — auto-generated summary\n\n\
+                 The {stage_name} stage completed but did not write a summary file. \
+                 Below is the captured output from the session.\n\n---\n\n{accumulated}"
+            )
+        };
+
+        // Best-effort write — don't fail the stage if the write fails.
+        if let Some(parent) = Path::new(&file_to_watch).parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        match std::fs::write(&file_to_watch, &fallback) {
+            Ok(()) => {
+                eprintln!(
+                    "[pipeline] {stage_name}: wrote fallback marker file to {file_to_watch}"
+                );
+                Some(fallback)
+            }
+            Err(e) => {
+                eprintln!(
+                    "[pipeline] {stage_name}: failed to write fallback marker file: {e}"
+                );
+                Some(fallback)
+            }
+        }
     } else {
         None
     };

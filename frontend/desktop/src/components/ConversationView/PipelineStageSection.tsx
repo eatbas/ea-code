@@ -23,7 +23,7 @@ interface PipelineStageSectionProps {
   children: ReactNode;
 }
 
-const STATUS_STYLES: Record<StageStatus, { dot: string; label: string; text: string }> = {
+export const STATUS_STYLES: Record<StageStatus, { dot: string; label: string; text: string }> = {
   pending: { dot: "bg-fg-faint", label: "Pending", text: "text-fg-faint" },
   running: { dot: "bg-running-dot animate-pulse", label: "Running", text: "text-fg" },
   completed: { dot: "hidden", label: "Done", text: "text-success-chip-text" },
@@ -31,7 +31,7 @@ const STATUS_STYLES: Record<StageStatus, { dot: string; label: string; text: str
   stopped: { dot: "bg-warning-text", label: "Stopped", text: "text-warning-text" },
 };
 
-function formatElapsed(ms: number): string {
+export function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -39,6 +39,19 @@ function formatElapsed(ms: number): string {
     return `${String(minutes)}m ${String(seconds).padStart(2, "0")}s`;
   }
   return `${String(seconds)}s`;
+}
+
+/** Shorten parallel stage labels: "Planner 1" → "P1", "Reviewer 2" → "R2". */
+function shortLabel(label: string): string {
+  const m = label.match(/^(Planner|Reviewer)\s+(\d+)$/);
+  if (m) return `${m[1][0]}${m[2]}`;
+  return label;
+}
+
+/** Strip the "provider / " prefix so only the model name is shown. */
+function modelOnly(raw: string): string {
+  const idx = raw.lastIndexOf("/");
+  return idx === -1 ? raw : raw.slice(idx + 1).trim();
 }
 
 export function PipelineStageSection({
@@ -82,14 +95,14 @@ export function PipelineStageSection({
       <button
         type="button"
         onClick={toggle}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        className="flex w-full items-center gap-2 px-4 py-3 text-left min-w-0 whitespace-nowrap"
       >
         <span className={`h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
-        <span className="text-xs font-semibold text-fg">{label}</span>
+        <span className="shrink-0 text-xs font-semibold text-fg">{shortLabel(label)}</span>
         {agentLabel && (
-          <span className="text-[10px] text-fg-muted">{agentLabel}</span>
+          <span className="truncate text-[10px] text-fg-muted">{modelOnly(agentLabel)}</span>
         )}
-        <span className="ml-auto flex items-center gap-3">
+        <span className="ml-auto flex shrink-0 items-center gap-2">
           {elapsed && (
             <span className="text-[10px] font-mono text-fg-faint">{elapsed}</span>
           )}

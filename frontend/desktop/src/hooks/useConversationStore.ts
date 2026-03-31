@@ -137,7 +137,12 @@ export function useConversationStore(
     sending,
     stopping,
     updateActivePromptDraft,
-    sendPrompt,
+    sendPrompt: async (prompt: string, agent: AgentSelection): Promise<void> => {
+      const summary = await sendPrompt(prompt, agent);
+      if (summary) {
+        upsertInIndex(summary);
+      }
+    },
     stopActiveConversation,
 
     conversationIndex,

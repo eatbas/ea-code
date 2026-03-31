@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import type { PipelineStageState } from "../../hooks/usePipelineSession";
 import type { PlanReviewPhase } from "../../hooks/usePlanReview";
+import { PipelineStageGroup } from "./PipelineStageGroup";
 import { PipelineStageSection } from "./PipelineStageSection";
 import { PipelineStatusBar } from "./PipelineStatusBar";
 
@@ -22,6 +23,16 @@ interface PipelineConversationViewProps {
   onStop?: () => void;
   /** Plan review phase. */
   planReviewPhase?: PlanReviewPhase;
+}
+
+/** Return the grid class for a set of parallel stage cards. */
+function stageGridClass(count: number): string {
+  if (count <= 1) return "";
+  if (count === 2) return "grid grid-cols-2 gap-3 min-w-0";
+  if (count === 3) return "grid grid-cols-3 gap-3 min-w-0";
+  if (count === 4) return "grid grid-cols-2 gap-3 min-w-0";
+  // 5+: three columns (3+2, 3+3, 3+3+1, …)
+  return "grid grid-cols-3 gap-3 min-w-0";
 }
 
 /** Default text shown inside a stage section when no output is available. */
@@ -97,24 +108,26 @@ export function PipelineConversationView({
 
           {/* Planner stages (parallel — synced open/close) */}
           {hasStages && (
-            <div className={plannerStages.length > 1 ? "grid grid-cols-2 gap-3 min-w-0" : ""}>
-              {plannerStages.map((stage, i) => (
-                <PipelineStageSection
-                  key={`planner-${String(i)}`}
-                  label={stage.stageName || `Planner ${String(i + 1)}`}
-                  agentLabel={stage.agentLabel}
-                  status={stage.status}
-                  open={plannersOpen}
-                  onOpenChange={setPlannersOpen}
-                  startedAt={stage.startedAt}
-                  finishedAt={stage.finishedAt}
-                >
-                  <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
-                    {stageBodyText(stage, "Plan file was not found.")}
-                  </p>
-                </PipelineStageSection>
-              ))}
-            </div>
+            <PipelineStageGroup groupLabel="Planners" stages={plannerStages}>
+              <div className={stageGridClass(plannerStages.length)}>
+                {plannerStages.map((stage, i) => (
+                  <PipelineStageSection
+                    key={`planner-${String(i)}`}
+                    label={stage.stageName || `Planner ${String(i + 1)}`}
+                    agentLabel={stage.agentLabel}
+                    status={stage.status}
+                    open={plannersOpen}
+                    onOpenChange={setPlannersOpen}
+                    startedAt={stage.startedAt}
+                    finishedAt={stage.finishedAt}
+                  >
+                    <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                      {stageBodyText(stage, "Plan file was not found.")}
+                    </p>
+                  </PipelineStageSection>
+                ))}
+              </div>
+            </PipelineStageGroup>
           )}
 
           {/* Plan Merge stage */}
@@ -165,24 +178,26 @@ export function PipelineConversationView({
 
           {/* Reviewer stages (parallel — synced open/close) */}
           {reviewerStages.length > 0 && (
-            <div className={reviewerStages.length > 1 ? "grid grid-cols-2 gap-3 min-w-0" : ""}>
-              {reviewerStages.map((stage, i) => (
-                <PipelineStageSection
-                  key={`reviewer-${String(i)}`}
-                  label={stage.stageName || `Reviewer ${String(i + 1)}`}
-                  agentLabel={stage.agentLabel}
-                  status={stage.status}
-                  open={reviewersOpen}
-                  onOpenChange={setReviewersOpen}
-                  startedAt={stage.startedAt}
-                  finishedAt={stage.finishedAt}
-                >
-                  <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
-                    {stageBodyText(stage, "Review file was not found.")}
-                  </p>
-                </PipelineStageSection>
-              ))}
-            </div>
+            <PipelineStageGroup groupLabel="Reviewers" stages={reviewerStages}>
+              <div className={stageGridClass(reviewerStages.length)}>
+                {reviewerStages.map((stage, i) => (
+                  <PipelineStageSection
+                    key={`reviewer-${String(i)}`}
+                    label={stage.stageName || `Reviewer ${String(i + 1)}`}
+                    agentLabel={stage.agentLabel}
+                    status={stage.status}
+                    open={reviewersOpen}
+                    onOpenChange={setReviewersOpen}
+                    startedAt={stage.startedAt}
+                    finishedAt={stage.finishedAt}
+                  >
+                    <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                      {stageBodyText(stage, "Review file was not found.")}
+                    </p>
+                  </PipelineStageSection>
+                ))}
+              </div>
+            </PipelineStageGroup>
           )}
           {reviewerStages.length === 0 && coderDone && running && (
             <PipelineStageSection label="Reviewers" status="pending">

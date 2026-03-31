@@ -35,7 +35,7 @@ interface UseConversationSessionReturn {
   updateActivePromptDraft: (prompt: string) => void;
   openConversation: (conversationId: string) => Promise<void>;
   startNewConversation: () => void;
-  sendPrompt: (prompt: string, agent: AgentSelection) => Promise<void>;
+  sendPrompt: (prompt: string, agent: AgentSelection) => Promise<ConversationSummary | null>;
   stopActiveConversation: () => Promise<void>;
   deleteConversationById: (conversationId: string) => Promise<boolean>;
   renameConversationById: (conversationId: string, title: string) => Promise<ConversationSummary | null>;
@@ -235,9 +235,9 @@ export function useConversationSession(
     setActiveConversation(null);
   }, []);
 
-  const sendPrompt = useCallback(async (prompt: string, agent: AgentSelection): Promise<void> => {
+  const sendPrompt = useCallback(async (prompt: string, agent: AgentSelection): Promise<ConversationSummary | null> => {
     if (!workspace) {
-      return;
+      return null;
     }
     const workspacePath = workspace.path;
 
@@ -262,7 +262,7 @@ export function useConversationSession(
             (item) => item.id,
           ),
         ));
-        return;
+        return updated.summary;
       }
 
       const created = await createConversation(workspacePath, agent, prompt);
@@ -282,8 +282,10 @@ export function useConversationSession(
           (item) => item.id,
         ),
       ));
+      return running.summary;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to send prompt.");
+      return null;
     } finally {
       setSending(false);
     }
