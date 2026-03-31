@@ -45,3 +45,23 @@ pub(super) fn plan_dir_path(workspace_path: &str, conversation_id: &str) -> Path
 pub(super) fn pipeline_file_path(workspace_path: &str, conversation_id: &str) -> PathBuf {
     conversation_dir(workspace_path, conversation_id).join(PIPELINE_FILE)
 }
+
+#[allow(dead_code)]
+pub(super) fn coder_dir_path(workspace_path: &str, conversation_id: &str) -> PathBuf {
+    conversation_dir(workspace_path, conversation_id).join("coder")
+}
+
+#[allow(dead_code)]
+pub(super) fn review_dir_path(workspace_path: &str, conversation_id: &str) -> PathBuf {
+    conversation_dir(workspace_path, conversation_id).join("review")
+}
+
+#[allow(dead_code)]
+pub(super) fn review_merged_dir_path(workspace_path: &str, conversation_id: &str) -> PathBuf {
+    conversation_dir(workspace_path, conversation_id).join("review_merged")
+}
+
+#[allow(dead_code)]
+pub(super) fn code_fixer_dir_path(workspace_path: &str, conversation_id: &str) -> PathBuf {
+    conversation_dir(workspace_path, conversation_id).join("code_fixer")
+}

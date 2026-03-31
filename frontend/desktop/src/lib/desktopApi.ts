@@ -182,8 +182,8 @@ export function getPipelineState(
 export function acceptPlan(
   workspacePath: string,
   conversationId: string,
-): Promise<ConversationSummary> {
-  return invokeCommand<ConversationSummary>("accept_plan", {
+): Promise<ConversationDetail> {
+  return invokeCommand<ConversationDetail>("accept_plan", {
     workspacePath,
     conversationId,
   });

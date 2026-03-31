@@ -46,30 +46,61 @@ pub fn update_pipeline_stage(
     })
 }
 
-/// Fills in the `text` field of each stage from the corresponding plan file
-/// on disk. Also corrects stale "Running" status when the plan file already
+/// Try to read a file and, if it exists, set the stage text and fix stale
+/// Running status. Also fills in `finished_at` when it was never persisted
+/// (e.g. after a crash), using the file's modification time as a proxy.
+fn hydrate_from_file(stage: &mut PipelineStageRecord, path: &std::path::Path) {
+    if let Ok(contents) = std::fs::read_to_string(path) {
+        stage.text = contents;
+        if stage.status == ConversationStatus::Running {
+            stage.status = ConversationStatus::Completed;
+        }
+        if stage.finished_at.is_none() {
+            stage.finished_at = file_modified_rfc3339(path)
+                .or_else(|| stage.started_at.clone());
+        }
+    }
+}
+
+/// Return the file's last-modified time as an RFC 3339 string, or None on error.
+fn file_modified_rfc3339(path: &std::path::Path) -> Option<String> {
+    let mtime = std::fs::metadata(path).ok()?.modified().ok()?;
+    let dt: chrono::DateTime<chrono::Utc> = mtime.into();
+    Some(dt.to_rfc3339())
+}
+
+/// Fills in the `text` field of each stage from the corresponding artifact
+/// file on disk. Also corrects stale "Running" status when the file already
 /// exists.
 fn hydrate_stage_text(workspace_path: &str, conversation_id: &str, state: &mut PipelineState) {
     let conv_dir = conversation_dir(workspace_path, conversation_id);
     let plan_dir = conv_dir.join("plan");
     let merged_file = conv_dir.join("plan_merged").join("plan_merged.md");
+    let coder_file = conv_dir.join("coder").join("coder_done.md");
+    let review_dir = conv_dir.join("review");
+    let review_merged_file = conv_dir.join("review_merged").join("review_merged.md");
+    let code_fixer_file = conv_dir.join("code_fixer").join("code_fixer_done.md");
 
     for stage in &mut state.stages {
-        let plan_file = plan_dir.join(format!("Plan-{}.md", stage.stage_index + 1));
-        if let Ok(contents) = std::fs::read_to_string(&plan_file) {
-            stage.text = contents;
-            if stage.status == ConversationStatus::Running {
-                stage.status = ConversationStatus::Completed;
-            }
-        }
-
-        if stage.stage_name == "Plan Merge" {
-            if let Ok(contents) = std::fs::read_to_string(&merged_file) {
-                stage.text = contents;
-                if stage.status == ConversationStatus::Running {
-                    stage.status = ConversationStatus::Completed;
+        if stage.stage_name.starts_with("Planner") {
+            let plan_file = plan_dir.join(format!("Plan-{}.md", stage.stage_index + 1));
+            hydrate_from_file(stage, &plan_file);
+        } else if stage.stage_name == "Plan Merge" {
+            hydrate_from_file(stage, &merged_file);
+        } else if stage.stage_name == "Coder" {
+            hydrate_from_file(stage, &coder_file);
+        } else if stage.stage_name.starts_with("Reviewer") {
+            // Extract reviewer number from stage name (e.g. "Reviewer 2" → 2).
+            if let Some(num_str) = stage.stage_name.strip_prefix("Reviewer ") {
+                if let Ok(n) = num_str.parse::<usize>() {
+                    let review_file = review_dir.join(format!("Review-{n}.md"));
+                    hydrate_from_file(stage, &review_file);
                 }
             }
+        } else if stage.stage_name == "Review Merge" {
+            hydrate_from_file(stage, &review_merged_file);
+        } else if stage.stage_name == "Code Fixer" {
+            hydrate_from_file(stage, &code_fixer_file);
         }
     }
 
@@ -156,6 +187,94 @@ fn reconstruct_pipeline_from_artifacts(
         stages.push(PipelineStageRecord {
             stage_index: stages.len(),
             stage_name: "Plan Merge".to_string(),
+            agent_label: String::new(),
+            status: ConversationStatus::Completed,
+            text,
+            started_at: None,
+            finished_at: None,
+            score_id: None,
+            provider_session_ref: None,
+        });
+    }
+
+    // Coder completion marker.
+    let coder_file = conv_dir.join("coder").join("coder_done.md");
+    if coder_file.exists() {
+        let text = std::fs::read_to_string(&coder_file).unwrap_or_default();
+        stages.push(PipelineStageRecord {
+            stage_index: stages.len(),
+            stage_name: "Coder".to_string(),
+            agent_label: String::new(),
+            status: ConversationStatus::Completed,
+            text,
+            started_at: None,
+            finished_at: None,
+            score_id: None,
+            provider_session_ref: None,
+        });
+    }
+
+    // Individual reviewer outputs.
+    let review_dir = conv_dir.join("review");
+    if review_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&review_dir) {
+            let mut review_stages: Vec<PipelineStageRecord> = Vec::new();
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if let Some(rest) = name_str.strip_prefix("Review-") {
+                    if let Some(num_str) = rest.strip_suffix(".md") {
+                        if let Ok(n) = num_str.parse::<usize>() {
+                            let text =
+                                std::fs::read_to_string(entry.path()).unwrap_or_default();
+                            review_stages.push(PipelineStageRecord {
+                                stage_index: stages.len() + n - 1,
+                                stage_name: format!("Reviewer {n}"),
+                                agent_label: String::new(),
+                                status: ConversationStatus::Completed,
+                                text,
+                                started_at: None,
+                                finished_at: None,
+                                score_id: None,
+                                provider_session_ref: None,
+                            });
+                        }
+                    }
+                }
+            }
+            review_stages.sort_by_key(|s| s.stage_index);
+            // Fix indices sequentially after existing stages.
+            for (i, rs) in review_stages.iter_mut().enumerate() {
+                rs.stage_index = stages.len() + i;
+            }
+            stages.extend(review_stages);
+        }
+    }
+
+    // Review merge output.
+    let review_merged_file = conv_dir.join("review_merged").join("review_merged.md");
+    if review_merged_file.exists() {
+        let text = std::fs::read_to_string(&review_merged_file).unwrap_or_default();
+        stages.push(PipelineStageRecord {
+            stage_index: stages.len(),
+            stage_name: "Review Merge".to_string(),
+            agent_label: String::new(),
+            status: ConversationStatus::Completed,
+            text,
+            started_at: None,
+            finished_at: None,
+            score_id: None,
+            provider_session_ref: None,
+        });
+    }
+
+    // Code Fixer completion marker.
+    let code_fixer_file = conv_dir.join("code_fixer").join("code_fixer_done.md");
+    if code_fixer_file.exists() {
+        let text = std::fs::read_to_string(&code_fixer_file).unwrap_or_default();
+        stages.push(PipelineStageRecord {
+            stage_index: stages.len(),
+            stage_name: "Code Fixer".to_string(),
             agent_label: String::new(),
             status: ConversationStatus::Completed,
             text,

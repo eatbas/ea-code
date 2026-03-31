@@ -29,6 +29,11 @@ pub struct StageConfig {
     pub provider_session_ref: Option<String>,
     pub failure_message: String,
     pub agent_label: String,
+    /// When `false`, the stage completes based on SSE stream end alone —
+    /// the `file_to_watch` is read if it exists but is not required.
+    /// Suitable for coding agents that modify the codebase but may not
+    /// write a dedicated marker file.
+    pub file_required: bool,
 }
 
 pub(super) fn request_symphony_stop(score_id: String) {
@@ -112,6 +117,7 @@ pub async fn run_stage(
         provider_session_ref,
         failure_message,
         agent_label,
+        file_required,
     } = config;
     let started_at = now_rfc3339();
 
@@ -252,13 +258,34 @@ pub async fn run_stage(
     .await;
 
     // Determine final status.
-    let plan_created =
+    let file_exists =
         file_ready.load(Ordering::Acquire) || Path::new(&file_to_watch).exists();
 
     let final_status = if abort.load(Ordering::Acquire) {
         ConversationStatus::Stopped
-    } else if plan_created {
+    } else if file_exists {
         ConversationStatus::Completed
+    } else if !file_required {
+        // For stages where the file is optional (e.g. Coder, Code Fixer):
+        // treat any non-error SSE completion as success — the agent may have
+        // done its work without writing the marker file.
+        match &result {
+            Ok(r) if r.status == ConversationStatus::Completed => ConversationStatus::Completed,
+            Ok(_) => {
+                eprintln!(
+                    "[pipeline] {stage_name}: SSE finished but without Completed status; \
+                     treating as Completed because file_required=false"
+                );
+                ConversationStatus::Completed
+            }
+            Err(e) => {
+                eprintln!(
+                    "[pipeline] {stage_name}: SSE stream error ({e}); \
+                     treating as Completed because file_required=false"
+                );
+                ConversationStatus::Completed
+            }
+        }
     } else {
         match &result {
             Ok(r) => r.status.clone(),
@@ -266,16 +293,11 @@ pub async fn run_stage(
         }
     };
 
-    let file_text = if plan_created {
+    let file_text = if file_exists {
         std::fs::read_to_string(&file_to_watch).ok()
     } else {
         None
     };
-
-    let _ = emit_stage_status(
-        &app, &conversation_id, stage_index, &stage_name,
-        final_status.clone(), &agent_label, file_text.clone(),
-    );
 
     // Build the persisted record.
     let captured_session_ref = session_ref.lock().ok().and_then(|g| g.clone());
@@ -285,12 +307,26 @@ pub async fn run_stage(
         .map(|g| g.clone())
         .unwrap_or_default();
 
+    // Prefer the marker file content; fall back to accumulated SSE output.
+    let display_text = file_text.or_else(|| {
+        if accumulated_text.is_empty() {
+            None
+        } else {
+            Some(accumulated_text.clone())
+        }
+    });
+
+    let _ = emit_stage_status(
+        &app, &conversation_id, stage_index, &stage_name,
+        final_status.clone(), &agent_label, display_text.clone(),
+    );
+
     let record = PipelineStageRecord {
         stage_index,
         stage_name: stage_name.clone(),
         agent_label: agent_label.clone(),
         status: final_status.clone(),
-        text: file_text.unwrap_or(accumulated_text),
+        text: display_text.unwrap_or(accumulated_text),
         started_at: Some(started_at),
         finished_at: Some(now_rfc3339()),
         score_id: captured_job,

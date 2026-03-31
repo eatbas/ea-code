@@ -110,7 +110,7 @@ export function PlanReviewCard({
           </button>
           {planOpen && (
             <div className="max-h-[40vh] overflow-y-auto border-t border-edge px-4 py-3 pipeline-scroll">
-              <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap">{planText}</p>
+              <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">{planText}</p>
             </div>
           )}
         </div>

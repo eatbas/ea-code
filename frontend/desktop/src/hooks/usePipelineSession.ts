@@ -107,8 +107,12 @@ export function usePipelineSession(
         // When the backend sends plan file content with a completed status,
         // replace the accumulated SSE output so the user sees the actual plan.
         text: event.text ?? existing.text,
-        startedAt: mappedStatus === "running" ? (existing.status === "running" ? existing.startedAt ?? now : now) : existing.startedAt,
-        finishedAt: mappedStatus === "completed" || mappedStatus === "failed" ? now : undefined,
+        startedAt: mappedStatus === "running"
+          ? (existing.status === "running" ? existing.startedAt ?? now : now)
+          : existing.startedAt,
+        finishedAt: (mappedStatus === "completed" || mappedStatus === "failed")
+          ? (existing.finishedAt ?? now)
+          : undefined,
       };
       return copy;
     });
@@ -119,13 +123,22 @@ export function usePipelineSession(
 
     setStages((prev) => {
       const copy = [...prev];
-      if (event.stageIndex < copy.length) {
-        const existing = copy[event.stageIndex];
-        copy[event.stageIndex] = {
-          ...existing,
-          text: existing.text ? `${existing.text}\n${event.text}` : event.text,
-        };
+      // Pad the array if the delta arrives before the status event.
+      while (copy.length <= event.stageIndex) {
+        copy.push({
+          stageName: "",
+          agentLabel: "",
+          status: "pending",
+          text: "",
+          startedAt: undefined,
+          finishedAt: undefined,
+        });
       }
+      const existing = copy[event.stageIndex];
+      copy[event.stageIndex] = {
+        ...existing,
+        text: existing.text ? `${existing.text}\n${event.text}` : event.text,
+      };
       return copy;
     });
   }, []);

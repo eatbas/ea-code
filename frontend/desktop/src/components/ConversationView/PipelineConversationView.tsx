@@ -24,6 +24,18 @@ interface PipelineConversationViewProps {
   planReviewPhase?: PlanReviewPhase;
 }
 
+/** Default text shown inside a stage section when no output is available. */
+function stageBodyText(stage: PipelineStageState, fallback: string): string {
+  if (stage.text) return stage.text;
+  if (stage.status === "failed") return "This stage did not produce output.";
+  if (stage.status === "completed") return fallback;
+  return "Waiting for output...";
+}
+
+function isTerminal(status: string): boolean {
+  return status === "completed" || status === "failed" || status === "stopped";
+}
+
 export function PipelineConversationView({
   userPrompt,
   stages,
@@ -36,22 +48,33 @@ export function PipelineConversationView({
 }: PipelineConversationViewProps): ReactNode {
   const [plannersOpen, setPlannersOpen] = useState(true);
   const [mergeOpen, setMergeOpen] = useState(true);
+  const [coderOpen, setCoderOpen] = useState(true);
+  const [reviewersOpen, setReviewersOpen] = useState(true);
+  const [reviewMergeOpen, setReviewMergeOpen] = useState(true);
+  const [codeFixerOpen, setCodeFixerOpen] = useState(true);
 
-  // Separate planner stages from the merge stage.
-  const plannerStages = stages.filter((s) => s.stageName !== "Plan Merge");
+  // Classify stages by name.
+  const plannerStages = stages.filter((s) => s.stageName.startsWith("Planner"));
   const mergeStage = stages.find((s) => s.stageName === "Plan Merge") ?? null;
+  const coderStage = stages.find((s) => s.stageName === "Coder") ?? null;
+  const reviewerStages = stages.filter((s) => s.stageName.startsWith("Reviewer"));
+  const reviewMergeStage = stages.find((s) => s.stageName === "Review Merge") ?? null;
+  const codeFixerStage = stages.find((s) => s.stageName === "Code Fixer") ?? null;
 
   const hasStages = plannerStages.length > 0;
-  const allPlannersDone = hasStages && plannerStages.every((s) => (
-    s.status === "completed" || s.status === "failed" || s.status === "stopped"
-  ));
+  const allPlannersDone = hasStages && plannerStages.every((s) => isTerminal(s.status));
   const hasFailed = stages.some((s) => s.status === "failed");
   const hasStopped = stages.some((s) => s.status === "stopped");
-  const allDone = stages.length > 0 && stages.every((s) => (
-    s.status === "completed" || s.status === "failed" || s.status === "stopped"
-  ));
-  const canResume = allDone && !running && planReviewPhase !== "reviewing" && planReviewPhase !== "editing" && planReviewPhase !== "submitting_edit";
+  const allDone = stages.length > 0 && stages.every((s) => isTerminal(s.status));
+  const canResume = allDone && !running
+    && planReviewPhase !== "reviewing"
+    && planReviewPhase !== "editing"
+    && planReviewPhase !== "submitting_edit";
   const planAccepted = planReviewPhase === "accepted";
+  const coderDone = coderStage != null && isTerminal(coderStage.status);
+  const allReviewersDone = reviewerStages.length > 0 && reviewerStages.every((s) => isTerminal(s.status));
+  const reviewMergeDone = reviewMergeStage != null && isTerminal(reviewMergeStage.status);
+
   const statusBarLabel = currentStageName || (running
     ? "Starting..."
     : hasStopped
@@ -62,19 +85,19 @@ export function PipelineConversationView({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 pipeline-scroll">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-5 pipeline-scroll">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
           {/* User prompt */}
           <div className="ml-auto max-w-3xl rounded-2xl border border-edge-strong bg-elevated px-4 py-3 text-sm leading-6 text-fg">
             <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
               user
             </p>
-            <p className="whitespace-pre-wrap">{userPrompt}</p>
+            <p className="whitespace-pre-wrap break-words">{userPrompt}</p>
           </div>
 
           {/* Planner stages (parallel — synced open/close) */}
           {hasStages && (
-            <div className={plannerStages.length > 1 ? "grid grid-cols-2 gap-3" : ""}>
+            <div className={plannerStages.length > 1 ? "grid grid-cols-2 gap-3 min-w-0" : ""}>
               {plannerStages.map((stage, i) => (
                 <PipelineStageSection
                   key={`planner-${String(i)}`}
@@ -86,12 +109,8 @@ export function PipelineConversationView({
                   startedAt={stage.startedAt}
                   finishedAt={stage.finishedAt}
                 >
-                  <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap">
-                    {stage.text || (stage.status === "failed"
-                      ? "This stage did not produce output."
-                      : stage.status === "completed"
-                      ? "Plan file was not found."
-                      : "Waiting for output...")}
+                  <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                    {stageBodyText(stage, "Plan file was not found.")}
                   </p>
                 </PipelineStageSection>
               ))}
@@ -109,12 +128,8 @@ export function PipelineConversationView({
               startedAt={mergeStage.startedAt}
               finishedAt={mergeStage.finishedAt}
             >
-              <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap">
-                {mergeStage.text || (mergeStage.status === "failed"
-                  ? "This stage did not produce output."
-                  : mergeStage.status === "completed"
-                  ? "Merged plan file was not found."
-                  : "Merging plans...")}
+              <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                {stageBodyText(mergeStage, "Merged plan file was not found.")}
               </p>
             </PipelineStageSection>
           ) : (
@@ -125,11 +140,100 @@ export function PipelineConversationView({
             )
           )}
 
-          {/* Coder placeholder — only after plan is accepted */}
-          {planAccepted && (
-            <PipelineStageSection label="Coder" status="pending">
-              <p className="text-xs text-fg-faint">Plan accepted. Coder stage pending...</p>
+          {/* Coder stage */}
+          {coderStage ? (
+            <PipelineStageSection
+              label="Coder"
+              agentLabel={coderStage.agentLabel}
+              status={coderStage.status}
+              open={coderOpen}
+              onOpenChange={setCoderOpen}
+              startedAt={coderStage.startedAt}
+              finishedAt={coderStage.finishedAt}
+            >
+              <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                {stageBodyText(coderStage, "Coder completion summary was not found.")}
+              </p>
             </PipelineStageSection>
+          ) : (
+            planAccepted && (
+              <PipelineStageSection label="Coder" status="pending">
+                <p className="text-xs text-fg-faint">Plan accepted. Coder stage pending...</p>
+              </PipelineStageSection>
+            )
+          )}
+
+          {/* Reviewer stages (parallel — synced open/close) */}
+          {reviewerStages.length > 0 && (
+            <div className={reviewerStages.length > 1 ? "grid grid-cols-2 gap-3 min-w-0" : ""}>
+              {reviewerStages.map((stage, i) => (
+                <PipelineStageSection
+                  key={`reviewer-${String(i)}`}
+                  label={stage.stageName || `Reviewer ${String(i + 1)}`}
+                  agentLabel={stage.agentLabel}
+                  status={stage.status}
+                  open={reviewersOpen}
+                  onOpenChange={setReviewersOpen}
+                  startedAt={stage.startedAt}
+                  finishedAt={stage.finishedAt}
+                >
+                  <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                    {stageBodyText(stage, "Review file was not found.")}
+                  </p>
+                </PipelineStageSection>
+              ))}
+            </div>
+          )}
+          {reviewerStages.length === 0 && coderDone && running && (
+            <PipelineStageSection label="Reviewers" status="pending">
+              <p className="text-xs text-fg-faint">Coder complete. Reviewer stages pending...</p>
+            </PipelineStageSection>
+          )}
+
+          {/* Review Merge stage */}
+          {reviewMergeStage ? (
+            <PipelineStageSection
+              label="Review Merge"
+              agentLabel={reviewMergeStage.agentLabel}
+              status={reviewMergeStage.status}
+              open={reviewMergeOpen}
+              onOpenChange={setReviewMergeOpen}
+              startedAt={reviewMergeStage.startedAt}
+              finishedAt={reviewMergeStage.finishedAt}
+            >
+              <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                {stageBodyText(reviewMergeStage, "Merged review file was not found.")}
+              </p>
+            </PipelineStageSection>
+          ) : (
+            allReviewersDone && running && (
+              <PipelineStageSection label="Review Merge" status="pending">
+                <p className="text-xs text-fg-faint">Reviews complete. Merging reviews...</p>
+              </PipelineStageSection>
+            )
+          )}
+
+          {/* Code Fixer stage */}
+          {codeFixerStage ? (
+            <PipelineStageSection
+              label="Code Fixer"
+              agentLabel={codeFixerStage.agentLabel}
+              status={codeFixerStage.status}
+              open={codeFixerOpen}
+              onOpenChange={setCodeFixerOpen}
+              startedAt={codeFixerStage.startedAt}
+              finishedAt={codeFixerStage.finishedAt}
+            >
+              <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                {stageBodyText(codeFixerStage, "Code Fixer summary was not found.")}
+              </p>
+            </PipelineStageSection>
+          ) : (
+            reviewMergeDone && running && (
+              <PipelineStageSection label="Code Fixer" status="pending">
+                <p className="text-xs text-fg-faint">Review merge complete. Code Fixer pending...</p>
+              </PipelineStageSection>
+            )
           )}
 
           {!hasStages && (

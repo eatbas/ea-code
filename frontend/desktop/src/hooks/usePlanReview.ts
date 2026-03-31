@@ -86,9 +86,13 @@ export function usePlanReview({
   }, [awaitingReview, phase, startCountdown]);
 
   // When pipeline starts running during an edit → move to submitting_edit.
+  // When pipeline starts running after acceptance → go back to inactive
+  // so the PlanReviewCard disappears and the coding stages render.
   useEffect(() => {
     if (running && phase === "editing") {
       setPhase("submitting_edit");
+    } else if (running && phase === "accepted") {
+      setPhase("inactive");
     }
   }, [running, phase]);
 

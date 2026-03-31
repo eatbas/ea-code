@@ -78,7 +78,7 @@ export function PipelineStageSection({
     : null;
 
   return (
-    <div className="flex flex-col rounded-xl border border-edge bg-panel">
+    <div className="flex flex-col rounded-xl border border-edge bg-panel min-w-0">
       <button
         type="button"
         onClick={toggle}
@@ -103,7 +103,7 @@ export function PipelineStageSection({
         />
       </button>
       {isOpen && (
-        <div className="min-h-0 flex-1 max-h-48 overflow-y-auto border-t border-edge px-4 py-3 pipeline-scroll">
+        <div className="min-h-0 flex-1 max-h-48 overflow-y-auto overflow-x-hidden border-t border-edge px-4 py-3 pipeline-scroll">
           {children}
         </div>
       )}

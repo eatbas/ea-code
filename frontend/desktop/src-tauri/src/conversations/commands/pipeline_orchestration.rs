@@ -18,14 +18,47 @@ use super::super::events::{EVENT_CONVERSATION_STATUS, EVENT_PIPELINE_STAGE_STATU
 use super::super::persistence;
 use super::super::pipeline;
 
+/// Precomputed stage index layout for the full pipeline.
+#[allow(dead_code)]
+pub(super) struct StageIndices {
+    pub planner_count: usize,
+    pub reviewer_count: usize,
+    pub plan_merge: usize,
+    pub coder: usize,
+    pub reviewer_start: usize,
+    pub review_merge: usize,
+    pub code_fixer: usize,
+    pub total: usize,
+}
+
+impl StageIndices {
+    pub fn new(planner_count: usize, reviewer_count: usize) -> Self {
+        Self {
+            planner_count,
+            reviewer_count,
+            plan_merge: planner_count,
+            coder: planner_count + 1,
+            reviewer_start: planner_count + 2,
+            review_merge: planner_count + 2 + reviewer_count,
+            code_fixer: planner_count + 3 + reviewer_count,
+            total: planner_count + 4 + reviewer_count,
+        }
+    }
+}
+
 /// Pipeline configuration loaded from settings before runtime state is allocated.
 pub(super) struct PipelineConfig {
     pub planners: Vec<PipelineAgent>,
     pub planner_count: usize,
     pub merge_agent: PipelineAgent,
+    pub coder: PipelineAgent,
+    pub reviewers: Vec<PipelineAgent>,
+    pub reviewer_count: usize,
+    pub indices: StageIndices,
 }
 
 /// Pre-allocated runtime state shared by all pipeline handler spawn blocks.
+#[allow(dead_code)]
 pub(super) struct PipelineSetup {
     pub abort: Arc<AtomicBool>,
     pub score_id_slots: Vec<Arc<std::sync::Mutex<Option<String>>>>,
@@ -33,6 +66,10 @@ pub(super) struct PipelineSetup {
     pub planners: Vec<PipelineAgent>,
     pub planner_count: usize,
     pub merge_agent: PipelineAgent,
+    pub coder: PipelineAgent,
+    pub reviewers: Vec<PipelineAgent>,
+    pub reviewer_count: usize,
+    pub indices: StageIndices,
 }
 
 /// Load pipeline settings without allocating runtime state.
@@ -41,18 +78,26 @@ pub(super) fn load_pipeline_config() -> Result<PipelineConfig, String> {
     let config: CodePipelineSettings = settings
         .code_pipeline
         .ok_or("Code pipeline is not configured. Set it up in Agents settings.")?;
+    let CodePipelineSettings { planners, coder, .. } = config;
 
-    let planners = config.planners;
     let planner_count = planners.len();
     if planner_count == 0 {
         return Err("No planners configured".to_string());
     }
     let merge_agent = planners[0].clone();
+    let reviewers = planners.clone();
+    let reviewer_count = planner_count;
+
+    let indices = StageIndices::new(planner_count, reviewer_count);
 
     Ok(PipelineConfig {
         planners,
         planner_count,
         merge_agent,
+        coder,
+        reviewers,
+        reviewer_count,
+        indices,
     })
 }
 
@@ -66,14 +111,18 @@ pub(super) fn prepare_pipeline_with_config(
         planners,
         planner_count,
         merge_agent,
+        coder,
+        reviewers,
+        reviewer_count,
+        indices,
     } = config;
 
     let abort = persistence::register_abort_flag(workspace_path, conversation_id)?;
     let score_id_slots = persistence::register_pipeline_score_slots(
-        workspace_path, conversation_id, planner_count + 1,
+        workspace_path, conversation_id, indices.total,
     )?;
     let stage_buffers = persistence::register_pipeline_stage_buffers(
-        workspace_path, conversation_id, planner_count + 1,
+        workspace_path, conversation_id, indices.total,
     )?;
 
     Ok(PipelineSetup {
@@ -83,6 +132,10 @@ pub(super) fn prepare_pipeline_with_config(
         planners,
         planner_count,
         merge_agent,
+        coder,
+        reviewers,
+        reviewer_count,
+        indices,
     })
 }
 
@@ -190,16 +243,17 @@ pub(super) fn determine_final_status(
     (status, error)
 }
 
-/// Re-emit completed planner stage status events so the frontend sees them
+/// Re-emit completed stage status events so the frontend sees them
 /// after a reset (e.g. Resume click or feedback round).
+/// Emits all stages with index < `up_to_index`.
 pub(super) fn re_emit_completed_stages(
     app: &AppHandle,
     conv_id: &str,
     ws: &str,
-    planner_count: usize,
+    up_to_index: usize,
 ) {
     if let Ok(Some(saved)) = persistence::load_pipeline_state(ws, conv_id) {
-        for stage in saved.stages.iter().take(planner_count) {
+        for stage in saved.stages.iter().filter(|s| s.stage_index < up_to_index) {
             let _ = app.emit(
                 EVENT_PIPELINE_STAGE_STATUS,
                 PipelineStageStatusEvent {
@@ -293,4 +347,256 @@ pub(super) async fn run_merge_chain(
         )
         .await,
     )
+}
+
+/// Ensure a generic stage record exists in pipeline.json.
+/// Creates it if absent; resets it to Running if present.
+pub(super) fn ensure_stage_record(
+    ws: &str,
+    conv_id: &str,
+    stage_index: usize,
+    stage_name: &str,
+    agent_label: &str,
+) {
+    if let Ok(Some(mut state)) = persistence::load_pipeline_state(ws, conv_id) {
+        if let Some(existing) = state.stages.iter_mut().find(|s| s.stage_index == stage_index) {
+            existing.status = ConversationStatus::Running;
+            existing.started_at = Some(now_rfc3339());
+            existing.finished_at = None;
+        } else {
+            state.stages.push(PipelineStageRecord {
+                stage_index,
+                stage_name: stage_name.to_string(),
+                agent_label: agent_label.to_string(),
+                status: ConversationStatus::Running,
+                text: String::new(),
+                started_at: Some(now_rfc3339()),
+                finished_at: None,
+                score_id: None,
+                provider_session_ref: None,
+            });
+            state.stages.sort_by_key(|s| s.stage_index);
+        }
+        let _ = persistence::save_pipeline_state(ws, conv_id, &state);
+    }
+}
+
+/// Run the review-merge chain: load first reviewer's session ref, ensure
+/// stage record, call run_review_merge.
+pub(super) async fn run_review_merge_chain(
+    app: AppHandle,
+    conv_id: String,
+    ws: String,
+    abort: Arc<AtomicBool>,
+    review_merge_agent: PipelineAgent,
+    indices: &StageIndices,
+    score_id_slots: &[Arc<std::sync::Mutex<Option<String>>>],
+    stage_buffers: &[Arc<std::sync::Mutex<String>>],
+) -> Option<Result<PipelineStageRecord, (PipelineStageRecord, String)>> {
+    let loaded = persistence::load_pipeline_state(&ws, &conv_id)
+        .ok()
+        .flatten();
+    let session_ref = loaded
+        .as_ref()
+        .and_then(|s| {
+            s.stages
+                .iter()
+                .find(|st| st.stage_index == indices.reviewer_start)
+                .and_then(|st| st.provider_session_ref.clone())
+        });
+
+    let ref_val = match session_ref {
+        Some(v) => v,
+        None => {
+            eprintln!("[pipeline] No provider_session_ref from first reviewer; skipping review merge");
+            return None;
+        }
+    };
+
+    let label = format!("{} / {}", review_merge_agent.provider, review_merge_agent.model);
+    ensure_stage_record(&ws, &conv_id, indices.review_merge, "Review Merge", &label);
+
+    let slot = score_id_slots.get(indices.review_merge).cloned().unwrap_or_default();
+    let buf = stage_buffers.get(indices.review_merge).cloned().unwrap_or_default();
+
+    Some(
+        pipeline::run_review_merge(
+            app, conv_id, ws, abort, slot, buf,
+            indices.review_merge, indices.reviewer_count, ref_val, review_merge_agent,
+        )
+        .await,
+    )
+}
+
+/// Run the full coding phase: Coder → Reviewers → Review Merge → Code Fixer.
+/// Returns the final status and optional error.
+pub(super) async fn run_coding_phase(
+    app: AppHandle,
+    conv_id: String,
+    ws: String,
+    setup: &PipelineSetup,
+    previous_stages: Option<Vec<PipelineStageRecord>>,
+) -> (ConversationStatus, Option<String>) {
+    let indices = &setup.indices;
+
+    // Check if the Coder stage is already complete (e.g. resuming from Reviewers).
+    let coder_already_done = previous_stages
+        .as_ref()
+        .and_then(|stages| stages.iter().find(|s| s.stage_name == "Coder"))
+        .map(|s| s.status == ConversationStatus::Completed)
+        .unwrap_or(false);
+
+    let coder_record = if coder_already_done {
+        // Re-emit the completed Coder stage for the frontend and use saved record.
+        let loaded = persistence::load_pipeline_state(&ws, &conv_id).ok().flatten();
+        loaded
+            .and_then(|s| s.stages.into_iter().find(|st| st.stage_name == "Coder"))
+            .unwrap_or_else(|| PipelineStageRecord {
+                stage_index: indices.coder,
+                stage_name: "Coder".to_string(),
+                agent_label: format!("{} / {}", setup.coder.provider, setup.coder.model),
+                status: ConversationStatus::Completed,
+                text: String::new(),
+                started_at: None,
+                finished_at: None,
+                score_id: None,
+                provider_session_ref: None,
+            })
+    } else {
+        // --- Coder ---
+        let coder_label = format!("{} / {}", setup.coder.provider, setup.coder.model);
+        ensure_stage_record(&ws, &conv_id, indices.coder, "Coder", &coder_label);
+
+        let coder_slot = setup.score_id_slots.get(indices.coder).cloned().unwrap_or_default();
+        let coder_buf = setup.stage_buffers.get(indices.coder).cloned().unwrap_or_default();
+
+        let coder_result = pipeline::run_coder(
+            app.clone(), conv_id.clone(), ws.clone(), setup.abort.clone(),
+            coder_slot, coder_buf, indices.coder, setup.coder.clone(),
+        )
+        .await;
+
+        if setup.abort.load(Ordering::Acquire) {
+            return (ConversationStatus::Stopped, None);
+        }
+
+        match coder_result {
+            Ok(record) => record,
+            Err((_, e)) => return (ConversationStatus::Failed, Some(e)),
+        }
+    };
+
+    // Collect planner stages for reviewer session resumption.
+    let planner_stages: Vec<PipelineStageRecord> = persistence::load_pipeline_state(&ws, &conv_id)
+        .ok()
+        .flatten()
+        .map(|s| s.stages.into_iter().take(indices.planner_count).collect())
+        .unwrap_or_default();
+
+    // --- Reviewers ---
+    let reviewer_slots: Vec<_> = (0..indices.reviewer_count)
+        .map(|i| {
+            setup.score_id_slots
+                .get(indices.reviewer_start + i)
+                .cloned()
+                .unwrap_or_default()
+        })
+        .collect();
+    let reviewer_bufs: Vec<_> = (0..indices.reviewer_count)
+        .map(|i| {
+            setup.stage_buffers
+                .get(indices.reviewer_start + i)
+                .cloned()
+                .unwrap_or_default()
+        })
+        .collect();
+
+    // Ensure reviewer stage records exist before spawning.
+    for (i, reviewer) in setup.reviewers.iter().enumerate() {
+        let label = format!("{} / {}", reviewer.provider, reviewer.model);
+        ensure_stage_record(
+            &ws, &conv_id, indices.reviewer_start + i,
+            &format!("Reviewer {}", i + 1), &label,
+        );
+    }
+
+    let reviewer_result = pipeline::run_pipeline_reviewers(
+        app.clone(), conv_id.clone(), ws.clone(),
+        setup.reviewers.clone(), setup.abort.clone(),
+        reviewer_slots, previous_stages, reviewer_bufs,
+        &planner_stages, indices.reviewer_start,
+    )
+    .await;
+
+    if setup.abort.load(Ordering::Acquire) {
+        return (ConversationStatus::Stopped, None);
+    }
+
+    if let Err(e) = reviewer_result {
+        return (ConversationStatus::Failed, Some(e));
+    }
+
+    // --- Review Merge ---
+    let Some(review_merge_agent) = setup.reviewers.first().cloned() else {
+        return (
+            ConversationStatus::Failed,
+            Some("No reviewer available for Review Merge".to_string()),
+        );
+    };
+
+    let review_merge_result = run_review_merge_chain(
+        app.clone(), conv_id.clone(), ws.clone(), setup.abort.clone(),
+        review_merge_agent, indices,
+        &setup.score_id_slots, &setup.stage_buffers,
+    )
+    .await;
+
+    if setup.abort.load(Ordering::Acquire) {
+        return (ConversationStatus::Stopped, None);
+    }
+
+    match &review_merge_result {
+        Some(Err((_, e))) => return (ConversationStatus::Failed, Some(e.clone())),
+        None => {
+            return (
+                ConversationStatus::Failed,
+                Some("Review merge was skipped — no reviewer session ref".to_string()),
+            );
+        }
+        Some(Ok(_)) => {}
+    }
+
+    // --- Code Fixer ---
+    let coder_session_ref = coder_record
+        .provider_session_ref
+        .clone()
+        .unwrap_or_default();
+
+    if coder_session_ref.is_empty() {
+        return (
+            ConversationStatus::Failed,
+            Some("No coder session ref available for Code Fixer".to_string()),
+        );
+    }
+
+    let fixer_label = format!("{} / {}", setup.coder.provider, setup.coder.model);
+    ensure_stage_record(&ws, &conv_id, indices.code_fixer, "Code Fixer", &fixer_label);
+
+    let fixer_slot = setup.score_id_slots.get(indices.code_fixer).cloned().unwrap_or_default();
+    let fixer_buf = setup.stage_buffers.get(indices.code_fixer).cloned().unwrap_or_default();
+
+    let fixer_result = pipeline::run_code_fixer(
+        app, conv_id, ws, setup.abort.clone(),
+        fixer_slot, fixer_buf, indices.code_fixer, coder_session_ref, setup.coder.clone(),
+    )
+    .await;
+
+    if setup.abort.load(Ordering::Acquire) {
+        return (ConversationStatus::Stopped, None);
+    }
+
+    match fixer_result {
+        Ok(_) => (ConversationStatus::Completed, None),
+        Err((_, e)) => (ConversationStatus::Failed, Some(e)),
+    }
 }
