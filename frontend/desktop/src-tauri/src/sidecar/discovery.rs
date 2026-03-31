@@ -8,8 +8,9 @@ pub fn symphony_dir_has_source(dir: &Path) -> bool {
 
 /// Locate the symphony directory relative to the project root.
 ///
-/// In development, this is `{repo_root}/symphony/`.
-/// In a bundled release, it would be inside the Tauri resource directory.
+/// In development, checks `{repo_root}/symphony-api/` (submodule name) then
+/// `{repo_root}/symphony/` (legacy). In a bundled release, checks
+/// platform-specific resource locations next to the executable.
 ///
 /// If the directory exists but the git submodule is not initialised (no
 /// `pyproject.toml`), attempts `git submodule update --init` automatically.
@@ -24,37 +25,38 @@ pub fn find_symphony_dir() -> Result<PathBuf, String> {
         .and_then(|p| p.parent()) // repo root
         .ok_or_else(|| "Cannot determine repository root".to_string())?;
 
-    let symphony_dir = repo_root.join("symphony");
-    if symphony_dir.is_dir() {
-        if symphony_dir_has_source(&symphony_dir) {
-            return Ok(symphony_dir);
+    // Dev mode: check both "symphony-api" (submodule name) and "symphony" (legacy).
+    for dir_name in ["symphony-api", "symphony"] {
+        let candidate = repo_root.join(dir_name);
+        if candidate.is_dir() {
+            if symphony_dir_has_source(&candidate) {
+                return Ok(candidate);
+            }
+
+            // Directory exists but source is missing — try initialising the submodule.
+            eprintln!(
+                "[sidecar] {dir_name}/ exists but source is missing — running git submodule update --init"
+            );
+            let status = std::process::Command::new("git")
+                .args(["submodule", "update", "--init", dir_name])
+                .current_dir(repo_root)
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .status();
+
+            match status {
+                Ok(s) if s.success() && symphony_dir_has_source(&candidate) => {
+                    eprintln!("[sidecar] {dir_name} submodule initialised successfully");
+                    return Ok(candidate);
+                }
+                Ok(s) => {
+                    eprintln!("[sidecar] git submodule update --init exited with {s}");
+                }
+                Err(e) => {
+                    eprintln!("[sidecar] Failed to run git submodule update: {e}");
+                }
+            }
         }
-
-        // Directory exists but source is missing — try initialising the submodule.
-        eprintln!("[sidecar] symphony directory exists but source is missing — running git submodule update --init");
-        let status = std::process::Command::new("git")
-            .args(["submodule", "update", "--init", "symphony"])
-            .current_dir(repo_root)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .status();
-
-        match status {
-            Ok(s) if s.success() && symphony_dir_has_source(&symphony_dir) => {
-                eprintln!("[sidecar] symphony submodule initialised successfully");
-                return Ok(symphony_dir);
-            }
-            Ok(s) => {
-                eprintln!("[sidecar] git submodule update --init exited with {s}");
-            }
-            Err(e) => {
-                eprintln!("[sidecar] Failed to run git submodule update: {e}");
-            }
-        }
-
-        return Err("symphony directory exists but has no source code. \
-             Run `git submodule update --init` from the repository root."
-            .into());
     }
 
     // Bundled: check platform-specific resource locations next to the executable.
