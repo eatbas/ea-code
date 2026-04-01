@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { ActiveView } from "../types";
+import type { ActiveView } from "../../types";
 
 export interface SettingsNavItem {
   view: ActiveView;
@@ -9,7 +9,7 @@ export interface SettingsNavItem {
   icon: LucideIcon;
 }
 
-interface SidebarSettingsProps {
+interface SettingsPanelProps {
   activeView: ActiveView;
   onNavigate: (view: ActiveView) => void;
   onBackToApp: () => void;
@@ -17,16 +17,16 @@ interface SidebarSettingsProps {
   navItems: SettingsNavItem[];
 }
 
-export function SidebarSettings({
+export function SettingsPanel({
   activeView,
   onNavigate,
   onBackToApp,
   appFooterLabel,
   navItems,
-}: SidebarSettingsProps): ReactNode {
+}: SettingsPanelProps): ReactNode {
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-edge bg-panel">
-      <div className="px-3 pt-8 pb-3">
+      <div className="px-3 pb-3 pt-8">
         <button
           type="button"
           onClick={onBackToApp}

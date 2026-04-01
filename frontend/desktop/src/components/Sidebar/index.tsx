@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { Cpu, Eye, PanelLeft, Plus, Settings, TerminalSquare } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { ActiveView, ConversationSummary, ProjectEntry } from "../types";
-import { useAppVersion } from "../hooks/useAppVersion";
-import { SidebarCollapsed } from "./SidebarCollapsed";
-import { SidebarProjectList } from "./SidebarProjectList";
-import { SidebarSettings } from "./SidebarSettings";
+import type { ActiveView, ConversationSummary, ProjectEntry } from "../../types";
+import { useAppVersion } from "../../hooks/useAppVersion";
+import { CollapsedSidebar } from "./CollapsedSidebar";
+import { ProjectList } from "./ProjectList";
+import { SettingsPanel } from "./SettingsPanel";
 
 const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; icon: LucideIcon }[] = [
   { view: "agents", label: "Agents", icon: Cpu },
@@ -90,7 +90,7 @@ export function Sidebar({
 
   if (collapsed) {
     return (
-      <SidebarCollapsed
+      <CollapsedSidebar
         onToggle={onToggle}
         onSettingsClick={handleSettingsClick}
         settingsActive={isSettings}
@@ -100,7 +100,7 @@ export function Sidebar({
 
   if (isSettings) {
     return (
-      <SidebarSettings
+      <SettingsPanel
         activeView={activeView}
         onNavigate={onNavigate}
         onBackToApp={() => onNavigate("home")}
@@ -112,7 +112,7 @@ export function Sidebar({
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-edge bg-panel">
-      <div className="flex items-center justify-between px-3 pt-8 pb-3">
+      <div className="flex items-center justify-between px-3 pb-3 pt-8">
         <span className="text-sm font-medium text-fg">Projects</span>
         <div className="flex items-center gap-1">
           <button
@@ -154,7 +154,7 @@ export function Sidebar({
         </div>
       </div>
 
-      <SidebarProjectList
+      <ProjectList
         activeView={activeView}
         projects={projects}
         visibleProjects={visibleProjects}

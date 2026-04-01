@@ -11,12 +11,12 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useSidebarRowMenu } from "../hooks/useSidebarRowMenu";
-import { InlineRenameInput } from "./shared/InlineRenameInput";
-import { ConfirmActionPopover } from "./shared/ConfirmActionPopover";
-import { RowDropdownMenu, type RowDropdownMenuItem } from "./shared/RowDropdownMenu";
+import { useSidebarRowMenu } from "../../hooks/useSidebarRowMenu";
+import { ConfirmActionPopover } from "../shared/ConfirmActionPopover";
+import { InlineRenameInput } from "../shared/InlineRenameInput";
+import { RowDropdownMenu, type RowDropdownMenuItem } from "../shared/RowDropdownMenu";
 
-interface SidebarProjectRowProps {
+interface ProjectRowProps {
   projectPath: string;
   projectLabel: string;
   isActive: boolean;
@@ -34,7 +34,7 @@ interface SidebarProjectRowProps {
   onRemoveProject?: () => void;
 }
 
-export function SidebarProjectRow({
+export function ProjectRow({
   projectPath,
   projectLabel,
   isActive,
@@ -50,7 +50,7 @@ export function SidebarProjectRow({
   onArchiveProject,
   onUnarchiveProject,
   onRemoveProject,
-}: SidebarProjectRowProps): ReactNode {
+}: ProjectRowProps): ReactNode {
   const {
     menuRef,
     renameInputRef,
@@ -128,7 +128,7 @@ export function SidebarProjectRow({
       >
         {hasRunningConversation && (
           <span
-            className="absolute top-1/2 left-3 inline-flex h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-running-dot shadow-[0_0_0_3px_rgba(30,183,95,0.16)] animate-pulse"
+            className="absolute left-3 top-1/2 inline-flex h-2.5 w-2.5 -translate-y-1/2 animate-pulse rounded-full bg-running-dot shadow-[0_0_0_3px_rgba(30,183,95,0.16)]"
             title="A conversation is running in this project"
           />
         )}
@@ -151,15 +151,18 @@ export function SidebarProjectRow({
         </span>
       </button>
 
-      <div ref={menuRef} className="absolute top-2 right-2 z-10 flex items-start gap-1">
+      <div ref={menuRef} className="absolute right-2 top-2 z-10 flex items-start gap-1">
         {confirmAction ? (
-          <div className="absolute top-1/2 right-0 z-20 -translate-y-1/2">
+          <div className="absolute right-0 top-1/2 z-20 -translate-y-1/2">
             <ConfirmActionPopover
               label={confirmAction === "archive" ? "Archive?" : "Delete?"}
               confirmLabel={confirmAction === "archive" ? "Archive" : "Delete"}
               onConfirm={() => {
-                if (confirmAction === "archive") { onArchiveProject?.(); }
-                else { onRemoveProject?.(); }
+                if (confirmAction === "archive") {
+                  onArchiveProject?.();
+                } else {
+                  onRemoveProject?.();
+                }
                 setConfirmAction(null);
               }}
               onCancel={() => setConfirmAction(null)}
@@ -170,7 +173,7 @@ export function SidebarProjectRow({
           <>
             <button
               type="button"
-              onClick={(event) => { event.stopPropagation(); setMenuOpen((c) => !c); }}
+              onClick={(event) => { event.stopPropagation(); setMenuOpen((current) => !current); }}
               className={`rounded p-1 text-fg-faint transition-opacity hover:bg-active hover:text-fg ${menuOpen ? "opacity-100" : "opacity-0 group-hover/project:opacity-100"}`}
               title="Project actions"
             >

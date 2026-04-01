@@ -74,12 +74,12 @@ pub fn run() {
             conversations::commands::conversation_handlers::archive_conversation,
             conversations::commands::conversation_handlers::unarchive_conversation,
             conversations::commands::conversation_handlers::set_conversation_pinned,
-            conversations::commands::pipeline_handlers::start_pipeline,
-            conversations::commands::pipeline_handlers::stop_pipeline,
-            conversations::commands::pipeline_handlers::resume_pipeline,
-            conversations::commands::pipeline_handlers::get_pipeline_state,
-            conversations::commands::pipeline_handlers::accept_plan,
-            conversations::commands::pipeline_handlers::send_plan_edit_feedback,
+            conversations::commands::pipeline_handlers::actions::start_pipeline,
+            conversations::commands::pipeline_handlers::actions::stop_pipeline,
+            conversations::commands::pipeline_handlers::resume::resume_pipeline,
+            conversations::commands::pipeline_handlers::actions::get_pipeline_state,
+            conversations::commands::pipeline_handlers::actions::accept_plan,
+            conversations::commands::pipeline_handlers::actions::send_plan_edit_feedback,
         ])
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");

@@ -1,19 +1,19 @@
 import type { ReactNode } from "react";
 import { PanelLeft, Settings } from "lucide-react";
 
-interface SidebarCollapsedProps {
+interface CollapsedSidebarProps {
   onToggle: () => void;
   onSettingsClick: () => void;
   settingsActive: boolean;
 }
 
-export function SidebarCollapsed({
+export function CollapsedSidebar({
   onToggle,
   onSettingsClick,
   settingsActive,
-}: SidebarCollapsedProps): ReactNode {
+}: CollapsedSidebarProps): ReactNode {
   return (
-    <aside className="flex h-full w-12 shrink-0 flex-col items-center gap-3 border-r border-edge bg-panel pt-8 pb-3">
+    <aside className="flex h-full w-12 shrink-0 flex-col items-center gap-3 border-r border-edge bg-panel pb-3 pt-8">
       <button
         type="button"
         onClick={onToggle}

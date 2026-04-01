@@ -1,12 +1,12 @@
 import type { CSSProperties, ReactNode } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { ConversationSummary, ProjectEntry } from "../types";
-import { projectDisplayName } from "../utils/formatters";
-import { SidebarConversationRow } from "./SidebarConversationRow";
-import { SidebarProjectRow } from "./SidebarProjectRow";
+import type { ConversationSummary, ProjectEntry } from "../../types";
+import { projectDisplayName } from "../../utils/formatters";
+import { ConversationRow } from "./ConversationRow";
+import { ProjectRow } from "./ProjectRow";
 
-interface SidebarSortableProjectItemProps {
+interface SortableProjectItemProps {
   project: ProjectEntry;
   isActive: boolean;
   isExpanded: boolean;
@@ -33,7 +33,7 @@ interface SidebarSortableProjectItemProps {
   onSetConversationPinned?: (projectPath: string, conversationId: string, pinned: boolean) => void;
 }
 
-export function SidebarSortableProjectItem({
+export function SortableProjectItem({
   project,
   isActive,
   isExpanded,
@@ -58,7 +58,7 @@ export function SidebarSortableProjectItem({
   onArchiveConversation,
   onUnarchiveConversation,
   onSetConversationPinned,
-}: SidebarSortableProjectItemProps): ReactNode {
+}: SortableProjectItemProps): ReactNode {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: project.path,
   });
@@ -77,7 +77,7 @@ export function SidebarSortableProjectItem({
       {...listeners}
     >
       <div className="mb-2">
-        <SidebarProjectRow
+        <ProjectRow
           projectPath={project.path}
           projectLabel={projectDisplayName(project)}
           isActive={isActive}
@@ -89,26 +89,10 @@ export function SidebarSortableProjectItem({
           onProjectClick={onProjectClick}
           onCreateConversation={onCreateConversation}
           onToggleShowArchivedConversations={onToggleShowArchivedConversations}
-          onRemoveProject={onRemoveProject
-            ? () => {
-                onRemoveProject(project.path);
-              }
-            : undefined}
-          onRenameProject={onRenameProject
-            ? (name) => {
-                onRenameProject(project.path, name);
-              }
-            : undefined}
-          onArchiveProject={onArchiveProject
-            ? () => {
-                onArchiveProject(project.path);
-              }
-            : undefined}
-          onUnarchiveProject={onUnarchiveProject
-            ? () => {
-                onUnarchiveProject(project.path);
-              }
-            : undefined}
+          onRemoveProject={onRemoveProject ? () => { onRemoveProject(project.path); } : undefined}
+          onRenameProject={onRenameProject ? (name) => { onRenameProject(project.path, name); } : undefined}
+          onArchiveProject={onArchiveProject ? () => { onArchiveProject(project.path); } : undefined}
+          onUnarchiveProject={onUnarchiveProject ? () => { onUnarchiveProject(project.path); } : undefined}
         />
 
         {isExpanded && (
@@ -122,7 +106,7 @@ export function SidebarSortableProjectItem({
               </p>
             )}
             {visibleConversations.map((conversation) => (
-              <SidebarConversationRow
+              <ConversationRow
                 key={conversation.id}
                 conversation={conversation}
                 isActive={isActive && conversation.id === activeConversationId}

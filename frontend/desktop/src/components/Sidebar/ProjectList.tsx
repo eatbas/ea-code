@@ -17,13 +17,13 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import type { ActiveView, ConversationSummary, ProjectEntry } from "../types";
-import { projectDisplayName } from "../utils/formatters";
-import { SidebarSortableProjectItem } from "./SidebarSortableProjectItem";
+import type { ActiveView, ConversationSummary, ProjectEntry } from "../../types";
+import { projectDisplayName } from "../../utils/formatters";
+import { SortableProjectItem } from "./SortableProjectItem";
 
 const EXPANDED_PROJECTS_STORAGE_KEY = "maestro.sidebar.expanded-projects";
 
-interface SidebarProjectListProps {
+interface ProjectListProps {
   activeView: ActiveView;
   projects: ProjectEntry[];
   visibleProjects: ProjectEntry[];
@@ -89,7 +89,7 @@ function mergeProjectOrder(
   });
 }
 
-export function SidebarProjectList({
+export function ProjectList({
   activeView,
   projects,
   visibleProjects,
@@ -111,18 +111,14 @@ export function SidebarProjectList({
   onArchiveConversation,
   onUnarchiveConversation,
   onSetConversationPinned,
-}: SidebarProjectListProps): ReactNode {
+}: ProjectListProps): ReactNode {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => readExpandedProjects());
   const [projectsShowingArchived, setProjectsShowingArchived] = useState<Set<string>>(new Set());
   const [draggingProjectPath, setDraggingProjectPath] = useState<string | null>(null);
   const expandedProjectsBeforeDragRef = useRef<Set<string> | null>(null);
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   useEffect(() => {
@@ -170,23 +166,21 @@ export function SidebarProjectList({
   }
 
   function handleDragStart(event: DragStartEvent): void {
-    const projectPath = String(event.active.id);
     expandedProjectsBeforeDragRef.current = new Set(expandedProjects);
-    setDraggingProjectPath(projectPath);
+    setDraggingProjectPath(String(event.active.id));
     setExpandedProjects(new Set());
   }
 
   function handleDragEnd(event: DragEndEvent): void {
-    const activeProjectPath = String(event.active.id);
+    const currentActiveProjectPath = String(event.active.id);
     const overProjectPath = event.over ? String(event.over.id) : null;
-
     restoreExpandedProjects();
 
-    if (!overProjectPath || activeProjectPath === overProjectPath) {
+    if (!overProjectPath || currentActiveProjectPath === overProjectPath) {
       return;
     }
 
-    const oldIndex = visibleProjects.findIndex((project) => project.path === activeProjectPath);
+    const oldIndex = visibleProjects.findIndex((project) => project.path === currentActiveProjectPath);
     const newIndex = visibleProjects.findIndex((project) => project.path === overProjectPath);
     if (oldIndex < 0 || newIndex < 0) {
       return;
@@ -218,6 +212,7 @@ export function SidebarProjectList({
               {projects.length > 0 ? "Archived projects hidden." : "No projects yet. Add a project to get started."}
             </p>
           )}
+
           {visibleProjects.map((project) => {
             const isActive = project.path === activeProjectPath;
             const conversations = conversationIndex[project.path] ?? [];
@@ -227,7 +222,7 @@ export function SidebarProjectList({
               : conversations.filter((conversation) => !conversation.archivedAt);
 
             return (
-              <SidebarSortableProjectItem
+              <SortableProjectItem
                 key={project.path}
                 project={project}
                 isActive={isActive}
@@ -244,7 +239,6 @@ export function SidebarProjectList({
                   if (!expandedProjects.has(project.path)) {
                     void onLoadProjectConversations(project.path);
                   }
-
                   setExpandedProjects((current) => {
                     const next = new Set(current);
                     if (next.has(project.path)) {
@@ -255,9 +249,7 @@ export function SidebarProjectList({
                     return next;
                   });
                 }}
-                onCreateConversation={() => {
-                  void onCreateConversation(project.path);
-                }}
+                onCreateConversation={() => { void onCreateConversation(project.path); }}
                 onToggleShowArchivedConversations={() => {
                   setProjectsShowingArchived((current) => {
                     const next = new Set(current);
