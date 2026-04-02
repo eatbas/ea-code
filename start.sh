@@ -9,6 +9,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_DIR="$SCRIPT_DIR/frontend/desktop"
 TAURI_DIR="$DESKTOP_DIR/src-tauri"
+POSIX_TOOLING_SCRIPTS=(
+  "$TAURI_DIR/.cargo/tooling/clang.sh"
+  "$TAURI_DIR/.cargo/tooling/clang-cxx.sh"
+)
 
 # ── Colours (no-op when not a terminal) ──────────────────────────────────────
 if [ -t 1 ]; then
@@ -21,6 +25,22 @@ info()  { printf "${GREEN}✓${RESET} %s\n" "$1"; }
 warn()  { printf "${YELLOW}⚠${RESET} %s\n" "$1"; }
 fail()  { printf "${RED}✗${RESET} %s\n" "$1"; exit 1; }
 header(){ printf "\n${BOLD}── %s ──${RESET}\n" "$1"; }
+
+ensure_posix_tooling_executable() {
+  local script updated=0
+
+  for script in "${POSIX_TOOLING_SCRIPTS[@]}"; do
+    [ -f "$script" ] || continue
+    if [ ! -x "$script" ]; then
+      chmod +x "$script"
+      updated=1
+    fi
+  done
+
+  if [ "$updated" -eq 1 ]; then
+    info "Restored execute permission on local clang wrapper scripts"
+  fi
+}
 
 # ── Detect platform ──────────────────────────────────────────────────────────
 header "Environment"
@@ -51,6 +71,10 @@ case "$ARCH_RAW" in
 esac
 
 info "Platform: $PLATFORM ($ARCH)"
+
+if [ "$PLATFORM" != "windows" ]; then
+  ensure_posix_tooling_executable
+fi
 
 # ── Platform-specific: clang setup ───────────────────────────────────────────
 # Clang must be resolved BEFORE any cargo commands because cargo install (e.g.

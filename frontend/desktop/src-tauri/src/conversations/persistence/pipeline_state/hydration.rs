@@ -30,8 +30,12 @@ pub(super) fn hydrate_stage_text(
     let merged_file = conversation_root.join("plan_merged").join("plan_merged.md");
     let coder_file = conversation_root.join("coder").join("coder_done.md");
     let review_dir = conversation_root.join("review");
-    let review_merged_file = conversation_root.join("review_merged").join("review_merged.md");
-    let code_fixer_file = conversation_root.join("code_fixer").join("code_fixer_done.md");
+    let review_merged_file = conversation_root
+        .join("review_merged")
+        .join("review_merged.md");
+    let code_fixer_file = conversation_root
+        .join("code_fixer")
+        .join("code_fixer_done.md");
 
     for stage in &mut state.stages {
         if stage.stage_name.starts_with("Planner") {
@@ -55,7 +59,10 @@ pub(super) fn hydrate_stage_text(
         }
     }
 
-    let has_merge_stage = state.stages.iter().any(|stage| stage.stage_name == "Plan Merge");
+    let has_merge_stage = state
+        .stages
+        .iter()
+        .any(|stage| stage.stage_name == "Plan Merge");
     if !has_merge_stage {
         if let Ok(contents) = std::fs::read_to_string(&merged_file) {
             state.stages.push(PipelineStageRecord {

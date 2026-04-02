@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PipelineStageState } from "../../hooks/usePipelineSession";
 import type { PlanReviewPhase } from "../../hooks/usePlanReview";
 import { PipelineStageGroup } from "./PipelineStageGroup";
@@ -134,6 +134,31 @@ export function PipelineConversationView({
     && planReviewPhase !== "reviewing"
     && planReviewPhase !== "editing"
     && planReviewPhase !== "submitting_edit";
+
+  // Auto-collapse stages when they complete.
+  useEffect(() => {
+    if (allPlannersDone) setPlannersOpen(false);
+  }, [allPlannersDone]);
+
+  useEffect(() => {
+    if (mergeStage && isTerminal(mergeStage.status)) setMergeOpen(false);
+  }, [mergeStage?.status]);
+
+  useEffect(() => {
+    if (coderStage && isTerminal(coderStage.status)) setCoderOpen(false);
+  }, [coderStage?.status]);
+
+  useEffect(() => {
+    if (allReviewersDone) setReviewersOpen(false);
+  }, [allReviewersDone]);
+
+  useEffect(() => {
+    if (reviewMergeStage && isTerminal(reviewMergeStage.status)) setReviewMergeOpen(false);
+  }, [reviewMergeStage?.status]);
+
+  useEffect(() => {
+    if (codeFixerStage && isTerminal(codeFixerStage.status)) setCodeFixerOpen(false);
+  }, [codeFixerStage?.status]);
 
   const statusBarLabel = currentStageName || (running
     ? "Starting..."

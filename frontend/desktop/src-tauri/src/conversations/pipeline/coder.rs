@@ -28,7 +28,12 @@ pub async fn run_coder(
 
     if let Err(e) = std::fs::create_dir_all(&coder_dir) {
         return Err((
-            PipelineStageRecord::failed(stage_index, "Coder".to_string(), label, Some(now_rfc3339())),
+            PipelineStageRecord::failed(
+                stage_index,
+                "Coder".to_string(),
+                label,
+                Some(now_rfc3339()),
+            ),
             format!("Failed to create coder directory: {e}"),
         ));
     }
@@ -50,7 +55,7 @@ pub async fn run_coder(
             provider_session_ref: None,
             failure_message: "Coder did not produce a completion summary".to_string(),
             agent_label: label,
-            file_required: false,
+            file_required: true,
         },
         abort,
         score_id_slot,

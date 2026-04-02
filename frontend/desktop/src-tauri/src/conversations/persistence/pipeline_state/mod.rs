@@ -4,9 +4,9 @@ mod reconstruction;
 use crate::models::{ConversationStatus, PipelineStageRecord, PipelineState};
 use crate::storage::{atomic_write, now_rfc3339, with_conversations_lock};
 
-use super::paths::pipeline_file_path;
 use self::hydration::hydrate_stage_text;
 use self::reconstruction::reconstruct_pipeline_from_artifacts;
+use super::paths::pipeline_file_path;
 
 pub fn save_pipeline_state(
     workspace_path: &str,
@@ -37,8 +37,11 @@ pub fn update_pipeline_stage(
 
         if let Some(stage) = state.stages.get_mut(record.stage_index) {
             stage.status = record.status.clone();
+            stage.text.clone_from(&record.text);
             stage.score_id.clone_from(&record.score_id);
-            stage.provider_session_ref.clone_from(&record.provider_session_ref);
+            stage
+                .provider_session_ref
+                .clone_from(&record.provider_session_ref);
             stage.started_at.clone_from(&record.started_at);
             stage.finished_at.clone_from(&record.finished_at);
         }

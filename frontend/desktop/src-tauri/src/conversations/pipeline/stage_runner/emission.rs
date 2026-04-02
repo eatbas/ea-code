@@ -2,9 +2,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::commands::api_health::symphony_base_url;
 use crate::http::symphony_client;
-use crate::models::{
-    ConversationStatus, PipelineStageOutputDelta, PipelineStageStatusEvent,
-};
+use crate::models::{ConversationStatus, PipelineStageOutputDelta, PipelineStageStatusEvent};
 
 use super::super::super::events::{EVENT_PIPELINE_STAGE_OUTPUT_DELTA, EVENT_PIPELINE_STAGE_STATUS};
 
@@ -18,7 +16,9 @@ pub(super) fn request_symphony_stop(score_id: String) {
             Ok(response) => {
                 let status = response.status();
                 let body = response.text().await.unwrap_or_default();
-                eprintln!("[pipeline] Failed to stop symphony job {score_id}: HTTP {status}: {body}");
+                eprintln!(
+                    "[pipeline] Failed to stop symphony job {score_id}: HTTP {status}: {body}"
+                );
             }
             Err(error) => eprintln!("[pipeline] Failed to stop symphony job {score_id}: {error}"),
         }

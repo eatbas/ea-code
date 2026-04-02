@@ -103,12 +103,16 @@ pub(super) fn reconstruct_pipeline_from_artifacts(
 
     append_stage_from_file(
         &mut stages,
-        &conversation_root.join("review_merged").join("review_merged.md"),
+        &conversation_root
+            .join("review_merged")
+            .join("review_merged.md"),
         "Review Merge",
     );
     append_stage_from_file(
         &mut stages,
-        &conversation_root.join("code_fixer").join("code_fixer_done.md"),
+        &conversation_root
+            .join("code_fixer")
+            .join("code_fixer_done.md"),
         "Code Fixer",
     );
 

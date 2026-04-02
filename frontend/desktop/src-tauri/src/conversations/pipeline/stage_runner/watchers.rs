@@ -9,10 +9,7 @@ pub(super) struct StageWatchers {
     pub local_stop: Arc<AtomicBool>,
 }
 
-pub(super) fn spawn_stage_watchers(
-    file_to_watch: String,
-    abort: Arc<AtomicBool>,
-) -> StageWatchers {
+pub(super) fn spawn_stage_watchers(file_to_watch: String, abort: Arc<AtomicBool>) -> StageWatchers {
     let file_ready = Arc::new(AtomicBool::new(false));
     let local_stop = Arc::new(AtomicBool::new(false));
 

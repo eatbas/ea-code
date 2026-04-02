@@ -9,16 +9,14 @@ use std::sync::Arc;
 use tauri::AppHandle;
 
 use crate::commands::api_health::symphony_base_url;
-use crate::conversations::symphony_request::SymphonyChatRequest;
 use crate::conversations::sse::{consume_symphony_sse, SymphonySseEvent};
+use crate::conversations::symphony_request::SymphonyChatRequest;
 use crate::models::{ConversationStatus, PipelineStageRecord};
 use crate::storage::now_rfc3339;
 
 use self::emission::{emit_stage_delta, request_symphony_stop};
 use self::finalise::{
-    determine_final_status,
-    read_accumulated_output,
-    resolve_stage_text,
+    describe_stage_failure, determine_final_status, read_accumulated_output, resolve_stage_text,
 };
 use self::watchers::spawn_stage_watchers;
 
@@ -114,6 +112,7 @@ pub async fn run_stage(
     };
 
     let emit_failed = |error_message: &str| -> (PipelineStageRecord, String) {
+        let diagnostic = format!("# {stage_name} failed\n\n{error_message}");
         let _ = emit_stage_status(
             &app,
             &conversation_id,
@@ -121,21 +120,25 @@ pub async fn run_stage(
             &stage_name,
             ConversationStatus::Failed,
             &agent_label,
-            None,
+            Some(diagnostic.clone()),
         );
-        (
-            PipelineStageRecord::failed(
-                stage_index,
-                stage_name.clone(),
-                agent_label.clone(),
-                Some(started_at.clone()),
-            ),
-            error_message.to_string(),
-        )
+        let mut record = PipelineStageRecord::failed(
+            stage_index,
+            stage_name.clone(),
+            agent_label.clone(),
+            Some(started_at.clone()),
+        );
+        record.text = diagnostic;
+        (record, error_message.to_string())
     };
 
     let url = format!("{}/v1/chat", symphony_base_url());
-    let response = match crate::http::symphony_client().post(&url).json(&request).send().await {
+    let response = match crate::http::symphony_client()
+        .post(&url)
+        .json(&request)
+        .send()
+        .await
+    {
         Ok(response) => response,
         Err(error) => {
             return Err(emit_failed(&format!(
@@ -159,8 +162,7 @@ pub async fn run_stage(
     let output_buffer_writer = output_buffer.clone();
     let abort_for_run = abort.clone();
     let local_stop_for_run = watchers.local_stop.clone();
-    let session_ref: Arc<std::sync::Mutex<Option<String>>> =
-        Arc::new(std::sync::Mutex::new(None));
+    let session_ref: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(None));
     let session_ref_writer = session_ref.clone();
 
     let result = consume_symphony_sse(response, &watchers.local_stop, |event| match event {
@@ -183,7 +185,9 @@ pub async fn run_stage(
             }
             Ok(())
         }
-        SymphonySseEvent::ProviderSession { provider_session_ref } => {
+        SymphonySseEvent::ProviderSession {
+            provider_session_ref,
+        } => {
             if let Ok(mut guard) = session_ref_writer.lock() {
                 *guard = Some(provider_session_ref.clone());
             }
@@ -211,13 +215,32 @@ pub async fn run_stage(
     let captured_session_ref = session_ref.lock().ok().and_then(|guard| guard.clone());
     let captured_job = score_id_slot.lock().ok().and_then(|guard| guard.clone());
     let accumulated_text = read_accumulated_output(&output_buffer);
-    let display_text = file_text.or_else(|| {
-        if accumulated_text.is_empty() {
-            None
-        } else {
-            Some(accumulated_text.clone())
-        }
-    });
+    let failure_text = if final_status == ConversationStatus::Failed {
+        Some(describe_stage_failure(
+            &stage_name,
+            &file_to_watch,
+            file_required,
+            &result,
+            captured_job.as_deref(),
+            captured_session_ref.as_deref(),
+            &accumulated_text,
+        ))
+    } else {
+        None
+    };
+    let display_text = file_text
+        .or_else(|| {
+            if accumulated_text.is_empty() {
+                None
+            } else {
+                Some(accumulated_text.clone())
+            }
+        })
+        .or(failure_text.clone());
+
+    if let Some(ref diagnostic) = failure_text {
+        eprintln!("[pipeline] {stage_name}: {diagnostic}");
+    }
 
     let _ = emit_stage_status(
         &app,
