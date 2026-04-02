@@ -23,10 +23,13 @@ pub async fn run_pipeline_reviewers(
     stage_buffers: Vec<Arc<std::sync::Mutex<String>>>,
     planner_stages: &[PipelineStageRecord],
     reviewer_start_index: usize,
+    review_dir_override: Option<String>,
+    stage_name_suffix: Option<String>,
 ) -> Result<(), String> {
     let conv_dir = format!("{workspace_path}/.maestro/conversations/{conversation_id}");
-    let review_dir = format!("{conv_dir}/review");
+    let review_dir = review_dir_override.unwrap_or_else(|| format!("{conv_dir}/review"));
     let plan_merged_path = format!("{conv_dir}/plan_merged/plan_merged.md");
+    let suffix = stage_name_suffix.unwrap_or_default();
 
     std::fs::create_dir_all(&review_dir)
         .map_err(|e| format!("Failed to create review directory: {e}"))?;
@@ -65,7 +68,7 @@ pub async fn run_pipeline_reviewers(
                 None => {
                     let failed_record = PipelineStageRecord::failed(
                         stage_idx,
-                        format!("Reviewer {reviewer_number}"),
+                        format!("Reviewer {reviewer_number}{suffix}"),
                         label.clone(),
                         Some(now_rfc3339()),
                     );
@@ -91,7 +94,7 @@ pub async fn run_pipeline_reviewers(
             None => {
                 let failed_record = PipelineStageRecord::failed(
                     stage_idx,
-                    format!("Reviewer {reviewer_number}"),
+                    format!("Reviewer {reviewer_number}{suffix}"),
                     label.clone(),
                     Some(now_rfc3339()),
                 );
@@ -123,6 +126,7 @@ pub async fn run_pipeline_reviewers(
         let dir = review_dir.clone();
         let plan_path = plan_merged_path.clone();
         let abort_c = abort.clone();
+        let sfx = suffix.clone();
 
         spawned_indices.push(stage_idx);
         handles.push(tokio::spawn(async move {
@@ -132,7 +136,7 @@ pub async fn run_pipeline_reviewers(
                 ws,
                 StageConfig {
                     stage_index: stage_idx,
-                    stage_name: format!("Reviewer {reviewer_number}"),
+                    stage_name: format!("Reviewer {reviewer_number}{sfx}"),
                     provider: reviewer_agent.provider,
                     model: reviewer_agent.model,
                     prompt: build_reviewer_prompt(reviewer_number, &plan_path, &dir),

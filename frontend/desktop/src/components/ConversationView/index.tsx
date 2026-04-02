@@ -60,6 +60,7 @@ export function ConversationView({
           pipelinePrompt={viewModel.pipelinePrompt}
           planReviewPhase={viewModel.planReview.phase}
           onResume={viewModel.handleResume}
+          onRedoReview={viewModel.handleRedoReview}
           onStop={viewModel.handleStop}
         />
 

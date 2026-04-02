@@ -21,16 +21,21 @@ pub async fn run_code_fixer(
     stage_index: usize,
     coder_session_ref: String,
     agent: PipelineAgent,
+    code_fixer_dir_override: Option<String>,
+    review_merged_path_override: Option<String>,
+    stage_name_override: Option<String>,
 ) -> Result<PipelineStageRecord, (PipelineStageRecord, String)> {
     let label = agent_label(&agent);
     let conv_dir = format!("{workspace_path}/.maestro/conversations/{conversation_id}");
-    let code_fixer_dir = format!("{conv_dir}/code_fixer");
-    let review_merged_path = format!("{conv_dir}/review_merged/review_merged.md");
+    let code_fixer_dir = code_fixer_dir_override.unwrap_or_else(|| format!("{conv_dir}/code_fixer"));
+    let review_merged_path = review_merged_path_override
+        .unwrap_or_else(|| format!("{conv_dir}/review_merged/review_merged.md"));
+    let stage_name = stage_name_override.unwrap_or_else(|| "Code Fixer".to_string());
 
     if let Err(e) = std::fs::create_dir_all(&code_fixer_dir) {
         return Err((
             PipelineStageRecord::failed(
-                stage_index, "Code Fixer".to_string(), label, Some(now_rfc3339()),
+                stage_index, stage_name.clone(), label, Some(now_rfc3339()),
             ),
             format!("Failed to create code_fixer directory: {e}"),
         ));
@@ -44,7 +49,7 @@ pub async fn run_code_fixer(
         workspace_path,
         StageConfig {
             stage_index,
-            stage_name: "Code Fixer".to_string(),
+            stage_name,
             provider: agent.provider,
             model: agent.model,
             prompt,

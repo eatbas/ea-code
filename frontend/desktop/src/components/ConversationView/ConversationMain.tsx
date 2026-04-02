@@ -13,6 +13,7 @@ interface ConversationMainProps {
   pipelinePrompt: string;
   planReviewPhase: PlanReviewPhase;
   onResume: () => Promise<void>;
+  onRedoReview: () => Promise<void>;
   onStop: () => Promise<void>;
 }
 
@@ -23,6 +24,7 @@ export function ConversationMain({
   pipelinePrompt,
   planReviewPhase,
   onResume,
+  onRedoReview,
   onStop,
 }: ConversationMainProps): ReactNode {
   if (pipeline.stages.length > 0 || pipeline.running || pipeline.userPrompt) {
@@ -34,6 +36,7 @@ export function ConversationMain({
         currentStageName={pipeline.currentStageName}
         pipelineStartedAt={pipeline.pipelineStartedAt}
         onResume={onResume}
+        onRedoReview={onRedoReview}
         onStop={onStop}
         planReviewPhase={planReviewPhase}
       />

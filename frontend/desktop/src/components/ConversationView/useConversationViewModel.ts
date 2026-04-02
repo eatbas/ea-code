@@ -8,6 +8,7 @@ import { useSettings } from "../../hooks/useSettings";
 import {
   acceptPlan,
   getPipelineState,
+  redoReviewPipeline,
   resumePipeline,
   sendPlanEditFeedback,
   startPipeline,
@@ -195,6 +196,19 @@ export function useConversationViewModel({
     await resumePipeline(workspace.path, pipelineConversationId);
   }, [pipeline, pipelineConversationId, planReview, workspace.path]);
 
+  const handleRedoReview = useCallback(async () => {
+    if (!pipelineConversationId) {
+      return;
+    }
+
+    pipeline.softReset();
+    try {
+      await redoReviewPipeline(workspace.path, pipelineConversationId);
+    } catch (error) {
+      console.error("[redo-review] Failed to start redo review:", error);
+    }
+  }, [pipeline, pipelineConversationId, workspace.path]);
+
   const handleNewPipeline = useCallback(() => {
     pipeline.reset();
     planReview.reset();
@@ -218,6 +232,7 @@ export function useConversationViewModel({
     handleSend,
     handleStop,
     handleResume,
+    handleRedoReview,
     handleNewPipeline,
     handleFooterError,
   };

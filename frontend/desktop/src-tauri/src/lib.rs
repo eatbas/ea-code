@@ -80,6 +80,7 @@ pub fn run() {
             conversations::commands::pipeline_handlers::actions::get_pipeline_state,
             conversations::commands::pipeline_handlers::actions::accept_plan,
             conversations::commands::pipeline_handlers::actions::send_plan_edit_feedback,
+            conversations::commands::pipeline_handlers::redo_review::redo_review_pipeline,
         ])
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");

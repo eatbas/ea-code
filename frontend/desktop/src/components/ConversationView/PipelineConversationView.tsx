@@ -19,6 +19,8 @@ interface PipelineConversationViewProps {
   pipelineStartedAt: number | undefined;
   /** Called when the user clicks Resume / Retry. */
   onResume?: () => void;
+  /** Called when the user clicks Re-do Review. */
+  onRedoReview?: () => void;
   /** Called when the user clicks Stop. */
   onStop?: () => void;
   /** Plan review phase. */
@@ -54,6 +56,7 @@ export function PipelineConversationView({
   currentStageName,
   pipelineStartedAt,
   onResume,
+  onRedoReview,
   onStop,
   planReviewPhase,
 }: PipelineConversationViewProps): ReactNode {
@@ -68,9 +71,45 @@ export function PipelineConversationView({
   const plannerStages = stages.filter((s) => s.stageName.startsWith("Planner"));
   const mergeStage = stages.find((s) => s.stageName === "Plan Merge") ?? null;
   const coderStage = stages.find((s) => s.stageName === "Coder") ?? null;
-  const reviewerStages = stages.filter((s) => s.stageName.startsWith("Reviewer"));
-  const reviewMergeStage = stages.find((s) => s.stageName === "Review Merge") ?? null;
-  const codeFixerStage = stages.find((s) => s.stageName === "Code Fixer") ?? null;
+
+  // Separate first-run review stages from re-do cycle stages.
+  const reviewerStages = stages.filter(
+    (s) => s.stageName.startsWith("Reviewer") && !s.stageName.includes("(Cycle"),
+  );
+  const reviewMergeStage = stages.find(
+    (s) => s.stageName === "Review Merge",
+  ) ?? null;
+  const codeFixerStage = stages.find(
+    (s) => s.stageName === "Code Fixer",
+  ) ?? null;
+
+  // Collect re-do review cycles. Each cycle has stages with "(Cycle N)" suffix.
+  const redoCycles: Array<{
+    cycle: number;
+    reviewers: PipelineStageState[];
+    reviewMerge: PipelineStageState | null;
+    codeFixer: PipelineStageState | null;
+  }> = [];
+  const cycleNumbers = new Set<number>();
+  for (const s of stages) {
+    const match = s.stageName.match(/\(Cycle (\d+)\)/);
+    if (match) cycleNumbers.add(Number(match[1]));
+  }
+  for (const cycle of [...cycleNumbers].sort((a, b) => a - b)) {
+    const suffix = `(Cycle ${String(cycle)})`;
+    redoCycles.push({
+      cycle,
+      reviewers: stages.filter(
+        (s) => s.stageName.startsWith("Reviewer") && s.stageName.includes(suffix),
+      ),
+      reviewMerge: stages.find(
+        (s) => s.stageName.includes("Review Merge") && s.stageName.includes(suffix),
+      ) ?? null,
+      codeFixer: stages.find(
+        (s) => s.stageName.includes("Code Fixer") && s.stageName.includes(suffix),
+      ) ?? null,
+    });
+  }
 
   const hasStages = plannerStages.length > 0;
   const allPlannersDone = hasStages && plannerStages.every((s) => isTerminal(s.status));
@@ -85,6 +124,16 @@ export function PipelineConversationView({
   const coderDone = coderStage != null && isTerminal(coderStage.status);
   const allReviewersDone = reviewerStages.length > 0 && reviewerStages.every((s) => isTerminal(s.status));
   const reviewMergeDone = reviewMergeStage != null && isTerminal(reviewMergeStage.status);
+
+  // The latest code fixer is the one from the last redo cycle, or the original.
+  const latestCodeFixer = redoCycles.length > 0
+    ? redoCycles[redoCycles.length - 1].codeFixer
+    : codeFixerStage;
+  const canRedoReview = allDone && !running && latestCodeFixer != null
+    && isTerminal(latestCodeFixer.status)
+    && planReviewPhase !== "reviewing"
+    && planReviewPhase !== "editing"
+    && planReviewPhase !== "submitting_edit";
 
   const statusBarLabel = currentStageName || (running
     ? "Starting..."
@@ -251,6 +300,70 @@ export function PipelineConversationView({
             )
           )}
 
+          {/* Re-do review cycles */}
+          {redoCycles.map((cycle) => (
+            <div key={`cycle-${String(cycle.cycle)}`} className="flex flex-col gap-3">
+              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle mt-2">
+                Review Cycle {cycle.cycle}
+              </p>
+
+              {cycle.reviewers.length > 0 && (
+                <PipelineStageGroup groupLabel={`Reviewers (Cycle ${String(cycle.cycle)})`} stages={cycle.reviewers}>
+                  <div className={stageGridClass(cycle.reviewers.length)}>
+                    {cycle.reviewers.map((stage, i) => (
+                      <PipelineStageSection
+                        key={`redo-reviewer-${String(cycle.cycle)}-${String(i)}`}
+                        label={stage.stageName}
+                        agentLabel={stage.agentLabel}
+                        status={stage.status}
+                        open={reviewersOpen}
+                        onOpenChange={setReviewersOpen}
+                        startedAt={stage.startedAt}
+                        finishedAt={stage.finishedAt}
+                      >
+                        <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                          {stageBodyText(stage, "Review file was not found.")}
+                        </p>
+                      </PipelineStageSection>
+                    ))}
+                  </div>
+                </PipelineStageGroup>
+              )}
+
+              {cycle.reviewMerge && (
+                <PipelineStageSection
+                  label={cycle.reviewMerge.stageName}
+                  agentLabel={cycle.reviewMerge.agentLabel}
+                  status={cycle.reviewMerge.status}
+                  open={reviewMergeOpen}
+                  onOpenChange={setReviewMergeOpen}
+                  startedAt={cycle.reviewMerge.startedAt}
+                  finishedAt={cycle.reviewMerge.finishedAt}
+                >
+                  <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                    {stageBodyText(cycle.reviewMerge, "Merged review file was not found.")}
+                  </p>
+                </PipelineStageSection>
+              )}
+
+              {cycle.codeFixer && (
+                <PipelineStageSection
+                  label={cycle.codeFixer.stageName}
+                  agentLabel={cycle.codeFixer.agentLabel}
+                  status={cycle.codeFixer.status}
+                  open={codeFixerOpen}
+                  onOpenChange={setCodeFixerOpen}
+                  startedAt={cycle.codeFixer.startedAt}
+                  finishedAt={cycle.codeFixer.finishedAt}
+                >
+                  <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                    {stageBodyText(cycle.codeFixer, "Code Fixer summary was not found.")}
+                  </p>
+                </PipelineStageSection>
+              )}
+            </div>
+          ))}
+
           {!hasStages && (
             <div className="flex items-center justify-center py-10">
               <p className="text-sm text-fg-faint">Starting pipeline...</p>
@@ -269,6 +382,8 @@ export function PipelineConversationView({
           canResume={canResume}
           hasFailed={hasFailed}
           onResume={onResume}
+          canRedoReview={canRedoReview}
+          onRedoReview={onRedoReview}
           onStop={onStop}
           reviewPhase={planReviewPhase}
         />

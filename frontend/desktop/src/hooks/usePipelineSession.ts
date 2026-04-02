@@ -100,6 +100,14 @@ export function usePipelineSession(
         });
       }
       const existing = copy[event.stageIndex];
+      // When re-emitting saved stages the event carries persisted timestamps.
+      const persistedStart = event.startedAt
+        ? new Date(event.startedAt).getTime()
+        : undefined;
+      const persistedFinish = event.finishedAt
+        ? new Date(event.finishedAt).getTime()
+        : undefined;
+
       copy[event.stageIndex] = {
         stageName: event.stageName,
         agentLabel: event.agentLabel,
@@ -107,12 +115,14 @@ export function usePipelineSession(
         // When the backend sends plan file content with a completed status,
         // replace the accumulated SSE output so the user sees the actual plan.
         text: event.text ?? existing.text,
-        startedAt: mappedStatus === "running"
-          ? (existing.status === "running" ? existing.startedAt ?? now : now)
-          : existing.startedAt,
-        finishedAt: (mappedStatus === "completed" || mappedStatus === "failed")
-          ? (existing.finishedAt ?? now)
-          : undefined,
+        startedAt: persistedStart
+          ?? (mappedStatus === "running"
+            ? (existing.status === "running" ? existing.startedAt ?? now : now)
+            : existing.startedAt),
+        finishedAt: persistedFinish
+          ?? ((mappedStatus === "completed" || mappedStatus === "failed")
+            ? (existing.finishedAt ?? now)
+            : undefined),
       };
       return copy;
     });

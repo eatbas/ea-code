@@ -43,6 +43,8 @@ pub(super) fn emit_stage_status(
             status,
             agent_label: agent_label.to_string(),
             text,
+            started_at: None,
+            finished_at: None,
         },
     )
     .map_err(|error| format!("Failed to emit pipeline stage status: {error}"))

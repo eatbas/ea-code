@@ -23,16 +23,20 @@ pub async fn run_review_merge(
     reviewer_count: usize,
     provider_session_ref: String,
     agent: PipelineAgent,
+    review_dir_override: Option<String>,
+    review_merged_dir_override: Option<String>,
+    stage_name_override: Option<String>,
 ) -> Result<PipelineStageRecord, (PipelineStageRecord, String)> {
     let label = agent_label(&agent);
     let conv_dir = format!("{workspace_path}/.maestro/conversations/{conversation_id}");
-    let review_dir = format!("{conv_dir}/review");
-    let review_merged_dir = format!("{conv_dir}/review_merged");
+    let review_dir = review_dir_override.unwrap_or_else(|| format!("{conv_dir}/review"));
+    let review_merged_dir = review_merged_dir_override.unwrap_or_else(|| format!("{conv_dir}/review_merged"));
+    let stage_name = stage_name_override.unwrap_or_else(|| "Review Merge".to_string());
 
     if let Err(e) = std::fs::create_dir_all(&review_merged_dir) {
         return Err((
             PipelineStageRecord::failed(
-                stage_index, "Review Merge".to_string(), label, Some(now_rfc3339()),
+                stage_index, stage_name.clone(), label, Some(now_rfc3339()),
             ),
             format!("Failed to create review_merged directory: {e}"),
         ));
@@ -46,7 +50,7 @@ pub async fn run_review_merge(
         workspace_path,
         StageConfig {
             stage_index,
-            stage_name: "Review Merge".to_string(),
+            stage_name,
             provider: agent.provider,
             model: agent.model,
             prompt,

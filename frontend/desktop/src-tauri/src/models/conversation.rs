@@ -86,6 +86,12 @@ pub struct PipelineStageStatusEvent {
     /// content so the frontend can replace the accumulated SSE output.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
+    /// Persisted start time — included when re-emitting saved stages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<String>,
+    /// Persisted finish time — included when re-emitting saved stages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finished_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -144,4 +150,11 @@ pub struct PipelineState {
     pub user_prompt: String,
     pub pipeline_mode: String,
     pub stages: Vec<PipelineStageRecord>,
+    /// Current review cycle number (1 = first run, 2+ = re-do cycles).
+    #[serde(default = "default_review_cycle")]
+    pub review_cycle: usize,
+}
+
+fn default_review_cycle() -> usize {
+    1
 }

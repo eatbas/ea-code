@@ -58,21 +58,22 @@ pub fn build_coder_prompt(merged_plan_path: &str, coder_dir: &str) -> String {
     format!(
         "You are the Coder agent in a multi-agent code pipeline. \
          The planning phase is complete and the user has approved the plan.\n\n\
+         ⚠️  REMINDER: When ALL code work is done you MUST write \
+         {done}/coder_done.md — the pipeline BLOCKS until that file exists.\n\n\
          Read the approved merged plan at: {plan}\n\n\
-         IMPORTANT RULES:\n\
+         IMPLEMENTATION RULES:\n\
          - Implement EVERY step described in the plan. Do not skip any.\n\
          - Create and modify files exactly as specified in the plan.\n\
          - Follow the existing codebase conventions (naming, formatting, patterns).\n\
          - Use proper error handling throughout.\n\n\
-         CRITICAL — COMPLETION SUMMARY (you MUST do this):\n\
-         When you have finished ALL implementation work, you MUST write a completion \
+         CRITICAL — COMPLETION SUMMARY (you MUST do this as your LAST action):\n\
+         When you have finished ALL implementation work, write a completion \
          summary to: {done}/coder_done.md\n\
-         - The completion summary must list every file you created or modified and \
-         briefly describe the change.\n\
-         - Do NOT write the completion summary until all code changes are done.\n\
+         - List every file you created or modified and briefly describe the change.\n\
          - Writing this file is MANDATORY. The pipeline cannot continue without it.\n\
-         - Even if you encounter errors during implementation, still write the summary \
-         describing what you completed and what failed.",
+         - Even if you encounter errors, still write the summary describing \
+         what you completed and what failed.\n\
+         - Do NOT end your turn without writing this file.",
         plan = merged_plan_path,
         done = coder_dir,
     )
@@ -151,21 +152,23 @@ pub fn build_code_fixer_prompt(review_merged_path: &str, code_fixer_dir: &str) -
         "You are the Code Fixer agent in a multi-agent code pipeline. \
          You are continuing the Coder session. The reviewers have examined the \
          Coder's work and produced a consolidated review.\n\n\
+         ⚠️  REMINDER: When ALL fixes are done you MUST write \
+         {done}/code_fixer_done.md — the pipeline BLOCKS until that file exists.\n\n\
          Read the consolidated review at: {review}\n\n\
-         IMPORTANT RULES:\n\
+         FIX RULES:\n\
          - Address every 🔴 Critical and 🟠 Major issue in the review.\n\
          - Address 🟡 Minor issues where the fix is straightforward.\n\
          - For 💡 Suggestions, apply them only if they are quick wins.\n\
          - Follow the existing codebase conventions.\n\n\
-         CRITICAL — COMPLETION SUMMARY (you MUST do this):\n\
-         When you have finished ALL fixes, you MUST write a summary to: \
+         CRITICAL — COMPLETION SUMMARY (you MUST do this as your LAST action):\n\
+         When you have finished ALL fixes, write a summary to: \
          {done}/code_fixer_done.md\n\
-         - The summary must list each issue you fixed (with file path) \
-         and any issues you intentionally left unchanged with a rationale.\n\
-         - Do NOT write the summary until all code fixes are done.\n\
+         - List each issue you fixed (with file path) and any issues you \
+         intentionally left unchanged with a rationale.\n\
          - Writing this file is MANDATORY. The pipeline cannot continue without it.\n\
-         - Even if you encounter errors during fixes, still write the summary \
-         describing what you completed and what failed.",
+         - Even if you encounter errors, still write the summary describing \
+         what you completed and what failed.\n\
+         - Do NOT end your turn without writing this file.",
         review = review_merged_path,
         done = code_fixer_dir,
     )

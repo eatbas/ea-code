@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { RotateCcw, Square } from "lucide-react";
+import { RefreshCw, RotateCcw, Square } from "lucide-react";
 import type { PlanReviewPhase } from "../../hooks/usePlanReview";
 
 interface PipelineStatusBarProps {
@@ -20,6 +20,10 @@ interface PipelineStatusBarProps {
   onResume?: () => void;
   /** Called when the user clicks Stop. */
   onStop?: () => void;
+  /** Whether the user can re-do the review cycle. */
+  canRedoReview?: boolean;
+  /** Called when the user clicks Re-do Review. */
+  onRedoReview?: () => void;
   /** Plan review phase. */
   reviewPhase?: PlanReviewPhase;
 }
@@ -43,6 +47,8 @@ export function PipelineStatusBar({
   hasFailed,
   onResume,
   onStop,
+  canRedoReview,
+  onRedoReview,
   reviewPhase,
 }: PipelineStatusBarProps): ReactNode {
   const [now, setNow] = useState(Date.now());
@@ -94,9 +100,19 @@ export function PipelineStatusBar({
       );
     }
 
-    // Default: Resume button.
+    // Default: Resume and Re-do Review buttons.
     return (
       <div className="flex items-center gap-2.5">
+        {canRedoReview && onRedoReview && (
+          <button
+            type="button"
+            onClick={onRedoReview}
+            className="inline-flex items-center gap-2 rounded-lg border border-edge bg-elevated px-4 py-1.5 text-xs font-semibold text-fg transition-colors hover:bg-active"
+          >
+            <RefreshCw size={10} />
+            Re-do Review
+          </button>
+        )}
         {canResume && onResume && (
           <button
             type="button"

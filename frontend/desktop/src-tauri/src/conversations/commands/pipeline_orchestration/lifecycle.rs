@@ -136,6 +136,8 @@ pub(in crate::conversations::commands) fn re_emit_completed_stages(
                     } else {
                         Some(stage.text.clone())
                     },
+                    started_at: stage.started_at.clone(),
+                    finished_at: stage.finished_at.clone(),
                 },
             );
         }

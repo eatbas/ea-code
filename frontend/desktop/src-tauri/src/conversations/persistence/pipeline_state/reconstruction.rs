@@ -116,6 +116,7 @@ pub(super) fn reconstruct_pipeline_from_artifacts(
         user_prompt,
         pipeline_mode: "code".to_string(),
         stages,
+        review_cycle: 1,
     };
 
     if let Err(error) = save_pipeline_state(workspace_path, conversation_id, &state) {

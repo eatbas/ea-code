@@ -67,6 +67,7 @@ pub async fn run_pipeline_planners(
         user_prompt: user_prompt.clone(),
         pipeline_mode: "code".to_string(),
         stages: initial_stages,
+        review_cycle: 1,
     };
     if let Err(e) =
         super::super::persistence::save_pipeline_state(&workspace_path, &conversation_id, &initial_state)
@@ -173,6 +174,7 @@ pub async fn run_pipeline_planners(
         user_prompt,
         pipeline_mode: "code".to_string(),
         stages: stage_records,
+        review_cycle: 1,
     };
     if let Err(e) =
         super::super::persistence::save_pipeline_state(&workspace_path, &conversation_id, &state)

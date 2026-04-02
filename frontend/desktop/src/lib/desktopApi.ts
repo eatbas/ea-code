@@ -169,6 +169,16 @@ export function resumePipeline(
   });
 }
 
+export function redoReviewPipeline(
+  workspacePath: string,
+  conversationId: string,
+): Promise<ConversationDetail> {
+  return invokeCommand<ConversationDetail>("redo_review_pipeline", {
+    workspacePath,
+    conversationId,
+  });
+}
+
 export function getPipelineState(
   workspacePath: string,
   conversationId: string,

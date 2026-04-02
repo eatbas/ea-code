@@ -205,6 +205,7 @@ pub async fn resume_pipeline(
                         let fixer_result = pipeline::run_code_fixer(
                             app_handle.clone(), conv_id.clone(), ws.clone(), setup.abort.clone(),
                             fixer_slot, fixer_buf, setup.indices.code_fixer, coder_ref, setup.coder.clone(),
+                            None, None, None,
                         )
                         .await;
 
@@ -242,6 +243,7 @@ pub async fn resume_pipeline(
                     let fixer_result = pipeline::run_code_fixer(
                         app_handle.clone(), conv_id.clone(), ws.clone(), setup.abort.clone(),
                         fixer_slot, fixer_buf, setup.indices.code_fixer, coder_ref, setup.coder.clone(),
+                        None, None, None,
                     )
                     .await;
 

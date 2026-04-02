@@ -53,6 +53,10 @@ export interface PipelineStageStatusEvent {
   agentLabel: string;
   /** When a stage completes, carries the plan file content to replace SSE output. */
   text?: string;
+  /** Persisted start time — present when re-emitting saved stages. */
+  startedAt?: string;
+  /** Persisted finish time — present when re-emitting saved stages. */
+  finishedAt?: string;
 }
 
 export interface PipelineStageOutputDelta {

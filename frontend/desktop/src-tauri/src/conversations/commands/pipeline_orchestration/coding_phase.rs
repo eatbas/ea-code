@@ -96,6 +96,7 @@ pub(in crate::conversations::commands) async fn run_review_merge_chain(
         pipeline::run_review_merge(
             app, conv_id, ws, abort, slot, buf,
             indices.review_merge, indices.reviewer_count, ref_val, review_merge_agent,
+            None, None, None,
         )
         .await,
     )
@@ -198,6 +199,7 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
         setup.reviewers.clone(), setup.abort.clone(),
         reviewer_slots, previous_stages, reviewer_bufs,
         &planner_stages, indices.reviewer_start,
+        None, None,
     )
     .await;
 
@@ -261,6 +263,7 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
     let fixer_result = pipeline::run_code_fixer(
         app, conv_id, ws, setup.abort.clone(),
         fixer_slot, fixer_buf, indices.code_fixer, coder_session_ref, setup.coder.clone(),
+        None, None, None,
     )
     .await;
 
