@@ -4,7 +4,7 @@ use tokio::process::Command;
 /// Result of Python detection: the command and optional version flag for `py` launcher.
 #[derive(Debug, Clone)]
 pub struct PythonInterpreter {
-    /// The executable name or path (e.g. "python", "py", "python3.13").
+    /// The executable name or absolute path (e.g. "py", "C:\\Python312\\python.exe").
     pub executable: String,
     /// Optional version flag for the Windows `py` launcher (e.g. "-3.13").
     pub launcher_version: Option<String>,
@@ -37,9 +37,10 @@ impl PythonInterpreter {
 ///
 /// Search order:
 /// 1. Windows `py` launcher with explicit version flags (3.14, 3.13, 3.12).
-/// 2. macOS well-known Homebrew paths (Apple Silicon `/opt/homebrew`, Intel `/usr/local`).
-/// 3. Unix-style versioned binaries on PATH: python3.14, python3.13, python3.12.
-/// 4. Generic python3 / python on PATH — only accepted if >= 3.12.
+/// 2. Windows well-known install locations and `where.exe` resolved absolute paths.
+/// 3. macOS well-known Homebrew paths (Apple Silicon `/opt/homebrew`, Intel `/usr/local`).
+/// 4. Unix-style versioned binaries on PATH: python3.14, python3.13, python3.12.
+/// 5. Generic python3 / python on PATH — only accepted if >= 3.12.
 pub async fn find_python() -> Result<PythonInterpreter, String> {
     // 1. Windows py launcher
     #[cfg(target_os = "windows")]
@@ -65,11 +66,45 @@ pub async fn find_python() -> Result<PythonInterpreter, String> {
         }
     }
 
-    // 2. macOS Homebrew well-known paths (faster than PATH search)
+    // 2. Windows: check well-known install paths and resolve via where.exe
+    #[cfg(target_os = "windows")]
+    {
+        // Common installer locations
+        let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_default();
+        let program_files = std::env::var("ProgramFiles").unwrap_or_default();
+
+        for ver in ["314", "313", "312"] {
+            let candidates = [
+                format!("{local_app_data}\\Programs\\Python\\Python{ver}\\python.exe"),
+                format!("{program_files}\\Python{ver}\\python.exe"),
+            ];
+            for path in &candidates {
+                if check_python_version(path).await {
+                    return Ok(PythonInterpreter {
+                        executable: path.clone(),
+                        launcher_version: None,
+                    });
+                }
+            }
+        }
+
+        // Ask each candidate for its real sys.executable path, which
+        // resolves the actual binary behind WindowsApps aliases.
+        for candidate in ["python3", "python"] {
+            if let Some(real_path) = resolve_real_python_path(candidate).await {
+                if check_python_version(&real_path).await {
+                    return Ok(PythonInterpreter {
+                        executable: real_path,
+                        launcher_version: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // 3. macOS Homebrew well-known paths (faster than PATH search)
     #[cfg(target_os = "macos")]
     {
-        // Apple Silicon: /opt/homebrew/bin/python3*
-        // Intel Mac:     /usr/local/bin/python3*
         let brew_prefixes = ["/opt/homebrew/bin", "/usr/local/bin"];
         for prefix in &brew_prefixes {
             for ver in ["python3.14", "python3.13", "python3.12"] {
@@ -81,7 +116,6 @@ pub async fn find_python() -> Result<PythonInterpreter, String> {
                     });
                 }
             }
-            // Also try the unversioned python3 at this prefix
             let path = format!("{prefix}/python3");
             if check_python_version(&path).await {
                 return Ok(PythonInterpreter {
@@ -92,7 +126,7 @@ pub async fn find_python() -> Result<PythonInterpreter, String> {
         }
     }
 
-    // 3. Versioned binaries on PATH
+    // 4. Versioned binaries on PATH
     for candidate in ["python3.14", "python3.13", "python3.12"] {
         if binary_exists(candidate).await {
             return Ok(PythonInterpreter {
@@ -102,7 +136,7 @@ pub async fn find_python() -> Result<PythonInterpreter, String> {
         }
     }
 
-    // 4. Generic python3 / python on PATH — version check
+    // 5. Generic python3 / python on PATH — version check
     for candidate in ["python3", "python"] {
         if binary_exists(candidate).await && check_python_version(candidate).await {
             return Ok(PythonInterpreter {
@@ -138,6 +172,38 @@ pub async fn venv_is_valid(venv_dir: &Path) -> bool {
 }
 
 // ── helpers ──────────────────────────────────────────────────────────
+
+/// Resolve a bare executable name to the real absolute path Python reports
+/// for itself via `sys.executable`. This bypasses issues with WindowsApps
+/// app execution aliases that `where.exe` returns — those short aliases
+/// cannot be spawned reliably from non-shell contexts like Tauri desktop apps,
+/// but they *can* be executed by the shell that `Command` inherits, so we use
+/// the alias just long enough to ask Python where it really lives.
+#[cfg(target_os = "windows")]
+async fn resolve_real_python_path(name: &str) -> Option<String> {
+    let output = Command::new(name)
+        .args(["-c", "import sys; print(sys.executable)"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let path = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .to_string();
+    if path.is_empty() {
+        return None;
+    }
+    // Verify the resolved path actually exists on disk
+    if Path::new(&path).exists() {
+        Some(path)
+    } else {
+        None
+    }
+}
 
 async fn binary_exists(name: &str) -> bool {
     #[cfg(target_os = "windows")]

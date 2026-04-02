@@ -1,7 +1,21 @@
 [env]
-# Windows ARM64 builds (e.g. `ring`) require LLVM clang because MSVC support on
-# aarch64 is incomplete for some crates. Route through repo-local wrappers that
-# probe common install locations.
-# x86_64 builds use the default MSVC toolchain (cl.exe) and need no override.
-CC_aarch64_pc_windows_msvc = { value = ".cargo/tooling/clang.cmd", relative = true, force = false }
+# ── Windows ARM64 ──────────────────────────────────────────────────────────────
+# Ring, vswhom-sys and other crates need LLVM clang on aarch64 because MSVC
+# support is incomplete. Route through repo-local .cmd wrappers that probe
+# common install locations (Visual Studio Clang tools, standalone LLVM, PATH).
+CC_aarch64_pc_windows_msvc  = { value = ".cargo/tooling/clang.cmd", relative = true, force = false }
 CXX_aarch64_pc_windows_msvc = { value = ".cargo/tooling/clang-cxx.cmd", relative = true, force = false }
+
+# ── Windows x86_64 ────────────────────────────────────────────────────────────
+# Intel Windows uses the default MSVC toolchain (cl.exe) — no override needed.
+# If a future crate requires clang on x64, uncomment:
+# CC_x86_64_pc_windows_msvc  = { value = ".cargo/tooling/clang.cmd", relative = true, force = false }
+# CXX_x86_64_pc_windows_msvc = { value = ".cargo/tooling/clang-cxx.cmd", relative = true, force = false }
+
+# ── macOS (Apple Silicon & Intel) ─────────────────────────────────────────────
+# macOS ships clang via Xcode command-line tools, so most builds just work.
+# The .sh wrappers add fallback to Homebrew LLVM and MAESTRO_LLVM_BIN.
+CC_aarch64_apple_darwin  = { value = ".cargo/tooling/clang.sh", relative = true, force = false }
+CXX_aarch64_apple_darwin = { value = ".cargo/tooling/clang-cxx.sh", relative = true, force = false }
+CC_x86_64_apple_darwin   = { value = ".cargo/tooling/clang.sh", relative = true, force = false }
+CXX_x86_64_apple_darwin  = { value = ".cargo/tooling/clang-cxx.sh", relative = true, force = false }
