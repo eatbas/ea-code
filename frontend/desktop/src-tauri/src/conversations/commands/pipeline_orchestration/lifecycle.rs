@@ -10,6 +10,7 @@ use crate::models::{
 };
 use crate::storage::now_rfc3339;
 
+use super::super::super::pipeline_debug::emit_pipeline_debug;
 use super::super::super::events::{EVENT_CONVERSATION_STATUS, EVENT_PIPELINE_STAGE_STATUS};
 use super::super::super::persistence;
 
@@ -23,10 +24,12 @@ pub(in crate::conversations::commands) fn begin_pipeline_task(
     let guard = match persistence::track_running_conversation(ws, conv_id) {
         Ok(g) => g,
         Err(e) => {
+            emit_pipeline_debug(app, ws, conv_id, format!("Pipeline start skipped: {e}"));
             eprintln!("[pipeline] Failed to track running conversation: {e}");
             return None;
         }
     };
+    emit_pipeline_debug(app, ws, conv_id, "Pipeline task acquired running guard");
     emit_running_status(app, ws, conv_id);
     Some(guard)
 }
@@ -39,6 +42,7 @@ pub(in crate::conversations::commands) fn emit_running_status(
 ) {
     match persistence::set_status(ws, conv_id, ConversationStatus::Running, None) {
         Ok(summary) => {
+            emit_pipeline_debug(app, ws, conv_id, "Conversation status -> running");
             let _ = app.emit(
                 EVENT_CONVERSATION_STATUS,
                 ConversationStatusEvent {
@@ -59,8 +63,14 @@ pub(in crate::conversations::commands) fn emit_final_status(
     status: ConversationStatus,
     error: Option<String>,
 ) {
+    let status_label = format!("{:?}", status).to_lowercase();
+    let debug_message = match &error {
+        Some(error) => format!("Conversation final status -> {status_label}; error={error}"),
+        None => format!("Conversation final status -> {status_label}"),
+    };
     match persistence::set_status(ws, conv_id, status, error) {
         Ok(summary) => {
+            emit_pipeline_debug(app, ws, conv_id, debug_message);
             let _ = app.emit(
                 EVENT_CONVERSATION_STATUS,
                 ConversationStatusEvent {

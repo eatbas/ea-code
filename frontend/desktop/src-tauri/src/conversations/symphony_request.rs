@@ -13,6 +13,5 @@ pub struct SymphonyChatRequest<'a> {
     pub mode: &'a str,
     pub prompt: &'a str,
     pub provider_session_ref: Option<&'a str>,
-    pub stream: bool,
     pub provider_options: HashMap<String, String>,
 }

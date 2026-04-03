@@ -28,6 +28,7 @@ export const CONVERSATION_EVENTS = {
 export const PIPELINE_EVENTS = {
   STAGE_STATUS: "pipeline_stage_status",
   STAGE_OUTPUT_DELTA: "pipeline_stage_output_delta",
+  DEBUG_LOG: "pipeline_debug_log",
 } as const;
 
 /** CLI health events (emitted by `commands/cli/health.rs`). */

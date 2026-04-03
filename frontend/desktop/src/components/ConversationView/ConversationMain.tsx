@@ -32,6 +32,7 @@ export function ConversationMain({
       <PipelineConversationView
         userPrompt={pipelinePrompt || pipeline.userPrompt}
         stages={pipeline.stages}
+        debugLog={pipeline.debugLog}
         running={pipeline.running}
         currentStageName={pipeline.currentStageName}
         pipelineStartedAt={pipeline.pipelineStartedAt}

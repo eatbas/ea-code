@@ -6,6 +6,7 @@ use tauri::AppHandle;
 use tokio::time::{sleep, Duration, Instant};
 
 use crate::commands::api_health::symphony_base_url;
+use crate::conversations::pipeline_debug::emit_pipeline_debug;
 use crate::http::symphony_client;
 use crate::models::{
     AgentSelection, ConversationDetail, ConversationStatus, ConversationSummary, PipelineState,
@@ -63,6 +64,12 @@ pub async fn start_pipeline(
 
     let detail = persistence::create_conversation(&workspace_path, agent, Some(trimmed))?;
     let conversation_id = detail.summary.id.clone();
+    emit_pipeline_debug(
+        &app,
+        &workspace_path,
+        &conversation_id,
+        format!("Pipeline requested for prompt: {}", trimmed.replace('\n', " ")),
+    );
 
     let setup = prepare_pipeline_with_config(&workspace_path, &conversation_id, config)?;
 
@@ -75,6 +82,7 @@ pub async fn start_pipeline(
         let Some(_guard) = begin_pipeline_task(&app_handle, &ws, &conv_id) else {
             return;
         };
+        emit_pipeline_debug(&app_handle, &ws, &conv_id, "Pipeline background task started");
 
         let planner_result = pipeline::run_pipeline_planners(
             app_handle.clone(), conv_id.clone(), ws.clone(),
@@ -107,10 +115,12 @@ pub async fn start_pipeline(
 
 #[tauri::command]
 pub async fn stop_pipeline(
+    app: AppHandle,
     workspace_path: String,
     conversation_id: String,
 ) -> Result<ConversationSummary, String> {
     persistence::trigger_abort(&workspace_path, &conversation_id)?;
+    emit_pipeline_debug(&app, &workspace_path, &conversation_id, "Stop requested from UI");
 
     let deadline = Instant::now() + PIPELINE_STOP_WAIT_TIMEOUT;
     let client = symphony_client();
@@ -118,10 +128,30 @@ pub async fn stop_pipeline(
 
     loop {
         let score_ids = persistence::get_pipeline_score_ids(&workspace_path, &conversation_id)?;
+        if !score_ids.is_empty() {
+            emit_pipeline_debug(
+                &app,
+                &workspace_path,
+                &conversation_id,
+                format!("Stop pipeline inspecting {} active score id(s)", score_ids.len()),
+            );
+        }
         for score_id in score_ids {
             if stopped_score_ids.insert(score_id.clone()) {
+                emit_pipeline_debug(
+                    &app,
+                    &workspace_path,
+                    &conversation_id,
+                    format!("Sending Symphony stop request for score {score_id}"),
+                );
                 if let Err(e) = send_symphony_stop_request(&client, &score_id).await {
                     eprintln!("[pipeline] {e}");
+                    emit_pipeline_debug(
+                        &app,
+                        &workspace_path,
+                        &conversation_id,
+                        format!("Symphony stop request failed for {score_id}: {e}"),
+                    );
                 }
             }
         }
@@ -134,6 +164,12 @@ pub async fn stop_pipeline(
     }
 
     persistence::mark_running_pipeline_stages_stopped(&workspace_path, &conversation_id)?;
+    emit_pipeline_debug(
+        &app,
+        &workspace_path,
+        &conversation_id,
+        "Marked running pipeline stages as stopped",
+    );
 
     persistence::set_status(
         &workspace_path,
@@ -163,6 +199,14 @@ pub async fn get_pipeline_state(
     }
 
     Ok(state)
+}
+
+#[tauri::command]
+pub async fn get_pipeline_debug_log(
+    workspace_path: String,
+    conversation_id: String,
+) -> Result<String, String> {
+    persistence::read_pipeline_debug_log(&workspace_path, &conversation_id)
 }
 
 #[tauri::command]

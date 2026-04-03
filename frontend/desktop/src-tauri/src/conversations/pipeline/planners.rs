@@ -6,6 +6,7 @@ use tauri::AppHandle;
 use crate::models::{ConversationStatus, PipelineAgent, PipelineStageRecord, PipelineState};
 use crate::storage::now_rfc3339;
 
+use crate::conversations::pipeline_debug::emit_pipeline_debug;
 use super::prompts::{agent_label, build_planner_prompt};
 use super::stage_runner::{emit_stage_status, run_stage, StageConfig};
 
@@ -22,6 +23,12 @@ pub async fn run_pipeline_planners(
     stage_buffers: Vec<Arc<std::sync::Mutex<String>>>,
 ) -> Result<(), String> {
     let conv_dir = format!("{workspace_path}/.maestro/conversations/{conversation_id}");
+    emit_pipeline_debug(
+        &app,
+        &workspace_path,
+        &conversation_id,
+        format!("Initialising planner phase with {} planner(s)", planners.len()),
+    );
 
     // Save user prompt in its own folder.
     let prompt_dir = format!("{conv_dir}/prompt");
@@ -73,6 +80,7 @@ pub async fn run_pipeline_planners(
         super::super::persistence::save_pipeline_state(&workspace_path, &conversation_id, &initial_state)
     {
         eprintln!("[pipeline] Failed to save initial pipeline state: {e}");
+        emit_pipeline_debug(&app, &workspace_path, &conversation_id, format!("Failed to save initial pipeline state: {e}"));
     }
 
     let planner_count = planners.len();
@@ -115,6 +123,16 @@ pub async fn run_pipeline_planners(
         let planner_number = i + 1;
         let label = agent_label(&planner_agent);
         let mode = if resume_ref.is_some() { "resume" } else { "new" };
+        emit_pipeline_debug(
+            &app,
+            &workspace_path,
+            &conversation_id,
+            format!(
+                "Planner {planner_number} queued with {} / {} in {mode} mode",
+                planner_agent.provider,
+                planner_agent.model,
+            ),
+        );
 
         spawned_indices.push(i);
         handles.push(tokio::spawn(async move {
@@ -180,11 +198,19 @@ pub async fn run_pipeline_planners(
         super::super::persistence::save_pipeline_state(&workspace_path, &conversation_id, &state)
     {
         eprintln!("[pipeline] Failed to save pipeline state: {e}");
+        emit_pipeline_debug(&app, &workspace_path, &conversation_id, format!("Failed to save planner phase state: {e}"));
     }
 
     if errors.is_empty() {
+        emit_pipeline_debug(&app, &workspace_path, &conversation_id, "Planner phase completed without errors");
         Ok(())
     } else {
+        emit_pipeline_debug(
+            &app,
+            &workspace_path,
+            &conversation_id,
+            format!("Planner phase completed with errors: {}", errors.join("; ")),
+        );
         Err(errors.join("; "))
     }
 }

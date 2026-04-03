@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type {
   ConversationStatus,
+  PipelineDebugLogEvent,
   ConversationStatusEvent,
   PipelineState,
   PipelineStageStatusEvent,
@@ -31,6 +32,7 @@ function mapStatus(s: string): StageStatus {
 
 export interface UsePipelineSessionReturn {
   stages: PipelineStageState[];
+  debugLog: string;
   pipelineStartedAt: number | undefined;
   running: boolean;
   awaitingReview: boolean;
@@ -40,6 +42,7 @@ export interface UsePipelineSessionReturn {
   reset: () => void;
   /** Soft reset — keeps existing stages but resets running/review flags. */
   softReset: () => void;
+  loadDebugLog: (log: string) => void;
   loadFromSaved: (state: PipelineState, stillRunning?: boolean, conversationStatus?: ConversationStatus) => void;
 }
 
@@ -53,6 +56,7 @@ export function usePipelineSession(
   activeConversationId: string | null,
 ): UsePipelineSessionReturn {
   const [stages, setStages] = useState<PipelineStageState[]>([]);
+  const [debugLog, setDebugLog] = useState("");
   const [running, setRunning] = useState(false);
   const [awaitingReview, setAwaitingReview] = useState(false);
   const [currentStageName, setCurrentStageName] = useState("");
@@ -153,6 +157,11 @@ export function usePipelineSession(
     });
   }, []);
 
+  const handleDebugLog = useCallback((event: PipelineDebugLogEvent) => {
+    if (event.conversationId !== conversationIdRef.current) return;
+    setDebugLog((prev) => (prev ? `${prev}\n${event.line}` : event.line));
+  }, []);
+
   // Listen to the overall conversation status so we can mark the pipeline as
   // no longer running once the backend reports a terminal state.
   const handleConversationStatus = useCallback((event: ConversationStatusEvent) => {
@@ -179,12 +188,14 @@ export function usePipelineSession(
     listeners: [
       { event: PIPELINE_EVENTS.STAGE_STATUS, handler: handleStageStatus },
       { event: PIPELINE_EVENTS.STAGE_OUTPUT_DELTA, handler: handleStageDelta },
+      { event: PIPELINE_EVENTS.DEBUG_LOG, handler: handleDebugLog },
       { event: CONVERSATION_EVENTS.STATUS, handler: handleConversationStatus },
     ],
   });
 
   const reset = useCallback(() => {
     setStages([]);
+    setDebugLog("");
     setRunning(false);
     setAwaitingReview(false);
     setCurrentStageName("");
@@ -199,6 +210,10 @@ export function usePipelineSession(
     setAwaitingReview(false);
     setCurrentStageName("");
     runningNamesRef.current.clear();
+  }, []);
+
+  const loadDebugLog = useCallback((log: string) => {
+    setDebugLog(log);
   }, []);
 
   const loadFromSaved = useCallback((
@@ -245,6 +260,7 @@ export function usePipelineSession(
 
   return {
     stages,
+    debugLog,
     pipelineStartedAt: pipelineStartRef.current,
     running,
     awaitingReview,
@@ -252,6 +268,7 @@ export function usePipelineSession(
     userPrompt,
     reset,
     softReset,
+    loadDebugLog,
     loadFromSaved,
   };
 }

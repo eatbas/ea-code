@@ -102,6 +102,14 @@ pub struct PipelineStageOutputDelta {
     pub text: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PipelineDebugLogEvent {
+    pub conversation_id: String,
+    pub created_at: String,
+    pub line: String,
+}
+
 /// Persisted state of a single pipeline stage.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

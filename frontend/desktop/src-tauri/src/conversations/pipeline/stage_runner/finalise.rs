@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use crate::conversations::sse::SseResult;
+use crate::conversations::score_client::SymphonyScoreSnapshot;
 use crate::models::ConversationStatus;
 
 pub(super) fn determine_final_status(
@@ -11,7 +11,7 @@ pub(super) fn determine_final_status(
     file_ready: &AtomicBool,
     file_required: bool,
     stage_name: &str,
-    result: &Result<SseResult, String>,
+    result: &Result<SymphonyScoreSnapshot, String>,
 ) -> ConversationStatus {
     let file_exists = file_ready.load(Ordering::Acquire) || Path::new(file_to_watch).exists();
 
@@ -31,26 +31,26 @@ pub(super) fn determine_final_status(
             }
             Err(error) => {
                 eprintln!(
-                    "[pipeline] {stage_name}: required file was not created at {file_to_watch}; SSE stream ended with error: {error}"
+                    "[pipeline] {stage_name}: required file was not created at {file_to_watch}; score polling ended with error: {error}"
                 );
             }
         }
         return ConversationStatus::Failed;
     }
     match result {
-        Ok(run_result) if run_result.status == ConversationStatus::Completed => {
+        Ok(run_result) if run_result.status.as_conversation_status() == ConversationStatus::Completed => {
             ConversationStatus::Completed
         }
         Ok(_) => {
             eprintln!(
-                "[pipeline] {stage_name}: SSE finished but without Completed status; \
+                "[pipeline] {stage_name}: score finished but without Completed status; \
                  treating as Completed because file_required=false"
             );
             ConversationStatus::Completed
         }
         Err(error) => {
             eprintln!(
-                "[pipeline] {stage_name}: SSE stream error ({error}); \
+                "[pipeline] {stage_name}: score polling error ({error}); \
                  treating as Completed because file_required=false"
             );
             ConversationStatus::Completed
@@ -60,7 +60,7 @@ pub(super) fn determine_final_status(
 
 pub(super) fn resolve_stage_text(
     file_to_watch: &str,
-    output_buffer: &Arc<std::sync::Mutex<String>>,
+    output_buffer: &Arc<Mutex<String>>,
     file_required: bool,
     final_status: &ConversationStatus,
     stage_name: &str,
@@ -72,7 +72,7 @@ pub(super) fn resolve_stage_text(
         return None;
     }
 
-    let accumulated = read_accumulated_output(output_buffer);
+    let accumulated = live_output(output_buffer);
     let fallback = if accumulated.trim().is_empty() {
         format!(
             "# {stage_name} - auto-generated summary\n\n\
@@ -107,7 +107,7 @@ pub(super) fn describe_stage_failure(
     stage_name: &str,
     file_to_watch: &str,
     file_required: bool,
-    result: &Result<SseResult, String>,
+    result: &Result<SymphonyScoreSnapshot, String>,
     score_id: Option<&str>,
     provider_session_ref: Option<&str>,
     accumulated_text: &str,
@@ -122,17 +122,17 @@ pub(super) fn describe_stage_failure(
 
     match result {
         Ok(run_result) => {
-            lines.push(format!("SSE status: `{:?}`", run_result.status));
+            lines.push(format!("Score status: `{:?}`", run_result.status));
             if let Some(exit_code) = run_result.exit_code {
                 lines.push(format!("Exit code: `{exit_code}`"));
             }
             if let Some(error) = &run_result.error {
-                lines.push(format!("SSE error: `{error}`"));
+                lines.push(format!("Score error: `{error}`"));
             }
         }
         Err(error) => {
-            lines.push("SSE status: `stream_error`".to_string());
-            lines.push(format!("SSE error: `{error}`"));
+            lines.push("Score status: `poll_error`".to_string());
+            lines.push(format!("Score error: `{error}`"));
         }
     }
 
@@ -164,7 +164,48 @@ pub(super) fn describe_stage_failure(
     lines.join("\n")
 }
 
-pub(super) fn read_accumulated_output(output_buffer: &Arc<std::sync::Mutex<String>>) -> String {
+pub(super) fn append_live_output(output_buffer: &Arc<Mutex<String>>, text: &str) {
+    if let Ok(mut guard) = output_buffer.lock() {
+        if !guard.is_empty() {
+            guard.push('\n');
+        }
+        guard.push_str(text);
+    }
+}
+
+pub(super) fn sync_snapshot_output(
+    output_buffer: &Arc<Mutex<String>>,
+    accumulated_text: &str,
+) -> Option<String> {
+    let Ok(mut guard) = output_buffer.lock() else {
+        return None;
+    };
+
+    if accumulated_text.starts_with(guard.as_str()) {
+        let suffix = accumulated_text[guard.len()..].trim_start_matches('\n').to_string();
+        *guard = accumulated_text.to_string();
+        return (!suffix.is_empty()).then_some(suffix);
+    }
+
+    *guard = accumulated_text.to_string();
+    None
+}
+
+pub(super) fn maybe_update_session_ref(
+    session_ref: &Arc<Mutex<Option<String>>>,
+    next_session: Option<&str>,
+) {
+    let Some(next_session) = next_session.map(str::to_string) else {
+        return;
+    };
+    if let Ok(mut guard) = session_ref.lock() {
+        if guard.as_deref() != Some(next_session.as_str()) {
+            *guard = Some(next_session);
+        }
+    }
+}
+
+pub(super) fn live_output(output_buffer: &Arc<Mutex<String>>) -> String {
     output_buffer
         .lock()
         .map(|guard| guard.clone())

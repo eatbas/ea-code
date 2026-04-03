@@ -1,6 +1,7 @@
 use super::super::{
     create_conversation, delete_conversation, finish_turn, get_conversation, list_conversations,
-    mark_turn_running, rename_conversation, track_running_conversation,
+    mark_turn_running, register_abort_flag, register_pipeline_score_slots,
+    register_pipeline_stage_buffers, rename_conversation, track_running_conversation,
 };
 use crate::models::{AgentSelection, ConversationStatus};
 
@@ -182,6 +183,87 @@ fn tracked_running_conversations_stay_running_on_load() {
 
     assert_eq!(loaded.summary.status, ConversationStatus::Running);
     assert_eq!(loaded.summary.error, None);
+}
+
+#[test]
+fn tracking_same_running_conversation_twice_fails() {
+    let workspace = TestWorkspace::new();
+    let conversation = create_conversation(
+        workspace
+            .path()
+            .to_str()
+            .expect("workspace path should be utf-8"),
+        AgentSelection {
+            provider: "codex".to_string(),
+            model: "gpt-5.4".to_string(),
+        },
+        None,
+    )
+    .expect("conversation should be created");
+
+    let _guard = track_running_conversation(
+        workspace
+            .path()
+            .to_str()
+            .expect("workspace path should be utf-8"),
+        &conversation.summary.id,
+    )
+    .expect("conversation should be tracked");
+
+    let error = match track_running_conversation(
+        workspace
+            .path()
+            .to_str()
+            .expect("workspace path should be utf-8"),
+        &conversation.summary.id,
+    ) {
+        Ok(_) => panic!("duplicate tracking should fail"),
+        Err(error) => error,
+    };
+
+    assert!(error.contains("already running"));
+}
+
+#[test]
+fn runtime_registries_are_reused_for_same_conversation() {
+    let workspace = TestWorkspace::new();
+    let conversation = create_conversation(
+        workspace
+            .path()
+            .to_str()
+            .expect("workspace path should be utf-8"),
+        AgentSelection {
+            provider: "codex".to_string(),
+            model: "gpt-5.4".to_string(),
+        },
+        None,
+    )
+    .expect("conversation should be created");
+
+    let workspace_path = workspace
+        .path()
+        .to_str()
+        .expect("workspace path should be utf-8");
+
+    let first_abort = register_abort_flag(workspace_path, &conversation.summary.id)
+        .expect("first abort flag should register");
+    let second_abort = register_abort_flag(workspace_path, &conversation.summary.id)
+        .expect("second abort flag should reuse existing");
+    assert!(std::sync::Arc::ptr_eq(&first_abort, &second_abort));
+
+    let first_slots = register_pipeline_score_slots(workspace_path, &conversation.summary.id, 4)
+        .expect("first score slots should register");
+    let second_slots = register_pipeline_score_slots(workspace_path, &conversation.summary.id, 4)
+        .expect("second score slots should reuse existing");
+    assert_eq!(first_slots.len(), second_slots.len());
+    assert!(std::sync::Arc::ptr_eq(&first_slots[0], &second_slots[0]));
+
+    let first_buffers = register_pipeline_stage_buffers(workspace_path, &conversation.summary.id, 4)
+        .expect("first stage buffers should register");
+    let second_buffers = register_pipeline_stage_buffers(workspace_path, &conversation.summary.id, 4)
+        .expect("second stage buffers should reuse existing");
+    assert_eq!(first_buffers.len(), second_buffers.len());
+    assert!(std::sync::Arc::ptr_eq(&first_buffers[0], &second_buffers[0]));
 }
 
 #[test]

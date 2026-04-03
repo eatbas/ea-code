@@ -65,6 +65,12 @@ export interface PipelineStageOutputDelta {
   text: string;
 }
 
+export interface PipelineDebugLogEvent {
+  conversationId: string;
+  createdAt: string;
+  line: string;
+}
+
 export interface PipelineStageRecord {
   stageIndex: number;
   stageName: string;

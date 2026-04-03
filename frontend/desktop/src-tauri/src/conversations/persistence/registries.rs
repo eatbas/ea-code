@@ -44,10 +44,13 @@ pub fn track_running_conversation(
     conversation_id: &str,
 ) -> Result<RunningConversationGuard, String> {
     let key = running_conversation_key(workspace_path, conversation_id);
-    running_conversations()
+    let inserted = running_conversations()
         .lock()
         .map_err(|error| format!("Failed to track running conversation: {error}"))?
         .insert(key.clone());
+    if !inserted {
+        return Err("Conversation is already running".to_string());
+    }
     Ok(RunningConversationGuard { key })
 }
 
@@ -65,11 +68,15 @@ pub fn register_abort_flag(
     conversation_id: &str,
 ) -> Result<Arc<AtomicBool>, String> {
     let key = running_conversation_key(workspace_path, conversation_id);
-    let flag = Arc::new(AtomicBool::new(false));
-    abort_flags()
+    let mut guard = abort_flags()
         .lock()
-        .map_err(|error| format!("Failed to register abort flag: {error}"))?
-        .insert(key, flag.clone());
+        .map_err(|error| format!("Failed to register abort flag: {error}"))?;
+    if let Some(existing) = guard.get(&key) {
+        return Ok(existing.clone());
+    }
+
+    let flag = Arc::new(AtomicBool::new(false));
+    guard.insert(key, flag.clone());
     Ok(flag)
 }
 
@@ -114,13 +121,17 @@ pub fn register_pipeline_score_slots(
     count: usize,
 ) -> Result<Vec<Arc<std::sync::Mutex<Option<String>>>>, String> {
     let key = running_conversation_key(workspace_path, conversation_id);
+    let mut guard = pipeline_jobs()
+        .lock()
+        .map_err(|e| format!("Failed to register pipeline score slots: {e}"))?;
+    if let Some(existing) = guard.get(&key) {
+        return Ok(existing.clone());
+    }
+
     let slots: Vec<_> = (0..count)
         .map(|_| Arc::new(std::sync::Mutex::new(None)))
         .collect();
-    pipeline_jobs()
-        .lock()
-        .map_err(|e| format!("Failed to register pipeline score slots: {e}"))?
-        .insert(key, slots.clone());
+    guard.insert(key, slots.clone());
     Ok(slots)
 }
 
@@ -156,7 +167,7 @@ pub fn remove_pipeline_score_slots(
 }
 
 // ---------------------------------------------------------------------------
-// Pipeline stage output buffers — accumulates SSE output text on the Rust
+// Pipeline stage output buffers — accumulate live score output text on the Rust
 // side so it survives frontend navigation (React state is ephemeral).
 // ---------------------------------------------------------------------------
 
@@ -166,7 +177,7 @@ fn stage_buffers() -> &'static Mutex<HashMap<String, Vec<Arc<std::sync::Mutex<St
     BUFS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Pre-allocate one text buffer per planner. Each planner appends its SSE
+/// Pre-allocate one text buffer per planner. Each planner appends its live
 /// output here so `get_pipeline_state` can return accumulated text even
 /// after the frontend navigated away and back.
 pub fn register_pipeline_stage_buffers(
@@ -175,13 +186,17 @@ pub fn register_pipeline_stage_buffers(
     count: usize,
 ) -> Result<Vec<Arc<std::sync::Mutex<String>>>, String> {
     let key = running_conversation_key(workspace_path, conversation_id);
+    let mut guard = stage_buffers()
+        .lock()
+        .map_err(|e| format!("Failed to register stage buffers: {e}"))?;
+    if let Some(existing) = guard.get(&key) {
+        return Ok(existing.clone());
+    }
+
     let buffers: Vec<_> = (0..count)
         .map(|_| Arc::new(std::sync::Mutex::new(String::new())))
         .collect();
-    stage_buffers()
-        .lock()
-        .map_err(|e| format!("Failed to register stage buffers: {e}"))?
-        .insert(key, buffers.clone());
+    guard.insert(key, buffers.clone());
     Ok(buffers)
 }
 

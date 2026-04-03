@@ -189,6 +189,16 @@ export function getPipelineState(
   });
 }
 
+export function getPipelineDebugLog(
+  workspacePath: string,
+  conversationId: string,
+): Promise<string> {
+  return invokeCommand<string>("get_pipeline_debug_log", {
+    workspacePath,
+    conversationId,
+  });
+}
+
 export function acceptPlan(
   workspacePath: string,
   conversationId: string,

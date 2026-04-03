@@ -4,6 +4,7 @@ pub(super) const CONVERSATIONS_DIR: &str = ".maestro/conversations";
 pub(super) const CONVERSATION_FILE: &str = "conversation.json";
 pub(super) const MESSAGES_FILE: &str = "messages.jsonl";
 pub(super) const PIPELINE_FILE: &str = "pipeline.json";
+pub(super) const PIPELINE_DEBUG_FILE: &str = "pipeline-debug.log";
 pub(super) const STALE_RUNNING_ERROR: &str = "maestro closed while this task was running";
 pub(super) const RECOVERED_SUMMARY_ERROR: &str =
     "Recovered conversation metadata after an incomplete write";
@@ -44,6 +45,10 @@ pub(super) fn plan_dir_path(workspace_path: &str, conversation_id: &str) -> Path
 
 pub(super) fn pipeline_file_path(workspace_path: &str, conversation_id: &str) -> PathBuf {
     conversation_dir(workspace_path, conversation_id).join(PIPELINE_FILE)
+}
+
+pub(super) fn pipeline_debug_file_path(workspace_path: &str, conversation_id: &str) -> PathBuf {
+    conversation_dir(workspace_path, conversation_id).join(PIPELINE_DEBUG_FILE)
 }
 
 #[allow(dead_code)]

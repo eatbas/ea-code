@@ -7,6 +7,7 @@ import { usePlanReview } from "../../hooks/usePlanReview";
 import { useSettings } from "../../hooks/useSettings";
 import {
   acceptPlan,
+  getPipelineDebugLog,
   getPipelineState,
   redoReviewPipeline,
   resumePipeline,
@@ -100,6 +101,13 @@ export function useConversationViewModel({
       pipeline.loadFromSaved(state, isStillRunning, activeConversation.summary.status);
       setPipelinePrompt(state.userPrompt);
       setPipelineMode("code");
+    });
+
+    void getPipelineDebugLog(workspace.path, activeConversation.summary.id).then((log) => {
+      if (cancelled) {
+        return;
+      }
+      pipeline.loadDebugLog(log);
     });
 
     return () => {

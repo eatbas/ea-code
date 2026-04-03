@@ -78,6 +78,7 @@ pub fn run() {
             conversations::commands::pipeline_handlers::actions::stop_pipeline,
             conversations::commands::pipeline_handlers::resume::resume_pipeline,
             conversations::commands::pipeline_handlers::actions::get_pipeline_state,
+            conversations::commands::pipeline_handlers::actions::get_pipeline_debug_log,
             conversations::commands::pipeline_handlers::actions::accept_plan,
             conversations::commands::pipeline_handlers::actions::send_plan_edit_feedback,
             conversations::commands::pipeline_handlers::redo_review::redo_review_pipeline,

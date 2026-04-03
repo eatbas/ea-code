@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { Clipboard } from "lucide-react";
 import type { PipelineStageState } from "../../hooks/usePipelineSession";
 import type { PlanReviewPhase } from "../../hooks/usePlanReview";
 import { PipelineStageGroup } from "./PipelineStageGroup";
@@ -11,6 +12,8 @@ interface PipelineConversationViewProps {
   userPrompt: string;
   /** Live stage states from usePipelineSession. */
   stages: PipelineStageState[];
+  /** Persistent backend debug trace for this pipeline conversation. */
+  debugLog: string;
   /** Whether the pipeline is actively running. */
   running: boolean;
   /** Name of the current active stage. */
@@ -52,6 +55,7 @@ function isTerminal(status: string): boolean {
 export function PipelineConversationView({
   userPrompt,
   stages,
+  debugLog,
   running,
   currentStageName,
   pipelineStartedAt,
@@ -66,6 +70,7 @@ export function PipelineConversationView({
   const [reviewersOpen, setReviewersOpen] = useState(true);
   const [reviewMergeOpen, setReviewMergeOpen] = useState(true);
   const [codeFixerOpen, setCodeFixerOpen] = useState(true);
+  const [copiedDebug, setCopiedDebug] = useState(false);
 
   // Classify stages by name.
   const plannerStages = stages.filter((s) => s.stageName.startsWith("Planner"));
@@ -159,6 +164,18 @@ export function PipelineConversationView({
   useEffect(() => {
     if (codeFixerStage && isTerminal(codeFixerStage.status)) setCodeFixerOpen(false);
   }, [codeFixerStage?.status]);
+
+  useEffect(() => {
+    if (!copiedDebug) return;
+    const id = setTimeout(() => setCopiedDebug(false), 1500);
+    return () => clearTimeout(id);
+  }, [copiedDebug]);
+
+  async function handleCopyDebugLog(): Promise<void> {
+    if (!debugLog.trim()) return;
+    await navigator.clipboard.writeText(debugLog);
+    setCopiedDebug(true);
+  }
 
   const statusBarLabel = currentStageName || (running
     ? "Starting..."
@@ -388,6 +405,33 @@ export function PipelineConversationView({
               )}
             </div>
           ))}
+
+          <div className="rounded-2xl border border-edge bg-panel">
+            <div className="flex items-center justify-between border-b border-edge px-4 py-3">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
+                  Pipeline Debug
+                </p>
+                <p className="text-xs text-fg-muted">
+                  Tauri backend trace. Copy this and send it back for diagnosis.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { void handleCopyDebugLog(); }}
+                disabled={!debugLog.trim()}
+                className="inline-flex items-center gap-2 rounded-lg border border-edge bg-elevated px-3 py-1.5 text-xs font-semibold text-fg transition-colors hover:bg-active disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Clipboard size={12} />
+                {copiedDebug ? "Copied" : "Copy Log"}
+              </button>
+            </div>
+            <div className="max-h-56 overflow-auto px-4 py-3 pipeline-scroll">
+              <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-fg-muted">
+                {debugLog || "Waiting for pipeline debug output..."}
+              </pre>
+            </div>
+          </div>
 
           {!hasStages && (
             <div className="flex items-center justify-center py-10">

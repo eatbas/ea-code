@@ -1,4 +1,5 @@
 mod crud;
+mod debug_log;
 mod io;
 mod paths;
 mod pipeline_state;
@@ -17,6 +18,8 @@ pub use crud::{
     rename_conversation, set_active_score_id, set_conversation_pinned, set_provider_session_ref,
     set_status, unarchive_conversation,
 };
+
+pub use debug_log::{append_pipeline_debug_log, read_pipeline_debug_log};
 
 pub use pipeline_state::{
     load_pipeline_state, mark_running_pipeline_stages_stopped, save_pipeline_state,
