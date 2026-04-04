@@ -173,7 +173,8 @@ where
             return Ok(());
         };
 
-        let message = message.map_err(|error| format!("Symphony WebSocket read failed: {error}"))?;
+        let message =
+            message.map_err(|error| format!("Symphony WebSocket read failed: {error}"))?;
         match message {
             Message::Text(text) => on_event(parse_live_event(&text)?)?,
             Message::Close(_) => return Ok(()),
@@ -189,8 +190,8 @@ async fn wait_for_stop(stop_flag: &AtomicBool) {
 }
 
 fn parse_live_event(payload: &str) -> Result<SymphonyLiveEvent, String> {
-    let value: serde_json::Value =
-        serde_json::from_str(payload).map_err(|error| format!("Invalid Symphony WebSocket payload: {error}"))?;
+    let value: serde_json::Value = serde_json::from_str(payload)
+        .map_err(|error| format!("Invalid Symphony WebSocket payload: {error}"))?;
     let event_type = value
         .get("type")
         .and_then(serde_json::Value::as_str)

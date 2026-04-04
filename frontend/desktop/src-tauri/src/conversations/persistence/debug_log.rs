@@ -15,8 +15,12 @@ pub fn read_pipeline_debug_log(
             return Ok(String::new());
         }
 
-        std::fs::read_to_string(&path)
-            .map_err(|error| format!("Failed to read pipeline debug log {}: {error}", path.display()))
+        std::fs::read_to_string(&path).map_err(|error| {
+            format!(
+                "Failed to read pipeline debug log {}: {error}",
+                path.display()
+            )
+        })
     })
 }
 
@@ -28,17 +32,30 @@ pub fn append_pipeline_debug_log(
     with_conversations_lock(|| {
         let path = pipeline_debug_file_path(workspace_path, conversation_id);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|error| format!("Failed to create debug log directory {}: {error}", parent.display()))?;
+            std::fs::create_dir_all(parent).map_err(|error| {
+                format!(
+                    "Failed to create debug log directory {}: {error}",
+                    parent.display()
+                )
+            })?;
         }
 
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&path)
-            .map_err(|error| format!("Failed to open pipeline debug log {}: {error}", path.display()))?;
+            .map_err(|error| {
+                format!(
+                    "Failed to open pipeline debug log {}: {error}",
+                    path.display()
+                )
+            })?;
 
-        writeln!(file, "{line}")
-            .map_err(|error| format!("Failed to write pipeline debug log {}: {error}", path.display()))
+        writeln!(file, "{line}").map_err(|error| {
+            format!(
+                "Failed to write pipeline debug log {}: {error}",
+                path.display()
+            )
+        })
     })
 }

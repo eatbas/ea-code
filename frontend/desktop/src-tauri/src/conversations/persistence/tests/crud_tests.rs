@@ -258,12 +258,17 @@ fn runtime_registries_are_reused_for_same_conversation() {
     assert_eq!(first_slots.len(), second_slots.len());
     assert!(std::sync::Arc::ptr_eq(&first_slots[0], &second_slots[0]));
 
-    let first_buffers = register_pipeline_stage_buffers(workspace_path, &conversation.summary.id, 4)
-        .expect("first stage buffers should register");
-    let second_buffers = register_pipeline_stage_buffers(workspace_path, &conversation.summary.id, 4)
-        .expect("second stage buffers should reuse existing");
+    let first_buffers =
+        register_pipeline_stage_buffers(workspace_path, &conversation.summary.id, 4)
+            .expect("first stage buffers should register");
+    let second_buffers =
+        register_pipeline_stage_buffers(workspace_path, &conversation.summary.id, 4)
+            .expect("second stage buffers should reuse existing");
     assert_eq!(first_buffers.len(), second_buffers.len());
-    assert!(std::sync::Arc::ptr_eq(&first_buffers[0], &second_buffers[0]));
+    assert!(std::sync::Arc::ptr_eq(
+        &first_buffers[0],
+        &second_buffers[0]
+    ));
 }
 
 #[test]

@@ -2,7 +2,6 @@ mod emission;
 mod finalise;
 mod watchers;
 
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -12,7 +11,7 @@ use tokio::time::{sleep, Duration, Instant};
 
 use crate::conversations::pipeline_debug::emit_pipeline_debug;
 use crate::conversations::score_client::{
-    consume_score_websocket, fetch_score_snapshot, SCORE_POLL_INTERVAL, SymphonyLiveEvent,
+    consume_score_websocket, fetch_score_snapshot, SymphonyLiveEvent, SCORE_POLL_INTERVAL,
 };
 use crate::conversations::symphony_request::SymphonyChatRequest;
 use crate::models::{ConversationStatus, PipelineStageRecord};
@@ -123,7 +122,7 @@ pub async fn run_stage(
         mode,
         prompt: &prompt,
         provider_session_ref: provider_session_ref.as_deref(),
-        provider_options: HashMap::new(),
+        provider_options: crate::conversations::symphony_request::default_provider_options(&provider),
     };
 
     let emit_failed = |error_message: &str| -> (PipelineStageRecord, String) {
@@ -156,7 +155,9 @@ pub async fn run_stage(
                 &conversation_id,
                 format!("{stage_name}: failed to submit score: {error}"),
             );
-            return Err(emit_failed(&format!("{stage_name} failed to submit to symphony: {error}")));
+            return Err(emit_failed(&format!(
+                "{stage_name} failed to submit to symphony: {error}"
+            )));
         }
     };
     emit_pipeline_debug(
@@ -186,33 +187,54 @@ pub async fn run_stage(
         let workspace_for_ws = workspace_path.clone();
         let conversation_for_ws = conversation_id.clone();
         tokio::spawn(async move {
-            let result = consume_score_websocket(&score_id, websocket_stop_ref.as_ref(), |event| {
-                match event {
-                    SymphonyLiveEvent::ScoreSnapshot(snapshot) => {
-                        if let Some(delta) = sync_snapshot_output(&output_buffer_writer, &snapshot.accumulated_text) {
-                            emit_stage_delta(&app_ref, &conversation_id_ref, stage_index, &delta)?;
+            let result =
+                consume_score_websocket(
+                    &score_id,
+                    websocket_stop_ref.as_ref(),
+                    |event| match event {
+                        SymphonyLiveEvent::ScoreSnapshot(snapshot) => {
+                            if let Some(delta) = sync_snapshot_output(
+                                &output_buffer_writer,
+                                &snapshot.accumulated_text,
+                            ) {
+                                emit_stage_delta(
+                                    &app_ref,
+                                    &conversation_id_ref,
+                                    stage_index,
+                                    &delta,
+                                )?;
+                            }
+                            maybe_update_session_ref(
+                                &session_ref_writer,
+                                snapshot.provider_session_ref.as_deref(),
+                            );
+                            Ok(())
                         }
-                        maybe_update_session_ref(&session_ref_writer, snapshot.provider_session_ref.as_deref());
-                        Ok(())
-                    }
-                    SymphonyLiveEvent::OutputDelta { text } => {
-                        append_live_output(&output_buffer_writer, &text);
-                        emit_stage_delta(&app_ref, &conversation_id_ref, stage_index, &text)
-                    }
-                    SymphonyLiveEvent::ProviderSession { provider_session_ref } => {
-                        maybe_update_session_ref(&session_ref_writer, Some(provider_session_ref.as_str()));
-                        emit_pipeline_debug(
-                            &app_for_ws,
-                            &workspace_for_ws,
-                            &conversation_for_ws,
-                            format!("{stage_name_for_ws}: provider session captured via websocket"),
-                        );
-                        Ok(())
-                    }
-                    SymphonyLiveEvent::Ignored => Ok(()),
-                }
-            })
-            .await;
+                        SymphonyLiveEvent::OutputDelta { text } => {
+                            append_live_output(&output_buffer_writer, &text);
+                            emit_stage_delta(&app_ref, &conversation_id_ref, stage_index, &text)
+                        }
+                        SymphonyLiveEvent::ProviderSession {
+                            provider_session_ref,
+                        } => {
+                            maybe_update_session_ref(
+                                &session_ref_writer,
+                                Some(provider_session_ref.as_str()),
+                            );
+                            emit_pipeline_debug(
+                                &app_for_ws,
+                                &workspace_for_ws,
+                                &conversation_for_ws,
+                                format!(
+                                    "{stage_name_for_ws}: provider session captured via websocket"
+                                ),
+                            );
+                            Ok(())
+                        }
+                        SymphonyLiveEvent::Ignored => Ok(()),
+                    },
+                )
+                .await;
 
             if let Err(error) = result {
                 eprintln!("[pipeline] {stage_name_for_ws}: Symphony WebSocket error: {error}");
@@ -248,7 +270,10 @@ pub async fn run_stage(
                 &app,
                 &workspace_path,
                 &conversation_id,
-                format!("{stage_name}: issuing stop request for score {} because {stop_reason}", accepted.score_id),
+                format!(
+                    "{stage_name}: issuing stop request for score {} because {stop_reason}",
+                    accepted.score_id
+                ),
             );
             request_symphony_stop(accepted.score_id.clone());
             stop_requested = true;
@@ -283,7 +308,9 @@ pub async fn run_stage(
                     );
                     last_status = Some(status_label);
                 }
-                if let Some(delta) = sync_snapshot_output(&output_buffer, &snapshot.accumulated_text) {
+                if let Some(delta) =
+                    sync_snapshot_output(&output_buffer, &snapshot.accumulated_text)
+                {
                     emit_stage_delta(&app, &conversation_id, stage_index, &delta)
                         .map_err(|error| emit_failed(&error))?;
                 }

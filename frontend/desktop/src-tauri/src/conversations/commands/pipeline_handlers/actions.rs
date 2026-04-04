@@ -68,7 +68,10 @@ pub async fn start_pipeline(
         &app,
         &workspace_path,
         &conversation_id,
-        format!("Pipeline requested for prompt: {}", trimmed.replace('\n', " ")),
+        format!(
+            "Pipeline requested for prompt: {}",
+            trimmed.replace('\n', " ")
+        ),
     );
 
     let setup = prepare_pipeline_with_config(&workspace_path, &conversation_id, config)?;
@@ -82,23 +85,36 @@ pub async fn start_pipeline(
         let Some(_guard) = begin_pipeline_task(&app_handle, &ws, &conv_id) else {
             return;
         };
-        emit_pipeline_debug(&app_handle, &ws, &conv_id, "Pipeline background task started");
+        emit_pipeline_debug(
+            &app_handle,
+            &ws,
+            &conv_id,
+            "Pipeline background task started",
+        );
 
         let planner_result = pipeline::run_pipeline_planners(
-            app_handle.clone(), conv_id.clone(), ws.clone(),
-            setup.planners, user_prompt, setup.abort.clone(),
-            setup.score_id_slots[..setup.planner_count].to_vec(), None,
+            app_handle.clone(),
+            conv_id.clone(),
+            ws.clone(),
+            setup.planners,
+            user_prompt,
+            setup.abort.clone(),
+            setup.score_id_slots[..setup.planner_count].to_vec(),
+            None,
             setup.stage_buffers[..setup.planner_count].to_vec(),
         )
         .await;
 
-        let merge_result = if planner_result.is_ok()
-            && !setup.abort.load(Ordering::Acquire)
-        {
+        let merge_result = if planner_result.is_ok() && !setup.abort.load(Ordering::Acquire) {
             run_merge_chain(
-                app_handle.clone(), conv_id.clone(), ws.clone(), setup.abort.clone(),
-                setup.merge_agent, setup.planner_count,
-                &setup.score_id_slots, &setup.stage_buffers,
+                app_handle.clone(),
+                conv_id.clone(),
+                ws.clone(),
+                setup.abort.clone(),
+                setup.merge_agent,
+                setup.planner_count,
+                &setup.score_id_slots,
+                &setup.stage_buffers,
             )
             .await
         } else {
@@ -120,7 +136,12 @@ pub async fn stop_pipeline(
     conversation_id: String,
 ) -> Result<ConversationSummary, String> {
     persistence::trigger_abort(&workspace_path, &conversation_id)?;
-    emit_pipeline_debug(&app, &workspace_path, &conversation_id, "Stop requested from UI");
+    emit_pipeline_debug(
+        &app,
+        &workspace_path,
+        &conversation_id,
+        "Stop requested from UI",
+    );
 
     let deadline = Instant::now() + PIPELINE_STOP_WAIT_TIMEOUT;
     let client = symphony_client();
@@ -133,7 +154,10 @@ pub async fn stop_pipeline(
                 &app,
                 &workspace_path,
                 &conversation_id,
-                format!("Stop pipeline inspecting {} active score id(s)", score_ids.len()),
+                format!(
+                    "Stop pipeline inspecting {} active score id(s)",
+                    score_ids.len()
+                ),
             );
         }
         for score_id in score_ids {
@@ -187,8 +211,7 @@ pub async fn get_pipeline_state(
     let mut state = persistence::load_pipeline_state(&workspace_path, &conversation_id)?;
 
     if let Some(ref mut s) = state {
-        let live_texts =
-            persistence::get_pipeline_stage_texts(&workspace_path, &conversation_id)?;
+        let live_texts = persistence::get_pipeline_stage_texts(&workspace_path, &conversation_id)?;
         for (i, text) in live_texts.into_iter().enumerate() {
             if let Some(stage) = s.stages.get_mut(i) {
                 if stage.text.is_empty() && !text.is_empty() {
@@ -234,12 +257,18 @@ pub async fn accept_plan(
         // Re-emit all completed planning stages (planners + merge) so the
         // frontend displays them after its state reset.
         re_emit_completed_stages(
-            &app_handle, &conv_id, &ws,
+            &app_handle,
+            &conv_id,
+            &ws,
             setup.indices.coder, // emit everything before the Coder
         );
 
         let (status, error) = run_coding_phase(
-            app_handle.clone(), conv_id.clone(), ws.clone(), &setup, None,
+            app_handle.clone(),
+            conv_id.clone(),
+            ws.clone(),
+            &setup,
+            None,
         )
         .await;
 
@@ -288,18 +317,36 @@ pub async fn send_plan_edit_feedback(
             return;
         };
 
-        let merge_label = format!("{} / {}", setup.merge_agent.provider, setup.merge_agent.model);
+        let merge_label = format!(
+            "{} / {}",
+            setup.merge_agent.provider, setup.merge_agent.model
+        );
         ensure_merge_stage_record(&ws, &conv_id, setup.planner_count, &merge_label);
 
-        let merge_slot = setup.score_id_slots.get(setup.planner_count).cloned().unwrap_or_default();
-        let merge_buf = setup.stage_buffers.get(setup.planner_count).cloned().unwrap_or_default();
+        let merge_slot = setup
+            .score_id_slots
+            .get(setup.planner_count)
+            .cloned()
+            .unwrap_or_default();
+        let merge_buf = setup
+            .stage_buffers
+            .get(setup.planner_count)
+            .cloned()
+            .unwrap_or_default();
 
         re_emit_completed_stages(&app_handle, &conv_id, &ws, setup.planner_count);
 
         let merge_result = pipeline::run_plan_merge_with_feedback(
-            app_handle.clone(), conv_id.clone(), ws.clone(), setup.abort.clone(),
-            merge_slot, merge_buf, setup.planner_count, session_ref,
-            setup.merge_agent, user_feedback,
+            app_handle.clone(),
+            conv_id.clone(),
+            ws.clone(),
+            setup.abort.clone(),
+            merge_slot,
+            merge_buf,
+            setup.planner_count,
+            session_ref,
+            setup.merge_agent,
+            user_feedback,
         )
         .await;
 

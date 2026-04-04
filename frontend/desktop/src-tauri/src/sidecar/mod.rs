@@ -62,7 +62,8 @@ impl SidecarManager {
 
         kill_orphaned_symphony(inner.port).await;
 
-        let prepared = prepare_symphony_environment(&inner.symphony_dir, inner.setup_complete).await?;
+        let prepared =
+            prepare_symphony_environment(&inner.symphony_dir, inner.setup_complete).await?;
         let child =
             spawn_symphony_process(&prepared.venv_python, &inner.symphony_dir, inner.port).await?;
 

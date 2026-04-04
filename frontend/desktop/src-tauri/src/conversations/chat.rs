@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -14,7 +13,7 @@ use super::score_client::{
     consume_score_websocket, poll_until_terminal, submit_score, SymphonyLiveEvent,
     SymphonyScoreSnapshot,
 };
-use super::symphony_request::SymphonyChatRequest;
+use super::symphony_request::{default_provider_options, SymphonyChatRequest};
 
 fn emit_status(app: &AppHandle, event: ConversationStatusEvent) -> Result<(), String> {
     app.emit(EVENT_CONVERSATION_STATUS, event)
@@ -41,16 +40,15 @@ fn append_live_output(buffer: &Arc<Mutex<String>>, text: &str) {
     }
 }
 
-fn sync_snapshot_output(
-    buffer: &Arc<Mutex<String>>,
-    accumulated_text: &str,
-) -> Option<String> {
+fn sync_snapshot_output(buffer: &Arc<Mutex<String>>, accumulated_text: &str) -> Option<String> {
     let Ok(mut guard) = buffer.lock() else {
         return None;
     };
 
     if accumulated_text.starts_with(guard.as_str()) {
-        let suffix = accumulated_text[guard.len()..].trim_start_matches('\n').to_string();
+        let suffix = accumulated_text[guard.len()..]
+            .trim_start_matches('\n')
+            .to_string();
         *guard = accumulated_text.to_string();
         return (!suffix.is_empty()).then_some(suffix);
     }
@@ -138,20 +136,13 @@ pub async fn run_conversation_turn(
         mode,
         prompt: &prompt,
         provider_session_ref: summary.last_provider_session_ref.as_deref(),
-        provider_options: HashMap::new(),
+        provider_options: default_provider_options(&summary.agent.provider),
     };
 
     let accepted = match submit_score(&request).await {
         Ok(response) => response,
         Err(error) => {
-            return finish_with_failure(
-                &app,
-                &workspace_path,
-                &conversation_id,
-                None,
-                error,
-            )
-            .await;
+            return finish_with_failure(&app, &workspace_path, &conversation_id, None, error).await;
         }
     };
 
@@ -182,37 +173,42 @@ pub async fn run_conversation_turn(
         let websocket_stop_ref = websocket_stop.clone();
 
         tokio::spawn(async move {
-            let result = consume_score_websocket(&score_id, websocket_stop_ref.as_ref(), |event| {
-                match event {
-                    SymphonyLiveEvent::ScoreSnapshot(snapshot) => {
-                        if let Some(delta) = sync_snapshot_output(&live_buffer_ref, &snapshot.accumulated_text) {
-                            emit_output_delta(&app_ref, &conversation_ref, &delta)?;
+            let result =
+                consume_score_websocket(
+                    &score_id,
+                    websocket_stop_ref.as_ref(),
+                    |event| match event {
+                        SymphonyLiveEvent::ScoreSnapshot(snapshot) => {
+                            if let Some(delta) =
+                                sync_snapshot_output(&live_buffer_ref, &snapshot.accumulated_text)
+                            {
+                                emit_output_delta(&app_ref, &conversation_ref, &delta)?;
+                            }
+                            maybe_update_provider_session(
+                                &app_ref,
+                                &workspace_ref,
+                                &conversation_ref,
+                                &session_ref,
+                                snapshot.provider_session_ref.as_deref(),
+                            )
                         }
-                        maybe_update_provider_session(
-                            &app_ref,
-                            &workspace_ref,
-                            &conversation_ref,
-                            &session_ref,
-                            snapshot.provider_session_ref.as_deref(),
-                        )
-                    }
-                    SymphonyLiveEvent::OutputDelta { text } => {
-                        append_live_output(&live_buffer_ref, &text);
-                        emit_output_delta(&app_ref, &conversation_ref, &text)
-                    }
-                    SymphonyLiveEvent::ProviderSession { provider_session_ref } => {
-                        maybe_update_provider_session(
+                        SymphonyLiveEvent::OutputDelta { text } => {
+                            append_live_output(&live_buffer_ref, &text);
+                            emit_output_delta(&app_ref, &conversation_ref, &text)
+                        }
+                        SymphonyLiveEvent::ProviderSession {
+                            provider_session_ref,
+                        } => maybe_update_provider_session(
                             &app_ref,
                             &workspace_ref,
                             &conversation_ref,
                             &session_ref,
                             Some(provider_session_ref.as_str()),
-                        )
-                    }
-                    SymphonyLiveEvent::Ignored => Ok(()),
-                }
-            })
-            .await;
+                        ),
+                        SymphonyLiveEvent::Ignored => Ok(()),
+                    },
+                )
+                .await;
 
             if let Err(error) = result {
                 eprintln!("[conversation] Symphony WebSocket closed with error: {error}");
@@ -220,19 +216,20 @@ pub async fn run_conversation_turn(
         });
     }
 
-    let terminal_snapshot = poll_until_terminal(accepted.score_id.as_str(), abort.as_ref(), |snapshot| {
-        if let Some(delta) = sync_snapshot_output(&live_buffer, &snapshot.accumulated_text) {
-            emit_output_delta(&app, &conversation_id, &delta)?;
-        }
-        maybe_update_provider_session(
-            &app,
-            &workspace_path,
-            &conversation_id,
-            &provider_session_ref,
-            snapshot.provider_session_ref.as_deref(),
-        )
-    })
-    .await;
+    let terminal_snapshot =
+        poll_until_terminal(accepted.score_id.as_str(), abort.as_ref(), |snapshot| {
+            if let Some(delta) = sync_snapshot_output(&live_buffer, &snapshot.accumulated_text) {
+                emit_output_delta(&app, &conversation_id, &delta)?;
+            }
+            maybe_update_provider_session(
+                &app,
+                &workspace_path,
+                &conversation_id,
+                &provider_session_ref,
+                snapshot.provider_session_ref.as_deref(),
+            )
+        })
+        .await;
 
     websocket_stop.store(true, Ordering::Release);
 
@@ -270,7 +267,10 @@ fn finish_conversation_from_snapshot(
     let assistant_text = snapshot
         .final_text
         .clone()
-        .or_else(|| (!snapshot.accumulated_text.trim().is_empty()).then(|| snapshot.accumulated_text.clone()))
+        .or_else(|| {
+            (!snapshot.accumulated_text.trim().is_empty())
+                .then(|| snapshot.accumulated_text.clone())
+        })
         .or_else(|| {
             let live = live_output(live_buffer);
             (!live.trim().is_empty()).then_some(live)

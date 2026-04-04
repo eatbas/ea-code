@@ -13,10 +13,10 @@ mod tests;
 // (e.g. `super::persistence::create_conversation`) remain unchanged.
 
 pub use crud::{
-    archive_conversation, cleanup_orphaned_conversations, create_conversation,
-    delete_conversation, finish_turn, get_conversation, list_conversations, mark_turn_running,
-    rename_conversation, set_active_score_id, set_conversation_pinned, set_provider_session_ref,
-    set_status, unarchive_conversation,
+    archive_conversation, cleanup_orphaned_conversations, create_conversation, delete_conversation,
+    finish_turn, get_conversation, list_conversations, mark_turn_running, rename_conversation,
+    set_active_score_id, set_conversation_pinned, set_provider_session_ref, set_status,
+    unarchive_conversation,
 };
 
 pub use debug_log::{append_pipeline_debug_log, read_pipeline_debug_log};

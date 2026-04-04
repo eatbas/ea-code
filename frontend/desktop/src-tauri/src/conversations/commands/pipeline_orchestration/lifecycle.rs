@@ -10,9 +10,9 @@ use crate::models::{
 };
 use crate::storage::now_rfc3339;
 
-use super::super::super::pipeline_debug::emit_pipeline_debug;
 use super::super::super::events::{EVENT_CONVERSATION_STATUS, EVENT_PIPELINE_STAGE_STATUS};
 use super::super::super::persistence;
+use super::super::super::pipeline_debug::emit_pipeline_debug;
 
 /// Acquire the running-conversation guard and emit Running status.
 /// Returns the guard on success, or logs and returns None if tracking failed.
@@ -109,15 +109,11 @@ pub(in crate::conversations::commands) fn determine_final_status(
         }
     };
 
-    let error = planner_result
-        .as_ref()
-        .err()
-        .cloned()
-        .or_else(|| {
-            merge_result
-                .as_ref()
-                .and_then(|r| r.as_ref().err().map(|(_, e)| e.clone()))
-        });
+    let error = planner_result.as_ref().err().cloned().or_else(|| {
+        merge_result
+            .as_ref()
+            .and_then(|r| r.as_ref().err().map(|(_, e)| e.clone()))
+    });
 
     (status, error)
 }
@@ -198,7 +194,11 @@ pub(in crate::conversations::commands) fn ensure_stage_record(
     agent_label: &str,
 ) {
     if let Ok(Some(mut state)) = persistence::load_pipeline_state(ws, conv_id) {
-        if let Some(existing) = state.stages.iter_mut().find(|s| s.stage_index == stage_index) {
+        if let Some(existing) = state
+            .stages
+            .iter_mut()
+            .find(|s| s.stage_index == stage_index)
+        {
             existing.status = ConversationStatus::Running;
             existing.started_at = Some(now_rfc3339());
             existing.finished_at = None;

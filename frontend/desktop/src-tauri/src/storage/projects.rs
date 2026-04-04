@@ -148,15 +148,13 @@ pub fn reorder_projects(ordered_project_paths: &[String]) -> Result<Vec<ProjectE
             return Err("Project reorder payload does not match saved projects".to_string());
         }
 
-        let mut remaining: HashMap<String, ProjectEntry> = projects
-            .drain(..)
-            .map(|p| (p.path.clone(), p))
-            .collect();
+        let mut remaining: HashMap<String, ProjectEntry> =
+            projects.drain(..).map(|p| (p.path.clone(), p)).collect();
 
         for project_path in ordered_project_paths {
-            let project = remaining.remove(project_path).ok_or_else(|| {
-                format!("Project not found in reorder request: {project_path}")
-            })?;
+            let project = remaining
+                .remove(project_path)
+                .ok_or_else(|| format!("Project not found in reorder request: {project_path}"))?;
             projects.push(project);
         }
 

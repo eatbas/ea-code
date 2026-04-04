@@ -15,7 +15,9 @@ pub fn emit_pipeline_debug(
     let message = message.into();
     let line = format!("[{created_at}] {message}");
 
-    if let Err(error) = persistence::append_pipeline_debug_log(workspace_path, conversation_id, &line) {
+    if let Err(error) =
+        persistence::append_pipeline_debug_log(workspace_path, conversation_id, &line)
+    {
         eprintln!("[pipeline-debug] Failed to persist log line: {error}");
     }
 

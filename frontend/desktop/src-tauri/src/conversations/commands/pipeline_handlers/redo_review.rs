@@ -11,8 +11,7 @@ use crate::models::{ConversationDetail, ConversationStatus, PipelineStageRecord}
 use super::super::super::persistence;
 use super::super::super::pipeline;
 use super::super::pipeline_orchestration::{
-    begin_pipeline_task, emit_final_status, ensure_stage_record, pipeline_cleanup,
-    prepare_pipeline,
+    begin_pipeline_task, emit_final_status, ensure_stage_record, pipeline_cleanup, prepare_pipeline,
 };
 
 #[tauri::command]
@@ -33,9 +32,7 @@ pub async fn redo_review_pipeline(
     let new_cycle = current_cycle + 1;
 
     // Build directory paths for the new cycle.
-    let conv_dir = format!(
-        "{workspace_path}/.maestro/conversations/{conversation_id}"
-    );
+    let conv_dir = format!("{workspace_path}/.maestro/conversations/{conversation_id}");
     let review_dir = format!("{conv_dir}/review_{new_cycle}");
     let review_merged_dir = format!("{conv_dir}/review_merged_{new_cycle}");
     let code_fixer_dir = format!("{conv_dir}/code_fixer_{new_cycle}");
@@ -130,7 +127,11 @@ pub async fn redo_review_pipeline(
 
         if abort.load(Ordering::Acquire) {
             emit_final_status(
-                &app_handle, &ws, &conv_id, ConversationStatus::Stopped, None,
+                &app_handle,
+                &ws,
+                &conv_id,
+                ConversationStatus::Stopped,
+                None,
             );
             pipeline_cleanup(&ws, &conv_id);
             return;
@@ -138,7 +139,11 @@ pub async fn redo_review_pipeline(
 
         if let Err(e) = reviewer_result {
             emit_final_status(
-                &app_handle, &ws, &conv_id, ConversationStatus::Failed, Some(e),
+                &app_handle,
+                &ws,
+                &conv_id,
+                ConversationStatus::Failed,
+                Some(e),
             );
             pipeline_cleanup(&ws, &conv_id);
             return;
@@ -147,7 +152,10 @@ pub async fn redo_review_pipeline(
         // --- Review Merge ---
         let Some(review_merge_agent) = setup.reviewers.first().cloned() else {
             emit_final_status(
-                &app_handle, &ws, &conv_id, ConversationStatus::Failed,
+                &app_handle,
+                &ws,
+                &conv_id,
+                ConversationStatus::Failed,
                 Some("No reviewer available for Review Merge".to_string()),
             );
             pipeline_cleanup(&ws, &conv_id);
@@ -155,7 +163,9 @@ pub async fn redo_review_pipeline(
         };
 
         // Load the first reviewer's session ref from the new cycle stages.
-        let loaded = persistence::load_pipeline_state(&ws, &conv_id).ok().flatten();
+        let loaded = persistence::load_pipeline_state(&ws, &conv_id)
+            .ok()
+            .flatten();
         let reviewer_session_ref = loaded
             .as_ref()
             .and_then(|s| {
@@ -168,7 +178,10 @@ pub async fn redo_review_pipeline(
 
         if reviewer_session_ref.is_empty() {
             emit_final_status(
-                &app_handle, &ws, &conv_id, ConversationStatus::Failed,
+                &app_handle,
+                &ws,
+                &conv_id,
+                ConversationStatus::Failed,
                 Some("No reviewer session ref for Review Merge".to_string()),
             );
             pipeline_cleanup(&ws, &conv_id);
@@ -204,7 +217,11 @@ pub async fn redo_review_pipeline(
 
         if abort.load(Ordering::Acquire) {
             emit_final_status(
-                &app_handle, &ws, &conv_id, ConversationStatus::Stopped, None,
+                &app_handle,
+                &ws,
+                &conv_id,
+                ConversationStatus::Stopped,
+                None,
             );
             pipeline_cleanup(&ws, &conv_id);
             return;
@@ -212,7 +229,11 @@ pub async fn redo_review_pipeline(
 
         if let Err((_, e)) = rm_result {
             emit_final_status(
-                &app_handle, &ws, &conv_id, ConversationStatus::Failed, Some(e),
+                &app_handle,
+                &ws,
+                &conv_id,
+                ConversationStatus::Failed,
+                Some(e),
             );
             pipeline_cleanup(&ws, &conv_id);
             return;
@@ -222,7 +243,11 @@ pub async fn redo_review_pipeline(
         let fixer_label = format!("{} / {}", setup.coder.provider, setup.coder.model);
         let fixer_stage_name = format!("Code Fixer{cycle_suffix}");
         ensure_stage_record(
-            &ws, &conv_id, code_fixer_index, &fixer_stage_name, &fixer_label,
+            &ws,
+            &conv_id,
+            code_fixer_index,
+            &fixer_stage_name,
+            &fixer_label,
         );
 
         let fixer_slot = Arc::new(std::sync::Mutex::new(None::<String>));
@@ -246,15 +271,27 @@ pub async fn redo_review_pipeline(
 
         if abort.load(Ordering::Acquire) {
             emit_final_status(
-                &app_handle, &ws, &conv_id, ConversationStatus::Stopped, None,
+                &app_handle,
+                &ws,
+                &conv_id,
+                ConversationStatus::Stopped,
+                None,
             );
         } else {
             match fixer_result {
                 Ok(_) => emit_final_status(
-                    &app_handle, &ws, &conv_id, ConversationStatus::Completed, None,
+                    &app_handle,
+                    &ws,
+                    &conv_id,
+                    ConversationStatus::Completed,
+                    None,
                 ),
                 Err((_, e)) => emit_final_status(
-                    &app_handle, &ws, &conv_id, ConversationStatus::Failed, Some(e),
+                    &app_handle,
+                    &ws,
+                    &conv_id,
+                    ConversationStatus::Failed,
+                    Some(e),
                 ),
             }
         }

@@ -1,8 +1,6 @@
 //! Conversation read operations: list, get, create, and cleanup.
 
-use crate::models::{
-    AgentSelection, ConversationDetail, ConversationStatus, ConversationSummary,
-};
+use crate::models::{AgentSelection, ConversationDetail, ConversationStatus, ConversationSummary};
 use crate::storage::{now_rfc3339, with_conversations_lock};
 
 use super::super::io::{

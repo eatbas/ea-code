@@ -3,9 +3,7 @@ use tauri::AppHandle;
 use tokio::time::{sleep, Duration, Instant};
 
 use crate::http::symphony_client;
-use crate::models::{
-    AgentSelection, ConversationDetail, ConversationStatus, ConversationSummary,
-};
+use crate::models::{AgentSelection, ConversationDetail, ConversationStatus, ConversationSummary};
 
 use super::super::{chat, persistence};
 

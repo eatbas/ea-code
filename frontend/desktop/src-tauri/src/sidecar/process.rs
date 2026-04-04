@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::{Child, Command};
 
 pub(crate) const DEFAULT_PORT: u16 = 8719;
@@ -44,6 +45,7 @@ pub(crate) async fn spawn_symphony_process(
             "127.0.0.1",
             "--port",
             &port_str,
+            "--no-access-log",
         ])
         .env("SYMPHONY_CONFIG", &config_path)
         .current_dir(symphony_dir)
@@ -54,9 +56,19 @@ pub(crate) async fn spawn_symphony_process(
     #[cfg(unix)]
     command.process_group(0);
 
-    command
+    let mut child = command
         .spawn()
-        .map_err(|error| format!("Failed to start symphony: {error}"))
+        .map_err(|error| format!("Failed to start symphony: {error}"))?;
+
+    if let Some(stdout) = child.stdout.take() {
+        spawn_pipe_drain(stdout, "stdout");
+    }
+
+    if let Some(stderr) = child.stderr.take() {
+        spawn_pipe_drain(stderr, "stderr");
+    }
+
+    Ok(child)
 }
 
 pub(crate) fn inspect_child_state(child: &mut Child) -> RestartState {
@@ -109,8 +121,37 @@ pub(crate) async fn stop_symphony_process(child: &mut Child) {
     }
 }
 
+fn spawn_pipe_drain<R>(reader: R, stream_name: &'static str)
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut lines = BufReader::new(reader).lines();
+        loop {
+            match lines.next_line().await {
+                Ok(Some(line)) => {
+                    if !line.trim().is_empty() {
+                        eprintln!("[sidecar:{stream_name}] {line}");
+                    }
+                }
+                Ok(None) => break,
+                Err(error) => {
+                    eprintln!("[sidecar:{stream_name}] failed to read process output: {error}");
+                    break;
+                }
+            }
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
+    use std::process::Stdio;
+    use std::time::Duration;
+
+    use tokio::process::Command;
+    use tokio::time::timeout;
+
     use super::{requires_restart, RestartState};
 
     #[test]
@@ -119,5 +160,55 @@ mod tests {
         assert!(requires_restart(RestartState::Exited));
         assert!(requires_restart(RestartState::Unknown));
         assert!(!requires_restart(RestartState::Running));
+    }
+
+    #[tokio::test]
+    async fn pipe_drain_allows_noisy_child_to_exit() {
+        let mut command = noisy_python_command().await;
+        command
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+
+        let mut child = command
+            .spawn()
+            .expect("test fixture should spawn a noisy child process");
+
+        if let Some(stdout) = child.stdout.take() {
+            super::spawn_pipe_drain(stdout, "test-stdout");
+        }
+
+        if let Some(stderr) = child.stderr.take() {
+            super::spawn_pipe_drain(stderr, "test-stderr");
+        }
+
+        let status = timeout(Duration::from_secs(10), child.wait())
+            .await
+            .expect("draining sidecar pipes should prevent child-process deadlock")
+            .expect("child process should exit cleanly");
+
+        assert!(
+            status.success(),
+            "expected noisy child to exit successfully"
+        );
+    }
+
+    async fn noisy_python_command() -> Command {
+        let interpreter = crate::sidecar::python::find_python()
+            .await
+            .expect("Python 3.12+ is required for sidecar tests");
+
+        let mut command = Command::new(&interpreter.executable);
+        if let Some(version_flag) = interpreter.launcher_version.as_deref() {
+            command.arg(version_flag);
+        }
+
+        // Emit enough blank lines to exceed a typical pipe buffer without
+        // cluttering captured test output when the drain helper is active.
+        command.args([
+            "-c",
+            "import sys; chunk = '\\n' * 200000; sys.stdout.write(chunk); sys.stdout.flush(); sys.stderr.write(chunk); sys.stderr.flush()",
+        ]);
+        command
     }
 }

@@ -54,16 +54,28 @@ pub async fn run_pipeline_reviewers(
                 .and_then(|s| s.iter().find(|st| st.stage_index == stage_idx))
             {
                 let _ = emit_stage_status(
-                    &app, &conversation_id, stage_idx, &record.stage_name,
-                    record.status.clone(), &record.agent_label,
-                    if record.text.is_empty() { None } else { Some(record.text.clone()) },
+                    &app,
+                    &conversation_id,
+                    stage_idx,
+                    &record.stage_name,
+                    record.status.clone(),
+                    &record.agent_label,
+                    if record.text.is_empty() {
+                        None
+                    } else {
+                        Some(record.text.clone())
+                    },
                 );
             }
             continue;
         }
 
         let planner_session_ref = match planner_stages.get(i) {
-            Some(stage) => match stage.provider_session_ref.clone().filter(|value| !value.is_empty()) {
+            Some(stage) => match stage
+                .provider_session_ref
+                .clone()
+                .filter(|value| !value.is_empty())
+            {
                 Some(session_ref) => session_ref,
                 None => {
                     let failed_record = PipelineStageRecord::failed(
@@ -163,7 +175,10 @@ pub async fn run_pipeline_reviewers(
         match result {
             Ok(Ok(_record)) => {}
             Ok(Err((_record, e))) => {
-                errors.push(format!("Reviewer {}: {e}", stage_idx - reviewer_start_index + 1));
+                errors.push(format!(
+                    "Reviewer {}: {e}",
+                    stage_idx - reviewer_start_index + 1
+                ));
             }
             Err(e) => {
                 errors.push(format!(

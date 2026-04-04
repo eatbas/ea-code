@@ -6,9 +6,9 @@ use tauri::AppHandle;
 use crate::models::{ConversationStatus, PipelineAgent, PipelineStageRecord, PipelineState};
 use crate::storage::now_rfc3339;
 
-use crate::conversations::pipeline_debug::emit_pipeline_debug;
 use super::prompts::{agent_label, build_planner_prompt};
 use super::stage_runner::{emit_stage_status, run_stage, StageConfig};
+use crate::conversations::pipeline_debug::emit_pipeline_debug;
 
 /// Run all planners in parallel. Returns when all planners have completed.
 pub async fn run_pipeline_planners(
@@ -27,7 +27,10 @@ pub async fn run_pipeline_planners(
         &app,
         &workspace_path,
         &conversation_id,
-        format!("Initialising planner phase with {} planner(s)", planners.len()),
+        format!(
+            "Initialising planner phase with {} planner(s)",
+            planners.len()
+        ),
     );
 
     // Save user prompt in its own folder.
@@ -76,11 +79,18 @@ pub async fn run_pipeline_planners(
         stages: initial_stages,
         review_cycle: 1,
     };
-    if let Err(e) =
-        super::super::persistence::save_pipeline_state(&workspace_path, &conversation_id, &initial_state)
-    {
+    if let Err(e) = super::super::persistence::save_pipeline_state(
+        &workspace_path,
+        &conversation_id,
+        &initial_state,
+    ) {
         eprintln!("[pipeline] Failed to save initial pipeline state: {e}");
-        emit_pipeline_debug(&app, &workspace_path, &conversation_id, format!("Failed to save initial pipeline state: {e}"));
+        emit_pipeline_debug(
+            &app,
+            &workspace_path,
+            &conversation_id,
+            format!("Failed to save initial pipeline state: {e}"),
+        );
     }
 
     let planner_count = planners.len();
@@ -98,9 +108,17 @@ pub async fn run_pipeline_planners(
         if already_completed {
             if let Some(record) = previous_stages.as_ref().and_then(|s| s.get(i)) {
                 let _ = emit_stage_status(
-                    &app, &conversation_id, i, &record.stage_name,
-                    record.status.clone(), &record.agent_label,
-                    if record.text.is_empty() { None } else { Some(record.text.clone()) },
+                    &app,
+                    &conversation_id,
+                    i,
+                    &record.stage_name,
+                    record.status.clone(),
+                    &record.agent_label,
+                    if record.text.is_empty() {
+                        None
+                    } else {
+                        Some(record.text.clone())
+                    },
                 );
                 completed_records.push(record.clone());
             }
@@ -122,15 +140,18 @@ pub async fn run_pipeline_planners(
         let abort_c = abort.clone();
         let planner_number = i + 1;
         let label = agent_label(&planner_agent);
-        let mode = if resume_ref.is_some() { "resume" } else { "new" };
+        let mode = if resume_ref.is_some() {
+            "resume"
+        } else {
+            "new"
+        };
         emit_pipeline_debug(
             &app,
             &workspace_path,
             &conversation_id,
             format!(
                 "Planner {planner_number} queued with {} / {} in {mode} mode",
-                planner_agent.provider,
-                planner_agent.model,
+                planner_agent.provider, planner_agent.model,
             ),
         );
 
@@ -198,11 +219,21 @@ pub async fn run_pipeline_planners(
         super::super::persistence::save_pipeline_state(&workspace_path, &conversation_id, &state)
     {
         eprintln!("[pipeline] Failed to save pipeline state: {e}");
-        emit_pipeline_debug(&app, &workspace_path, &conversation_id, format!("Failed to save planner phase state: {e}"));
+        emit_pipeline_debug(
+            &app,
+            &workspace_path,
+            &conversation_id,
+            format!("Failed to save planner phase state: {e}"),
+        );
     }
 
     if errors.is_empty() {
-        emit_pipeline_debug(&app, &workspace_path, &conversation_id, "Planner phase completed without errors");
+        emit_pipeline_debug(
+            &app,
+            &workspace_path,
+            &conversation_id,
+            "Planner phase completed without errors",
+        );
         Ok(())
     } else {
         emit_pipeline_debug(

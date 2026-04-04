@@ -38,7 +38,9 @@ pub(super) fn determine_final_status(
         return ConversationStatus::Failed;
     }
     match result {
-        Ok(run_result) if run_result.status.as_conversation_status() == ConversationStatus::Completed => {
+        Ok(run_result)
+            if run_result.status.as_conversation_status() == ConversationStatus::Completed =>
+        {
             ConversationStatus::Completed
         }
         Ok(_) => {
@@ -182,7 +184,9 @@ pub(super) fn sync_snapshot_output(
     };
 
     if accumulated_text.starts_with(guard.as_str()) {
-        let suffix = accumulated_text[guard.len()..].trim_start_matches('\n').to_string();
+        let suffix = accumulated_text[guard.len()..]
+            .trim_start_matches('\n')
+            .to_string();
         *guard = accumulated_text.to_string();
         return (!suffix.is_empty()).then_some(suffix);
     }

@@ -67,7 +67,9 @@ pub(in crate::conversations::commands) fn load_pipeline_config() -> Result<Pipel
     let config: CodePipelineSettings = settings
         .code_pipeline
         .ok_or("Code pipeline is not configured. Set it up in Agents settings.")?;
-    let CodePipelineSettings { planners, coder, .. } = config;
+    let CodePipelineSettings {
+        planners, coder, ..
+    } = config;
 
     let planner_count = planners.len();
     if planner_count == 0 {
@@ -107,11 +109,12 @@ pub(in crate::conversations::commands) fn prepare_pipeline_with_config(
     } = config;
 
     let abort = persistence::register_abort_flag(workspace_path, conversation_id)?;
-    let score_id_slots = persistence::register_pipeline_score_slots(
-        workspace_path, conversation_id, indices.total,
-    )?;
+    let score_id_slots =
+        persistence::register_pipeline_score_slots(workspace_path, conversation_id, indices.total)?;
     let stage_buffers = persistence::register_pipeline_stage_buffers(
-        workspace_path, conversation_id, indices.total,
+        workspace_path,
+        conversation_id,
+        indices.total,
     )?;
 
     Ok(PipelineSetup {

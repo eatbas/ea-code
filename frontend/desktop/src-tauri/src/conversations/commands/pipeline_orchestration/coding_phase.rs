@@ -27,9 +27,11 @@ pub(in crate::conversations::commands) async fn run_merge_chain(
     let loaded = persistence::load_pipeline_state(&ws, &conv_id)
         .ok()
         .flatten();
-    let session_ref = loaded
-        .as_ref()
-        .and_then(|s| s.stages.first().and_then(|st| st.provider_session_ref.clone()));
+    let session_ref = loaded.as_ref().and_then(|s| {
+        s.stages
+            .first()
+            .and_then(|st| st.provider_session_ref.clone())
+    });
 
     let ref_val = match session_ref {
         Some(v) => v,
@@ -42,13 +44,26 @@ pub(in crate::conversations::commands) async fn run_merge_chain(
     let merge_label = format!("{} / {}", merge_agent.provider, merge_agent.model);
     ensure_merge_stage_record(&ws, &conv_id, planner_count, &merge_label);
 
-    let merge_slot = score_id_slots.get(planner_count).cloned().unwrap_or_default();
-    let merge_buf = stage_buffers.get(planner_count).cloned().unwrap_or_default();
+    let merge_slot = score_id_slots
+        .get(planner_count)
+        .cloned()
+        .unwrap_or_default();
+    let merge_buf = stage_buffers
+        .get(planner_count)
+        .cloned()
+        .unwrap_or_default();
 
     Some(
         pipeline::run_plan_merge(
-            app, conv_id, ws, abort, merge_slot, merge_buf,
-            planner_count, ref_val, merge_agent,
+            app,
+            conv_id,
+            ws,
+            abort,
+            merge_slot,
+            merge_buf,
+            planner_count,
+            ref_val,
+            merge_agent,
         )
         .await,
     )
@@ -69,34 +84,53 @@ pub(in crate::conversations::commands) async fn run_review_merge_chain(
     let loaded = persistence::load_pipeline_state(&ws, &conv_id)
         .ok()
         .flatten();
-    let session_ref = loaded
-        .as_ref()
-        .and_then(|s| {
-            s.stages
-                .iter()
-                .find(|st| st.stage_index == indices.reviewer_start)
-                .and_then(|st| st.provider_session_ref.clone())
-        });
+    let session_ref = loaded.as_ref().and_then(|s| {
+        s.stages
+            .iter()
+            .find(|st| st.stage_index == indices.reviewer_start)
+            .and_then(|st| st.provider_session_ref.clone())
+    });
 
     let ref_val = match session_ref {
         Some(v) => v,
         None => {
-            eprintln!("[pipeline] No provider_session_ref from first reviewer; skipping review merge");
+            eprintln!(
+                "[pipeline] No provider_session_ref from first reviewer; skipping review merge"
+            );
             return None;
         }
     };
 
-    let label = format!("{} / {}", review_merge_agent.provider, review_merge_agent.model);
+    let label = format!(
+        "{} / {}",
+        review_merge_agent.provider, review_merge_agent.model
+    );
     ensure_stage_record(&ws, &conv_id, indices.review_merge, "Review Merge", &label);
 
-    let slot = score_id_slots.get(indices.review_merge).cloned().unwrap_or_default();
-    let buf = stage_buffers.get(indices.review_merge).cloned().unwrap_or_default();
+    let slot = score_id_slots
+        .get(indices.review_merge)
+        .cloned()
+        .unwrap_or_default();
+    let buf = stage_buffers
+        .get(indices.review_merge)
+        .cloned()
+        .unwrap_or_default();
 
     Some(
         pipeline::run_review_merge(
-            app, conv_id, ws, abort, slot, buf,
-            indices.review_merge, indices.reviewer_count, ref_val, review_merge_agent,
-            None, None, None,
+            app,
+            conv_id,
+            ws,
+            abort,
+            slot,
+            buf,
+            indices.review_merge,
+            indices.reviewer_count,
+            ref_val,
+            review_merge_agent,
+            None,
+            None,
+            None,
         )
         .await,
     )
@@ -122,7 +156,9 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
 
     let coder_record = if coder_already_done {
         // Re-emit the completed Coder stage for the frontend and use saved record.
-        let loaded = persistence::load_pipeline_state(&ws, &conv_id).ok().flatten();
+        let loaded = persistence::load_pipeline_state(&ws, &conv_id)
+            .ok()
+            .flatten();
         loaded
             .and_then(|s| s.stages.into_iter().find(|st| st.stage_name == "Coder"))
             .unwrap_or_else(|| PipelineStageRecord {
@@ -141,12 +177,26 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
         let coder_label = format!("{} / {}", setup.coder.provider, setup.coder.model);
         ensure_stage_record(&ws, &conv_id, indices.coder, "Coder", &coder_label);
 
-        let coder_slot = setup.score_id_slots.get(indices.coder).cloned().unwrap_or_default();
-        let coder_buf = setup.stage_buffers.get(indices.coder).cloned().unwrap_or_default();
+        let coder_slot = setup
+            .score_id_slots
+            .get(indices.coder)
+            .cloned()
+            .unwrap_or_default();
+        let coder_buf = setup
+            .stage_buffers
+            .get(indices.coder)
+            .cloned()
+            .unwrap_or_default();
 
         let coder_result = pipeline::run_coder(
-            app.clone(), conv_id.clone(), ws.clone(), setup.abort.clone(),
-            coder_slot, coder_buf, indices.coder, setup.coder.clone(),
+            app.clone(),
+            conv_id.clone(),
+            ws.clone(),
+            setup.abort.clone(),
+            coder_slot,
+            coder_buf,
+            indices.coder,
+            setup.coder.clone(),
         )
         .await;
 
@@ -170,7 +220,8 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
     // --- Reviewers ---
     let reviewer_slots: Vec<_> = (0..indices.reviewer_count)
         .map(|i| {
-            setup.score_id_slots
+            setup
+                .score_id_slots
                 .get(indices.reviewer_start + i)
                 .cloned()
                 .unwrap_or_default()
@@ -178,7 +229,8 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
         .collect();
     let reviewer_bufs: Vec<_> = (0..indices.reviewer_count)
         .map(|i| {
-            setup.stage_buffers
+            setup
+                .stage_buffers
                 .get(indices.reviewer_start + i)
                 .cloned()
                 .unwrap_or_default()
@@ -189,17 +241,27 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
     for (i, reviewer) in setup.reviewers.iter().enumerate() {
         let label = format!("{} / {}", reviewer.provider, reviewer.model);
         ensure_stage_record(
-            &ws, &conv_id, indices.reviewer_start + i,
-            &format!("Reviewer {}", i + 1), &label,
+            &ws,
+            &conv_id,
+            indices.reviewer_start + i,
+            &format!("Reviewer {}", i + 1),
+            &label,
         );
     }
 
     let reviewer_result = pipeline::run_pipeline_reviewers(
-        app.clone(), conv_id.clone(), ws.clone(),
-        setup.reviewers.clone(), setup.abort.clone(),
-        reviewer_slots, previous_stages, reviewer_bufs,
-        &planner_stages, indices.reviewer_start,
-        None, None,
+        app.clone(),
+        conv_id.clone(),
+        ws.clone(),
+        setup.reviewers.clone(),
+        setup.abort.clone(),
+        reviewer_slots,
+        previous_stages,
+        reviewer_bufs,
+        &planner_stages,
+        indices.reviewer_start,
+        None,
+        None,
     )
     .await;
 
@@ -220,9 +282,14 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
     };
 
     let review_merge_result = run_review_merge_chain(
-        app.clone(), conv_id.clone(), ws.clone(), setup.abort.clone(),
-        review_merge_agent, indices,
-        &setup.score_id_slots, &setup.stage_buffers,
+        app.clone(),
+        conv_id.clone(),
+        ws.clone(),
+        setup.abort.clone(),
+        review_merge_agent,
+        indices,
+        &setup.score_id_slots,
+        &setup.stage_buffers,
     )
     .await;
 
@@ -255,15 +322,38 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
     }
 
     let fixer_label = format!("{} / {}", setup.coder.provider, setup.coder.model);
-    ensure_stage_record(&ws, &conv_id, indices.code_fixer, "Code Fixer", &fixer_label);
+    ensure_stage_record(
+        &ws,
+        &conv_id,
+        indices.code_fixer,
+        "Code Fixer",
+        &fixer_label,
+    );
 
-    let fixer_slot = setup.score_id_slots.get(indices.code_fixer).cloned().unwrap_or_default();
-    let fixer_buf = setup.stage_buffers.get(indices.code_fixer).cloned().unwrap_or_default();
+    let fixer_slot = setup
+        .score_id_slots
+        .get(indices.code_fixer)
+        .cloned()
+        .unwrap_or_default();
+    let fixer_buf = setup
+        .stage_buffers
+        .get(indices.code_fixer)
+        .cloned()
+        .unwrap_or_default();
 
     let fixer_result = pipeline::run_code_fixer(
-        app, conv_id, ws, setup.abort.clone(),
-        fixer_slot, fixer_buf, indices.code_fixer, coder_session_ref, setup.coder.clone(),
-        None, None, None,
+        app,
+        conv_id,
+        ws,
+        setup.abort.clone(),
+        fixer_slot,
+        fixer_buf,
+        indices.code_fixer,
+        coder_session_ref,
+        setup.coder.clone(),
+        None,
+        None,
+        None,
     )
     .await;
 

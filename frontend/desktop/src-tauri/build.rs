@@ -25,7 +25,10 @@ fn ensure_symphony_checkout() -> Result<(), String> {
         "cargo:rerun-if-changed={}",
         symphony_dir.join("pyproject.toml").display()
     );
-    println!("cargo:rerun-if-changed={}", symphony_dir.join("src").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        symphony_dir.join("src").display()
+    );
 
     if symphony_dir_has_source(&symphony_dir) {
         return Ok(());
@@ -42,7 +45,13 @@ fn ensure_symphony_checkout() -> Result<(), String> {
     println!("cargo:warning=Initialising symphony submodule for Tauri resources");
 
     let status = Command::new("git")
-        .args(["submodule", "update", "--init", "--recursive", "symphony-api"])
+        .args([
+            "submodule",
+            "update",
+            "--init",
+            "--recursive",
+            "symphony-api",
+        ])
         .current_dir(repo_root)
         .status()
         .map_err(|error| format!("Failed to initialise symphony submodule: {error}"))?;

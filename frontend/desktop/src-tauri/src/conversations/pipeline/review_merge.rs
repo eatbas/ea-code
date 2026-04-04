@@ -30,13 +30,17 @@ pub async fn run_review_merge(
     let label = agent_label(&agent);
     let conv_dir = format!("{workspace_path}/.maestro/conversations/{conversation_id}");
     let review_dir = review_dir_override.unwrap_or_else(|| format!("{conv_dir}/review"));
-    let review_merged_dir = review_merged_dir_override.unwrap_or_else(|| format!("{conv_dir}/review_merged"));
+    let review_merged_dir =
+        review_merged_dir_override.unwrap_or_else(|| format!("{conv_dir}/review_merged"));
     let stage_name = stage_name_override.unwrap_or_else(|| "Review Merge".to_string());
 
     if let Err(e) = std::fs::create_dir_all(&review_merged_dir) {
         return Err((
             PipelineStageRecord::failed(
-                stage_index, stage_name.clone(), label, Some(now_rfc3339()),
+                stage_index,
+                stage_name.clone(),
+                label,
+                Some(now_rfc3339()),
             ),
             format!("Failed to create review_merged directory: {e}"),
         ));

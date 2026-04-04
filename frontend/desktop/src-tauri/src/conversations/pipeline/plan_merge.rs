@@ -23,8 +23,15 @@ pub async fn run_plan_merge_with_feedback(
     feedback: String,
 ) -> Result<PipelineStageRecord, (PipelineStageRecord, String)> {
     run_plan_merge_inner(
-        app, conversation_id, workspace_path, abort, score_id_slot,
-        output_buffer, planner_count, provider_session_ref, agent,
+        app,
+        conversation_id,
+        workspace_path,
+        abort,
+        score_id_slot,
+        output_buffer,
+        planner_count,
+        provider_session_ref,
+        agent,
         Some(feedback),
     )
     .await
@@ -44,8 +51,15 @@ pub async fn run_plan_merge(
     agent: PipelineAgent,
 ) -> Result<PipelineStageRecord, (PipelineStageRecord, String)> {
     run_plan_merge_inner(
-        app, conversation_id, workspace_path, abort, score_id_slot,
-        output_buffer, planner_count, provider_session_ref, agent,
+        app,
+        conversation_id,
+        workspace_path,
+        abort,
+        score_id_slot,
+        output_buffer,
+        planner_count,
+        provider_session_ref,
+        agent,
         None,
     )
     .await
@@ -73,7 +87,10 @@ async fn run_plan_merge_inner(
     if let Err(e) = std::fs::create_dir_all(&merged_dir) {
         return Err((
             PipelineStageRecord::failed(
-                stage_index, "Plan Merge".to_string(), label, Some(now_rfc3339()),
+                stage_index,
+                "Plan Merge".to_string(),
+                label,
+                Some(now_rfc3339()),
             ),
             format!("Failed to create plan_merged directory: {e}"),
         ));

@@ -191,9 +191,7 @@ async fn resolve_real_python_path(name: &str) -> Option<String> {
     if !output.status.success() {
         return None;
     }
-    let path = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .to_string();
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if path.is_empty() {
         return None;
     }

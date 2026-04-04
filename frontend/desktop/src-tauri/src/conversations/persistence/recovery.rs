@@ -1,14 +1,12 @@
 use crate::models::{
-    AgentSelection, ConversationMessageRole, ConversationStatus, ConversationSummary,
-    PipelineState,
+    AgentSelection, ConversationMessageRole, ConversationStatus, ConversationSummary, PipelineState,
 };
 use crate::storage::{atomic_write, now_rfc3339};
 
 use super::io::{read_messages_unlocked, read_summary_unlocked, write_summary_unlocked};
 use super::paths::{
-    conversation_backup_file_path, conversation_dir, conversation_file_path,
-    pipeline_file_path, plan_dir_path, prompt_file_path, RECOVERED_SUMMARY_ERROR,
-    STALE_RUNNING_ERROR,
+    conversation_backup_file_path, conversation_dir, conversation_file_path, pipeline_file_path,
+    plan_dir_path, prompt_file_path, RECOVERED_SUMMARY_ERROR, STALE_RUNNING_ERROR,
 };
 use super::pipeline_state::load_pipeline_state;
 use super::registries::is_running_conversation_tracked;
@@ -175,8 +173,7 @@ fn recover_summary_unlocked(
         message_count: messages.len(),
         last_provider_session_ref: None,
         active_score_id: None,
-        error: (status == ConversationStatus::Failed)
-            .then(|| RECOVERED_SUMMARY_ERROR.to_string()),
+        error: (status == ConversationStatus::Failed).then(|| RECOVERED_SUMMARY_ERROR.to_string()),
         archived_at: None,
         pinned_at: None,
     };
@@ -193,8 +190,7 @@ pub(super) fn load_summary_with_recovery_unlocked(
         Err(error) => {
             let summary_path = conversation_file_path(workspace_path, conversation_id);
             if !summary_path.exists() {
-                let backup_path =
-                    conversation_backup_file_path(workspace_path, conversation_id);
+                let backup_path = conversation_backup_file_path(workspace_path, conversation_id);
                 if backup_path.exists() {
                     std::fs::rename(&backup_path, &summary_path).map_err(|restore_error| {
                         format!(
