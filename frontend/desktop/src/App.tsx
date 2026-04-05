@@ -6,6 +6,8 @@ import { useConversationStore } from "./hooks/useConversationStore";
 import { usePrerequisites } from "./hooks/usePrerequisites";
 import { useSidecarReady } from "./hooks/useSidecarReady";
 import { useWorkspaceSession } from "./hooks/useWorkspaceSession";
+import { useSettings } from "./hooks/useSettings";
+import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
 import { Sidebar } from "./components/Sidebar";
 import { AppContentRouter } from "./components/AppContentRouter";
 import { UpdateInstallBanner } from "./components/shared/UpdateInstallBanner";
@@ -27,6 +29,8 @@ function App(): ReactNode {
     unarchiveProject,
   } = useWorkspaceSession();
   const { sidecarReady } = useSidecarReady();
+  const { settings } = useSettings();
+  useTaskLifecycle(settings);
   const { status: updateStatus, updateVersion } = useUpdateCheck(false);
   const { status: prereqs, dismissed: prereqsDismissed, dismiss: dismissPrereqs } = usePrerequisites();
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -136,6 +140,9 @@ function App(): ReactNode {
             onAddProject={selectFolder}
             onOpenProjectFolder={openProjectFolder}
             onOpenInVsCode={openInVsCode}
+            allProjects={projects}
+            onRemoveProject={(p) => { void deleteProject(p); }}
+            onUnarchiveConversation={store.unarchiveConversation}
           />
         </div>
         {updateStatus !== "idle" && (

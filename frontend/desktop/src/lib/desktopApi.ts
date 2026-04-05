@@ -261,6 +261,22 @@ export function unarchiveConversation(
   });
 }
 
+export function enableKeepAwake(): Promise<void> {
+  return invokeCommand<void>("enable_keep_awake");
+}
+
+export function disableKeepAwake(): Promise<void> {
+  return invokeCommand<void>("disable_keep_awake");
+}
+
+export function requestNotificationPermission(): Promise<boolean> {
+  return invokeCommand<boolean>("request_notification_permission");
+}
+
+export function sendNotification(title: string, body: string): Promise<void> {
+  return invokeCommand<void>("send_notification", { title, body });
+}
+
 export function setConversationPinned(
   workspacePath: string,
   conversationId: string,

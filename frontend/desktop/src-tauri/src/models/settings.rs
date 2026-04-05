@@ -74,10 +74,30 @@ pub struct AppSettings {
     /// Code pipeline configuration (None = not configured).
     #[serde(default)]
     pub code_pipeline: Option<CodePipelineSettings>,
+    /// User interface language (reserved for future i18n).
+    #[serde(default = "default_language")]
+    pub language: String,
+    /// Whether to prevent the system from sleeping whilst the app is open.
+    #[serde(default)]
+    pub keep_awake: bool,
+    /// When to show OS completion notifications: "always", "never", "when_in_background".
+    #[serde(default = "default_completion_notifications")]
+    pub completion_notifications: String,
+    /// Whether permission-request notifications are enabled.
+    #[serde(default)]
+    pub permission_notifications: bool,
 }
 
 fn default_theme() -> String {
     "system".to_string()
+}
+
+fn default_language() -> String {
+    "en".to_string()
+}
+
+fn default_completion_notifications() -> String {
+    "never".to_string()
 }
 
 impl Default for AppSettings {
@@ -100,6 +120,10 @@ impl Default for AppSettings {
             python_path: String::new(),
             orchestrator: None,
             code_pipeline: None,
+            language: default_language(),
+            keep_awake: false,
+            completion_notifications: default_completion_notifications(),
+            permission_notifications: false,
         }
     }
 }

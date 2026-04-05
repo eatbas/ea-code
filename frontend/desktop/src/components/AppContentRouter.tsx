@@ -5,6 +5,10 @@ import type { Dispatch, SetStateAction } from "react";
 import { IdleView } from "./IdleView";
 import { AgentsSettingsRoute } from "./AgentsSettingsView/Route";
 import { CliSetupRoute } from "./CliSetupView/Route";
+import { GeneralSettingsRoute } from "./GeneralSettingsView/Route";
+import { NotificationsSettingsRoute } from "./NotificationsSettingsView/Route";
+import { ProjectsSettingsRoute } from "./ProjectsSettingsView/Route";
+import { ArchivedThreadsSettingsRoute } from "./ArchivedThreadsSettingsView/Route";
 import { ConversationView } from "./ConversationView";
 
 interface AppContentRouterProps {
@@ -28,6 +32,9 @@ interface AppContentRouterProps {
   onAddProject: () => Promise<void>;
   onOpenProjectFolder: (path: string) => Promise<void>;
   onOpenInVsCode: (path: string) => Promise<void>;
+  allProjects: ProjectEntry[];
+  onRemoveProject: (projectPath: string) => void;
+  onUnarchiveConversation: (projectPath: string, conversationId: string) => void;
 }
 
 /** Routes the main content panel between home and settings views. */
@@ -52,13 +59,38 @@ export function AppContentRouter({
   onAddProject,
   onOpenProjectFolder,
   onOpenInVsCode,
+  allProjects,
+  onRemoveProject,
+  onUnarchiveConversation,
 }: AppContentRouterProps): ReactNode {
+  if (activeView === "general") {
+    return <GeneralSettingsRoute />;
+  }
+
+  if (activeView === "notifications") {
+    return <NotificationsSettingsRoute />;
+  }
+
   if (activeView === "agents") {
     return <AgentsSettingsRoute />;
   }
 
   if (activeView === "cli-setup") {
     return <CliSetupRoute />;
+  }
+
+  if (activeView === "projects") {
+    return (
+      <ProjectsSettingsRoute
+        projects={allProjects}
+        onAddProject={onAddProject}
+        onRemoveProject={onRemoveProject}
+      />
+    );
+  }
+
+  if (activeView === "archived-threads") {
+    return <ArchivedThreadsSettingsRoute onUnarchiveConversation={onUnarchiveConversation} />;
   }
 
   if (workspace) {

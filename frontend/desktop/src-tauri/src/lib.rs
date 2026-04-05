@@ -38,6 +38,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState {
             sidecar: sidecar.clone(),
         })
@@ -82,14 +83,26 @@ pub fn run() {
             conversations::commands::pipeline_handlers::actions::accept_plan,
             conversations::commands::pipeline_handlers::actions::send_plan_edit_feedback,
             conversations::commands::pipeline_handlers::redo_review::redo_review_pipeline,
+            commands::power::enable_keep_awake,
+            commands::power::disable_keep_awake,
+            commands::notifications::request_notification_permission,
+            commands::notifications::send_notification,
         ])
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");
 
     spawn_sidecar_startup(app.handle().clone(), sidecar.clone());
 
+    // Auto-enable keep-awake if the user had it turned on.
+    if let Ok(settings) = storage::settings::read_settings() {
+        if settings.keep_awake {
+            let _ = commands::power::enable_keep_awake();
+        }
+    }
+
     app.run(move |_app_handle, event| {
         if let tauri::RunEvent::ExitRequested { .. } = event {
+            let _ = commands::power::disable_keep_awake();
             stop_sidecar(&sidecar);
         }
     });

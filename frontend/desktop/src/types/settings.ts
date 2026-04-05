@@ -53,6 +53,14 @@ export interface AppSettings {
   orchestrator: OrchestratorSettings | null;
   /** Code pipeline configuration (null = not configured). */
   codePipeline: CodePipelineSettings | null;
+  /** User interface language (reserved for future i18n). */
+  language: string;
+  /** Prevent the system from sleeping whilst the app is open. */
+  keepAwake: boolean;
+  /** When to show OS completion notifications. */
+  completionNotifications: "always" | "never" | "when_in_background";
+  /** Whether permission-request notifications are enabled. */
+  permissionNotifications: boolean;
 }
 
 /** Default settings values. */
@@ -74,4 +82,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pythonPath: "",
   orchestrator: null,
   codePipeline: null,
+  language: "en",
+  keepAwake: false,
+  completionNotifications: "never",
+  permissionNotifications: false,
 };

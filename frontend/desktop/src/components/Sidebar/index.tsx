@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { Cpu, Eye, PanelLeft, Plus, Settings, TerminalSquare } from "lucide-react";
+import { Archive, Bell, Cpu, Eye, FolderOpen, PanelLeft, Plus, Settings, SlidersHorizontal, TerminalSquare } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ActiveView, ConversationSummary, ProjectEntry } from "../../types";
 import { useAppVersion } from "../../hooks/useAppVersion";
@@ -9,8 +9,12 @@ import { ProjectList } from "./ProjectList";
 import { SettingsPanel } from "./SettingsPanel";
 
 const SETTINGS_NAV_ITEMS: { view: ActiveView; label: string; icon: LucideIcon }[] = [
+  { view: "general", label: "General", icon: SlidersHorizontal },
   { view: "agents", label: "Agents", icon: Cpu },
   { view: "cli-setup", label: "CLI Setup", icon: TerminalSquare },
+  { view: "notifications", label: "Notifications", icon: Bell },
+  { view: "projects", label: "Projects", icon: FolderOpen },
+  { view: "archived-threads", label: "Archived Threads", icon: Archive },
 ];
 
 const SETTINGS_VIEWS: ReadonlySet<ActiveView> = new Set(
