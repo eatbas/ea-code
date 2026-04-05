@@ -70,3 +70,9 @@ pub(super) fn review_merged_dir_path(workspace_path: &str, conversation_id: &str
 pub(super) fn code_fixer_dir_path(workspace_path: &str, conversation_id: &str) -> PathBuf {
     conversation_dir(workspace_path, conversation_id).join("code_fixer")
 }
+
+pub(super) fn orchestrator_output_path(workspace_path: &str, conversation_id: &str) -> PathBuf {
+    conversation_dir(workspace_path, conversation_id)
+        .join("prompt_enhanced")
+        .join("prompt_enhanced_output.json")
+}

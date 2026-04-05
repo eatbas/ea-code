@@ -67,6 +67,8 @@ function App(): ReactNode {
 
   async function handleCreateConversation(projectPath: string): Promise<void> {
     setViewResetToken((n) => n + 1);
+    // Reset pipeline mode to "auto" for the new conversation.
+    store.resetPipelineModeForNewConversation(projectPath);
     store.setConversationSelection({
       workspacePath: projectPath,
       mode: "new",
@@ -119,8 +121,11 @@ function App(): ReactNode {
             sidecarReady={sidecarReady}
             viewResetToken={viewResetToken}
             activeConversation={store.activeConversation}
+            onSetActiveConversation={store.setActiveConversation}
             activeDraft={store.activeDraft}
             activePromptDraft={store.activePromptDraft}
+            activePipelineMode={store.activePipelineMode}
+            onPipelineModeChange={store.updateActivePipelineMode}
             sendingConversation={store.sending}
             stoppingConversation={store.stopping}
             onPromptDraftChange={store.updateActivePromptDraft}

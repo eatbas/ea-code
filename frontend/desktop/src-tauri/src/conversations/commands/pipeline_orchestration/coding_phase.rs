@@ -20,6 +20,7 @@ pub(in crate::conversations::commands) async fn run_merge_chain(
     ws: String,
     abort: Arc<AtomicBool>,
     merge_agent: PipelineAgent,
+    plan_merge_index: usize,
     planner_count: usize,
     score_id_slots: &[Arc<std::sync::Mutex<Option<String>>>],
     stage_buffers: &[Arc<std::sync::Mutex<String>>],
@@ -27,9 +28,11 @@ pub(in crate::conversations::commands) async fn run_merge_chain(
     let loaded = persistence::load_pipeline_state(&ws, &conv_id)
         .ok()
         .flatten();
+    // Find the first planner stage for session ref (not orchestrator).
     let session_ref = loaded.as_ref().and_then(|s| {
         s.stages
-            .first()
+            .iter()
+            .find(|st| st.stage_name.starts_with("Planner"))
             .and_then(|st| st.provider_session_ref.clone())
     });
 
@@ -42,14 +45,14 @@ pub(in crate::conversations::commands) async fn run_merge_chain(
     };
 
     let merge_label = format!("{} / {}", merge_agent.provider, merge_agent.model);
-    ensure_merge_stage_record(&ws, &conv_id, planner_count, &merge_label);
+    ensure_merge_stage_record(&ws, &conv_id, plan_merge_index, &merge_label);
 
     let merge_slot = score_id_slots
-        .get(planner_count)
+        .get(plan_merge_index)
         .cloned()
         .unwrap_or_default();
     let merge_buf = stage_buffers
-        .get(planner_count)
+        .get(plan_merge_index)
         .cloned()
         .unwrap_or_default();
 

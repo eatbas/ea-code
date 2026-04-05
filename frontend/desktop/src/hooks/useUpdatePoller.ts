@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { check, type Update } from "@tauri-apps/plugin-updater";
+import { disposeTauriListener } from "../utils/tauriListeners";
 
 const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
 const COOLDOWN_MS = 5 * 60 * 1000;
@@ -84,7 +85,7 @@ export function useUpdatePoller(callbacks: UpdatePollerCallbacks): void {
     return () => {
       callbacksRef.current.onDispose();
       clearInterval(interval);
-      void focusUnlisten.then((unlisten) => unlisten());
+      disposeTauriListener(focusUnlisten, "window focus");
     };
   }, []);
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { SIDECAR_EVENTS } from "../constants/events";
 import { checkSidecarReady } from "../lib/desktopApi";
+import { disposeTauriListener } from "../utils/tauriListeners";
 
 interface SidecarReadyPayload {
   ready: boolean;
@@ -47,7 +48,7 @@ export function useSidecarReady(): UseSidecarReadyReturn {
       });
 
     return () => {
-      void unlistenPromise.then((fn) => fn());
+      disposeTauriListener(unlistenPromise, SIDECAR_EVENTS.READY);
     };
   }, []);
 

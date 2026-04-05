@@ -26,14 +26,14 @@ That's expensive, slow, and exhausting.
 
 Maestro puts every AI CLI you already pay for into a structured pipeline:
 
-- **One agent sharpens your prompt** so the task is crystal clear
+- **An orchestrator sharpens your prompt** so the task is crystal clear (optional)
 - **Up to three agents plan in parallel** — you get multiple perspectives, not one guess
-- **An auditor pressure-tests the plan** before a single line is written
+- **Plan Merge consolidates them** into a single coherent plan you approve before any code is written
 - **A coder implements it**, then **up to three reviewers critique it independently**
-- **A fixer applies the feedback**, and **a judge decides if the task is done**
-- **If not? It loops automatically** — refining, regenerating, and reviewing until the job is truly complete
+- **Review Merge deduplicates and prioritises** all findings by severity
+- **A Code Fixer applies the feedback** — and you can **trigger more review cycles** until you're satisfied
 
-You assign the roles. Claude plans, Codex codes, Gemini reviews — or any combination you want. Each model does what it's best at. The result is code that's been planned, written, reviewed, and approved by multiple AI agents working together.
+You assign the roles. Claude plans, Codex codes, Gemini reviews — or any combination you want. Each model does what it's best at. The result is code that's been planned, written, reviewed, and fixed by multiple AI agents working together.
 
 ## Supported AI Backends
 
@@ -53,39 +53,30 @@ Use one, use all five — assign any backend to any stage.
  Your Prompt
      |
      v
- [1. Prompt Enhance] -----> Clarifies and sharpens the task
+ [1. Orchestrator] ---------> Enhances the prompt and generates a summary title (optional)
      |
      v
- [2. Skill Select] -------> Pulls in relevant local guidance
+ [2. Planner x3] -----------> Up to 3 agents draft plans IN PARALLEL
      |
      v
- [3. Plan x3] ------------> Up to 3 agents draft plans IN PARALLEL
+ [3. Plan Merge] -----------> Consolidates all plans — you approve before coding
      |
      v
- [4. Plan Audit] ----------> Pressure-tests the chosen plan
+ [4. Coder] -----------------> Implements the approved plan
      |
      v
- [5. Code] ----------------> Implements the change
+ [5. Reviewer x3] -----------> Up to 3 agents review IN PARALLEL (via git diff)
      |
      v
- [6. Review x3] -----------> Up to 3 agents review IN PARALLEL
+ [6. Review Merge] ----------> Deduplicates and prioritises findings by severity
      |
      v
- [7. Review Merge] --------> Combines all reviewer feedback
-     |
-     v
- [8. Fix] -----------------> Applies required changes
-     |
-     v
- [9. Judge] -----+---------> COMPLETE? Ship it.
-                  |
-                  +---------> NOT COMPLETE? Loop back with full context.
-     |
-     v
- [10. Executive Summary] --> Records what happened
+ [7. Code Fixer] --+---------> Applies critical and major fixes
+                    |
+                    +---------> Redo Review? Cycles back to Reviewers.
 ```
 
-The judge isn't the same agent that wrote the code. That's the point — no model marks its own homework.
+No model marks its own homework — reviewers resume planner sessions for context, and the Code Fixer resumes the coder's session.
 
 ## Why This Beats Using One Agent
 
@@ -93,22 +84,22 @@ The judge isn't the same agent that wrote the code. That's the point — no mode
 |---|---|
 | One model plans, codes, reviews, and judges its own work | Different agents specialise in each role |
 | Blind spots go unnoticed | Parallel reviewers catch what one misses |
-| You manually re-prompt when output is wrong | Auto-loops with full context until the judge approves |
-| Context gets lost between sessions | Session memory carries continuity across runs |
+| You manually re-prompt when output is wrong | Redo Review cycles re-review and fix with full context |
+| No review before implementation begins | Plan approval gates let you review before any code is written |
 | You pay for 5 subscriptions and use 1 at a time | Every subscription earns its keep |
 
 ## Desktop App Highlights
 
 - **Project Picker** — switch between repositories instantly
 - **Session History** — every task grouped in its own thread with full traceability
-- **Live Run Timeline** — watch stages execute with real-time logs, diffs, and artefacts
+- **Live Run Timeline** — watch stages execute with real-time streaming output
 - **Agent Assignment** — configure which backend handles which stage
-- **Plan Approval Gates** — pause before execution to review, revise, or reject
+- **Plan Approval Gates** — pause after Plan Merge to review, edit, or provide feedback
+- **Redo Review Cycles** — trigger another review + merge + fix cycle as many times as needed
+- **Debug Log Viewer** — collapsible real-time pipeline execution trace with one-click copy
 - **Pause / Resume / Cancel** — full control during runs
-- **Skill Editor** — create reusable instructions for domain-specific guidance
-- **MCP Integrations** — connect Model Context Protocol servers for external tools and context
 - **CLI Health Checks** — verify agent availability and update CLIs in-app
-- **Fully Local** — everything stored on your machine, no cloud backend required
+- **Fully Local** — everything stored on your machine under `~/.maestro/`, no cloud backend required
 
 ## Getting Started
 

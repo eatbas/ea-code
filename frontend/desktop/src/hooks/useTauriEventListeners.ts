@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { disposeTauriListener } from "../utils/tauriListeners";
 
 /** Descriptor for a single Tauri event listener to register. */
 export interface EventListenerConfig<T = unknown> {
@@ -74,7 +75,7 @@ export function useTauriEventListeners(
 
     return () => {
       for (const promise of unlistenPromises) {
-        void promise.then((fn) => fn());
+        disposeTauriListener(promise, "event");
       }
     };
   }, []); // Intentionally mount-only; handlers read live state via closures / setters.

@@ -8,24 +8,24 @@ const AGENTS = [
 
 export function AgentsBar() {
   return (
-    <section id="agents" className="border-y border-border bg-surface-elevated/50 py-10">
+    <section id="agents" className="border-y border-border bg-white py-10">
       <div className="mx-auto max-w-6xl px-6">
-        <p className="mb-6 text-center font-mono text-xs font-medium uppercase tracking-widest text-muted">
-          You&apos;re already paying for them — make them work together
+        <p className="mb-6 text-center font-mono text-xs font-medium uppercase tracking-widest text-faint">
+          You&apos;re already paying for them &mdash; make them work together
         </p>
-        <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
+        <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6">
           {AGENTS.map((a) => (
             <div
               key={a.mono}
-              className="flex items-center gap-3 rounded-xl border border-border bg-surface px-5 py-3 transition-colors duration-200 hover:border-muted cursor-pointer"
+              className="flex items-center gap-3 rounded-xl border border-border bg-white px-5 py-3 transition-all duration-200 hover:border-heading/20 hover:shadow-sm cursor-pointer"
             >
               <span
-                className="flex h-9 w-9 items-center justify-center rounded-lg font-mono text-xs font-bold text-white"
-                style={{ backgroundColor: a.colour + "22", color: a.colour }}
+                className="flex h-9 w-9 items-center justify-center rounded-lg font-mono text-xs font-bold"
+                style={{ backgroundColor: a.colour + "14", color: a.colour }}
               >
                 {a.mono.slice(0, 2).toUpperCase()}
               </span>
-              <span className="font-mono text-sm font-semibold">{a.name}</span>
+              <span className="font-mono text-sm font-semibold text-heading">{a.name}</span>
             </div>
           ))}
         </div>

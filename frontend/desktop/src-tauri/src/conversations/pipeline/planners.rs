@@ -16,6 +16,7 @@ pub async fn run_pipeline_planners(
     conversation_id: String,
     workspace_path: String,
     planners: Vec<PipelineAgent>,
+    planner_start_index: usize,
     user_prompt: String,
     abort: Arc<AtomicBool>,
     score_id_slots: Vec<Arc<std::sync::Mutex<Option<String>>>>,
@@ -33,13 +34,6 @@ pub async fn run_pipeline_planners(
         ),
     );
 
-    // Save user prompt in its own folder.
-    let prompt_dir = format!("{conv_dir}/prompt");
-    std::fs::create_dir_all(&prompt_dir)
-        .map_err(|e| format!("Failed to create prompt directory: {e}"))?;
-    std::fs::write(format!("{prompt_dir}/prompt.md"), &user_prompt)
-        .map_err(|e| format!("Failed to save prompt: {e}"))?;
-
     // Create the plan folder for planner outputs.
     let plan_dir = format!("{conv_dir}/plan");
     std::fs::create_dir_all(&plan_dir)
@@ -50,17 +44,19 @@ pub async fn run_pipeline_planners(
         .iter()
         .enumerate()
         .map(|(i, a)| {
-            let already_completed = previous_stages
+            let stage_index = planner_start_index + i;
+            let previous_stage = previous_stages
                 .as_ref()
-                .and_then(|s| s.get(i))
+                .and_then(|s| s.iter().find(|st| st.stage_index == stage_index));
+            let already_completed = previous_stage
                 .map(|s| s.status == ConversationStatus::Completed)
                 .unwrap_or(false);
 
             if already_completed {
-                previous_stages.as_ref().unwrap()[i].clone()
+                previous_stage.unwrap().clone()
             } else {
                 PipelineStageRecord {
-                    stage_index: i,
+                    stage_index,
                     stage_name: format!("Planner {}", i + 1),
                     agent_label: agent_label(a),
                     status: ConversationStatus::Running,
@@ -73,11 +69,24 @@ pub async fn run_pipeline_planners(
             }
         })
         .collect();
+    // Load existing state to preserve orchestrator data.
+    let existing = super::super::persistence::load_pipeline_state(&workspace_path, &conversation_id)
+        .ok()
+        .flatten();
+
+    let mut all_stages = existing
+        .as_ref()
+        .map(|s| s.stages.iter().filter(|st| !st.stage_name.starts_with("Planner")).cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
+    all_stages.extend(initial_stages);
+    all_stages.sort_by_key(|s| s.stage_index);
+
     let initial_state = PipelineState {
-        user_prompt: user_prompt.clone(),
+        user_prompt: existing.as_ref().map(|s| s.user_prompt.clone()).unwrap_or(user_prompt.clone()),
         pipeline_mode: "code".to_string(),
-        stages: initial_stages,
-        review_cycle: 1,
+        stages: all_stages,
+        review_cycle: existing.as_ref().map(|s| s.review_cycle).unwrap_or(1),
+        enhanced_prompt: existing.and_then(|s| s.enhanced_prompt),
     };
     if let Err(e) = super::super::persistence::save_pipeline_state(
         &workspace_path,
@@ -99,18 +108,20 @@ pub async fn run_pipeline_planners(
     let mut completed_records: Vec<PipelineStageRecord> = Vec::new();
 
     for (i, planner_agent) in planners.into_iter().enumerate() {
-        let already_completed = previous_stages
+        let stage_index = planner_start_index + i;
+        let previous_stage = previous_stages
             .as_ref()
-            .and_then(|s| s.get(i))
+            .and_then(|s| s.iter().find(|st| st.stage_index == stage_index));
+        let already_completed = previous_stage
             .map(|s| s.status == ConversationStatus::Completed)
             .unwrap_or(false);
 
         if already_completed {
-            if let Some(record) = previous_stages.as_ref().and_then(|s| s.get(i)) {
+            if let Some(record) = previous_stage {
                 let _ = emit_stage_status(
                     &app,
                     &conversation_id,
-                    i,
+                    stage_index,
                     &record.stage_name,
                     record.status.clone(),
                     &record.agent_label,
@@ -125,10 +136,7 @@ pub async fn run_pipeline_planners(
             continue;
         }
 
-        let resume_ref = previous_stages
-            .as_ref()
-            .and_then(|s| s.get(i))
-            .and_then(|s| s.provider_session_ref.clone());
+        let resume_ref = previous_stage.and_then(|s| s.provider_session_ref.clone());
 
         let job_slot = score_id_slots.get(i).cloned().unwrap_or_default();
         let out_buf = stage_buffers.get(i).cloned().unwrap_or_default();
@@ -155,14 +163,14 @@ pub async fn run_pipeline_planners(
             ),
         );
 
-        spawned_indices.push(i);
+        spawned_indices.push(stage_index);
         handles.push(tokio::spawn(async move {
             run_stage(
                 app_c,
                 conv_id,
                 ws,
                 StageConfig {
-                    stage_index: i,
+                    stage_index,
                     stage_name: format!("Planner {planner_number}"),
                     provider: planner_agent.provider,
                     model: planner_agent.model,
@@ -209,11 +217,24 @@ pub async fn run_pipeline_planners(
 
     stage_records.sort_by_key(|s| s.stage_index);
 
+    // Load existing state to preserve orchestrator data when merging.
+    let existing_final = super::super::persistence::load_pipeline_state(&workspace_path, &conversation_id)
+        .ok()
+        .flatten();
+
+    let mut all_final_stages = existing_final
+        .as_ref()
+        .map(|s| s.stages.iter().filter(|st| !st.stage_name.starts_with("Planner")).cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
+    all_final_stages.extend(stage_records);
+    all_final_stages.sort_by_key(|s| s.stage_index);
+
     let state = PipelineState {
-        user_prompt,
+        user_prompt: existing_final.as_ref().map(|s| s.user_prompt.clone()).unwrap_or(user_prompt),
         pipeline_mode: "code".to_string(),
-        stages: stage_records,
-        review_cycle: 1,
+        stages: all_final_stages,
+        review_cycle: existing_final.as_ref().map(|s| s.review_cycle).unwrap_or(1),
+        enhanced_prompt: existing_final.and_then(|s| s.enhanced_prompt),
     };
     if let Err(e) =
         super::super::persistence::save_pipeline_state(&workspace_path, &conversation_id, &state)

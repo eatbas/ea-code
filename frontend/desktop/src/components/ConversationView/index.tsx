@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import type { AgentSelection, ConversationDetail, WorkspaceInfo } from "../../types";
+import type { PipelineMode } from "./ConversationComposer";
 import { PlanReviewCard } from "./PlanReviewCard";
 import { ConversationComposer } from "./ConversationComposer";
 import { ConversationFooter } from "./ConversationFooter";
@@ -12,8 +13,11 @@ interface ConversationViewProps {
   sidecarReady: boolean | null;
   viewResetToken: number;
   activeConversation: ConversationDetail | null;
+  onSetActiveConversation: Dispatch<SetStateAction<ConversationDetail | null>>;
   activeDraft: string;
   activePromptDraft: string;
+  pipelineMode: PipelineMode;
+  onPipelineModeChange: (mode: PipelineMode) => void;
   sending: boolean;
   stopping: boolean;
   onOpenProjectFolder: (path: string) => Promise<void>;
@@ -28,8 +32,11 @@ export function ConversationView({
   sidecarReady,
   viewResetToken,
   activeConversation,
+  onSetActiveConversation,
   activeDraft,
   activePromptDraft,
+  pipelineMode,
+  onPipelineModeChange,
   sending,
   stopping,
   onOpenProjectFolder,
@@ -42,6 +49,9 @@ export function ConversationView({
     workspace,
     viewResetToken,
     activeConversation,
+    onSetActiveConversation,
+    pipelineMode,
+    onPipelineModeChange,
     onSendPrompt,
     onStopConversation,
   });
@@ -84,10 +94,10 @@ export function ConversationView({
             stopping={stopping}
             activeRunning={Boolean(viewModel.activeRunning)}
             pipelineRunning={viewModel.pipeline.running}
-            pipelineMode={viewModel.pipelineMode}
+            pipelineMode={pipelineMode}
             pipelineDone={viewModel.pipelineDone}
             sidecarReady={sidecarReady}
-            onPipelineModeChange={viewModel.setPipelineMode}
+            onPipelineModeChange={onPipelineModeChange}
             onAgentChange={viewModel.setSelectedAgent}
             onPromptChange={onPromptDraftChange}
             onSend={viewModel.handleSend}

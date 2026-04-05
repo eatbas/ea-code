@@ -33,17 +33,17 @@ export function CTA() {
   const version = release ? `v${release.version}` : "";
 
   return (
-    <section id="download" className="relative py-24 md:py-32">
+    <section id="download" className="relative bg-white py-24 md:py-32">
       <div className="mx-auto max-w-3xl px-6 text-center">
-        <div className="fade-in-up rounded-3xl border border-border bg-surface-elevated p-10 md:p-16 shadow-2xl shadow-black/30">
-          <h2 className="font-mono text-3xl font-bold tracking-tight md:text-4xl">
+        <div className="fade-in-up">
+          <h2 className="text-3xl font-bold tracking-tight text-heading md:text-4xl">
             Stop Switching Tabs.
             <br />
             <span className="text-accent">Start Orchestrating.</span>
           </h2>
           <p className="mx-auto mt-4 max-w-md text-muted leading-relaxed">
             Download Maestro and turn the AI CLIs you already pay for
-            into a coordinated, self-improving development team.
+            into a coordinated, multi-agent development pipeline.
           </p>
           {version && (
             <p className="mt-2 font-mono text-xs text-accent">{version}</p>
@@ -51,21 +51,21 @@ export function CTA() {
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <a
               href={windowsUrl ?? GITHUB_RELEASES}
-              className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface transition-colors duration-200 hover:bg-accent-hover cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-xl bg-heading px-6 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-accent cursor-pointer"
             >
               <WindowsIcon className="h-4 w-4" />
               Download for Win
             </a>
             <a
               href={macosUrl ?? GITHUB_RELEASES}
-              className="inline-flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface transition-colors duration-200 hover:bg-accent-hover cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-xl bg-heading px-6 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-accent cursor-pointer"
             >
               <AppleIcon className="h-4 w-4" />
               Download for Mac
             </a>
             <a
               href="https://github.com/eatbas/maestro"
-              className="inline-flex items-center gap-2 rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted transition-colors duration-200 hover:border-muted hover:text-white cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-xl border border-border px-6 py-3 text-sm font-medium text-heading transition-colors duration-200 hover:border-heading cursor-pointer"
             >
               <GitHubIcon className="h-4 w-4" />
               View on GitHub

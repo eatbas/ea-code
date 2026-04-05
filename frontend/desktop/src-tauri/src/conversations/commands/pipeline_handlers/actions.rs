@@ -2,15 +2,18 @@
 
 use std::sync::atomic::Ordering;
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tokio::time::{sleep, Duration, Instant};
 
 use crate::commands::api_health::symphony_base_url;
+use crate::conversations::events::EVENT_CONVERSATION_STATUS;
 use crate::conversations::pipeline_debug::emit_pipeline_debug;
 use crate::http::symphony_client;
 use crate::models::{
-    AgentSelection, ConversationDetail, ConversationStatus, ConversationSummary, PipelineState,
+    AgentSelection, ConversationDetail, ConversationStatus, ConversationSummary,
+    PipelineStageRecord, PipelineState, ConversationStatusEvent,
 };
+use crate::storage::now_rfc3339;
 
 use super::super::super::persistence;
 use super::super::super::pipeline;
@@ -92,16 +95,194 @@ pub async fn start_pipeline(
             "Pipeline background task started",
         );
 
+        // Step 1: Save the raw prompt to prompt/prompt.md.
+        let conv_dir = format!("{ws}/.maestro/conversations/{conv_id}");
+        let prompt_dir = format!("{conv_dir}/prompt");
+        if let Err(e) = std::fs::create_dir_all(&prompt_dir) {
+            emit_pipeline_debug(
+                &app_handle,
+                &ws,
+                &conv_id,
+                format!("Failed to create prompt directory: {e}"),
+            );
+        }
+        if let Err(e) = std::fs::write(format!("{prompt_dir}/prompt.md"), &user_prompt) {
+            emit_pipeline_debug(
+                &app_handle,
+                &ws,
+                &conv_id,
+                format!("Failed to save prompt: {e}"),
+            );
+        }
+
+        // Step 2: If orchestrator is configured, create pipeline.json with an
+        // initial Orchestrator stage record so that `update_pipeline_stage`
+        // (called by `run_stage`) can persist its progress.  Without this file
+        // existing beforehand, stage updates are silently skipped.
+        if setup.orchestrator_agent.is_some() {
+            let orchestrator_index = setup.indices.orchestrator.unwrap_or(0);
+            let orch_label = setup.orchestrator_agent.as_ref().map(|a| {
+                format!("{} / {}", a.provider, a.model)
+            }).unwrap_or_default();
+            let seed_state = PipelineState {
+                user_prompt: user_prompt.clone(),
+                pipeline_mode: "code".to_string(),
+                stages: vec![PipelineStageRecord {
+                    stage_index: orchestrator_index,
+                    stage_name: "Prompt Enhancer".to_string(),
+                    agent_label: orch_label,
+                    status: ConversationStatus::Running,
+                    text: String::new(),
+                    started_at: Some(now_rfc3339()),
+                    finished_at: None,
+                    score_id: None,
+                    provider_session_ref: None,
+                }],
+                review_cycle: 1,
+                enhanced_prompt: None,
+            };
+            if let Err(e) = persistence::save_pipeline_state(&ws, &conv_id, &seed_state) {
+                emit_pipeline_debug(
+                    &app_handle,
+                    &ws,
+                    &conv_id,
+                    format!("Failed to seed pipeline state: {e}"),
+                );
+            }
+        }
+
+        // Step 3: Run orchestrator if configured.
+        let mut effective_prompt = user_prompt.clone();
+        let mut enhanced_prompt_saved: Option<String> = None;
+
+        if let Some(orchestrator_agent) = &setup.orchestrator_agent {
+            emit_pipeline_debug(
+                &app_handle,
+                &ws,
+                &conv_id,
+                "Running orchestrator stage...",
+            );
+
+            let orchestrator_index = setup.indices.orchestrator.unwrap_or(0);
+            let orchestrator_slot = setup
+                .score_id_slots
+                .get(orchestrator_index)
+                .cloned()
+                .unwrap_or_default();
+            let orchestrator_buf = setup
+                .stage_buffers
+                .get(orchestrator_index)
+                .cloned()
+                .unwrap_or_default();
+
+            match pipeline::run_orchestrator(
+                app_handle.clone(),
+                conv_id.clone(),
+                ws.clone(),
+                user_prompt.clone(),
+                orchestrator_agent.clone(),
+                orchestrator_index,
+                setup.abort.clone(),
+                orchestrator_slot,
+                orchestrator_buf,
+            )
+            .await
+            {
+                Ok(result) => {
+                    effective_prompt = result.enhanced_prompt.clone();
+                    enhanced_prompt_saved = Some(result.enhanced_prompt.clone());
+
+                    // Save enhanced prompt to file.
+                    let enhanced_path = format!("{prompt_dir}/prompt_enhanced.md");
+                    if let Err(e) = std::fs::write(&enhanced_path, &result.enhanced_prompt) {
+                        emit_pipeline_debug(
+                            &app_handle,
+                            &ws,
+                            &conv_id,
+                            format!("Failed to save enhanced prompt: {e}"),
+                        );
+                    }
+
+                    // Rename conversation with the summary title.
+                    match persistence::rename_conversation(&ws, &conv_id, &result.summary) {
+                        Ok(updated_summary) => {
+                            // Emit conversation_status event to update sidebar and header.
+                            let _ = app_handle.emit(
+                                EVENT_CONVERSATION_STATUS,
+                                ConversationStatusEvent {
+                                    conversation: updated_summary,
+                                    message: None,
+                                },
+                            );
+                            emit_pipeline_debug(
+                                &app_handle,
+                                &ws,
+                                &conv_id,
+                                format!("Conversation renamed to: {}", result.summary),
+                            );
+                        }
+                        Err(e) => {
+                            emit_pipeline_debug(
+                                &app_handle,
+                                &ws,
+                                &conv_id,
+                                format!("Failed to rename conversation: {e}"),
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    emit_pipeline_debug(
+                        &app_handle,
+                        &ws,
+                        &conv_id,
+                        format!("Orchestrator failed, using original prompt: {e}"),
+                    );
+                    // Fall back to original prompt.
+                    effective_prompt = user_prompt.clone();
+
+                    // Generate a fallback title from the first 4 words.
+                    let fallback_title: String = user_prompt
+                        .split_whitespace()
+                        .take(4)
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    if !fallback_title.is_empty() {
+                        if let Ok(updated_summary) = persistence::rename_conversation(&ws, &conv_id, &fallback_title) {
+                            let _ = app_handle.emit(
+                                EVENT_CONVERSATION_STATUS,
+                                ConversationStatusEvent {
+                                    conversation: updated_summary,
+                                    message: None,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // Step 4: Save enhanced_prompt to pipeline state BEFORE running planners.
+        if let Some(enhanced) = enhanced_prompt_saved.clone() {
+            if let Ok(Some(mut state)) = persistence::load_pipeline_state(&ws, &conv_id) {
+                state.enhanced_prompt = Some(enhanced);
+                let _ = persistence::save_pipeline_state(&ws, &conv_id, &state);
+            }
+        }
+
+        // Step 5: Run planners with the effective prompt.
+        let planner_start = setup.indices.orchestrator.map(|_| 1).unwrap_or(0);
         let planner_result = pipeline::run_pipeline_planners(
             app_handle.clone(),
             conv_id.clone(),
             ws.clone(),
             setup.planners,
-            user_prompt,
+            planner_start,
+            effective_prompt.clone(),
             setup.abort.clone(),
-            setup.score_id_slots[..setup.planner_count].to_vec(),
+            setup.score_id_slots.iter().skip(planner_start).take(setup.planner_count).cloned().collect(),
             None,
-            setup.stage_buffers[..setup.planner_count].to_vec(),
+            setup.stage_buffers.iter().skip(planner_start).take(setup.planner_count).cloned().collect(),
         )
         .await;
 
@@ -112,6 +293,7 @@ pub async fn start_pipeline(
                 ws.clone(),
                 setup.abort.clone(),
                 setup.merge_agent,
+                setup.indices.plan_merge,
                 setup.planner_count,
                 &setup.score_id_slots,
                 &setup.stage_buffers,
@@ -325,12 +507,12 @@ pub async fn send_plan_edit_feedback(
 
         let merge_slot = setup
             .score_id_slots
-            .get(setup.planner_count)
+            .get(setup.indices.plan_merge)
             .cloned()
             .unwrap_or_default();
         let merge_buf = setup
             .stage_buffers
-            .get(setup.planner_count)
+            .get(setup.indices.plan_merge)
             .cloned()
             .unwrap_or_default();
 
@@ -350,17 +532,16 @@ pub async fn send_plan_edit_feedback(
         )
         .await;
 
-        let final_status = if setup.abort.load(Ordering::Acquire) {
-            ConversationStatus::Stopped
+        let (status, error) = if setup.abort.load(Ordering::Acquire) {
+            (ConversationStatus::Stopped, None)
         } else {
             match &merge_result {
-                Ok(_) => ConversationStatus::AwaitingReview,
-                Err(_) => ConversationStatus::Failed,
+                Ok(_) => (ConversationStatus::AwaitingReview, None),
+                Err((_, e)) => (ConversationStatus::Failed, Some(e.clone())),
             }
         };
-        let error = merge_result.err().map(|(_, e)| e);
 
-        emit_final_status(&app_handle, &ws, &conv_id, final_status, error);
+        emit_final_status(&app_handle, &ws, &conv_id, status, error);
         pipeline_cleanup(&ws, &conv_id);
     });
 

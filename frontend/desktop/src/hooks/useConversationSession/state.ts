@@ -1,5 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ConversationDetail,
   ConversationOutputDelta,
@@ -20,6 +20,9 @@ import {
   sortConversations,
   upsertConversationSummary,
 } from "./helpers";
+import type { PipelineMode } from "../../components/ConversationView/ConversationComposer";
+
+const PIPELINE_MODES_KEY = "maestro:pipelineModes";
 
 export interface ConversationSelectionIntent {
   workspacePath: string;
@@ -40,6 +43,8 @@ export interface UseConversationSessionState {
   setDrafts: Dispatch<SetStateAction<Record<string, string>>>;
   promptDrafts: Record<string, string>;
   setPromptDrafts: Dispatch<SetStateAction<Record<string, string>>>;
+  pipelineModes: Record<string, PipelineMode>;
+  setPipelineModes: Dispatch<SetStateAction<Record<string, PipelineMode>>>;
   loading: boolean;
   setLoading: Dispatch<SetStateAction<boolean>>;
   sending: boolean;
@@ -50,6 +55,9 @@ export interface UseConversationSessionState {
   activeDraft: string;
   activePromptDraft: string;
   updateActivePromptDraft: (prompt: string) => void;
+  activePipelineMode: PipelineMode;
+  updateActivePipelineMode: (mode: PipelineMode) => void;
+  resetPipelineModeForNewConversation: (workspacePath: string) => void;
 }
 
 export function useConversationSessionState(
@@ -61,6 +69,14 @@ export function useConversationSessionState(
   const [activeConversation, setActiveConversation] = useState<ConversationDetail | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
+  const [pipelineModes, setPipelineModes] = useState<Record<string, PipelineMode>>(() => {
+    try {
+      const stored = sessionStorage.getItem(PIPELINE_MODES_KEY);
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
   const [loading, setLoading] = useState<boolean>(false);
   const [sending, setSending] = useState<boolean>(false);
   const [stoppingConversationId, setStoppingConversationId] = useState<string | null>(null);
@@ -110,6 +126,11 @@ export function useConversationSessionState(
     ],
   });
 
+  // Sync pipelineModes to sessionStorage whenever it changes.
+  useEffect(() => {
+    sessionStorage.setItem(PIPELINE_MODES_KEY, JSON.stringify(pipelineModes));
+  }, [pipelineModes]);
+
   useEffect(() => {
     if (!workspace) {
       previousWorkspacePathRef.current = null;
@@ -117,6 +138,7 @@ export function useConversationSessionState(
       setActiveConversation(null);
       setDrafts({});
       setPromptDrafts({});
+      setPipelineModes({});
       stoppingConversationIdRef.current = null;
       setStoppingConversationId(null);
       return;
@@ -129,6 +151,8 @@ export function useConversationSessionState(
     if (workspaceChanged) {
       setConversations([]);
       setDrafts({});
+      // Note: pipelineModes is NOT reset on workspace change — keys are scoped
+      // as `${workspacePath}::${conversationId}` so no cross-workspace collision.
     }
     setActiveConversation(null);
 
@@ -205,6 +229,27 @@ export function useConversationSessionState(
     }));
   };
 
+  const activePipelineMode: PipelineMode = useMemo(() => {
+    if (!workspace) {
+      return "auto";
+    }
+    const key = promptDraftKey(workspace.path, activeConversation?.summary.id ?? null);
+    return pipelineModes[key] ?? "auto";
+  }, [workspace, activeConversation, pipelineModes]);
+
+  const updateActivePipelineMode = useCallback((mode: PipelineMode): void => {
+    if (!workspace) {
+      return;
+    }
+    const key = promptDraftKey(workspace.path, activeConversation?.summary.id ?? null);
+    setPipelineModes((previous) => ({ ...previous, [key]: mode }));
+  }, [workspace, activeConversation]);
+
+  const resetPipelineModeForNewConversation = useCallback((workspacePath: string): void => {
+    const key = promptDraftKey(workspacePath, null);
+    setPipelineModes((previous) => ({ ...previous, [key]: "auto" }));
+  }, []);
+
   return {
     conversations,
     setConversations,
@@ -214,6 +259,8 @@ export function useConversationSessionState(
     setDrafts,
     promptDrafts,
     setPromptDrafts,
+    pipelineModes,
+    setPipelineModes,
     loading,
     setLoading,
     sending,
@@ -224,5 +271,8 @@ export function useConversationSessionState(
     activeDraft,
     activePromptDraft,
     updateActivePromptDraft,
+    activePipelineMode,
+    updateActivePipelineMode,
+    resetPipelineModeForNewConversation,
   };
 }

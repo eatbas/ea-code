@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import type { ActiveView, ConversationDetail, WorkspaceInfo, ProjectEntry, AgentSelection } from "../types";
+import type { PipelineMode } from "./ConversationView/ConversationComposer";
+import type { Dispatch, SetStateAction } from "react";
 import { IdleView } from "./IdleView";
 import { AgentsSettingsRoute } from "./AgentsSettingsView/Route";
 import { CliSetupRoute } from "./CliSetupView/Route";
@@ -11,8 +13,11 @@ interface AppContentRouterProps {
   sidecarReady: boolean | null;
   viewResetToken: number;
   activeConversation: ConversationDetail | null;
+  onSetActiveConversation: Dispatch<SetStateAction<ConversationDetail | null>>;
   activeDraft: string;
   activePromptDraft: string;
+  activePipelineMode: PipelineMode;
+  onPipelineModeChange: (mode: PipelineMode) => void;
   sendingConversation: boolean;
   stoppingConversation: boolean;
   onPromptDraftChange: (prompt: string) => void;
@@ -32,8 +37,11 @@ export function AppContentRouter({
   sidecarReady,
   viewResetToken,
   activeConversation,
+  onSetActiveConversation,
   activeDraft,
   activePromptDraft,
+  activePipelineMode,
+  onPipelineModeChange,
   sendingConversation,
   stoppingConversation,
   onPromptDraftChange,
@@ -60,8 +68,11 @@ export function AppContentRouter({
         sidecarReady={sidecarReady}
         viewResetToken={viewResetToken}
         activeConversation={activeConversation}
+        onSetActiveConversation={onSetActiveConversation}
         activeDraft={activeDraft}
         activePromptDraft={activePromptDraft}
+        pipelineMode={activePipelineMode}
+        onPipelineModeChange={onPipelineModeChange}
         sending={sendingConversation}
         stopping={stoppingConversation}
         onOpenProjectFolder={onOpenProjectFolder}

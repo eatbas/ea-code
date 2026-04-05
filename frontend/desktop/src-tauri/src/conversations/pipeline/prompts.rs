@@ -173,3 +173,31 @@ pub fn build_code_fixer_prompt(review_merged_path: &str, code_fixer_dir: &str) -
         done = code_fixer_dir,
     )
 }
+
+pub fn build_orchestrator_prompt(user_prompt: &str, output_path: &str) -> String {
+    format!(
+        "You are the Orchestrator agent in a multi-agent code pipeline. \
+         Your task is to analyse and enhance the user's prompt before it \
+         reaches the planner agents.\n\n\
+         TASKS:\n\
+         1. Analyse the raw user prompt for clarity, completeness, and technical precision.\n\
+         2. Produce an enhanced version that is more detailed, explicit, and structured \
+            for consumption by downstream planner agents.\n\
+         3. Produce a 4-word summary to serve as the conversation title.\n\n\
+         OUTPUT FORMAT:\n\
+         Write a JSON file to: {output_path}\n\n\
+         The JSON must have this structure:\n\
+         {{\n           \"enhanced_prompt\": \"the rewritten prompt text...\",\n\
+           \"summary\": \"four word summary\"\n\
+         }}\n\n\
+         IMPORTANT RULES:\n\
+         - The enhanced_prompt should expand abbreviations, clarify ambiguities, and add \
+           technical context that planners will need.\n\
+         - The summary must be EXACTLY 4 words (no more, no less).\n\
+         - The output file MUST be created for the pipeline to continue.\n\
+         - Do NOT write any code — only produce the JSON file.\n\n\
+         USER PROMPT:\n{prompt}",
+        output_path = output_path,
+        prompt = user_prompt,
+    )
+}

@@ -12,7 +12,34 @@ pub(super) fn reconstruct_pipeline_from_artifacts(
     let plan_dir = conversation_root.join("plan");
     let user_prompt = std::fs::read_to_string(&prompt_path).ok()?;
 
+    // Load enhanced prompt if it exists (produced by orchestrator).
+    let enhanced_prompt_path = conversation_root.join("prompt").join("prompt_enhanced.md");
+    let enhanced_prompt = std::fs::read_to_string(&enhanced_prompt_path).ok();
+
     let mut stages: Vec<PipelineStageRecord> = Vec::new();
+
+    // Reconstruct orchestrator stage from its output artefact.
+    let orchestrator_file = conversation_root
+        .join("prompt_enhanced")
+        .join("prompt_enhanced_output.json");
+    if orchestrator_file.exists() {
+        let text = std::fs::read_to_string(&orchestrator_file).unwrap_or_default();
+        stages.push(PipelineStageRecord {
+            stage_index: 0,
+            stage_name: "Prompt Enhancer".to_string(),
+            agent_label: String::new(),
+            status: ConversationStatus::Completed,
+            text,
+            started_at: None,
+            finished_at: None,
+            score_id: None,
+            provider_session_ref: None,
+        });
+    }
+
+    let has_orchestrator = !stages.is_empty();
+    let planner_offset = if has_orchestrator { 1 } else { 0 };
+
     if plan_dir.is_dir() {
         if let Ok(entries) = std::fs::read_dir(&plan_dir) {
             for entry in entries.flatten() {
@@ -23,7 +50,7 @@ pub(super) fn reconstruct_pipeline_from_artifacts(
                         if let Ok(planner_index) = num_str.parse::<usize>() {
                             let text = std::fs::read_to_string(entry.path()).unwrap_or_default();
                             stages.push(PipelineStageRecord {
-                                stage_index: planner_index - 1,
+                                stage_index: planner_offset + planner_index - 1,
                                 stage_name: format!("Planner {planner_index}"),
                                 agent_label: String::new(),
                                 status: ConversationStatus::Completed,
@@ -121,6 +148,7 @@ pub(super) fn reconstruct_pipeline_from_artifacts(
         pipeline_mode: "code".to_string(),
         stages,
         review_cycle: 1,
+        enhanced_prompt,
     };
 
     if let Err(error) = save_pipeline_state(workspace_path, conversation_id, &state) {

@@ -87,4 +87,5 @@ export interface PipelineState {
   userPrompt: string;
   pipelineMode: string;
   stages: PipelineStageRecord[];
+  enhancedPrompt?: string;
 }

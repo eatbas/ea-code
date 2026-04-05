@@ -1,3 +1,4 @@
+import type { Dispatch, SetStateAction } from "react";
 import { useState } from "react";
 import type {
   AgentSelection,
@@ -19,12 +20,18 @@ import {
 } from "./useConversationSession";
 import { useProjectConversationIndex } from "./useProjectConversationIndex";
 import { useToast } from "../components/shared/Toast";
+import type { PipelineMode } from "../components/ConversationView/ConversationComposer";
 
 interface UseConversationStoreReturn {
   /** Active conversation detail for the current workspace. */
   activeConversation: ConversationDetail | null;
+  /** Set the active conversation directly (e.g. after starting a pipeline). */
+  setActiveConversation: Dispatch<SetStateAction<ConversationDetail | null>>;
   activeDraft: string;
   activePromptDraft: string;
+  activePipelineMode: PipelineMode;
+  updateActivePipelineMode: (mode: PipelineMode) => void;
+  resetPipelineModeForNewConversation: (workspacePath: string) => void;
   sending: boolean;
   stopping: boolean;
   updateActivePromptDraft: (prompt: string) => void;
@@ -83,8 +90,12 @@ export function useConversationStore(
 
   const {
     activeConversation,
+    setActiveConversation,
     activeDraft,
     activePromptDraft,
+    activePipelineMode,
+    updateActivePipelineMode,
+    resetPipelineModeForNewConversation,
     sending,
     stopping,
     updateActivePromptDraft,
@@ -132,8 +143,12 @@ export function useConversationStore(
 
   return {
     activeConversation,
+    setActiveConversation,
     activeDraft,
     activePromptDraft,
+    activePipelineMode,
+    updateActivePipelineMode,
+    resetPipelineModeForNewConversation,
     sending,
     stopping,
     updateActivePromptDraft,

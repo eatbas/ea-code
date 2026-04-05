@@ -10,6 +10,7 @@ use super::super::super::persistence;
 /// Precomputed stage index layout for the full pipeline.
 #[allow(dead_code)]
 pub(in crate::conversations::commands) struct StageIndices {
+    pub orchestrator: Option<usize>,
     pub planner_count: usize,
     pub reviewer_count: usize,
     pub plan_merge: usize,
@@ -21,22 +22,40 @@ pub(in crate::conversations::commands) struct StageIndices {
 }
 
 impl StageIndices {
-    pub fn new(planner_count: usize, reviewer_count: usize) -> Self {
-        Self {
-            planner_count,
-            reviewer_count,
-            plan_merge: planner_count,
-            coder: planner_count + 1,
-            reviewer_start: planner_count + 2,
-            review_merge: planner_count + 2 + reviewer_count,
-            code_fixer: planner_count + 3 + reviewer_count,
-            total: planner_count + 4 + reviewer_count,
+    pub fn new(planner_count: usize, reviewer_count: usize, has_orchestrator: bool) -> Self {
+        if has_orchestrator {
+            // Orchestrator occupies index 0, everything else shifts by +1.
+            Self {
+                orchestrator: Some(0),
+                planner_count,
+                reviewer_count,
+                plan_merge: planner_count + 1,
+                coder: planner_count + 2,
+                reviewer_start: planner_count + 3,
+                review_merge: planner_count + 3 + reviewer_count,
+                code_fixer: planner_count + 4 + reviewer_count,
+                total: planner_count + 5 + reviewer_count,
+            }
+        } else {
+            // No orchestrator, indices remain unchanged for backwards compatibility.
+            Self {
+                orchestrator: None,
+                planner_count,
+                reviewer_count,
+                plan_merge: planner_count,
+                coder: planner_count + 1,
+                reviewer_start: planner_count + 2,
+                review_merge: planner_count + 2 + reviewer_count,
+                code_fixer: planner_count + 3 + reviewer_count,
+                total: planner_count + 4 + reviewer_count,
+            }
         }
     }
 }
 
 /// Pipeline configuration loaded from settings before runtime state is allocated.
 pub(in crate::conversations::commands) struct PipelineConfig {
+    pub orchestrator_agent: Option<PipelineAgent>,
     pub planners: Vec<PipelineAgent>,
     pub planner_count: usize,
     pub merge_agent: PipelineAgent,
@@ -49,6 +68,7 @@ pub(in crate::conversations::commands) struct PipelineConfig {
 /// Pre-allocated runtime state shared by all pipeline handler spawn blocks.
 #[allow(dead_code)]
 pub(in crate::conversations::commands) struct PipelineSetup {
+    pub orchestrator_agent: Option<PipelineAgent>,
     pub abort: Arc<AtomicBool>,
     pub score_id_slots: Vec<Arc<std::sync::Mutex<Option<String>>>>,
     pub stage_buffers: Vec<Arc<std::sync::Mutex<String>>>,
@@ -79,9 +99,14 @@ pub(in crate::conversations::commands) fn load_pipeline_config() -> Result<Pipel
     let reviewers = planners.clone();
     let reviewer_count = planner_count;
 
-    let indices = StageIndices::new(planner_count, reviewer_count);
+    // Read orchestrator agent from settings.
+    let orchestrator_agent = settings.orchestrator.as_ref().map(|o| o.agent.clone());
+    let has_orchestrator = orchestrator_agent.is_some();
+
+    let indices = StageIndices::new(planner_count, reviewer_count, has_orchestrator);
 
     Ok(PipelineConfig {
+        orchestrator_agent,
         planners,
         planner_count,
         merge_agent,
@@ -99,6 +124,7 @@ pub(in crate::conversations::commands) fn prepare_pipeline_with_config(
     config: PipelineConfig,
 ) -> Result<PipelineSetup, String> {
     let PipelineConfig {
+        orchestrator_agent,
         planners,
         planner_count,
         merge_agent,
@@ -118,6 +144,7 @@ pub(in crate::conversations::commands) fn prepare_pipeline_with_config(
     )?;
 
     Ok(PipelineSetup {
+        orchestrator_agent,
         abort,
         score_id_slots,
         stage_buffers,

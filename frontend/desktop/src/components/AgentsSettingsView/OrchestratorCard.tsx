@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AppSettings, OrchestratorSettings, PipelineAgent, ProviderInfo } from "../../types";
 import { PipelineAgentRow } from "./PipelineAgentRow";
 import { useToast } from "../shared/Toast";
@@ -48,6 +48,18 @@ export function OrchestratorCard({
   const orchestrator = ensureOrchestrator(settings, providers);
 
   const fastOnly = useMemo(() => fastProviders(providers), [providers]);
+
+  // Auto-persist default orchestrator settings when the card renders for the
+  // first time and no orchestrator has been configured yet.  Without this the
+  // user sees a pre-filled card but `settings.orchestrator` remains null and
+  // the pipeline skips the orchestrator stage entirely.
+  useEffect(() => {
+    if (!settings.orchestrator && providers.length > 0) {
+      onSave({ ...settings, orchestrator: { agent: defaultFastAgent(providers), maxIterations: 3 } });
+    }
+    // Only run on mount / when providers become available.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providers.length > 0]);
 
   const save = useCallback(
     (next: OrchestratorSettings) => {

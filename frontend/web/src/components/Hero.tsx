@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { ArrowDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useReleaseInfo } from "../hooks/useReleaseInfo";
 
-const SCREENSHOTS = ["/ss1.png", "/ss2.png"];
+const SCREENSHOTS = ["/SS-1.png", "/SS-2.png"];
 
 export function Hero() {
   const { release } = useReleaseInfo();
@@ -18,7 +18,7 @@ export function Hero() {
   }, [next]);
 
   return (
-    <section className="relative overflow-hidden pt-32 pb-20 md:pt-40 md:pb-28">
+    <section className="relative overflow-hidden bg-surface-dark pt-32 pb-20 md:pt-40 md:pb-28">
       <div className="hero-glow" />
 
       <div className="relative mx-auto max-w-6xl px-6">
@@ -28,27 +28,28 @@ export function Hero() {
             <p className="mb-4 inline-block rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 font-mono text-xs font-medium text-accent">
               {release ? `v${release.version}` : ""} — Free &amp; open-source
             </p>
-            <h1 className="font-mono text-2xl leading-tight font-bold tracking-tight md:text-3xl lg:text-3xl">
+            <h1 className="text-4xl leading-tight font-bold tracking-tight text-white md:text-5xl lg:text-5xl">
               Put your{" "}
-              <span className="text-accent">AI subscriptions to work</span>
-              {" "}as one quality pipeline.
+              <span className="text-accent">AI subscriptions</span>
+              {" "}to work as one quality pipeline.
             </h1>
-            <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted md:text-xl mx-auto lg:mx-0">
+            <p className="mt-6 max-w-lg text-lg leading-relaxed text-faint mx-auto lg:mx-0">
               You already have Claude, Codex, Gemini, Kimi, and OpenCode.
-              Maestro orchestrates those subscriptions into one pipeline, so
-              each model can plan, code, and review where it performs best,
-              helping you ship higher-quality code than a single agent alone.
+              Maestro orchestrates them into one pipeline — planning in
+              parallel, merging plans, coding, reviewing with multiple agents,
+              and fixing — so you ship higher-quality code than any single
+              agent could produce alone.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
               <a
                 href="#download"
-                className="rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface transition-colors duration-200 hover:bg-accent-hover cursor-pointer"
+                className="rounded-xl bg-white px-6 py-3 text-sm font-semibold text-surface-dark transition-colors duration-200 hover:bg-accent hover:text-white cursor-pointer"
               >
                 Download for Free
               </a>
               <a
                 href="#why"
-                className="flex items-center gap-2 rounded-xl border border-border px-6 py-3 text-sm font-medium text-muted transition-colors duration-200 hover:border-muted hover:text-white cursor-pointer"
+                className="flex items-center gap-2 rounded-xl border border-border-dark px-6 py-3 text-sm font-medium text-faint transition-colors duration-200 hover:border-white hover:text-white cursor-pointer"
               >
                 Why Multiple Agents?
                 <ArrowDown className="h-4 w-4" />
@@ -58,7 +59,7 @@ export function Hero() {
 
           {/* Screenshot carousel */}
           <div className="fade-in-up relative mx-auto w-full max-w-lg lg:mx-0" style={{ animationDelay: "0.2s" }}>
-            <div className="overflow-hidden rounded-2xl border border-border bg-surface-elevated shadow-2xl shadow-black/40">
+            <div className="overflow-hidden rounded-2xl border border-border-dark shadow-2xl shadow-black/40">
               <div
                 className="relative aspect-[16/10] w-full cursor-pointer"
                 onClick={() => setLightbox(true)}
@@ -67,7 +68,7 @@ export function Hero() {
                   <img
                     key={src}
                     src={src}
-                    alt={`maestro screenshot ${i + 1}`}
+                    alt={`Maestro screenshot ${i + 1}`}
                     className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
                       i === current ? "opacity-100" : "opacity-0"
                     }`}
@@ -80,14 +81,14 @@ export function Hero() {
             <button
               onClick={prev}
               aria-label="Previous screenshot"
-              className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full border border-border bg-surface/80 p-1.5 text-muted backdrop-blur-sm transition-colors hover:text-white"
+              className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full border border-border-dark bg-surface-dark/80 p-1.5 text-faint backdrop-blur-sm transition-colors hover:text-white cursor-pointer"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
               onClick={next}
               aria-label="Next screenshot"
-              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full border border-border bg-surface/80 p-1.5 text-muted backdrop-blur-sm transition-colors hover:text-white"
+              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full border border-border-dark bg-surface-dark/80 p-1.5 text-faint backdrop-blur-sm transition-colors hover:text-white cursor-pointer"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -99,8 +100,8 @@ export function Hero() {
                   key={i}
                   onClick={() => setCurrent(i)}
                   aria-label={`Go to screenshot ${i + 1}`}
-                  className={`h-2 w-2 rounded-full transition-colors ${
-                    i === current ? "bg-accent" : "bg-border"
+                  className={`h-2 w-2 rounded-full transition-colors cursor-pointer ${
+                    i === current ? "bg-accent" : "bg-border-dark"
                   }`}
                 />
               ))}
@@ -112,19 +113,19 @@ export function Hero() {
       {/* Lightbox */}
       {lightbox && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={() => setLightbox(false)}
         >
           <button
             onClick={() => setLightbox(false)}
             aria-label="Close lightbox"
-            className="absolute top-6 right-6 rounded-full border border-white/20 bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+            className="absolute top-6 right-6 rounded-full border border-white/20 bg-white/10 p-2 text-white transition-colors hover:bg-white/20 cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
           <img
             src={SCREENSHOTS[current]}
-            alt={`maestro screenshot ${current + 1}`}
+            alt={`Maestro screenshot ${current + 1}`}
             className="max-h-[90vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />

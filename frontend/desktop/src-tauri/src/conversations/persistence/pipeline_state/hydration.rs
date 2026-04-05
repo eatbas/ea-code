@@ -26,6 +26,9 @@ pub(super) fn hydrate_stage_text(
     state: &mut PipelineState,
 ) {
     let conversation_root = conversation_dir(workspace_path, conversation_id);
+    let orchestrator_file = conversation_root
+        .join("prompt_enhanced")
+        .join("prompt_enhanced_output.json");
     let plan_dir = conversation_root.join("plan");
     let merged_file = conversation_root.join("plan_merged").join("plan_merged.md");
     let coder_file = conversation_root.join("coder").join("coder_done.md");
@@ -38,8 +41,18 @@ pub(super) fn hydrate_stage_text(
         .join("code_fixer_done.md");
 
     for stage in &mut state.stages {
-        if stage.stage_name.starts_with("Planner") {
-            let plan_file = plan_dir.join(format!("Plan-{}.md", stage.stage_index + 1));
+        if stage.stage_name == "Prompt Enhancer" {
+            hydrate_from_file(stage, &orchestrator_file);
+        } else if stage.stage_name.starts_with("Planner") {
+            // Extract planner number from stage name (e.g. "Planner 1" → 1)
+            // rather than deriving from stage_index, which shifts when an
+            // orchestrator stage occupies index 0.
+            let planner_number = stage
+                .stage_name
+                .strip_prefix("Planner ")
+                .and_then(|n| n.parse::<usize>().ok())
+                .unwrap_or(stage.stage_index + 1);
+            let plan_file = plan_dir.join(format!("Plan-{planner_number}.md"));
             hydrate_from_file(stage, &plan_file);
         } else if stage.stage_name == "Plan Merge" {
             hydrate_from_file(stage, &merged_file);

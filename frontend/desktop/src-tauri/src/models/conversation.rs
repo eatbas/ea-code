@@ -161,6 +161,9 @@ pub struct PipelineState {
     /// Current review cycle number (1 = first run, 2+ = re-do cycles).
     #[serde(default = "default_review_cycle")]
     pub review_cycle: usize,
+    /// Enhanced prompt produced by the orchestrator (if configured).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enhanced_prompt: Option<String>,
 }
 
 fn default_review_cycle() -> usize {

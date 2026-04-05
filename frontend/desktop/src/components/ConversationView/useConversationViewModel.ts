@@ -1,3 +1,4 @@
+import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentSelection, ConversationDetail, WorkspaceInfo } from "../../types";
 import { useApiHealth } from "../../hooks/useApiHealth";
@@ -24,6 +25,9 @@ interface UseConversationViewModelParams {
   workspace: WorkspaceInfo;
   viewResetToken: number;
   activeConversation: ConversationDetail | null;
+  onSetActiveConversation: Dispatch<SetStateAction<ConversationDetail | null>>;
+  pipelineMode: PipelineMode;
+  onPipelineModeChange: (mode: PipelineMode) => void;
   onSendPrompt: (prompt: string, agent: AgentSelection) => Promise<void>;
   onStopConversation: () => Promise<void>;
 }
@@ -32,6 +36,9 @@ export function useConversationViewModel({
   workspace,
   viewResetToken,
   activeConversation,
+  onSetActiveConversation,
+  pipelineMode,
+  onPipelineModeChange,
   onSendPrompt,
   onStopConversation,
 }: UseConversationViewModelParams) {
@@ -39,7 +46,6 @@ export function useConversationViewModel({
   const { settings } = useSettings();
   const handleFooterError = useFooterErrorHandler();
   const [selectedAgent, setSelectedAgent] = useState<AgentSelection | null>(null);
-  const [pipelineMode, setPipelineMode] = useState<PipelineMode>("auto");
   const [pipelinePrompt, setPipelinePrompt] = useState<string>("");
   const [pipelineConversationId, setPipelineConversationId] = useState<string | null>(null);
   const prevConversationIdRef = useRef<string | null>(null);
@@ -81,7 +87,7 @@ export function useConversationViewModel({
       planReview.reset();
       setPipelinePrompt("");
       setPipelineConversationId(null);
-      setPipelineMode("auto");
+      // Note: pipelineMode is now managed by the store, not reset here.
     }
   }, [activeConversation, pipeline, planReview, viewResetToken]);
 
@@ -100,7 +106,12 @@ export function useConversationViewModel({
       setPipelineConversationId(activeConversation.summary.id);
       pipeline.loadFromSaved(state, isStillRunning, activeConversation.summary.status);
       setPipelinePrompt(state.userPrompt);
-      setPipelineMode("code");
+      // Only default to "code" when loading a pipeline conversation if the
+      // user has not already selected a mode for this conversation.  This
+      // preserves the mode across view navigations (e.g. settings → home).
+      if (pipelineMode === "auto") {
+        onPipelineModeChange("code");
+      }
     });
 
     void getPipelineDebugLog(workspace.path, activeConversation.summary.id).then((log) => {
@@ -113,7 +124,7 @@ export function useConversationViewModel({
     return () => {
       cancelled = true;
     };
-  }, [activeConversation, pipeline, workspace.path]);
+  }, [activeConversation, pipeline, workspace.path, onPipelineModeChange]);
 
   useEffect(() => {
     if (activeConversation) {
@@ -174,6 +185,9 @@ export function useConversationViewModel({
       setPipelinePrompt(prompt);
       const detail = await startPipeline(workspace.path, prompt);
       setPipelineConversationId(detail.summary.id);
+      // Set the active conversation so the header shows the title and
+      // subsequent status events (e.g. orchestrator rename) can update it.
+      onSetActiveConversation(detail);
       return;
     }
 
@@ -183,7 +197,7 @@ export function useConversationViewModel({
     }
 
     await onSendPrompt(prompt, agent);
-  }, [activeConversation, onSendPrompt, pipeline, pipelineMode, planReview, selectedAgent, workspace.path]);
+  }, [activeConversation, onSendPrompt, onSetActiveConversation, pipeline, pipelineMode, planReview, selectedAgent, workspace.path]);
 
   const handleStop = useCallback(async () => {
     if (pipelineConversationId) {
@@ -222,15 +236,13 @@ export function useConversationViewModel({
     planReview.reset();
     setPipelineConversationId(null);
     setPipelinePrompt("");
-    setPipelineMode("code");
-  }, [pipeline, planReview]);
+    onPipelineModeChange("code");
+  }, [pipeline, planReview, onPipelineModeChange]);
 
   return {
     availableProviders,
     currentAgent,
     setSelectedAgent,
-    pipelineMode,
-    setPipelineMode,
     pipelinePrompt,
     pipeline,
     planReview,

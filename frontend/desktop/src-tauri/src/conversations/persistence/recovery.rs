@@ -5,8 +5,8 @@ use crate::storage::{atomic_write, now_rfc3339};
 
 use super::io::{read_messages_unlocked, read_summary_unlocked, write_summary_unlocked};
 use super::paths::{
-    conversation_backup_file_path, conversation_dir, conversation_file_path, pipeline_file_path,
-    plan_dir_path, prompt_file_path, RECOVERED_SUMMARY_ERROR, STALE_RUNNING_ERROR,
+    conversation_backup_file_path, conversation_dir, conversation_file_path, orchestrator_output_path,
+    pipeline_file_path, plan_dir_path, prompt_file_path, RECOVERED_SUMMARY_ERROR, STALE_RUNNING_ERROR,
 };
 use super::pipeline_state::load_pipeline_state;
 use super::registries::is_running_conversation_tracked;
@@ -46,11 +46,28 @@ pub(super) fn parse_agent_label(label: &str) -> Option<AgentSelection> {
     })
 }
 
+/// Try to read the orchestrator output and extract the summary title.
+fn try_read_orchestrator_title(workspace_path: &str, conversation_id: &str) -> Option<String> {
+    let path = orchestrator_output_path(workspace_path, conversation_id);
+    let content = std::fs::read_to_string(path).ok()?;
+    let parsed: serde_json::Value = serde_json::from_str(&content).ok()?;
+    parsed
+        .get("summary")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
 fn recover_title_unlocked(
     workspace_path: &str,
     conversation_id: &str,
     messages: &[crate::models::ConversationMessage],
 ) -> String {
+    // First try the orchestrator-generated summary (most accurate).
+    if let Some(title) = try_read_orchestrator_title(workspace_path, conversation_id) {
+        return title;
+    }
+
     if let Some(title) = messages
         .iter()
         .find(|message| message.role == ConversationMessageRole::User)

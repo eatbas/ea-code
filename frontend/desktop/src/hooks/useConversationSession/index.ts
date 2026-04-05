@@ -11,8 +11,12 @@ export type { ConversationSelectionIntent } from "./state";
 interface UseConversationSessionReturn {
   conversations: ConversationSummary[];
   activeConversation: ConversationDetail | null;
+  setActiveConversation: import("react").Dispatch<import("react").SetStateAction<ConversationDetail | null>>;
   activeDraft: string;
   activePromptDraft: string;
+  activePipelineMode: import("../../components/ConversationView/ConversationComposer").PipelineMode;
+  updateActivePipelineMode: (mode: import("../../components/ConversationView/ConversationComposer").PipelineMode) => void;
+  resetPipelineModeForNewConversation: (workspacePath: string) => void;
   loading: boolean;
   sending: boolean;
   stopping: boolean;
@@ -51,8 +55,12 @@ export function useConversationSession(
   return {
     conversations: state.conversations,
     activeConversation: state.activeConversation,
+    setActiveConversation: state.setActiveConversation,
     activeDraft: state.activeDraft,
     activePromptDraft: state.activePromptDraft,
+    activePipelineMode: state.activePipelineMode,
+    updateActivePipelineMode: state.updateActivePipelineMode,
+    resetPipelineModeForNewConversation: state.resetPipelineModeForNewConversation,
     loading: state.loading,
     sending: state.sending,
     stopping: state.activeConversation?.summary.id === state.stoppingConversationId,

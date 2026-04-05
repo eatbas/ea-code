@@ -64,6 +64,7 @@ export function PipelineConversationView({
   onStop,
   planReviewPhase,
 }: PipelineConversationViewProps): ReactNode {
+  const [orchestratorOpen, setOrchestratorOpen] = useState(true);
   const [plannersOpen, setPlannersOpen] = useState(true);
   const [mergeOpen, setMergeOpen] = useState(true);
   const [coderOpen, setCoderOpen] = useState(true);
@@ -74,6 +75,7 @@ export function PipelineConversationView({
   const [copiedDebug, setCopiedDebug] = useState(false);
 
   // Classify stages by name.
+  const orchestratorStage = stages.find((s) => s.stageName === "Prompt Enhancer") ?? null;
   const plannerStages = stages.filter((s) => s.stageName.startsWith("Planner"));
   const mergeStage = stages.find((s) => s.stageName === "Plan Merge") ?? null;
   const coderStage = stages.find((s) => s.stageName === "Coder") ?? null;
@@ -143,6 +145,14 @@ export function PipelineConversationView({
 
   // Auto-collapse stages when they complete.
   useEffect(() => {
+    if (orchestratorStage && isTerminal(orchestratorStage.status)) setOrchestratorOpen(false);
+    // Depend only on the status string, not the full object reference, so
+    // the user can re-open the section without it being forced closed on
+    // every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orchestratorStage?.status]);
+
+  useEffect(() => {
     if (allPlannersDone) setPlannersOpen(false);
   }, [allPlannersDone]);
 
@@ -178,6 +188,7 @@ export function PipelineConversationView({
     setCopiedDebug(true);
   }
 
+  // The status bar label comes directly from the backend stage name now.
   const statusBarLabel = currentStageName || (running
     ? "Starting..."
     : hasStopped
@@ -197,6 +208,29 @@ export function PipelineConversationView({
             </p>
             <p className="whitespace-pre-wrap break-words">{userPrompt}</p>
           </div>
+
+          {/* Prompt Enhancer stage */}
+          {orchestratorStage ? (
+            <PipelineStageSection
+              label="Prompt Enhancer"
+              agentLabel={orchestratorStage.agentLabel}
+              status={orchestratorStage.status}
+              open={orchestratorOpen}
+              onOpenChange={setOrchestratorOpen}
+              startedAt={orchestratorStage.startedAt}
+              finishedAt={orchestratorStage.finishedAt}
+            >
+              <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
+                {stageBodyText(orchestratorStage, "Enhanced prompt was not found.")}
+              </p>
+            </PipelineStageSection>
+          ) : (
+            stages.length === 0 && running && (
+              <PipelineStageSection label="Prompt Enhancer" status="pending">
+                <p className="text-xs text-fg-faint">Enhancing prompt...</p>
+              </PipelineStageSection>
+            )
+          )}
 
           {/* Planner stages (parallel — synced open/close) */}
           {hasStages && (
