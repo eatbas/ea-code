@@ -1,5 +1,11 @@
 use std::path::{Path, PathBuf};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 /// Returns `true` if the directory looks like an initialised symphony checkout
 /// (i.e. contains `pyproject.toml`).
 pub fn symphony_dir_has_source(dir: &Path) -> bool {
@@ -37,12 +43,15 @@ pub fn find_symphony_dir() -> Result<PathBuf, String> {
             eprintln!(
                 "[sidecar] {dir_name}/ exists but source is missing — running git submodule update --init"
             );
-            let status = std::process::Command::new("git")
+            let mut git_cmd = std::process::Command::new("git");
+            git_cmd
                 .args(["submodule", "update", "--init", dir_name])
                 .current_dir(repo_root)
                 .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .status();
+                .stderr(std::process::Stdio::piped());
+            #[cfg(target_os = "windows")]
+            git_cmd.creation_flags(CREATE_NO_WINDOW);
+            let status = git_cmd.status();
 
             match status {
                 Ok(s) if s.success() && symphony_dir_has_source(&candidate) => {

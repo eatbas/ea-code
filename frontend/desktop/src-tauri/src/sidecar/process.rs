@@ -4,6 +4,9 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::{Child, Command};
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 pub(crate) const DEFAULT_PORT: u16 = 8719;
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 
@@ -53,6 +56,9 @@ pub(crate) async fn spawn_symphony_process(
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
 
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
+
     #[cfg(unix)]
     command.process_group(0);
 
@@ -88,6 +94,7 @@ pub(crate) async fn stop_symphony_process(child: &mut Child) {
     if let Some(pid) = child.id() {
         let _ = Command::new("taskkill")
             .args(["/T", "/F", "/PID", &pid.to_string()])
+            .creation_flags(CREATE_NO_WINDOW)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()

@@ -2,6 +2,9 @@ use std::path::{Path, PathBuf};
 
 use tokio::process::Command;
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 use super::python::{find_python, venv_is_valid, venv_python};
 
 pub(crate) struct PreparedEnvironment {
@@ -54,19 +57,25 @@ async fn ensure_dependencies(
     }
 
     eprintln!("[sidecar] Installing symphony dependencies…");
-    let _ = Command::new(venv_python)
+    let mut pip_upgrade = Command::new(venv_python);
+    pip_upgrade
         .args(["-m", "pip", "install", "--quiet", "--upgrade", "pip"])
         .current_dir(symphony_dir)
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .status()
-        .await;
+        .stderr(std::process::Stdio::piped());
+    #[cfg(target_os = "windows")]
+    pip_upgrade.creation_flags(CREATE_NO_WINDOW);
+    let _ = pip_upgrade.status().await;
 
-    let output = Command::new(venv_python)
+    let mut pip_install = Command::new(venv_python);
+    pip_install
         .args(["-m", "pip", "install", "--quiet", "-e", "."])
         .current_dir(symphony_dir)
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    #[cfg(target_os = "windows")]
+    pip_install.creation_flags(CREATE_NO_WINDOW);
+    let output = pip_install
         .output()
         .await
         .map_err(|error| format!("Dependency install failed: {error}"))?;

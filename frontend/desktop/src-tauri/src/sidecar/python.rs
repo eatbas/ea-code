@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 /// Result of Python detection: the command and optional version flag for `py` launcher.
 #[derive(Debug, Clone)]
 pub struct PythonInterpreter {
@@ -19,6 +22,8 @@ impl PythonInterpreter {
         }
         cmd.args(["-m", "venv"]);
         cmd.arg(venv_dir);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
         cmd
     }
 
@@ -29,6 +34,8 @@ impl PythonInterpreter {
             cmd.arg(ver);
         }
         cmd.args(["-m", module]);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
         cmd
     }
 }
@@ -50,6 +57,7 @@ pub async fn find_python() -> Result<PythonInterpreter, String> {
                 let flag = format!("-{ver}");
                 let ok = Command::new("py")
                     .args([&flag, "--version"])
+                    .creation_flags(CREATE_NO_WINDOW)
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
                     .status()
@@ -183,6 +191,7 @@ pub async fn venv_is_valid(venv_dir: &Path) -> bool {
 async fn resolve_real_python_path(name: &str) -> Option<String> {
     let output = Command::new(name)
         .args(["-c", "import sys; print(sys.executable)"])
+        .creation_flags(CREATE_NO_WINDOW)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .output()
@@ -208,6 +217,7 @@ async fn binary_exists(name: &str) -> bool {
     {
         Command::new("where.exe")
             .arg(name)
+            .creation_flags(CREATE_NO_WINDOW)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
@@ -229,14 +239,16 @@ async fn binary_exists(name: &str) -> bool {
 }
 
 async fn check_python_version(executable: &str) -> bool {
-    Command::new(executable)
-        .args([
-            "-c",
-            "import sys; exit(0 if sys.version_info >= (3,12) else 1)",
-        ])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
+    let mut cmd = Command::new(executable);
+    cmd.args([
+        "-c",
+        "import sys; exit(0 if sys.version_info >= (3,12) else 1)",
+    ])
+    .stdout(std::process::Stdio::null())
+    .stderr(std::process::Stdio::null());
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.status()
         .await
         .map(|s| s.success())
         .unwrap_or(false)

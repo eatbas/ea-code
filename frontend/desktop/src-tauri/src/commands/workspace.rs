@@ -50,16 +50,17 @@ pub async fn check_prerequisites() -> Result<PrerequisiteStatus, String> {
     // Python check
     let (python_available, python_version) = match crate::sidecar::python::find_python().await {
         Ok(py) => {
-            let version = tokio::process::Command::new(&py.executable)
-                .args(
-                    py.launcher_version
-                        .iter()
-                        .map(|v| v.as_str())
-                        .chain(["--version"])
-                        .collect::<Vec<_>>(),
-                )
-                .output()
-                .await
+            let mut cmd = tokio::process::Command::new(&py.executable);
+            cmd.args(
+                py.launcher_version
+                    .iter()
+                    .map(|v| v.as_str())
+                    .chain(["--version"])
+                    .collect::<Vec<_>>(),
+            );
+            #[cfg(target_os = "windows")]
+            cmd.creation_flags(0x08000000);
+            let version = cmd.output().await
                 .ok()
                 .and_then(|o| {
                     String::from_utf8(o.stdout)

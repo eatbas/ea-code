@@ -1,5 +1,8 @@
 use tokio::process::Command;
 
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 pub(crate) async fn kill_orphaned_symphony(port: u16) {
     let port_str = port.to_string();
 
@@ -30,6 +33,7 @@ pub(crate) async fn kill_orphaned_symphony(port: u16) {
                 "/C",
                 &format!("netstat -ano | findstr :{port_str} | findstr LISTENING"),
             ])
+            .creation_flags(CREATE_NO_WINDOW)
             .output()
             .await;
 
@@ -44,6 +48,7 @@ pub(crate) async fn kill_orphaned_symphony(port: u16) {
                     eprintln!("[sidecar] Killing orphaned process {pid_str} on port {port_str}");
                     let _ = Command::new("taskkill")
                         .args(["/T", "/F", "/PID", pid_str])
+                        .creation_flags(CREATE_NO_WINDOW)
                         .stdout(std::process::Stdio::null())
                         .stderr(std::process::Stdio::null())
                         .status()
