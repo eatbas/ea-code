@@ -112,7 +112,7 @@ jobs:
           CXX: ""
         with:
           projectPath: frontend/desktop
-          args: --target universal-apple-darwin
+          args: --target universal-apple-darwin --bundles app,dmg
           tagName: v__VERSION__
           releaseName: "Maestro v__VERSION__"
           releaseBody: "See the assets below to download the installer for your platform."
