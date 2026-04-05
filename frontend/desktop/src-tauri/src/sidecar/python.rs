@@ -248,8 +248,5 @@ async fn check_python_version(executable: &str) -> bool {
     .stderr(std::process::Stdio::null());
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
-    cmd.status()
-        .await
-        .map(|s| s.success())
-        .unwrap_or(false)
+    cmd.status().await.map(|s| s.success()).unwrap_or(false)
 }

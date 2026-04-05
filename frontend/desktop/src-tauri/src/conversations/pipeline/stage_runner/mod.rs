@@ -122,7 +122,9 @@ pub async fn run_stage(
         mode,
         prompt: &prompt,
         provider_session_ref: provider_session_ref.as_deref(),
-        provider_options: crate::conversations::symphony_request::default_provider_options(&provider),
+        provider_options: crate::conversations::symphony_request::default_provider_options(
+            &provider,
+        ),
     };
 
     let emit_failed = |error_message: &str| -> (PipelineStageRecord, String) {

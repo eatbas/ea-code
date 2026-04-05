@@ -60,13 +60,11 @@ pub async fn check_prerequisites() -> Result<PrerequisiteStatus, String> {
             );
             #[cfg(target_os = "windows")]
             cmd.creation_flags(0x08000000);
-            let version = cmd.output().await
-                .ok()
-                .and_then(|o| {
-                    String::from_utf8(o.stdout)
-                        .ok()
-                        .map(|s| s.trim().to_string())
-                });
+            let version = cmd.output().await.ok().and_then(|o| {
+                String::from_utf8(o.stdout)
+                    .ok()
+                    .map(|s| s.trim().to_string())
+            });
             (true, version)
         }
         Err(_) => (false, None),
