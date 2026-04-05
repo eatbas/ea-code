@@ -125,6 +125,9 @@ jobs:
     needs: [build-windows, build-macos]
     permissions:
       contents: write
+    defaults:
+      run:
+        working-directory: .
     steps:
       - name: Publish merged updater manifest
         env:
