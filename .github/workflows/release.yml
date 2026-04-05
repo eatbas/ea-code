@@ -64,7 +64,7 @@ jobs:
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: true
-          includeUpdaterJson: true
+          includeUpdaterJson: false
 
   build-macos:
     runs-on: macos-latest
@@ -97,7 +97,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build Tauri app (macOS universal DMG)
+      - name: Build Tauri app (macOS universal bundle)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -112,10 +112,102 @@ jobs:
           CXX: ""
         with:
           projectPath: frontend/desktop
-          args: --target universal-apple-darwin --bundles dmg
+          args: --target universal-apple-darwin
           tagName: v__VERSION__
           releaseName: "Maestro v__VERSION__"
           releaseBody: "See the assets below to download the installer for your platform."
           releaseDraft: false
           prerelease: false
-          includeUpdaterJson: true
+          includeUpdaterJson: false
+
+  publish-updater-manifest:
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-macos]
+    permissions:
+      contents: write
+    steps:
+      - name: Publish merged updater manifest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          api_url="https://api.github.com/repos/${REPOSITORY}/releases/tags/${TAG}"
+          release_json="$(mktemp)"
+
+          curl -fsSL \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${api_url}" > "${release_json}"
+
+          version="${TAG#v}"
+          pub_date="$(jq -r '.published_at // .created_at' "${release_json}")"
+          notes="$(jq -r '.body // ""' "${release_json}")"
+
+          asset_url() {
+            local pattern="$1"
+            jq -r --arg pattern "${pattern}" '
+              .assets[]
+              | select(.name | test($pattern))
+              | .browser_download_url
+            ' "${release_json}" | head -n 1
+          }
+
+          fetch_asset_text() {
+            local url="$1"
+            curl -fsSL "${url}"
+          }
+
+          windows_url="$(asset_url "Maestro_[0-9.]+_x64-setup\\.exe$")"
+          windows_sig_url="$(asset_url "Maestro_[0-9.]+_x64-setup\\.exe\\.sig$")"
+          macos_url="$(asset_url "\\.app\\.tar\\.gz$")"
+          macos_sig_url="$(asset_url "\\.app\\.tar\\.gz\\.sig$")"
+
+          if [ -z "${windows_url}" ] || [ -z "${windows_sig_url}" ]; then
+            echo "Missing Windows updater assets in release ${TAG}" >&2
+            exit 1
+          fi
+
+          if [ -z "${macos_url}" ] || [ -z "${macos_sig_url}" ]; then
+            echo "Missing macOS updater assets in release ${TAG}" >&2
+            exit 1
+          fi
+
+          windows_sig="$(fetch_asset_text "${windows_sig_url}")"
+          macos_sig="$(fetch_asset_text "${macos_sig_url}")"
+
+          jq -n \
+            --arg version "${version}" \
+            --arg notes "${notes}" \
+            --arg pub_date "${pub_date}" \
+            --arg windows_url "${windows_url}" \
+            --arg windows_sig "${windows_sig}" \
+            --arg macos_url "${macos_url}" \
+            --arg macos_sig "${macos_sig}" \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "windows-x86_64": {
+                  signature: $windows_sig,
+                  url: $windows_url
+                },
+                "windows-x86_64-nsis": {
+                  signature: $windows_sig,
+                  url: $windows_url
+                },
+                "darwin-aarch64": {
+                  signature: $macos_sig,
+                  url: $macos_url
+                },
+                "darwin-x86_64": {
+                  signature: $macos_sig,
+                  url: $macos_url
+                }
+              }
+            }' > latest.json
+
+          gh release upload "${TAG}" latest.json --clobber --repo "${REPOSITORY}"
