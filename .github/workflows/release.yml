@@ -120,6 +120,29 @@ jobs:
           prerelease: false
           includeUpdaterJson: false
 
+      - name: Upload macOS updater artefacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          bundle_dir="src-tauri/target/universal-apple-darwin/release/bundle/macos"
+          updater_archive="$(find "${bundle_dir}" -maxdepth 1 -type f -name '*.app.tar.gz' | head -n 1)"
+          updater_signature="$(find "${bundle_dir}" -maxdepth 1 -type f -name '*.app.tar.gz.sig' | head -n 1)"
+
+          if [ -z "${updater_archive}" ] || [ -z "${updater_signature}" ]; then
+            echo "Expected macOS updater artefacts were not generated in ${bundle_dir}" >&2
+            echo "Contents of ${bundle_dir}:" >&2
+            ls -la "${bundle_dir}" >&2 || true
+            exit 1
+          fi
+
+          gh release upload "${{ github.ref_name }}" \
+            "${updater_archive}" \
+            "${updater_signature}" \
+            --clobber \
+            --repo "${{ github.repository }}"
+
   publish-updater-manifest:
     runs-on: ubuntu-latest
     needs: [build-windows, build-macos]
