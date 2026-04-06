@@ -98,7 +98,16 @@ export function useConversationViewModel({
 
     let cancelled = false;
     void getPipelineState(workspace.path, activeConversation.summary.id).then((state) => {
-      if (cancelled || !state) {
+      if (cancelled) {
+        return;
+      }
+
+      if (!state) {
+        // No pipeline state — this is a simple task conversation.
+        // Auto-detect the mode so the agent selector stays visible.
+        if (pipelineMode === "auto") {
+          onPipelineModeChange("simple");
+        }
         return;
       }
 

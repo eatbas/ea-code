@@ -50,6 +50,7 @@ export function useConversationSession(
     setSending: state.setSending,
     setStoppingConversationId: state.setStoppingConversationId,
     stoppingConversationIdRef: state.stoppingConversationIdRef,
+    transferPipelineModeToConversation: state.transferPipelineModeToConversation,
   });
 
   return {

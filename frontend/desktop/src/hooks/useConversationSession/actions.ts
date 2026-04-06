@@ -35,6 +35,7 @@ interface UseConversationSessionActionParams {
   setSending: Dispatch<SetStateAction<boolean>>;
   setStoppingConversationId: Dispatch<SetStateAction<string | null>>;
   stoppingConversationIdRef: MutableRefObject<string | null>;
+  transferPipelineModeToConversation: (workspacePath: string, conversationId: string) => void;
 }
 
 export function useConversationSessionActions({
@@ -49,6 +50,7 @@ export function useConversationSessionActions({
   setSending,
   setStoppingConversationId,
   stoppingConversationIdRef,
+  transferPipelineModeToConversation,
 }: UseConversationSessionActionParams) {
   const openConversation = useCallback(async (conversationId: string): Promise<void> => {
     if (!workspace) {
@@ -106,6 +108,7 @@ export function useConversationSessionActions({
       }
 
       const created = await createConversation(workspacePath, agent, prompt);
+      transferPipelineModeToConversation(workspacePath, created.summary.id);
       const running = await sendConversationTurn(workspacePath, created.summary.id, prompt);
       setPromptDrafts((previous) => ({
         ...previous,
@@ -125,7 +128,7 @@ export function useConversationSessionActions({
     } finally {
       setSending(false);
     }
-  }, [activeConversation, setActiveConversation, setConversations, setPromptDrafts, setSending, toast, workspace]);
+  }, [activeConversation, setActiveConversation, setConversations, setPromptDrafts, setSending, toast, transferPipelineModeToConversation, workspace]);
 
   const stopActiveConversation = useCallback(async (): Promise<void> => {
     if (!workspace || !activeConversation) {

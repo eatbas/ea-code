@@ -58,6 +58,7 @@ export interface UseConversationSessionState {
   activePipelineMode: PipelineMode;
   updateActivePipelineMode: (mode: PipelineMode) => void;
   resetPipelineModeForNewConversation: (workspacePath: string) => void;
+  transferPipelineModeToConversation: (workspacePath: string, conversationId: string) => void;
 }
 
 export function useConversationSessionState(
@@ -250,6 +251,21 @@ export function useConversationSessionState(
     setPipelineModes((previous) => ({ ...previous, [key]: "auto" }));
   }, []);
 
+  const transferPipelineModeToConversation = useCallback((
+    workspacePath: string,
+    conversationId: string,
+  ): void => {
+    const nullKey = promptDraftKey(workspacePath, null);
+    const newKey = promptDraftKey(workspacePath, conversationId);
+    setPipelineModes((previous) => {
+      const mode = previous[nullKey];
+      if (!mode || mode === "auto") {
+        return previous;
+      }
+      return { ...previous, [newKey]: mode };
+    });
+  }, []);
+
   return {
     conversations,
     setConversations,
@@ -274,5 +290,6 @@ export function useConversationSessionState(
     activePipelineMode,
     updateActivePipelineMode,
     resetPipelineModeForNewConversation,
+    transferPipelineModeToConversation,
   };
 }
