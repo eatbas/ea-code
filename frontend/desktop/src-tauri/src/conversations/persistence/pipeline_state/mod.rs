@@ -1,3 +1,4 @@
+pub(super) mod artifacts;
 mod hydration;
 mod reconstruction;
 

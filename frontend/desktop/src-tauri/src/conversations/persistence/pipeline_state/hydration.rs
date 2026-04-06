@@ -1,5 +1,6 @@
 use crate::models::{ConversationStatus, PipelineStageRecord, PipelineState};
 
+use super::artifacts::artifact_path_for_stage;
 use super::super::paths::conversation_dir;
 
 fn hydrate_from_file(stage: &mut PipelineStageRecord, path: &std::path::Path) {
@@ -25,50 +26,13 @@ pub(super) fn hydrate_stage_text(
     conversation_id: &str,
     state: &mut PipelineState,
 ) {
-    let conversation_root = conversation_dir(workspace_path, conversation_id);
-    let orchestrator_file = conversation_root
-        .join("prompt_enhanced")
-        .join("prompt_enhanced_output.json");
-    let plan_dir = conversation_root.join("plan");
-    let merged_file = conversation_root.join("plan_merged").join("plan_merged.md");
-    let coder_file = conversation_root.join("coder").join("coder_done.md");
-    let review_dir = conversation_root.join("review");
-    let review_merged_file = conversation_root
-        .join("review_merged")
-        .join("review_merged.md");
-    let code_fixer_file = conversation_root
-        .join("code_fixer")
-        .join("code_fixer_done.md");
+    let merged_file = conversation_dir(workspace_path, conversation_id)
+        .join("plan_merged")
+        .join("plan_merged.md");
 
     for stage in &mut state.stages {
-        if stage.stage_name == "Prompt Enhancer" {
-            hydrate_from_file(stage, &orchestrator_file);
-        } else if stage.stage_name.starts_with("Planner") {
-            // Extract planner number from stage name (e.g. "Planner 1" → 1)
-            // rather than deriving from stage_index, which shifts when an
-            // orchestrator stage occupies index 0.
-            let planner_number = stage
-                .stage_name
-                .strip_prefix("Planner ")
-                .and_then(|n| n.parse::<usize>().ok())
-                .unwrap_or(stage.stage_index + 1);
-            let plan_file = plan_dir.join(format!("Plan-{planner_number}.md"));
-            hydrate_from_file(stage, &plan_file);
-        } else if stage.stage_name == "Plan Merge" {
-            hydrate_from_file(stage, &merged_file);
-        } else if stage.stage_name == "Coder" {
-            hydrate_from_file(stage, &coder_file);
-        } else if stage.stage_name.starts_with("Reviewer") {
-            if let Some(reviewer_number) = stage.stage_name.strip_prefix("Reviewer ") {
-                if let Ok(reviewer_index) = reviewer_number.parse::<usize>() {
-                    let review_file = review_dir.join(format!("Review-{reviewer_index}.md"));
-                    hydrate_from_file(stage, &review_file);
-                }
-            }
-        } else if stage.stage_name == "Review Merge" {
-            hydrate_from_file(stage, &review_merged_file);
-        } else if stage.stage_name == "Code Fixer" {
-            hydrate_from_file(stage, &code_fixer_file);
+        if let Some(path) = artifact_path_for_stage(workspace_path, conversation_id, stage) {
+            hydrate_from_file(stage, &path);
         }
     }
 

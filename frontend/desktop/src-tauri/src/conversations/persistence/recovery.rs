@@ -5,9 +5,11 @@ use crate::storage::{atomic_write, now_rfc3339};
 
 use super::io::{read_messages_unlocked, read_summary_unlocked, write_summary_unlocked};
 use super::paths::{
-    conversation_backup_file_path, conversation_dir, conversation_file_path, orchestrator_output_path,
-    pipeline_file_path, plan_dir_path, prompt_file_path, RECOVERED_SUMMARY_ERROR, STALE_RUNNING_ERROR,
+    conversation_backup_file_path, conversation_dir, conversation_file_path,
+    orchestrator_output_path, pipeline_file_path, plan_dir_path, prompt_file_path,
+    RECOVERED_SUMMARY_ERROR, STALE_RUNNING_ERROR,
 };
+use super::pipeline_state::artifacts::artifact_path_for_stage;
 use super::pipeline_state::load_pipeline_state;
 use super::registries::is_running_conversation_tracked;
 
@@ -232,20 +234,31 @@ pub(super) fn load_summary_with_recovery_unlocked(
 pub(super) fn reconcile_stale_running_unlocked(
     summary: &mut ConversationSummary,
 ) -> Result<(), String> {
-    if summary.status != ConversationStatus::Running {
+    let dominated_by_pipeline = matches!(
+        summary.status,
+        ConversationStatus::Running | ConversationStatus::AwaitingReview
+    );
+    if !dominated_by_pipeline {
         return Ok(());
     }
     if is_running_conversation_tracked(&summary.workspace_path, &summary.id)? {
         return Ok(());
     }
 
-    summary.status = ConversationStatus::Failed;
     summary.active_score_id = None;
     summary.error = Some(STALE_RUNNING_ERROR.to_string());
     summary.updated_at = now_rfc3339();
-    write_summary_unlocked(summary)?;
 
     reconcile_stale_pipeline_stages(&summary.workspace_path, &summary.id);
+
+    // Re-derive conversation status from the now-reconciled pipeline stages.
+    if let Ok(Some(state)) = load_pipeline_state(&summary.workspace_path, &summary.id) {
+        summary.status = recover_status_from_pipeline_state(&state);
+    } else {
+        summary.status = ConversationStatus::Failed;
+    }
+
+    write_summary_unlocked(summary)?;
     Ok(())
 }
 
@@ -260,21 +273,23 @@ fn reconcile_stale_pipeline_stages(workspace_path: &str, conversation_id: &str) 
         Err(_) => return,
     };
 
-    let plan_dir = conversation_dir(workspace_path, conversation_id).join("plan");
     let mut changed = false;
 
     for stage in &mut state.stages {
         if stage.status != ConversationStatus::Running {
             continue;
         }
-        let plan_file = plan_dir.join(format!("Plan-{}.md", stage.stage_index + 1));
-        if plan_file.exists() {
+
+        let artifact_exists = artifact_path_for_stage(workspace_path, conversation_id, stage)
+            .map(|p| p.exists())
+            .unwrap_or(false);
+
+        if artifact_exists {
             stage.status = ConversationStatus::Completed;
-            stage.finished_at = Some(now_rfc3339());
         } else {
             stage.status = ConversationStatus::Failed;
-            stage.finished_at = Some(now_rfc3339());
         }
+        stage.finished_at = Some(now_rfc3339());
         changed = true;
     }
 
