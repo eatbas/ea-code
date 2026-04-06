@@ -195,6 +195,15 @@ else
   info "npm packages up to date"
 fi
 
+# ── Dev environment ─────────────────────────────────────────────────────────
+ENV_FILE="$DESKTOP_DIR/.env"
+if [ ! -f "$ENV_FILE" ]; then
+  printf 'VITE_MAESTRO_DEV=true\n' > "$ENV_FILE"
+  info "Created $ENV_FILE (enables pipeline debug panel)"
+else
+  info ".env present"
+fi
+
 # ── Launch ───────────────────────────────────────────────────────────────────
 header "Starting Maestro"
 info "Running tauri dev from $DESKTOP_DIR"

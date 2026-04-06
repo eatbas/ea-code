@@ -441,45 +441,47 @@ export function PipelineConversationView({
             </div>
           ))}
 
-          <div className="rounded-2xl border border-edge bg-panel">
-            <div className="flex items-center justify-between border-b border-edge px-4 py-3">
-              <button
-                type="button"
-                onClick={() => setDebugOpen((open) => !open)}
-                className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                aria-expanded={debugOpen}
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
-                    Pipeline Debug
-                  </p>
-                  <p className="text-xs text-fg-muted">
-                    Tauri backend trace. Copy this and send it back for diagnosis.
-                  </p>
-                </div>
-                <ChevronDown
-                  size={14}
-                  className={`shrink-0 text-fg-muted transition-transform ${debugOpen ? "rotate-180" : ""}`}
-                />
-              </button>
-              <button
-                type="button"
-                onClick={() => { void handleCopyDebugLog(); }}
-                disabled={!debugLog.trim()}
-                className="ml-3 inline-flex items-center gap-2 rounded-lg border border-edge bg-elevated px-3 py-1.5 text-xs font-semibold text-fg transition-colors hover:bg-active disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Clipboard size={12} />
-                {copiedDebug ? "Copied" : "Copy Log"}
-              </button>
-            </div>
-            {debugOpen && (
-              <div className="max-h-56 overflow-auto px-4 py-3 pipeline-scroll">
-                <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-fg-muted">
-                  {debugLog || "Waiting for pipeline debug output..."}
-                </pre>
+          {import.meta.env.VITE_MAESTRO_DEV === "true" && (
+            <div className="rounded-2xl border border-edge bg-panel">
+              <div className="flex items-center justify-between border-b border-edge px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setDebugOpen((open) => !open)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  aria-expanded={debugOpen}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
+                      Pipeline Debug
+                    </p>
+                    <p className="text-xs text-fg-muted">
+                      Tauri backend trace. Copy this and send it back for diagnosis.
+                    </p>
+                  </div>
+                  <ChevronDown
+                    size={14}
+                    className={`shrink-0 text-fg-muted transition-transform ${debugOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { void handleCopyDebugLog(); }}
+                  disabled={!debugLog.trim()}
+                  className="ml-3 inline-flex items-center gap-2 rounded-lg border border-edge bg-elevated px-3 py-1.5 text-xs font-semibold text-fg transition-colors hover:bg-active disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Clipboard size={12} />
+                  {copiedDebug ? "Copied" : "Copy Log"}
+                </button>
               </div>
-            )}
-          </div>
+              {debugOpen && (
+                <div className="max-h-56 overflow-auto px-4 py-3 pipeline-scroll">
+                  <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-fg-muted">
+                    {debugLog || "Waiting for pipeline debug output..."}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
 
           {!hasStages && (
             <div className="flex items-center justify-center py-10">
