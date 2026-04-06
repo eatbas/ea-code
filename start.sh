@@ -197,9 +197,13 @@ fi
 
 # ── Dev environment ─────────────────────────────────────────────────────────
 ENV_FILE="$DESKTOP_DIR/.env"
-if [ ! -f "$ENV_FILE" ]; then
+ENV_EXAMPLE="$DESKTOP_DIR/.env.example"
+if [ ! -f "$ENV_FILE" ] && [ -f "$ENV_EXAMPLE" ]; then
+  cp "$ENV_EXAMPLE" "$ENV_FILE"
+  info "Created .env from .env.example (enables pipeline debug panel)"
+elif [ ! -f "$ENV_FILE" ]; then
   printf 'VITE_MAESTRO_DEV=true\n' > "$ENV_FILE"
-  info "Created $ENV_FILE (enables pipeline debug panel)"
+  info "Created .env (enables pipeline debug panel)"
 else
   info ".env present"
 fi
