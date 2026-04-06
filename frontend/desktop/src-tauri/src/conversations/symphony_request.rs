@@ -20,13 +20,22 @@ pub struct SymphonyChatRequest<'a> {
 }
 
 /// Apply provider-specific defaults for Maestro-managed runs.
-pub fn default_provider_options(provider: &str) -> SymphonyProviderOptions {
+///
+/// When `thinking_level` is `Some`, the value is forwarded to the
+/// Symphony provider adapter as `"thinking_level"` in the options map.
+pub fn default_provider_options(
+    provider: &str,
+    thinking_level: Option<&str>,
+) -> SymphonyProviderOptions {
     let mut options = SymphonyProviderOptions::new();
     if provider.eq_ignore_ascii_case("claude") {
         options.insert(
             "max_turns".to_string(),
             Value::Number(CLAUDE_DEFAULT_MAX_TURNS.into()),
         );
+    }
+    if let Some(level) = thinking_level {
+        options.insert("thinking_level".to_string(), Value::String(level.to_string()));
     }
     options
 }
@@ -39,12 +48,21 @@ mod tests {
 
     #[test]
     fn claude_defaults_raise_auto_mode_turn_limit() {
-        let options = default_provider_options("claude");
+        let options = default_provider_options("claude", None);
         assert_eq!(options.get("max_turns"), Some(&Value::from(200)));
     }
 
     #[test]
     fn non_claude_defaults_are_empty() {
-        assert!(default_provider_options("codex").is_empty());
+        assert!(default_provider_options("codex", None).is_empty());
+    }
+
+    #[test]
+    fn thinking_level_is_forwarded() {
+        let options = default_provider_options("claude", Some("medium"));
+        assert_eq!(
+            options.get("thinking_level"),
+            Some(&Value::String("medium".to_string())),
+        );
     }
 }

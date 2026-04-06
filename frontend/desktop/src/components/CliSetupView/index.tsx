@@ -64,6 +64,16 @@ export function CliSetupView({
     }
   }, [refreshAll]);
 
+  function handleThinkingChange(providerName: string, value: string): void {
+    const updated: Record<string, string> = { ...settings.providerThinking };
+    if (value) {
+      updated[providerName] = value;
+    } else {
+      delete updated[providerName];
+    }
+    onSave({ ...settings, providerThinking: updated });
+  }
+
   function handleToggleModel(providerName: string, model: string): void {
     if (actionsDisabled) return;
     const provider = providers.find((p) => p.name === providerName);
@@ -169,9 +179,11 @@ export function CliSetupView({
                   updating={updating === p.name}
                   actionsDisabled={actionsDisabled}
                   enabledModels={getEnabledModels(settings, p.name)}
+                  thinkingLevel={settings.providerThinking?.[p.name] ?? ""}
                   onToggleModel={(model) => handleToggleModel(p.name, model)}
                   onToggleAll={(selectAll) => handleToggleAll(p.name, selectAll)}
                   onUpdate={() => void handleUpdateCli(p.name)}
+                  onThinkingChange={(value) => handleThinkingChange(p.name, value)}
                 />
               ))}
             </div>

@@ -86,6 +86,10 @@ pub struct AppSettings {
     /// Whether permission-request notifications are enabled.
     #[serde(default)]
     pub permission_notifications: bool,
+    /// Per-provider thinking / reasoning effort level
+    /// (e.g. {"claude": "high", "codex": "medium"}).
+    #[serde(default)]
+    pub provider_thinking: HashMap<String, String>,
 }
 
 fn default_theme() -> String {
@@ -124,11 +128,21 @@ impl Default for AppSettings {
             keep_awake: false,
             completion_notifications: default_completion_notifications(),
             permission_notifications: false,
+            provider_thinking: HashMap::new(),
         }
     }
 }
 
 impl AppSettings {
+    /// Returns the configured thinking / reasoning effort level for a provider,
+    /// or `None` when the user has not set one (meaning "use the CLI default").
+    pub fn thinking_level_for_provider(&self, provider: &str) -> Option<&str> {
+        self.provider_thinking
+            .get(provider)
+            .map(String::as_str)
+            .filter(|v| !v.is_empty())
+    }
+
     pub fn is_supported_cli(cli_name: &str) -> bool {
         AgentBackend::from_cli_name(cli_name).is_some()
     }

@@ -61,6 +61,8 @@ export interface AppSettings {
   completionNotifications: "always" | "never" | "when_in_background";
   /** Whether permission-request notifications are enabled. */
   permissionNotifications: boolean;
+  /** Per-provider thinking / reasoning effort level (e.g. { claude: "high", codex: "medium" }). */
+  providerThinking: Record<string, string>;
 }
 
 /** Default settings values. */
@@ -86,4 +88,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   keepAwake: false,
   completionNotifications: "never",
   permissionNotifications: false,
+  providerThinking: {},
 };

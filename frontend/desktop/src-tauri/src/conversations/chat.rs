@@ -129,6 +129,9 @@ pub async fn run_conversation_turn(
     } else {
         "new"
     };
+    let thinking_level = crate::storage::settings::read_settings()
+        .ok()
+        .and_then(|s| s.thinking_level_for_provider(&summary.agent.provider).map(str::to_string));
     let request = SymphonyChatRequest {
         provider: &summary.agent.provider,
         model: &summary.agent.model,
@@ -136,7 +139,10 @@ pub async fn run_conversation_turn(
         mode,
         prompt: &prompt,
         provider_session_ref: summary.last_provider_session_ref.as_deref(),
-        provider_options: default_provider_options(&summary.agent.provider),
+        provider_options: default_provider_options(
+            &summary.agent.provider,
+            thinking_level.as_deref(),
+        ),
     };
 
     let accepted = match submit_score(&request).await {

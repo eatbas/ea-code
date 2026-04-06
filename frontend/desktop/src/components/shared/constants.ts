@@ -66,6 +66,24 @@ export function formatAssistantLabel(provider: string, model: string): string {
   return `${providerLabel} ${modelLabel}`;
 }
 
+/** Thinking / reasoning effort options per provider. */
+export const THINKING_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  claude: [
+    { value: "", label: "Default (High)" },
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Medium" },
+    { value: "high", label: "High" },
+    { value: "max", label: "Max" },
+  ],
+  codex: [
+    { value: "", label: "Default (Medium)" },
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Medium" },
+    { value: "high", label: "High" },
+    { value: "xhigh", label: "Extra High" },
+  ],
+};
+
 /** Returns providers sorted by their display label. */
 export function sortProvidersByDisplayName(providers: ProviderInfo[]): ProviderInfo[] {
   return [...providers].sort((a, b) => (
