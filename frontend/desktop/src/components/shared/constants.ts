@@ -82,6 +82,11 @@ export const THINKING_OPTIONS: Record<string, { value: string; label: string }[]
     { value: "high", label: "High" },
     { value: "xhigh", label: "Extra High" },
   ],
+  kimi: [
+    { value: "", label: "Default (On)" },
+    { value: "on", label: "On" },
+    { value: "off", label: "Off" },
+  ],
 };
 
 /** Short labels for the trigger button, keyed by option value.
@@ -89,6 +94,7 @@ export const THINKING_OPTIONS: Record<string, { value: string; label: string }[]
 export const THINKING_TRIGGER_LABELS: Record<string, Record<string, string>> = {
   claude: { "": "Default" },
   codex: { "": "Default" },
+  kimi: { "": "Default" },
 };
 
 /** Returns providers sorted by their display label. */
