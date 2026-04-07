@@ -7,6 +7,7 @@ import type {
   ProjectEntry,
   WorkspaceInfo,
 } from "../types";
+import type { PendingImage } from "./useImageAttachments";
 import {
   archiveConversation as archiveConversationApi,
   deleteConversation as deleteConversationApi,
@@ -35,7 +36,7 @@ interface UseConversationStoreReturn {
   sending: boolean;
   stopping: boolean;
   updateActivePromptDraft: (prompt: string) => void;
-  sendPrompt: (prompt: string, agent: AgentSelection) => Promise<void>;
+  sendPrompt: (prompt: string, agent: AgentSelection, pendingImages?: PendingImage[]) => Promise<void>;
   stopActiveConversation: () => Promise<void>;
 
   /** Sidebar conversation index keyed by project path. */
@@ -152,8 +153,8 @@ export function useConversationStore(
     sending,
     stopping,
     updateActivePromptDraft,
-    sendPrompt: async (prompt: string, agent: AgentSelection): Promise<void> => {
-      const summary = await sendPrompt(prompt, agent);
+    sendPrompt: async (prompt: string, agent: AgentSelection, pendingImages?: PendingImage[]): Promise<void> => {
+      const summary = await sendPrompt(prompt, agent, pendingImages);
       if (summary) {
         upsertInIndex(summary);
       }

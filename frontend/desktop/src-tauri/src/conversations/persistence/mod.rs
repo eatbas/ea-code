@@ -1,5 +1,6 @@
 mod crud;
 mod debug_log;
+mod images;
 mod io;
 mod paths;
 mod pipeline_state;
@@ -20,6 +21,8 @@ pub use crud::{
 };
 
 pub use debug_log::{append_pipeline_debug_log, read_pipeline_debug_log};
+
+pub use images::save_image;
 
 pub use pipeline_state::{
     load_pipeline_state, mark_running_pipeline_stages_stopped, save_pipeline_state,

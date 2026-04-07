@@ -1,4 +1,5 @@
 import type { AgentSelection, ConversationDetail, ConversationSummary, WorkspaceInfo } from "../../types";
+import type { PendingImage } from "../useImageAttachments";
 import { useToast } from "../../components/shared/Toast";
 import { useConversationSessionActions } from "./actions";
 import {
@@ -23,7 +24,7 @@ interface UseConversationSessionReturn {
   updateActivePromptDraft: (prompt: string) => void;
   openConversation: (conversationId: string) => Promise<void>;
   startNewConversation: () => void;
-  sendPrompt: (prompt: string, agent: AgentSelection) => Promise<ConversationSummary | null>;
+  sendPrompt: (prompt: string, agent: AgentSelection, pendingImages?: PendingImage[]) => Promise<ConversationSummary | null>;
   stopActiveConversation: () => Promise<void>;
   deleteConversationById: (conversationId: string) => Promise<boolean>;
   renameConversationById: (conversationId: string, title: string) => Promise<ConversationSummary | null>;

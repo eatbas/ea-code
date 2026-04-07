@@ -3,7 +3,9 @@ import { useCallback, useRef } from "react";
 import type { PlanReviewPhase } from "../../../hooks/usePlanReview";
 import type { AgentSelection, ProviderInfo } from "../../../types";
 import { useAutoResizeTextarea } from "../../../hooks/useAutoResizeTextarea";
+import { type PendingImage, useImageAttachments } from "../../../hooks/useImageAttachments";
 import { ComposerToolbar } from "./ComposerToolbar";
+import { ImageThumbnails } from "./ImageThumbnails";
 import { PromptInput } from "./PromptInput";
 import { usePromptHistoryNavigation } from "./usePromptHistoryNavigation";
 
@@ -24,11 +26,13 @@ interface ConversationComposerProps {
   sidecarReady: boolean | null;
   thinkingLevel: string;
   thinkingOptions: { value: string; label: string }[] | undefined;
+  workspacePath: string;
+  conversationId: string | null;
   onPipelineModeChange: (mode: PipelineMode) => void;
   onAgentChange: (agent: AgentSelection) => void;
   onThinkingChange: (value: string) => void;
   onPromptChange: (prompt: string) => void;
-  onSend: (prompt: string) => Promise<void>;
+  onSend: (prompt: string, pendingImages?: PendingImage[]) => Promise<void>;
   onStop: () => Promise<void>;
   onResumePipeline?: () => void;
   onNewPipeline?: () => void;
@@ -50,6 +54,8 @@ export function ConversationComposer({
   sidecarReady,
   thinkingLevel,
   thinkingOptions,
+  workspacePath,
+  conversationId,
   onPipelineModeChange,
   onAgentChange,
   onThinkingChange,
@@ -64,6 +70,16 @@ export function ConversationComposer({
   const resetHistoryRef = useRef<() => void>(() => undefined);
   useAutoResizeTextarea(textareaRef, prompt);
 
+  const {
+    addImages,
+    buildPromptWithImages,
+    clearImages,
+    pendingImages,
+    hasImages,
+    allPreviews,
+    removeImage,
+  } = useImageAttachments(workspacePath, conversationId);
+
   const isReviewing = planReviewPhase === "reviewing";
   const isEditing = planReviewPhase === "editing";
   const isSubmittingEdit = planReviewPhase === "submitting_edit";
@@ -76,16 +92,22 @@ export function ConversationComposer({
     || prompt.trim().length === 0
     || sidecarReady !== true;
 
+  const handleImagePaste = useCallback((files: File[]) => {
+    void addImages(files);
+  }, [addImages]);
+
   const handleSubmit = useCallback(async () => {
     const trimmed = prompt.trim();
     if (!trimmed || !agent) {
       return;
     }
 
-    await onSend(trimmed);
+    const finalPrompt = buildPromptWithImages(trimmed);
+    await onSend(finalPrompt, pendingImages);
     onPromptChange("");
+    clearImages();
     resetHistoryRef.current();
-  }, [agent, onPromptChange, onSend, prompt]);
+  }, [agent, buildPromptWithImages, clearImages, onPromptChange, onSend, pendingImages, prompt]);
 
   const promptNavigation = usePromptHistoryNavigation({
     prompt,
@@ -100,6 +122,12 @@ export function ConversationComposer({
   return (
     <div className="bg-surface px-5 pb-2 pt-1">
       <div className="rounded-[20px] border border-edge bg-panel shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
+        {hasImages && (
+          <ImageThumbnails
+            previews={allPreviews}
+            onRemove={removeImage}
+          />
+        )}
         <PromptInput
           prompt={prompt}
           disabled={composerDisabled}
@@ -107,6 +135,7 @@ export function ConversationComposer({
           textareaRef={textareaRef}
           onPromptChange={promptNavigation.handlePromptChange}
           onKeyDown={promptNavigation.handlePromptKeyDown}
+          onImagePaste={handleImagePaste}
         />
 
         {!inReviewFlow && (

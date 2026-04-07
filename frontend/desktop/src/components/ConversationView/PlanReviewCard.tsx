@@ -131,7 +131,7 @@ export function PlanReviewCard({
             tabIndex={0}
             onClick={onAccept}
             onMouseEnter={() => { if (isReviewing) setSelected(1); }}
-            className={`${optionBase} cursor-pointer ${selected === 1 && isReviewing ? optionActive : optionInactive}`}
+            className={`${optionBase} cursor-pointer ${selected === 1 && isReviewing ? optionActive : `${optionInactive} hover:bg-elevated hover:text-fg`}`}
           >
             <span className="font-mono text-xs text-fg-faint">1.</span>
             <span className={selected === 1 && isReviewing ? "font-semibold" : ""}>
@@ -154,7 +154,7 @@ export function PlanReviewCard({
             tabIndex={0}
             onClick={() => { if (isReviewing) onEdit(); }}
             onMouseEnter={() => { if (isReviewing) setSelected(2); }}
-            className={`${optionBase} ${isEditing ? optionActive : (selected === 2 && isReviewing ? optionActive : optionInactive)}`}
+            className={`${optionBase} ${isEditing ? optionActive : (selected === 2 && isReviewing ? optionActive : `${optionInactive} hover:bg-elevated hover:text-fg`)} ${isReviewing ? "cursor-pointer" : ""}`}
           >
             <span className="font-mono text-xs text-fg-faint">2.</span>
             {isEditing ? (

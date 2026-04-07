@@ -1,12 +1,14 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { useCallback } from "react";
 import type { AgentSelection, ConversationDetail, ConversationSummary, WorkspaceInfo } from "../../types";
+import type { PendingImage } from "../useImageAttachments";
 import {
   archiveConversation,
   createConversation,
   deleteConversation,
   getConversation,
   renameConversation,
+  saveConversationImage,
   sendConversationTurn,
   setConversationPinned,
   stopConversation,
@@ -18,6 +20,25 @@ import {
   updateActiveConversationSummary,
   upsertConversationSummary,
 } from "./helpers";
+import { blobToBase64, buildPromptWithImages } from "../../utils/imageUtils";
+
+async function flushAndSaveImages(
+  workspacePath: string,
+  conversationId: string,
+  pendingImages: PendingImage[],
+): Promise<string[]> {
+  const paths: string[] = [];
+  for (const pending of pendingImages) {
+    try {
+      const base64 = await blobToBase64(pending.blob);
+      const result = await saveConversationImage(workspacePath, conversationId, base64, pending.extension);
+      paths.push(result.filePath);
+    } catch (error) {
+      console.warn("[sendPrompt] Failed to save pending image:", error);
+    }
+  }
+  return paths;
+}
 
 interface ToastApi {
   error: (message: string) => void;
@@ -75,6 +96,7 @@ export function useConversationSessionActions({
   const sendPrompt = useCallback(async (
     prompt: string,
     agent: AgentSelection,
+    pendingImages?: PendingImage[],
   ): Promise<ConversationSummary | null> => {
     if (!workspace) {
       return null;
@@ -85,7 +107,12 @@ export function useConversationSessionActions({
 
     try {
       if (activeConversation) {
-        const updated = await sendConversationTurn(workspacePath, activeConversation.summary.id, prompt);
+        let finalPrompt = prompt;
+        if (pendingImages && pendingImages.length > 0) {
+          const paths = await flushAndSaveImages(workspacePath, activeConversation.summary.id, pendingImages);
+          finalPrompt = buildPromptWithImages(prompt, paths);
+        }
+        const updated = await sendConversationTurn(workspacePath, activeConversation.summary.id, finalPrompt);
         setPromptDrafts((previous) => ({
           ...previous,
           [promptDraftKey(workspacePath, activeConversation.summary.id)]: "",
@@ -109,7 +136,14 @@ export function useConversationSessionActions({
 
       const created = await createConversation(workspacePath, agent, prompt);
       transferPipelineModeToConversation(workspacePath, created.summary.id);
-      const running = await sendConversationTurn(workspacePath, created.summary.id, prompt);
+
+      let finalPrompt = prompt;
+      if (pendingImages && pendingImages.length > 0) {
+        const paths = await flushAndSaveImages(workspacePath, created.summary.id, pendingImages);
+        finalPrompt = buildPromptWithImages(prompt, paths);
+      }
+
+      const running = await sendConversationTurn(workspacePath, created.summary.id, finalPrompt);
       setPromptDrafts((previous) => ({
         ...previous,
         [promptDraftKey(workspacePath, null)]: "",

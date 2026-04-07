@@ -89,3 +89,8 @@ export interface PipelineState {
   stages: PipelineStageRecord[];
   enhancedPrompt?: string;
 }
+
+export interface ImageSaveResult {
+  fileName: string;
+  filePath: string;
+}

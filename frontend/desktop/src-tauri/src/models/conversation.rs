@@ -169,3 +169,10 @@ pub struct PipelineState {
 fn default_review_cycle() -> usize {
     1
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageSaveResult {
+    pub file_name: String,
+    pub file_path: String,
+}

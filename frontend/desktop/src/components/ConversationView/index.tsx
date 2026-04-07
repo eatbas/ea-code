@@ -1,5 +1,6 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import type { AgentSelection, ConversationDetail, WorkspaceInfo } from "../../types";
+import type { PendingImage } from "../../hooks/useImageAttachments";
 import type { PipelineMode } from "./ConversationComposer";
 import { PlanReviewCard } from "./PlanReviewCard";
 import { ConversationComposer } from "./ConversationComposer";
@@ -23,7 +24,7 @@ interface ConversationViewProps {
   onOpenProjectFolder: (path: string) => Promise<void>;
   onOpenInVsCode: (path: string) => Promise<void>;
   onPromptDraftChange: (prompt: string) => void;
-  onSendPrompt: (prompt: string, agent: AgentSelection) => Promise<void>;
+  onSendPrompt: (prompt: string, agent: AgentSelection, pendingImages?: PendingImage[]) => Promise<void>;
   onStopConversation: () => Promise<void>;
 }
 
@@ -99,6 +100,8 @@ export function ConversationView({
             sidecarReady={sidecarReady}
             thinkingLevel={viewModel.thinkingLevel}
             thinkingOptions={viewModel.thinkingOptions}
+            workspacePath={workspace.path}
+            conversationId={activeConversation?.summary.id ?? null}
             onPipelineModeChange={onPipelineModeChange}
             onAgentChange={viewModel.setSelectedAgent}
             onThinkingChange={viewModel.handleThinkingChange}

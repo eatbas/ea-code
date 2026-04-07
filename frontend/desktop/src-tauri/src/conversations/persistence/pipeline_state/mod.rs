@@ -63,8 +63,16 @@ pub fn load_pipeline_state(
         ));
     }
 
-    let data = std::fs::read_to_string(&path)
-        .map_err(|error| format!("Failed to read pipeline state: {error}"))?;
+    let data = match std::fs::read_to_string(&path) {
+        Ok(data) => data,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(reconstruct_pipeline_from_artifacts(
+                workspace_path,
+                conversation_id,
+            ));
+        }
+        Err(error) => return Err(format!("Failed to read pipeline state: {error}")),
+    };
     let mut state: PipelineState = serde_json::from_str(&data)
         .map_err(|error| format!("Failed to parse pipeline state: {error}"))?;
     hydrate_stage_text(workspace_path, conversation_id, &mut state);

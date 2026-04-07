@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { ActiveView, ConversationDetail, WorkspaceInfo, ProjectEntry, AgentSelection } from "../types";
+import type { PendingImage } from "../hooks/useImageAttachments";
 import type { PipelineMode } from "./ConversationView/ConversationComposer";
 import type { Dispatch, SetStateAction } from "react";
 import { IdleView } from "./IdleView";
@@ -25,7 +26,7 @@ interface AppContentRouterProps {
   sendingConversation: boolean;
   stoppingConversation: boolean;
   onPromptDraftChange: (prompt: string) => void;
-  onSendConversationPrompt: (prompt: string, agent: AgentSelection) => Promise<void>;
+  onSendConversationPrompt: (prompt: string, agent: AgentSelection, pendingImages?: PendingImage[]) => Promise<void>;
   onStopConversation: () => Promise<void>;
   projects: ProjectEntry[];
   onSelectProject: (projectPath: string) => Promise<void>;

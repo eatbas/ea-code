@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentSelection, ConversationDetail, WorkspaceInfo } from "../../types";
+import type { PendingImage } from "../../hooks/useImageAttachments";
 import { useApiHealth } from "../../hooks/useApiHealth";
 import { useFooterErrorHandler } from "../../hooks/useFooterErrorHandler";
 import { usePipelineSession } from "../../hooks/usePipelineSession";
@@ -29,7 +30,7 @@ interface UseConversationViewModelParams {
   onSetActiveConversation: Dispatch<SetStateAction<ConversationDetail | null>>;
   pipelineMode: PipelineMode;
   onPipelineModeChange: (mode: PipelineMode) => void;
-  onSendPrompt: (prompt: string, agent: AgentSelection) => Promise<void>;
+  onSendPrompt: (prompt: string, agent: AgentSelection, pendingImages?: PendingImage[]) => Promise<void>;
   onStopConversation: () => Promise<void>;
 }
 
@@ -122,6 +123,8 @@ export function useConversationViewModel({
       if (pipelineMode === "auto") {
         onPipelineModeChange("code");
       }
+    }).catch((error) => {
+      console.warn("[pipeline] Failed to load pipeline state:", error);
     });
 
     void getPipelineDebugLog(workspace.path, activeConversation.summary.id).then((log) => {
@@ -188,7 +191,7 @@ export function useConversationViewModel({
     [activeConversation],
   );
 
-  const handleSend = useCallback(async (prompt: string) => {
+  const handleSend = useCallback(async (prompt: string, pendingImages?: PendingImage[]) => {
     if (pipelineMode === "code") {
       pipeline.reset();
       planReview.reset();
@@ -206,7 +209,7 @@ export function useConversationViewModel({
       return;
     }
 
-    await onSendPrompt(prompt, agent);
+    await onSendPrompt(prompt, agent, pendingImages);
   }, [activeConversation, onSendPrompt, onSetActiveConversation, pipeline, pipelineMode, planReview, selectedAgent, workspace.path]);
 
   const handleStop = useCallback(async () => {

@@ -75,6 +75,7 @@ pub fn run() {
             conversations::commands::conversation_handlers::archive_conversation,
             conversations::commands::conversation_handlers::unarchive_conversation,
             conversations::commands::conversation_handlers::set_conversation_pinned,
+            conversations::commands::image_handlers::save_conversation_image,
             conversations::commands::pipeline_handlers::actions::start_pipeline,
             conversations::commands::pipeline_handlers::actions::stop_pipeline,
             conversations::commands::pipeline_handlers::resume::resume_pipeline,

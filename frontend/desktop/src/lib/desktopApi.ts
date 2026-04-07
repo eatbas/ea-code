@@ -5,6 +5,7 @@ import type {
   AppSettings,
   ConversationDetail,
   ConversationSummary,
+  ImageSaveResult,
   PipelineState,
   PrerequisiteStatus,
   ProjectEntry,
@@ -286,5 +287,19 @@ export function setConversationPinned(
     workspacePath,
     conversationId,
     pinned,
+  });
+}
+
+export function saveConversationImage(
+  workspacePath: string,
+  conversationId: string,
+  imageBase64: string,
+  extension: string,
+): Promise<ImageSaveResult> {
+  return invokeCommand<ImageSaveResult>("save_conversation_image", {
+    workspacePath,
+    conversationId,
+    imageBase64,
+    extension,
   });
 }
