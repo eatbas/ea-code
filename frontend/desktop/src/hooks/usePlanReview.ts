@@ -130,15 +130,18 @@ export function usePlanReview({
   }, [awaitingReview, running, phase, clearTimer]);
 
   // When pipeline starts running during an edit, move to submitting_edit.
-  // When pipeline starts running after acceptance, go back to inactive
-  // so the PlanReviewCard disappears and the coding stages render.
+  // When pipeline starts running after acceptance (or if a stale
+  // loadFromSaved re-triggers the reviewing phase while the coding stage
+  // is already active), go back to inactive so the PlanReviewCard
+  // disappears and the coding stages render.
   useEffect(() => {
     if (running && phase === "editing") {
       setPhase("submitting_edit");
-    } else if (running && phase === "accepted") {
+    } else if (running && (phase === "accepted" || phase === "reviewing")) {
+      clearTimer();
       setPhase("inactive");
     }
-  }, [running, phase]);
+  }, [running, phase, clearTimer]);
 
   // When pipeline stops running and conversation goes back to awaiting_review
   // after a submitting_edit round, the awaitingReview effect above handles it.

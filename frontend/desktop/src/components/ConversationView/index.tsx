@@ -57,8 +57,9 @@ export function ConversationView({
     onStopConversation,
   });
 
-  const reviewingPlan = viewModel.planReview.phase === "reviewing"
-    || viewModel.planReview.phase === "editing";
+  const reviewingPlan = !viewModel.pipeline.running
+    && (viewModel.planReview.phase === "reviewing"
+      || viewModel.planReview.phase === "editing");
 
   return (
     <div className="flex h-full min-h-0 bg-surface">
