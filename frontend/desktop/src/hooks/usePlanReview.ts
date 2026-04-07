@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useToast } from "../components/shared/Toast";
 
 export type PlanReviewPhase =
   | "inactive"
@@ -34,18 +35,38 @@ interface UsePlanReviewOptions {
   onSubmitFeedback: (feedback: string) => Promise<void>;
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+  return fallback;
+}
+
 export function usePlanReview({
   awaitingReview,
   running,
   onAccept,
   onSubmitFeedback,
 }: UsePlanReviewOptions): UsePlanReviewReturn {
+  const toast = useToast();
   const [phase, setPhase] = useState<PlanReviewPhase>("inactive");
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onAcceptRef = useRef(onAccept);
   onAcceptRef.current = onAccept;
+  const onSubmitFeedbackRef = useRef(onSubmitFeedback);
+  onSubmitFeedbackRef.current = onSubmitFeedback;
   const prevAwaitingRef = useRef(false);
+  const awaitingReviewRef = useRef(awaitingReview);
+  awaitingReviewRef.current = awaitingReview;
+  const runningRef = useRef(running);
+  runningRef.current = running;
+  const acceptingRef = useRef(false);
+  const submittingFeedbackRef = useRef(false);
+  const acceptActionRef = useRef<() => void>(() => {});
 
   const clearTimer = useCallback(() => {
     if (intervalRef.current !== null) {
@@ -61,9 +82,7 @@ export function usePlanReview({
       setCountdown((prev) => {
         if (prev <= 1) {
           clearTimer();
-          // Auto-accept when countdown reaches zero.
-          void onAcceptRef.current();
-          setPhase("accepted");
+          acceptActionRef.current();
           return 0;
         }
         return prev - 1;
@@ -71,9 +90,21 @@ export function usePlanReview({
     }, 1000);
   }, [clearTimer]);
 
-  // When awaitingReview transitions from false→true → start reviewing.
+  const restoreReviewState = useCallback(() => {
+    if (awaitingReviewRef.current) {
+      setPhase("reviewing");
+      startCountdown();
+      return;
+    }
+
+    clearTimer();
+    setPhase("inactive");
+    setCountdown(COUNTDOWN_SECONDS);
+  }, [clearTimer, startCountdown]);
+
+  // When awaitingReview transitions from false to true, start reviewing.
   // We track the previous value so that a phase change alone (e.g.
-  // submitting_edit while awaitingReview is still true) doesn't
+  // submitting_edit while awaitingReview is still true) does not
   // immediately re-enter the reviewing state.
   useEffect(() => {
     const wasAwaiting = prevAwaitingRef.current;
@@ -85,8 +116,21 @@ export function usePlanReview({
     }
   }, [awaitingReview, phase, startCountdown]);
 
-  // When pipeline starts running during an edit → move to submitting_edit.
-  // When pipeline starts running after acceptance → go back to inactive
+  // If review mode disappears unexpectedly, clear the stale review UI.
+  useEffect(() => {
+    if (awaitingReview || running) {
+      return;
+    }
+
+    if (phase === "reviewing" || phase === "editing" || phase === "submitting_edit") {
+      clearTimer();
+      setPhase("inactive");
+      setCountdown(COUNTDOWN_SECONDS);
+    }
+  }, [awaitingReview, running, phase, clearTimer]);
+
+  // When pipeline starts running during an edit, move to submitting_edit.
+  // When pipeline starts running after acceptance, go back to inactive
   // so the PlanReviewCard disappears and the coding stages render.
   useEffect(() => {
     if (running && phase === "editing") {
@@ -97,7 +141,7 @@ export function usePlanReview({
   }, [running, phase]);
 
   // When pipeline stops running and conversation goes back to awaiting_review
-  // after a submitting_edit round → handled by the awaitingReview effect above.
+  // after a submitting_edit round, the awaitingReview effect above handles it.
 
   // Clean up interval on unmount.
   useEffect(() => clearTimer, [clearTimer]);
@@ -108,18 +152,47 @@ export function usePlanReview({
   }, [clearTimer]);
 
   const accept = useCallback(() => {
+    if (acceptingRef.current || !awaitingReviewRef.current || runningRef.current) {
+      return;
+    }
+
+    acceptingRef.current = true;
     clearTimer();
     setPhase("accepted");
-    void onAcceptRef.current();
-  }, [clearTimer]);
+    void onAcceptRef.current()
+      .catch((error: unknown) => {
+        restoreReviewState();
+        toast.error(getErrorMessage(error, "Failed to accept plan."));
+      })
+      .finally(() => {
+        acceptingRef.current = false;
+      });
+  }, [clearTimer, restoreReviewState, toast]);
+  acceptActionRef.current = accept;
 
   const submitFeedback = useCallback((feedback: string) => {
+    const trimmed = feedback.trim();
+    if (!trimmed || submittingFeedbackRef.current || !awaitingReviewRef.current) {
+      return;
+    }
+
+    submittingFeedbackRef.current = true;
+    clearTimer();
     setPhase("submitting_edit");
-    void onSubmitFeedback(feedback);
-  }, [onSubmitFeedback]);
+    void onSubmitFeedbackRef.current(trimmed)
+      .catch((error: unknown) => {
+        restoreReviewState();
+        toast.error(getErrorMessage(error, "Failed to update plan."));
+      })
+      .finally(() => {
+        submittingFeedbackRef.current = false;
+      });
+  }, [clearTimer, restoreReviewState, toast]);
 
   const reset = useCallback(() => {
     clearTimer();
+    acceptingRef.current = false;
+    submittingFeedbackRef.current = false;
     setPhase("inactive");
     setCountdown(COUNTDOWN_SECONDS);
   }, [clearTimer]);

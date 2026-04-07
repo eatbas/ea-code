@@ -421,20 +421,25 @@ pub async fn accept_plan(
     conversation_id: String,
 ) -> Result<ConversationDetail, String> {
     let detail = persistence::get_conversation(&workspace_path, &conversation_id)?;
+    if detail.summary.status == ConversationStatus::Running {
+        return Ok(detail);
+    }
+
     if detail.summary.status != ConversationStatus::AwaitingReview {
         return Err("Plan can only be accepted when status is awaiting_review".to_string());
     }
 
     let setup = prepare_pipeline(&workspace_path, &conversation_id)?;
+    let guard = begin_pipeline_task(&app, &workspace_path, &conversation_id)
+        .ok_or("Conversation is already running".to_string())?;
+    let running_detail = persistence::get_conversation(&workspace_path, &conversation_id)?;
 
     let app_handle = app.clone();
     let ws = workspace_path.clone();
     let conv_id = conversation_id.clone();
 
     tokio::spawn(async move {
-        let Some(_guard) = begin_pipeline_task(&app_handle, &ws, &conv_id) else {
-            return;
-        };
+        let _guard = guard;
 
         // Re-emit all completed planning stages (planners + merge) so the
         // frontend displays them after its state reset.
@@ -458,7 +463,7 @@ pub async fn accept_plan(
         pipeline_cleanup(&ws, &conv_id);
     });
 
-    Ok(detail)
+    Ok(running_detail)
 }
 
 #[tauri::command]

@@ -59,7 +59,10 @@ export function useConversationViewModel({
     running: pipeline.running,
     onAccept: async () => {
       if (!pipelineConversationId) return;
-      await acceptPlan(workspace.path, pipelineConversationId);
+      const detail = await acceptPlan(workspace.path, pipelineConversationId);
+      onSetActiveConversation((previous) => (
+        previous?.summary.id === detail.summary.id ? detail : previous
+      ));
     },
     onSubmitFeedback: async (feedback: string) => {
       if (!pipelineConversationId) return;

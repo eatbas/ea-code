@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
+import type { ConversationStatus } from "./types";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { useAppViewState } from "./hooks/useAppViewState";
 import { useConversationStore } from "./hooks/useConversationStore";
@@ -31,12 +32,21 @@ function App(): ReactNode {
   const { sidecarReady } = useSidecarReady();
   const { settings } = useSettings();
   useTaskLifecycle(settings);
-  const { status: updateStatus, updateVersion } = useUpdateCheck(false);
   const { status: prereqs, dismissed: prereqsDismissed, dismiss: dismissPrereqs } = usePrerequisites();
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [viewResetToken, setViewResetToken] = useState(0);
 
   const store = useConversationStore(projects, workspace);
+
+  const BUSY_STATUSES: ReadonlySet<ConversationStatus> = useMemo(
+    () => new Set<ConversationStatus>(["running", "awaiting_review"]),
+    [],
+  );
+  const conversationBusy = store.activeConversation !== null
+    && BUSY_STATUSES.has(store.activeConversation.summary.status);
+  const updatesBlocked = store.sending || conversationBusy;
+
+  const { status: updateStatus, updateVersion } = useUpdateCheck(updatesBlocked);
 
   const activeProjects = useMemo(
     () => projects.filter((project) => !project.archivedAt),

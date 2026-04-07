@@ -37,6 +37,7 @@ export function useUpdateInstall(updatesBlocked: boolean): UseUpdateInstallRetur
   const installingRef = useRef(false);
   const attemptedVersionRef = useRef<string | null>(null);
   const pendingUpdateRef = useRef<Update | null>(null);
+  const pendingRelaunchRef = useRef(false);
   const updatesBlockedRef = useRef(updatesBlocked);
 
   updatesBlockedRef.current = updatesBlocked;
@@ -64,10 +65,18 @@ export function useUpdateInstall(updatesBlocked: boolean): UseUpdateInstallRetur
 
     void update
       .downloadAndInstall()
-      .then(() => relaunch())
+      .then(() => {
+        if (updatesBlockedRef.current) {
+          pendingRelaunchRef.current = true;
+          setStatus("queued");
+          return;
+        }
+        void relaunch();
+      })
       .catch(() => {
         installingRef.current = false;
         attemptedVersionRef.current = null;
+        pendingRelaunchRef.current = false;
         setIdleState();
         closeUpdate(update);
         toast.error("Failed to install the update.");
@@ -99,9 +108,14 @@ export function useUpdateInstall(updatesBlocked: boolean): UseUpdateInstallRetur
     pendingUpdateRef.current = null;
   }
 
-  // When the blocker lifts, attempt to install any queued update.
+  // When the blocker lifts, relaunch if the update already installed, or
+  // install a queued update.
   useEffect(() => {
     if (!updatesBlocked) {
+      if (pendingRelaunchRef.current) {
+        void relaunch();
+        return;
+      }
       installPendingUpdate();
     }
   }, [updatesBlocked]);
