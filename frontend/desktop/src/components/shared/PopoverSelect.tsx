@@ -29,6 +29,9 @@ interface PopoverSelectProps {
   triggerClassName?: string;
   /** Optional menu style override. */
   menuClassName?: string;
+  /** Map from option value to a shorter label shown on the trigger button.
+   *  When provided, the menu still displays the full `label` from `options`. */
+  triggerLabels?: Record<string, string>;
 }
 
 /** Lightweight custom select rendered as a popover list. */
@@ -45,6 +48,7 @@ export function PopoverSelect({
   onOpen,
   triggerClassName,
   menuClassName,
+  triggerLabels,
 }: PopoverSelectProps): ReactNode {
   const [internalOpen, setInternalOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -58,7 +62,10 @@ export function PopoverSelect({
   const close = useCallback(() => setOpen(false), [setOpen]);
   useClickOutside(ref, close, open);
 
-  const selectedLabel = options.find((o) => o.value === value)?.label ?? placeholder;
+  const selectedOption = options.find((o) => o.value === value);
+  const selectedLabel = (triggerLabels && selectedOption ? triggerLabels[selectedOption.value] : undefined)
+    ?? selectedOption?.label
+    ?? placeholder;
 
   const positionClasses = direction === "up"
     ? "bottom-full mb-2"

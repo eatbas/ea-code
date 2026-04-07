@@ -131,7 +131,7 @@ pub async fn run_conversation_turn(
     };
     let thinking_level = crate::storage::settings::read_settings()
         .ok()
-        .and_then(|s| s.thinking_level_for_provider(&summary.agent.provider).map(str::to_string));
+        .and_then(|s| s.thinking_level(&summary.agent.provider, &summary.agent.model).map(str::to_string));
     let request = SymphonyChatRequest {
         provider: &summary.agent.provider,
         model: &summary.agent.model,

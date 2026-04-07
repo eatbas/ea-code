@@ -134,11 +134,14 @@ impl Default for AppSettings {
 }
 
 impl AppSettings {
-    /// Returns the configured thinking / reasoning effort level for a provider,
-    /// or `None` when the user has not set one (meaning "use the CLI default").
-    pub fn thinking_level_for_provider(&self, provider: &str) -> Option<&str> {
+    /// Returns the configured thinking / reasoning effort level for a specific
+    /// provider + model pair, or `None` when the user has not set one.
+    ///
+    /// Keys in `provider_thinking` use the composite format `"provider:model"`.
+    pub fn thinking_level(&self, provider: &str, model: &str) -> Option<&str> {
+        let key = format!("{provider}:{model}");
         self.provider_thinking
-            .get(provider)
+            .get(&key)
             .map(String::as_str)
             .filter(|v| !v.is_empty())
     }

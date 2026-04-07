@@ -17,6 +17,26 @@ import { CliCard } from "./CliCard";
 /** Minimum milliseconds between automatic refreshes on mount. */
 const REFRESH_COOLDOWN_MS = 60_000;
 
+/** Build a composite key for the providerThinking map. */
+function thinkingKey(provider: string, model: string): string {
+  return `${provider}:${model}`;
+}
+
+/** Extract the per-model thinking levels for a given provider. */
+function thinkingLevelsForProvider(
+  providerThinking: Record<string, string>,
+  providerName: string,
+): Record<string, string> {
+  const prefix = `${providerName}:`;
+  const levels: Record<string, string> = {};
+  for (const [key, value] of Object.entries(providerThinking)) {
+    if (key.startsWith(prefix)) {
+      levels[key.slice(prefix.length)] = value;
+    }
+  }
+  return levels;
+}
+
 interface CliSetupViewProps {
   settings: AppSettings;
   apiHealth: ApiHealth | null;
@@ -64,12 +84,13 @@ export function CliSetupView({
     }
   }, [refreshAll]);
 
-  function handleThinkingChange(providerName: string, value: string): void {
+  function handleThinkingChange(providerName: string, model: string, value: string): void {
     const updated: Record<string, string> = { ...settings.providerThinking };
+    const key = thinkingKey(providerName, model);
     if (value) {
-      updated[providerName] = value;
+      updated[key] = value;
     } else {
-      delete updated[providerName];
+      delete updated[key];
     }
     onSave({ ...settings, providerThinking: updated });
   }
@@ -179,11 +200,11 @@ export function CliSetupView({
                   updating={updating === p.name}
                   actionsDisabled={actionsDisabled}
                   enabledModels={getEnabledModels(settings, p.name)}
-                  thinkingLevel={settings.providerThinking?.[p.name] ?? ""}
+                  thinkingLevels={thinkingLevelsForProvider(settings.providerThinking ?? {}, p.name)}
                   onToggleModel={(model) => handleToggleModel(p.name, model)}
                   onToggleAll={(selectAll) => handleToggleAll(p.name, selectAll)}
                   onUpdate={() => void handleUpdateCli(p.name)}
-                  onThinkingChange={(value) => handleThinkingChange(p.name, value)}
+                  onThinkingChange={(model, value) => handleThinkingChange(p.name, model, value)}
                 />
               ))}
             </div>

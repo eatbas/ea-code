@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ProviderInfo, ApiCliVersionInfo } from "../../types";
-import { providerDisplayName, modelOptionsFromProvider, THINKING_OPTIONS } from "../shared/constants";
+import { providerDisplayName, modelOptionsFromProvider, THINKING_OPTIONS, THINKING_TRIGGER_LABELS } from "../shared/constants";
 import { useToast } from "../shared/Toast";
 import { ModelCheckboxList } from "./ModelCheckboxList";
-import { ThinkingDropdown } from "./ThinkingDropdown";
 import { VersionGrid } from "./VersionGrid";
 
 function buildGoogleInstallSearchUrl(name: string): string {
@@ -64,13 +63,13 @@ interface CliCardProps {
   updating: boolean;
   actionsDisabled: boolean;
   enabledModels: Set<string>;
-  /** Current thinking / effort level for this provider (empty = default). */
-  thinkingLevel: string;
+  /** Per-model thinking levels keyed by "provider:model". */
+  thinkingLevels: Record<string, string>;
   onToggleModel: (value: string) => void;
   onToggleAll: (selectAll: boolean) => void;
   onUpdate: () => void;
-  /** Called when the user changes the thinking level. */
-  onThinkingChange: (value: string) => void;
+  /** Called when the thinking level changes for a specific model. */
+  onThinkingChange: (model: string, value: string) => void;
 }
 
 /** Card displaying a single CLI provider's version, models, and actions. */
@@ -81,7 +80,7 @@ export function CliCard({
   updating,
   actionsDisabled,
   enabledModels,
-  thinkingLevel,
+  thinkingLevels,
   onToggleModel,
   onToggleAll,
   onUpdate,
@@ -92,6 +91,7 @@ export function CliCard({
   const modelOptions = modelOptionsFromProvider(provider);
   const modelControlsDisabled = actionsDisabled || !provider.available;
   const thinkingOptions = THINKING_OPTIONS[provider.name];
+  const thinkingTriggerLabels = THINKING_TRIGGER_LABELS[provider.name];
   const showUpdate =
     !loading && provider.available && version && !version.upToDate;
   const showInstall = !loading && !provider.available;
@@ -109,16 +109,12 @@ export function CliCard({
           modelOptions={modelOptions}
           enabledModels={enabledModels}
           disabled={modelControlsDisabled}
+          thinkingOptions={provider.available ? thinkingOptions : undefined}
+          thinkingLevels={thinkingLevels}
+          thinkingTriggerLabels={provider.available ? thinkingTriggerLabels : undefined}
           onToggleModel={onToggleModel}
           onToggleAll={onToggleAll}
-        />
-      )}
-      {thinkingOptions && provider.available && (
-        <ThinkingDropdown
-          options={thinkingOptions}
-          selected={thinkingLevel}
-          disabled={modelControlsDisabled}
-          onChange={onThinkingChange}
+          onThinkingChange={onThinkingChange}
         />
       )}
       {!loading && !provider.available && modelOptions.length > 0 && (

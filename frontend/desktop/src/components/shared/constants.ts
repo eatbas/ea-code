@@ -84,6 +84,13 @@ export const THINKING_OPTIONS: Record<string, { value: string; label: string }[]
   ],
 };
 
+/** Short labels for the trigger button, keyed by option value.
+ *  The menu still shows the full label from THINKING_OPTIONS. */
+export const THINKING_TRIGGER_LABELS: Record<string, Record<string, string>> = {
+  claude: { "": "Default" },
+  codex: { "": "Default" },
+};
+
 /** Returns providers sorted by their display label. */
 export function sortProvidersByDisplayName(providers: ProviderInfo[]): ProviderInfo[] {
   return [...providers].sort((a, b) => (
