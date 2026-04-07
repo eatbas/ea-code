@@ -1,10 +1,12 @@
 /// OS-level notification commands backed by tauri-plugin-notification (for
-/// permissions) and notify-rust (for sending, so we control the app icon).
+/// permissions and for sending on Windows/Linux) and notify-rust (for sending
+/// on macOS, where we need to override the bundle ID for the correct icon).
 
 use tauri::AppHandle;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 /// The bundle identifier used by macOS to resolve the app icon.
+#[cfg(target_os = "macos")]
 const BUNDLE_ID: &str = "com.eatbas.maestro";
 
 /// Request OS notification permission and return whether it was granted.
@@ -19,43 +21,36 @@ pub fn request_notification_permission(app: AppHandle) -> Result<bool, String> {
 
 /// Send an OS-level notification with the given title and body.
 ///
-/// Uses `notify-rust` directly so we can set the macOS application identifier
-/// to our bundle ID in both dev and production builds, ensuring the Maestro
-/// icon appears instead of Terminal's.
+/// On macOS, uses `notify-rust` directly so we can set the bundle identifier
+/// to our app ID in both dev and production builds, ensuring the Maestro icon
+/// appears instead of Terminal's.  On Windows and Linux, delegates to the
+/// Tauri notification plugin which handles platform registration (AUMID, COM
+/// threading, shortcut creation) correctly.
 #[tauri::command]
-pub fn send_notification(_app: AppHandle, title: String, body: String) -> Result<(), String> {
-    // On macOS, tell the notification system our bundle ID so the correct
-    // app icon is shown — even during development.
+pub fn send_notification(app: AppHandle, title: String, body: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         let _ = notify_rust::set_application(BUNDLE_ID);
-    }
+        let mut notification = notify_rust::Notification::new();
+        notification.summary(&title).body(&body);
 
-    let mut notification = notify_rust::Notification::new();
-    notification.summary(&title).body(&body);
-
-    // On Windows, point to the bundled icon explicitly.
-    #[cfg(windows)]
-    {
-        use tauri::Manager;
-        if let Ok(resource_dir) = _app.path().resource_dir() {
-            let icon_path = resource_dir.join("icons").join("icon.png");
-            if icon_path.exists() {
-                notification.icon(&icon_path.to_string_lossy());
+        // show() is synchronous / blocking — run it off the async runtime.
+        tauri::async_runtime::spawn_blocking(move || {
+            if let Err(e) = notification.show() {
+                eprintln!("Failed to show notification: {e}");
             }
-        }
-        notification.app_id(BUNDLE_ID);
+        });
     }
 
-    // On Linux, auto-detect the icon from the desktop entry.
-    #[cfg(not(any(target_os = "macos", windows)))]
+    #[cfg(not(target_os = "macos"))]
     {
-        notification.auto_icon();
+        app.notification()
+            .builder()
+            .title(&title)
+            .body(&body)
+            .show()
+            .map_err(|e| format!("Failed to send notification: {e}"))?;
     }
-
-    tauri::async_runtime::spawn(async move {
-        let _ = notification.show();
-    });
 
     Ok(())
 }
