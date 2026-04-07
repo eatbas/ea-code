@@ -234,11 +234,9 @@ pub(super) fn load_summary_with_recovery_unlocked(
 pub(super) fn reconcile_stale_running_unlocked(
     summary: &mut ConversationSummary,
 ) -> Result<(), String> {
-    let dominated_by_pipeline = matches!(
-        summary.status,
-        ConversationStatus::Running | ConversationStatus::AwaitingReview
-    );
-    if !dominated_by_pipeline {
+    // Only reconcile Running conversations — AwaitingReview is a deliberate
+    // paused state waiting for user input, not a stale running state.
+    if summary.status != ConversationStatus::Running {
         return Ok(());
     }
     if is_running_conversation_tracked(&summary.workspace_path, &summary.id)? {

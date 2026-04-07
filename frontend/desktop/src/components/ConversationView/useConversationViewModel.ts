@@ -109,10 +109,8 @@ export function useConversationViewModel({
 
       if (!state) {
         // No pipeline state — this is a simple task conversation.
-        // Auto-detect the mode so the agent selector stays visible.
-        if (pipelineMode === "auto") {
-          onPipelineModeChange("simple");
-        }
+        // Always set the mode so the agent selector stays visible.
+        onPipelineModeChange("simple");
         return;
       }
 
@@ -120,12 +118,11 @@ export function useConversationViewModel({
       setPipelineConversationId(activeConversation.summary.id);
       pipeline.loadFromSaved(state, isStillRunning, activeConversation.summary.status);
       setPipelinePrompt(state.userPrompt);
-      // Only default to "code" when loading a pipeline conversation if the
-      // user has not already selected a mode for this conversation.  This
-      // preserves the mode across view navigations (e.g. settings → home).
-      if (pipelineMode === "auto") {
-        onPipelineModeChange("code");
-      }
+      // Always set "code" when loading a pipeline conversation.  The mode
+      // is determined by backend state (the source of truth), not by
+      // session-local storage, to avoid stale values from prior
+      // auto-detection or effect re-runs.
+      onPipelineModeChange("code");
     }).catch((error) => {
       console.warn("[pipeline] Failed to load pipeline state:", error);
     });
