@@ -97,8 +97,11 @@ export function ConversationView({
             pipelineMode={pipelineMode}
             pipelineDone={viewModel.pipelineDone}
             sidecarReady={sidecarReady}
+            thinkingLevel={viewModel.thinkingLevel}
+            thinkingOptions={viewModel.thinkingOptions}
             onPipelineModeChange={onPipelineModeChange}
             onAgentChange={viewModel.setSelectedAgent}
+            onThinkingChange={viewModel.handleThinkingChange}
             onPromptChange={onPromptDraftChange}
             onSend={viewModel.handleSend}
             onStop={viewModel.handleStop}

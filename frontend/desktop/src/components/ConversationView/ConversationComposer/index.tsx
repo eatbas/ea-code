@@ -22,8 +22,11 @@ interface ConversationComposerProps {
   pipelineMode: PipelineMode;
   pipelineDone: boolean;
   sidecarReady: boolean | null;
+  thinkingLevel: string;
+  thinkingOptions: { value: string; label: string }[] | undefined;
   onPipelineModeChange: (mode: PipelineMode) => void;
   onAgentChange: (agent: AgentSelection) => void;
+  onThinkingChange: (value: string) => void;
   onPromptChange: (prompt: string) => void;
   onSend: (prompt: string) => Promise<void>;
   onStop: () => Promise<void>;
@@ -45,8 +48,11 @@ export function ConversationComposer({
   pipelineMode,
   pipelineDone,
   sidecarReady,
+  thinkingLevel,
+  thinkingOptions,
   onPipelineModeChange,
   onAgentChange,
+  onThinkingChange,
   onPromptChange,
   onSend,
   onStop,
@@ -115,8 +121,11 @@ export function ConversationComposer({
             pipelineMode={pipelineMode}
             pipelineDone={pipelineDone}
             sidecarReady={sidecarReady}
+            thinkingLevel={thinkingLevel}
+            thinkingOptions={thinkingOptions}
             onPipelineModeChange={onPipelineModeChange}
             onAgentChange={onAgentChange}
+            onThinkingChange={onThinkingChange}
             onSubmit={handleSubmit}
             onStop={onStop}
             onResumePipeline={onResumePipeline}

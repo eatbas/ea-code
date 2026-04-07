@@ -6,6 +6,7 @@ import { useFooterErrorHandler } from "../../hooks/useFooterErrorHandler";
 import { usePipelineSession } from "../../hooks/usePipelineSession";
 import { usePlanReview } from "../../hooks/usePlanReview";
 import { useSettings } from "../../hooks/useSettings";
+import { THINKING_OPTIONS } from "../shared/constants";
 import {
   acceptPlan,
   getPipelineDebugLog,
@@ -43,7 +44,7 @@ export function useConversationViewModel({
   onStopConversation,
 }: UseConversationViewModelParams) {
   const { providers, checkHealth } = useApiHealth();
-  const { settings } = useSettings();
+  const { settings, saveSettings } = useSettings();
   const handleFooterError = useFooterErrorHandler();
   const [selectedAgent, setSelectedAgent] = useState<AgentSelection | null>(null);
   const [pipelinePrompt, setPipelinePrompt] = useState<string>("");
@@ -248,6 +249,29 @@ export function useConversationViewModel({
     onPipelineModeChange("code");
   }, [pipeline, planReview, onPipelineModeChange]);
 
+  const thinkingLevel = useMemo(() => {
+    if (!settings || !currentAgent) return "";
+    const key = `${currentAgent.provider}:${currentAgent.model}`;
+    return settings.providerThinking[key] ?? "";
+  }, [settings, currentAgent]);
+
+  const thinkingOptions = useMemo(() => {
+    if (!currentAgent) return undefined;
+    return THINKING_OPTIONS[currentAgent.provider];
+  }, [currentAgent]);
+
+  const handleThinkingChange = useCallback((value: string) => {
+    if (!settings || !currentAgent) return;
+    const key = `${currentAgent.provider}:${currentAgent.model}`;
+    const updated = { ...settings.providerThinking };
+    if (value) {
+      updated[key] = value;
+    } else {
+      delete updated[key];
+    }
+    void saveSettings({ ...settings, providerThinking: updated });
+  }, [settings, currentAgent, saveSettings]);
+
   return {
     availableProviders,
     currentAgent,
@@ -258,11 +282,14 @@ export function useConversationViewModel({
     activeRunning,
     pipelineDone,
     promptHistory,
+    thinkingLevel,
+    thinkingOptions,
     handleSend,
     handleStop,
     handleResume,
     handleRedoReview,
     handleNewPipeline,
+    handleThinkingChange,
     handleFooterError,
   };
 }

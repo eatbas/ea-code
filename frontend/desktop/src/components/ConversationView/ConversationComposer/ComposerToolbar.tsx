@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { ArrowRight, Plus, RotateCcw, Square } from "lucide-react";
 import type { AgentSelection, ProviderInfo } from "../../../types";
 import { PopoverSelect } from "../../shared/PopoverSelect";
-import { modelOptionsFromProvider, providerDisplayName } from "../../shared/constants";
+import { modelOptionsFromProvider, providerDisplayName, THINKING_TRIGGER_LABELS } from "../../shared/constants";
 import type { PipelineMode } from "./index";
 
 const PIPELINE_OPTIONS: { value: PipelineMode; label: string }[] = [
@@ -23,8 +23,11 @@ interface ComposerToolbarProps {
   pipelineMode: PipelineMode;
   pipelineDone: boolean;
   sidecarReady: boolean | null;
+  thinkingLevel: string;
+  thinkingOptions: { value: string; label: string }[] | undefined;
   onPipelineModeChange: (mode: PipelineMode) => void;
   onAgentChange: (agent: AgentSelection) => void;
+  onThinkingChange: (value: string) => void;
   onSubmit: () => Promise<void>;
   onStop: () => Promise<void>;
   onResumePipeline?: () => void;
@@ -43,15 +46,20 @@ export function ComposerToolbar({
   pipelineMode,
   pipelineDone,
   sidecarReady,
+  thinkingLevel,
+  thinkingOptions,
   onPipelineModeChange,
   onAgentChange,
+  onThinkingChange,
   onSubmit,
   onStop,
   onResumePipeline,
   onNewPipeline,
   submitDisabled,
 }: ComposerToolbarProps): ReactNode {
-  const [openSelect, setOpenSelect] = useState<"pipeline" | "provider" | "model" | null>(null);
+  const [openSelect, setOpenSelect] = useState<"pipeline" | "provider" | "model" | "thinking" | null>(null);
+  const hasThinking = thinkingOptions !== undefined && thinkingOptions.length > 0;
+  const triggerLabels = agent ? THINKING_TRIGGER_LABELS[agent.provider] : undefined;
   const availableProviders = useMemo(
     () => providers.filter((provider) => provider.available),
     [providers],
@@ -138,6 +146,25 @@ export function ComposerToolbar({
               });
             }}
           />
+          {hasThinking && (
+            <>
+              <span className="px-0.5 text-separator">·</span>
+              <PopoverSelect
+                value={thinkingLevel}
+                options={thinkingOptions}
+                placeholder="Default"
+                disabled={locked}
+                direction="up"
+                align="right"
+                open={openSelect === "thinking"}
+                onOpenChange={(open) => setOpenSelect(open ? "thinking" : null)}
+                triggerClassName="flex h-7 w-[5rem] items-center gap-1 rounded-lg border border-edge-strong bg-input-bg px-2 text-[11px] font-semibold text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-input-border-focus hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55"
+                menuClassName="w-max min-w-full rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
+                triggerLabels={triggerLabels}
+                onChange={onThinkingChange}
+              />
+            </>
+          )}
         </div>
 
         {pipelineDone && !pipelineRunning && onResumePipeline && (
