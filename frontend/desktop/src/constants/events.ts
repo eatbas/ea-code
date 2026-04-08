@@ -7,6 +7,7 @@
 /** Sidecar lifecycle event (emitted by `bootstrap.rs`). */
 export const SIDECAR_EVENTS = {
   READY: "sidecar_ready",
+  LOG: "sidecar_log",
 } as const;
 
 /** Symphony events (emitted by `commands/api_health.rs`). */

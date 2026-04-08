@@ -1,6 +1,7 @@
 mod cleanup;
 mod discovery;
 mod health;
+pub(crate) mod log_buffer;
 mod process;
 pub mod python;
 mod setup;
@@ -10,10 +11,12 @@ pub use discovery::find_symphony_dir;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use tauri::AppHandle;
 use tokio::process::Child;
 use tokio::sync::Mutex;
 
 use cleanup::kill_orphaned_symphony;
+use log_buffer::SidecarLogBuffer;
 use process::{
     build_base_url, inspect_child_state, normalise_port, requires_restart, spawn_symphony_process,
     stop_symphony_process, RestartState,
@@ -31,6 +34,8 @@ struct SidecarInner {
     port: u16,
     symphony_dir: PathBuf,
     setup_complete: bool,
+    app: Option<AppHandle>,
+    log_buffer: SidecarLogBuffer,
 }
 
 impl SidecarManager {
@@ -42,8 +47,20 @@ impl SidecarManager {
                 port: normalise_port(port),
                 symphony_dir,
                 setup_complete: false,
+                app: None,
+                log_buffer: SidecarLogBuffer::new(),
             })),
         }
+    }
+
+    /// Inject the Tauri app handle so log events can be emitted to the frontend.
+    pub async fn set_app_handle(&self, app: AppHandle) {
+        self.inner.lock().await.app = Some(app);
+    }
+
+    /// Return a clone of the log buffer for retroactive retrieval.
+    pub async fn log_buffer(&self) -> SidecarLogBuffer {
+        self.inner.lock().await.log_buffer.clone()
     }
 
     /// The base URL for API calls (e.g. "http://127.0.0.1:8719").
@@ -64,8 +81,14 @@ impl SidecarManager {
 
         let prepared =
             prepare_symphony_environment(&inner.symphony_dir, inner.setup_complete).await?;
-        let child =
-            spawn_symphony_process(&prepared.venv_python, &inner.symphony_dir, inner.port).await?;
+        let child = spawn_symphony_process(
+            &prepared.venv_python,
+            &inner.symphony_dir,
+            inner.port,
+            inner.app.clone(),
+            Some(inner.log_buffer.clone()),
+        )
+        .await?;
 
         eprintln!("[sidecar] symphony process spawned on port {}", inner.port);
         inner.setup_complete = prepared.setup_complete;

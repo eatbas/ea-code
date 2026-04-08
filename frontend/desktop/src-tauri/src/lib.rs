@@ -62,6 +62,7 @@ pub fn run() {
             commands::cli::availability::invalidate_cli_cache,
             commands::api_health::check_sidecar_ready,
             commands::api_health::check_api_health,
+            commands::api_health::get_sidecar_logs,
             commands::api_health::get_api_providers,
             commands::api_health::get_api_cli_versions,
             commands::api_health::update_api_cli,

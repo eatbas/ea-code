@@ -1,8 +1,11 @@
 use std::path::Path;
 use std::time::Duration;
 
+use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::{Child, Command};
+
+use super::log_buffer::{emit_sidecar_log, SidecarLogBuffer};
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -34,6 +37,8 @@ pub(crate) async fn spawn_symphony_process(
     venv_python: &Path,
     symphony_dir: &Path,
     port: u16,
+    app: Option<AppHandle>,
+    buffer: Option<SidecarLogBuffer>,
 ) -> Result<Child, String> {
     let port_str = port.to_string();
     let config_path = symphony_dir.join("config.toml");
@@ -67,11 +72,11 @@ pub(crate) async fn spawn_symphony_process(
         .map_err(|error| format!("Failed to start symphony: {error}"))?;
 
     if let Some(stdout) = child.stdout.take() {
-        spawn_pipe_drain(stdout, "stdout");
+        spawn_pipe_drain(stdout, "stdout", app.clone(), buffer.clone());
     }
 
     if let Some(stderr) = child.stderr.take() {
-        spawn_pipe_drain(stderr, "stderr");
+        spawn_pipe_drain(stderr, "stderr", app, buffer);
     }
 
     Ok(child)
@@ -128,8 +133,12 @@ pub(crate) async fn stop_symphony_process(child: &mut Child) {
     }
 }
 
-fn spawn_pipe_drain<R>(reader: R, stream_name: &'static str)
-where
+fn spawn_pipe_drain<R>(
+    reader: R,
+    stream_name: &'static str,
+    app: Option<AppHandle>,
+    buffer: Option<SidecarLogBuffer>,
+) where
     R: AsyncRead + Unpin + Send + 'static,
 {
     tokio::spawn(async move {
@@ -139,6 +148,12 @@ where
                 Ok(Some(line)) => {
                     if !line.trim().is_empty() {
                         eprintln!("[sidecar:{stream_name}] {line}");
+                        emit_sidecar_log(
+                            app.as_ref(),
+                            buffer.as_ref(),
+                            stream_name,
+                            line,
+                        );
                     }
                 }
                 Ok(None) => break,
@@ -182,11 +197,11 @@ mod tests {
             .expect("test fixture should spawn a noisy child process");
 
         if let Some(stdout) = child.stdout.take() {
-            super::spawn_pipe_drain(stdout, "test-stdout");
+            super::spawn_pipe_drain(stdout, "test-stdout", None, None);
         }
 
         if let Some(stderr) = child.stderr.take() {
-            super::spawn_pipe_drain(stderr, "test-stderr");
+            super::spawn_pipe_drain(stderr, "test-stderr", None, None);
         }
 
         let status = timeout(Duration::from_secs(10), child.wait())

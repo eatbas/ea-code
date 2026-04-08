@@ -62,3 +62,10 @@ export interface ApiCliVersionInfo {
   upToDate: boolean;
   available: boolean;
 }
+
+/** A single sidecar stdout/stderr log entry. */
+export interface SidecarLogEntry {
+  stream: string;
+  line: string;
+  timestamp: string;
+}

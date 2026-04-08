@@ -13,6 +13,7 @@ import {
   applyModelCsv,
 } from "../../utils/modelSettings";
 import { CliCard } from "./CliCard";
+import { SidecarDebugConsole } from "./SidecarDebugConsole";
 
 /** Minimum milliseconds between automatic refreshes on mount. */
 const REFRESH_COOLDOWN_MS = 60_000;
@@ -48,6 +49,7 @@ interface CliSetupViewProps {
   onFetchVersions: () => void;
   onRefreshProviders: () => void;
   onUpdateCli: (provider: string) => Promise<void>;
+  sidecarLogs: string;
   onSave: (settings: AppSettings) => void;
 }
 
@@ -59,6 +61,7 @@ export function CliSetupView({
   apiVersions,
   versionsLoading,
   updating,
+  sidecarLogs,
   onFetchVersions,
   onRefreshProviders,
   onUpdateCli,
@@ -226,6 +229,9 @@ export function CliSetupView({
             <p className="text-sm text-fg-faint">
               No providers detected. Ensure the Symphony sidecar is running.
             </p>
+          )}
+          {import.meta.env.VITE_MAESTRO_DEV === "true" && sidecarLogs.trim().length > 0 && (
+            <SidecarDebugConsole logs={sidecarLogs} />
           )}
         </div>
       </div>

@@ -9,6 +9,7 @@ import type {
   PipelineState,
   PrerequisiteStatus,
   ProjectEntry,
+  SidecarLogEntry,
   WorkspaceInfo,
 } from "../types";
 
@@ -80,6 +81,10 @@ export function checkCliHealth(settings: AppSettings): Promise<void> {
 
 export function checkSidecarReady(): Promise<boolean> {
   return invokeCommand<boolean>("check_sidecar_ready");
+}
+
+export function getSidecarLogs(): Promise<SidecarLogEntry[]> {
+  return invokeCommand<SidecarLogEntry[]>("get_sidecar_logs");
 }
 
 export function checkApiHealth(): Promise<void> {

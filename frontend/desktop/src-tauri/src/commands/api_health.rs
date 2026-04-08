@@ -6,7 +6,8 @@ use tauri::{AppHandle, State};
 use crate::commands::emitter::{emit_done, emit_items};
 use crate::commands::AppState;
 use crate::http::api_client;
-use crate::models::{ApiCliVersionInfo, ApiHealthStatus, ProviderInfo};
+use crate::models::{ApiCliVersionInfo, ApiHealthStatus, ProviderInfo, SidecarLogEvent};
+use crate::sidecar::log_buffer::SidecarLogEntry;
 
 pub const EVENT_API_HEALTH: &str = "api_health_status";
 pub const EVENT_API_PROVIDER: &str = "api_provider_info";
@@ -242,6 +243,22 @@ pub async fn update_api_cli(
         }
     }
     Ok(())
+}
+
+/// Return all buffered sidecar log entries for retroactive retrieval.
+#[tauri::command]
+pub async fn get_sidecar_logs(
+    state: State<'_, AppState>,
+) -> Result<Vec<SidecarLogEvent>, String> {
+    let entries: Vec<SidecarLogEntry> = state.sidecar.log_buffer().await.snapshot().await;
+    Ok(entries
+        .into_iter()
+        .map(|e| SidecarLogEvent {
+            stream: e.stream,
+            line: e.line,
+            timestamp: e.timestamp,
+        })
+        .collect())
 }
 
 #[cfg(test)]

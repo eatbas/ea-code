@@ -36,6 +36,15 @@ pub struct ApiCliVersionInfo {
     pub available: bool,
 }
 
+/// Sidecar stdout/stderr log entry sent to the frontend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SidecarLogEvent {
+    pub stream: String,
+    pub line: String,
+    pub timestamp: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ApiCliVersionInfo, ApiHealthStatus, ProviderInfo};

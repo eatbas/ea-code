@@ -240,6 +240,8 @@ mod tests {
 
 pub(crate) fn spawn_sidecar_startup(app: AppHandle, sidecar: SidecarManager) {
     tauri::async_runtime::spawn(async move {
+        sidecar.set_app_handle(app.clone()).await;
+
         if let Err(error) = sidecar.start().await {
             eprintln!("Warning: failed to start symphony sidecar: {error}");
             let _ = app.emit(
