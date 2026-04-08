@@ -1,18 +1,26 @@
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useApiCliVersions } from "../../hooks/useApiCliVersions";
 import { useApiHealth } from "../../hooks/useApiHealth";
 import { useCliHealth } from "../../hooks/useCliHealth";
 import { useSidecarLogs } from "../../hooks/useSidecarLogs";
 import { useSidecarReady } from "../../hooks/useSidecarReady";
 import { useSettings } from "../../hooks/useSettings";
+import { useToast } from "../shared/Toast";
+import { shouldAutoRefreshOnReady } from "../../utils/symphonyStartup";
 import { CliSetupView } from ".";
 
 export function CliSetupRoute(): ReactNode {
+  const toast = useToast();
   const { settings, loading, saveSettings } = useSettings();
   const { checkHealth: checkCliHealth } = useCliHealth();
-  const { health: apiHealth, providers, checkHealth: checkApiHealth } = useApiHealth();
-  const { sidecarReady } = useSidecarReady();
+  const {
+    health: apiHealth,
+    providers,
+    checking: apiChecking,
+    checkHealth: checkApiHealth,
+  } = useApiHealth();
+  const { sidecarReady, sidecarError } = useSidecarReady();
   const { logs: sidecarLogs } = useSidecarLogs();
   const {
     versions: apiVersions,
@@ -21,6 +29,15 @@ export function CliSetupRoute(): ReactNode {
     fetchVersions: fetchApiVersions,
     updateCli: updateApiCli,
   } = useApiCliVersions();
+  const previousReadyRef = useRef<boolean | null | undefined>(undefined);
+
+  const refreshAll = useCallback((showSuccessToast: boolean): void => {
+    checkApiHealth();
+    fetchApiVersions();
+    if (showSuccessToast) {
+      toast.success("Symphony checks started.");
+    }
+  }, [checkApiHealth, fetchApiVersions, toast]);
 
   useEffect(() => {
     if (!settings) {
@@ -28,8 +45,16 @@ export function CliSetupRoute(): ReactNode {
     }
 
     checkCliHealth(settings);
-    checkApiHealth();
-  }, [settings, checkApiHealth, checkCliHealth]);
+  }, [settings, checkCliHealth]);
+
+  useEffect(() => {
+    const previousReady = previousReadyRef.current;
+    previousReadyRef.current = sidecarReady;
+
+    if (shouldAutoRefreshOnReady(previousReady, sidecarReady)) {
+      refreshAll(false);
+    }
+  }, [refreshAll, sidecarReady]);
 
   if (loading || !settings) {
     return (
@@ -43,14 +68,15 @@ export function CliSetupRoute(): ReactNode {
     <CliSetupView
       settings={settings}
       apiHealth={apiHealth}
+      apiChecking={apiChecking}
       sidecarReady={sidecarReady}
+      sidecarError={sidecarError}
       providers={providers}
       apiVersions={apiVersions}
       versionsLoading={apiVersionsLoading}
       updating={apiVersionsUpdating}
       sidecarLogs={sidecarLogs}
-      onFetchVersions={fetchApiVersions}
-      onRefreshProviders={checkApiHealth}
+      onRefresh={() => refreshAll(true)}
       onUpdateCli={updateApiCli}
       onSave={saveSettings}
     />

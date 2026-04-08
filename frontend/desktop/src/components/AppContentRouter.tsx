@@ -16,6 +16,7 @@ interface AppContentRouterProps {
   activeView: ActiveView;
   workspace: WorkspaceInfo | null;
   sidecarReady: boolean | null;
+  sidecarError: string | null;
   viewResetToken: number;
   activeConversation: ConversationDetail | null;
   onSetActiveConversation: Dispatch<SetStateAction<ConversationDetail | null>>;
@@ -36,6 +37,7 @@ interface AppContentRouterProps {
   allProjects: ProjectEntry[];
   onRemoveProject: (projectPath: string) => void;
   onUnarchiveConversation: (projectPath: string, conversationId: string) => void;
+  onOpenCliSetup: () => void;
 }
 
 /** Routes the main content panel between home and settings views. */
@@ -43,6 +45,7 @@ export function AppContentRouter({
   activeView,
   workspace,
   sidecarReady,
+  sidecarError,
   viewResetToken,
   activeConversation,
   onSetActiveConversation,
@@ -63,6 +66,7 @@ export function AppContentRouter({
   allProjects,
   onRemoveProject,
   onUnarchiveConversation,
+  onOpenCliSetup,
 }: AppContentRouterProps): ReactNode {
   if (activeView === "general") {
     return <GeneralSettingsRoute />;
@@ -99,6 +103,7 @@ export function AppContentRouter({
       <ConversationView
         workspace={workspace}
         sidecarReady={sidecarReady}
+        sidecarError={sidecarError}
         viewResetToken={viewResetToken}
         activeConversation={activeConversation}
         onSetActiveConversation={onSetActiveConversation}
@@ -113,6 +118,7 @@ export function AppContentRouter({
         onPromptDraftChange={onPromptDraftChange}
         onSendPrompt={onSendConversationPrompt}
         onStopConversation={onStopConversation}
+        onOpenCliSetup={onOpenCliSetup}
       />
     );
   }

@@ -20,11 +20,17 @@ import {
 } from "../../lib/desktopApi";
 import { parseAgentSelection } from "../../utils/agentSettings";
 import { filterProvidersBySettings } from "../../utils/modelSettings";
+import {
+  getSymphonyStartupStatus,
+  shouldAutoRefreshOnReady,
+} from "../../utils/symphonyStartup";
 import { sortProvidersByDisplayName } from "../shared/constants";
 import type { PipelineMode } from "./ConversationComposer";
 
 interface UseConversationViewModelParams {
   workspace: WorkspaceInfo;
+  sidecarReady: boolean | null;
+  sidecarError: string | null;
   viewResetToken: number;
   activeConversation: ConversationDetail | null;
   onSetActiveConversation: Dispatch<SetStateAction<ConversationDetail | null>>;
@@ -36,6 +42,8 @@ interface UseConversationViewModelParams {
 
 export function useConversationViewModel({
   workspace,
+  sidecarReady,
+  sidecarError,
   viewResetToken,
   activeConversation,
   onSetActiveConversation,
@@ -44,7 +52,12 @@ export function useConversationViewModel({
   onSendPrompt,
   onStopConversation,
 }: UseConversationViewModelParams) {
-  const { providers, checkHealth } = useApiHealth();
+  const {
+    health: apiHealth,
+    providers,
+    checking: apiChecking,
+    checkHealth,
+  } = useApiHealth();
   const { settings, saveSettings } = useSettings();
   const handleFooterError = useFooterErrorHandler();
   const [selectedAgent, setSelectedAgent] = useState<AgentSelection | null>(null);
@@ -52,6 +65,13 @@ export function useConversationViewModel({
   const [pipelineConversationId, setPipelineConversationId] = useState<string | null>(null);
   const prevConversationIdRef = useRef<string | null>(null);
   const prevResetTokenRef = useRef(viewResetToken);
+  const refreshContextRef = useRef<{
+    workspacePath: string;
+    sidecarReady: boolean | null | undefined;
+  }>({
+    workspacePath: "",
+    sidecarReady: undefined,
+  });
   const pipeline = usePipelineSession(pipelineConversationId);
 
   const planReview = usePlanReview({
@@ -74,10 +94,29 @@ export function useConversationViewModel({
     () => sortProvidersByDisplayName(filterProvidersBySettings(providers, settings)),
     [providers, settings],
   );
+  const startupStatus = useMemo(() => getSymphonyStartupStatus({
+    sidecarReady,
+    sidecarError,
+    apiHealth,
+    apiChecking,
+    versionsLoading: false,
+    providerCount: providers.length,
+  }), [sidecarReady, sidecarError, apiHealth, apiChecking, providers.length]);
 
   useEffect(() => {
-    checkHealth();
-  }, [checkHealth, workspace.path]);
+    const previous = refreshContextRef.current;
+    const workspaceChanged = previous.workspacePath !== workspace.path;
+    const readyBecameAvailable = shouldAutoRefreshOnReady(previous.sidecarReady, sidecarReady);
+
+    refreshContextRef.current = {
+      workspacePath: workspace.path,
+      sidecarReady,
+    };
+
+    if (sidecarReady === true && (workspaceChanged || readyBecameAvailable)) {
+      checkHealth();
+    }
+  }, [checkHealth, sidecarReady, workspace.path]);
 
   useEffect(() => {
     const currentId = activeConversation?.summary.id ?? null;
@@ -298,6 +337,7 @@ export function useConversationViewModel({
 
   return {
     availableProviders,
+    startupStatus,
     currentAgent,
     setSelectedAgent,
     pipelinePrompt,

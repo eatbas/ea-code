@@ -5,10 +5,12 @@ import type { PlanReviewPhase } from "../../../hooks/usePlanReview";
 import type { AgentSelection, ProviderInfo } from "../../../types";
 import { useAutoResizeTextarea } from "../../../hooks/useAutoResizeTextarea";
 import { type PendingImage, useImageAttachments } from "../../../hooks/useImageAttachments";
+import type { SymphonyStartupStatus } from "../../../utils/symphonyStartup";
 import { ComposerToolbar } from "./ComposerToolbar";
 import { ImageThumbnails } from "./ImageThumbnails";
 import { PromptInput } from "./PromptInput";
 import { QueuedPromptBanner } from "./QueuedPromptBanner";
+import { StartupBanner } from "./StartupBanner";
 import { usePromptHistoryNavigation } from "./usePromptHistoryNavigation";
 
 export type PipelineMode = "auto" | "simple" | "code";
@@ -70,6 +72,7 @@ function SimpleTaskStatusBar({
 interface ConversationComposerProps {
   providers: ProviderInfo[];
   agent: AgentSelection | null;
+  startupStatus: SymphonyStartupStatus;
   prompt: string;
   promptHistory: string[];
   locked: boolean;
@@ -79,7 +82,6 @@ interface ConversationComposerProps {
   pipelineRunning: boolean;
   pipelineMode: PipelineMode;
   pipelineDone: boolean;
-  sidecarReady: boolean | null;
   thinkingLevel: string;
   thinkingOptions: { value: string; label: string }[] | undefined;
   workspacePath: string;
@@ -101,11 +103,13 @@ interface ConversationComposerProps {
   onResumePipeline?: () => void;
   onNewPipeline?: () => void;
   planReviewPhase?: PlanReviewPhase;
+  onOpenCliSetup: () => void;
 }
 
 export function ConversationComposer({
   providers,
   agent,
+  startupStatus,
   prompt,
   promptHistory,
   locked,
@@ -115,7 +119,6 @@ export function ConversationComposer({
   pipelineRunning,
   pipelineMode,
   pipelineDone,
-  sidecarReady,
   thinkingLevel,
   thinkingOptions,
   workspacePath,
@@ -137,6 +140,7 @@ export function ConversationComposer({
   onResumePipeline,
   onNewPipeline,
   planReviewPhase,
+  onOpenCliSetup,
 }: ConversationComposerProps): ReactNode {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const resetHistoryRef = useRef<() => void>(() => undefined);
@@ -192,7 +196,7 @@ export function ConversationComposer({
     || (activeRunning && pipelineMode !== "simple")
     || (pipelineMode === "simple" && !agent)
     || prompt.trim().length === 0
-    || sidecarReady !== true;
+    || startupStatus.phase !== "connected";
 
   const handleImagePaste = useCallback((files: File[]) => {
     void addImages(files);
@@ -200,7 +204,11 @@ export function ConversationComposer({
 
   const handleSubmit = useCallback(async () => {
     const trimmed = prompt.trim();
-    if (!trimmed || !agent) {
+    if (!trimmed) {
+      return;
+    }
+
+    if (pipelineMode !== "code" && !agent) {
       return;
     }
 
@@ -251,6 +259,11 @@ export function ConversationComposer({
           />
         )}
 
+        <StartupBanner
+          status={startupStatus}
+          onOpenCliSetup={onOpenCliSetup}
+        />
+
         {hasImages && (
           <ImageThumbnails
             previews={allPreviews}
@@ -285,7 +298,7 @@ export function ConversationComposer({
             pipelineRunning={pipelineRunning}
             pipelineMode={pipelineMode}
             pipelineDone={pipelineDone}
-            sidecarReady={sidecarReady}
+            startupPhase={startupStatus.phase}
             thinkingLevel={thinkingLevel}
             thinkingOptions={thinkingOptions}
             onPipelineModeChange={onPipelineModeChange}

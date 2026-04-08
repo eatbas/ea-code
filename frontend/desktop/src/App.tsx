@@ -29,7 +29,7 @@ function App(): ReactNode {
     archiveProject,
     unarchiveProject,
   } = useWorkspaceSession();
-  const { sidecarReady } = useSidecarReady();
+  const { sidecarReady, sidecarError } = useSidecarReady();
   const { settings } = useSettings();
   useTaskLifecycle(settings);
   const { status: prereqs, dismissed: prereqsDismissed, dismiss: dismissPrereqs } = usePrerequisites();
@@ -133,6 +133,7 @@ function App(): ReactNode {
             activeView={activeView}
             workspace={workspace}
             sidecarReady={sidecarReady}
+            sidecarError={sidecarError}
             viewResetToken={viewResetToken}
             activeConversation={store.activeConversation}
             onSetActiveConversation={store.setActiveConversation}
@@ -153,6 +154,7 @@ function App(): ReactNode {
             allProjects={projects}
             onRemoveProject={(p) => { void deleteProject(p); }}
             onUnarchiveConversation={store.unarchiveConversation}
+            onOpenCliSetup={() => setActiveView("cli-setup")}
           />
         </div>
         {updateStatus !== "idle" && (

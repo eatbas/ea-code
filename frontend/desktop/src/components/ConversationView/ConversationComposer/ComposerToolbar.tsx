@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { ArrowRight, Plus, RotateCcw, Square } from "lucide-react";
 import type { AgentSelection, ProviderInfo } from "../../../types";
+import type { SymphonyStartupPhase } from "../../../utils/symphonyStartup";
 import { PopoverSelect } from "../../shared/PopoverSelect";
 import {
   modelOptionsFromProvider,
@@ -29,7 +30,7 @@ interface ComposerToolbarProps {
   pipelineRunning: boolean;
   pipelineMode: PipelineMode;
   pipelineDone: boolean;
-  sidecarReady: boolean | null;
+  startupPhase: SymphonyStartupPhase;
   thinkingLevel: string;
   thinkingOptions: { value: string; label: string }[] | undefined;
   onPipelineModeChange: (mode: PipelineMode) => void;
@@ -60,7 +61,7 @@ export function ComposerToolbar({
   pipelineRunning,
   pipelineMode,
   pipelineDone,
-  sidecarReady,
+  startupPhase,
   thinkingLevel,
   thinkingOptions,
   onPipelineModeChange,
@@ -283,11 +284,15 @@ export function ComposerToolbar({
           }`}
           title={(activeRunning || pipelineRunning)
             ? (stopping ? "Stopping..." : "Stop")
-            : sidecarReady !== true
-              ? "Waiting for Symphony..."
-              : sending
-                ? "Sending..."
-                : "Send"}
+            : startupPhase === "initialising"
+              ? "Initialising Symphony..."
+              : startupPhase === "checking"
+                ? "Checking available agents..."
+                : startupPhase === "failed"
+                  ? "Symphony is unavailable"
+                  : sending
+                    ? "Sending..."
+                    : "Send"}
         >
           {(activeRunning || pipelineRunning) ? (
             stopping ? (

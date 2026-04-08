@@ -12,6 +12,7 @@ import { useConversationViewModel } from "./useConversationViewModel";
 interface ConversationViewProps {
   workspace: WorkspaceInfo;
   sidecarReady: boolean | null;
+  sidecarError: string | null;
   viewResetToken: number;
   activeConversation: ConversationDetail | null;
   onSetActiveConversation: Dispatch<SetStateAction<ConversationDetail | null>>;
@@ -26,11 +27,13 @@ interface ConversationViewProps {
   onPromptDraftChange: (prompt: string) => void;
   onSendPrompt: (prompt: string, agent: AgentSelection, pendingImages?: PendingImage[]) => Promise<void>;
   onStopConversation: () => Promise<void>;
+  onOpenCliSetup: () => void;
 }
 
 export function ConversationView({
   workspace,
   sidecarReady,
+  sidecarError,
   viewResetToken,
   activeConversation,
   onSetActiveConversation,
@@ -45,9 +48,12 @@ export function ConversationView({
   onPromptDraftChange,
   onSendPrompt,
   onStopConversation,
+  onOpenCliSetup,
 }: ConversationViewProps): ReactNode {
   const viewModel = useConversationViewModel({
     workspace,
+    sidecarReady,
+    sidecarError,
     viewResetToken,
     activeConversation,
     onSetActiveConversation,
@@ -89,6 +95,7 @@ export function ConversationView({
           <ConversationComposer
             providers={viewModel.availableProviders}
             agent={viewModel.currentAgent}
+            startupStatus={viewModel.startupStatus}
             prompt={activePromptDraft}
             promptHistory={viewModel.promptHistory}
             locked={Boolean(activeConversation)}
@@ -98,7 +105,6 @@ export function ConversationView({
             pipelineRunning={viewModel.pipeline.running}
             pipelineMode={pipelineMode}
             pipelineDone={viewModel.pipelineDone}
-            sidecarReady={sidecarReady}
             thinkingLevel={viewModel.thinkingLevel}
             thinkingOptions={viewModel.thinkingOptions}
             workspacePath={workspace.path}
@@ -120,6 +126,7 @@ export function ConversationView({
             onResumePipeline={viewModel.handleResume}
             onNewPipeline={viewModel.handleNewPipeline}
             planReviewPhase={viewModel.planReview.phase}
+            onOpenCliSetup={onOpenCliSetup}
           />
         )}
 
