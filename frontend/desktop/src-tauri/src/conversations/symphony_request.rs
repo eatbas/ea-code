@@ -5,6 +5,14 @@ const CLAUDE_DEFAULT_MAX_TURNS: i64 = 200;
 
 pub type SymphonyProviderOptions = Map<String, Value>;
 
+/// Optional Kimi swarm configuration forwarded into `provider_options`.
+pub struct KimiSwarmOptions {
+    pub agent_file: String,
+    /// Per-conversation swarm directory for generated files.
+    pub swarm_dir: String,
+    pub max_ralph_iterations: i32,
+}
+
 /// Shared request body for Symphony `/v1/chat` calls.
 /// Used by both the single-turn chat path and the pipeline stage runner.
 #[derive(Serialize)]
@@ -26,6 +34,7 @@ pub struct SymphonyChatRequest<'a> {
 pub fn default_provider_options(
     provider: &str,
     thinking_level: Option<&str>,
+    kimi_swarm: Option<KimiSwarmOptions>,
 ) -> SymphonyProviderOptions {
     let mut options = SymphonyProviderOptions::new();
     if provider.eq_ignore_ascii_case("claude") {
@@ -36,6 +45,14 @@ pub fn default_provider_options(
     }
     if let Some(level) = thinking_level {
         options.insert("thinking_level".to_string(), Value::String(level.to_string()));
+    }
+    if let Some(swarm) = kimi_swarm {
+        options.insert("agent_file".to_string(), Value::String(swarm.agent_file));
+        options.insert("swarm_dir".to_string(), Value::String(swarm.swarm_dir));
+        options.insert(
+            "max_ralph_iterations".to_string(),
+            Value::Number(swarm.max_ralph_iterations.into()),
+        );
     }
     options
 }
@@ -48,21 +65,39 @@ mod tests {
 
     #[test]
     fn claude_defaults_raise_auto_mode_turn_limit() {
-        let options = default_provider_options("claude", None);
+        let options = default_provider_options("claude", None, None);
         assert_eq!(options.get("max_turns"), Some(&Value::from(200)));
     }
 
     #[test]
     fn non_claude_defaults_are_empty() {
-        assert!(default_provider_options("codex", None).is_empty());
+        assert!(default_provider_options("codex", None, None).is_empty());
     }
 
     #[test]
     fn thinking_level_is_forwarded() {
-        let options = default_provider_options("claude", Some("medium"));
+        let options = default_provider_options("claude", Some("medium"), None);
         assert_eq!(
             options.get("thinking_level"),
             Some(&Value::String("medium".to_string())),
+        );
+    }
+
+    #[test]
+    fn kimi_swarm_options_are_forwarded() {
+        let swarm = super::KimiSwarmOptions {
+            agent_file: "/tmp/swarm.yaml".to_string(),
+            swarm_dir: "/tmp".to_string(),
+            max_ralph_iterations: -1,
+        };
+        let options = default_provider_options("kimi", None, Some(swarm));
+        assert_eq!(
+            options.get("agent_file"),
+            Some(&Value::String("/tmp/swarm.yaml".to_string())),
+        );
+        assert_eq!(
+            options.get("max_ralph_iterations"),
+            Some(&Value::from(-1)),
         );
     }
 }

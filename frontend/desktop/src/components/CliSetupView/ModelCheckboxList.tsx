@@ -19,8 +19,8 @@ interface ModelCheckboxListProps {
   enabledModels: Set<string>;
   /** Whether checkbox interactions should be disabled. */
   disabled: boolean;
-  /** Thinking / effort options for this provider (undefined = no thinking control). */
-  thinkingOptions: ThinkingOption[] | undefined;
+  /** Per-model thinking / effort options keyed by model value (undefined = no thinking control). */
+  thinkingOptions: Record<string, ThinkingOption[]> | undefined;
   /** Per-model thinking levels keyed by model value. */
   thinkingLevels: Record<string, string>;
   /** Short labels for the trigger button, keyed by option value. */
@@ -75,7 +75,8 @@ export function ModelCheckboxList({
   onThinkingChange,
 }: ModelCheckboxListProps): ReactNode {
   const allSelected = modelOptions.every((opt) => enabledModels.has(opt.value));
-  const hasThinking = thinkingOptions !== undefined && thinkingOptions.length > 0;
+  const hasAnyThinking = thinkingOptions !== undefined
+    && Object.values(thinkingOptions).some((opts) => opts.length > 0);
 
   return (
     <div className="mt-4">
@@ -84,7 +85,7 @@ export function ModelCheckboxList({
           Models
         </p>
         <div className="flex items-center gap-3">
-          {hasThinking && (
+          {hasAnyThinking && (
             <p className="text-[10px] font-medium uppercase tracking-wider text-fg-faint">
               Thinking
             </p>
@@ -140,21 +141,26 @@ export function ModelCheckboxList({
                 </span>
                 <TruncatedLabel text={opt.label} />
               </button>
-              {hasThinking && (
-                <div className="shrink-0">
-                  <PopoverSelect
-                    value={thinkingLevels[opt.value] ?? ""}
-                    options={thinkingOptions}
-                    onChange={(v) => onThinkingChange(opt.value, v)}
-                    disabled={disabled}
-                    direction="down"
-                    placeholder="Default"
-                    triggerClassName={THINKING_TRIGGER_CLASS}
-                    menuClassName={THINKING_MENU_CLASS}
-                    triggerLabels={thinkingTriggerLabels}
-                  />
-                </div>
-              )}
+              {(() => {
+                const modelOpts = thinkingOptions?.[opt.value];
+                if (!modelOpts || modelOpts.length === 0) return null;
+                return (
+                  <div className="shrink-0">
+                    <PopoverSelect
+                      value={thinkingLevels[opt.value] ?? ""}
+                      options={modelOpts}
+                      onChange={(v) => onThinkingChange(opt.value, v)}
+                      disabled={disabled}
+                      direction="down"
+                      placeholder="Default"
+                      triggerClassName={THINKING_TRIGGER_CLASS}
+                      menuClassName={THINKING_MENU_CLASS}
+                      triggerLabels={thinkingTriggerLabels}
+                      menuTitle="Thinking Level"
+                    />
+                  </div>
+                );
+              })()}
             </div>
           );
         })}

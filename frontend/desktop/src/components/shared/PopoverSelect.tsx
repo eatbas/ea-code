@@ -32,6 +32,8 @@ interface PopoverSelectProps {
   /** Map from option value to a shorter label shown on the trigger button.
    *  When provided, the menu still displays the full `label` from `options`. */
   triggerLabels?: Record<string, string>;
+  /** Optional title shown at the top of the dropdown menu. */
+  menuTitle?: string;
 }
 
 /** Lightweight custom select rendered as a popover list. */
@@ -49,6 +51,7 @@ export function PopoverSelect({
   triggerClassName,
   menuClassName,
   triggerLabels,
+  menuTitle,
 }: PopoverSelectProps): ReactNode {
   const [internalOpen, setInternalOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -96,6 +99,11 @@ export function PopoverSelect({
       </button>
       {open && (
         <div className={`absolute ${positionClasses} ${alignClasses} z-50 ${resolvedMenuClassName}`}>
+          {menuTitle && (
+            <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
+              {menuTitle}
+            </p>
+          )}
           {options.map((opt) => (
             <button
               type="button"

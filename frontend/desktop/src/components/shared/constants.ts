@@ -66,7 +66,17 @@ export function formatAssistantLabel(provider: string, model: string): string {
   return `${providerLabel} ${modelLabel}`;
 }
 
-/** Thinking / reasoning effort options per provider. */
+/** Swarm prompt prefix prepended to the user's message when swarm mode is active. */
+export const KIMI_SWARM_PROMPT_PREFIX =
+  "[SWARM MODE] You have CreateSubagent and Task tools available. " +
+  "Before starting work, analyse the project and create specialised " +
+  "subagents (e.g. coder, reviewer, researcher, tester). Then use " +
+  "Task to dispatch independent subtasks in parallel — call Task " +
+  "multiple times in a single response for maximum concurrency. " +
+  "Aim for at least 5 parallel subagents when possible.\n\n" +
+  "USER REQUEST:\n";
+
+/** Thinking / reasoning effort options per provider (or per provider:model). */
 export const THINKING_OPTIONS: Record<string, { value: string; label: string }[]> = {
   claude: [
     { value: "", label: "Default (High)" },
@@ -75,6 +85,13 @@ export const THINKING_OPTIONS: Record<string, { value: string; label: string }[]
     { value: "high", label: "High" },
     { value: "max", label: "Max" },
   ],
+  "claude:sonnet": [
+    { value: "", label: "Default (High)" },
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Medium" },
+    { value: "high", label: "High" },
+  ],
+  "claude:haiku": [],
   codex: [
     { value: "", label: "Default (Medium)" },
     { value: "low", label: "Low" },
@@ -87,6 +104,40 @@ export const THINKING_OPTIONS: Record<string, { value: string; label: string }[]
     { value: "on", label: "On" },
     { value: "off", label: "Off" },
   ],
+};
+
+/** Returns thinking options for a specific provider and model.
+ *  Checks for a model-specific override first, then falls back to
+ *  the provider default. Returns undefined when no options apply. */
+export function getThinkingOptions(
+  provider: string,
+  model: string,
+): { value: string; label: string }[] | undefined {
+  const modelKey = `${provider}:${model}`;
+  if (modelKey in THINKING_OPTIONS) {
+    const options = THINKING_OPTIONS[modelKey];
+    return options.length > 0 ? options : undefined;
+  }
+  return THINKING_OPTIONS[provider];
+}
+
+/** Kimi swarm mode options. */
+export const SWARM_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Disabled" },
+  { value: "enabled", label: "Enabled" },
+];
+
+/** Kimi Ralph Loop iteration options (only shown when swarm is enabled). */
+export const RALPH_ITERATIONS_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Default (1)" },
+  { value: "1", label: "1" },
+  { value: "3", label: "3" },
+  { value: "5", label: "5" },
+  { value: "-1", label: "Unlimited (Agent Decides)" },
+];
+
+export const RALPH_TRIGGER_LABELS: Record<string, string> = {
+  "": "Default",
 };
 
 /** Short labels for the trigger button, keyed by option value.

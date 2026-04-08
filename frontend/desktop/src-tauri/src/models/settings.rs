@@ -2,6 +2,27 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+/// Default Kimi swarm agent YAML.
+pub const KIMI_SWARM_YAML: &str = r#"version: 1
+agent:
+  extend: default
+  tools:
+    - "kimi_cli.tools.multiagent:CreateSubagent"
+  system_prompt_args:
+    ROLE_ADDITIONAL: |
+      You are operating in **swarm mode**. You have the ability to create
+      specialised subagents and dispatch tasks to them in parallel.
+
+      When tackling a large task:
+      1. Break it into independent subtasks.
+      2. Use CreateSubagent to define specialised agents for each role.
+      3. Use Task to dispatch subtasks in parallel — call Task multiple
+         times in a single response for maximum concurrency.
+      4. Gather results and synthesise the final output.
+
+      Aim for maximum parallelism. Spawn as many subagents as needed.
+"#;
+
 use super::agents::{
     default_kimi_model, default_kimi_path, default_opencode_model, default_opencode_path,
     AgentBackend,
@@ -90,6 +111,16 @@ pub struct AppSettings {
     /// (e.g. {"claude": "high", "codex": "medium"}).
     #[serde(default)]
     pub provider_thinking: HashMap<String, String>,
+    /// Whether Kimi swarm (multi-agent) mode is enabled.
+    #[serde(default)]
+    pub kimi_swarm_enabled: bool,
+    /// Max Ralph Loop iterations for Kimi swarm (-1 = unlimited).
+    #[serde(default = "default_kimi_max_ralph_iterations")]
+    pub kimi_max_ralph_iterations: i32,
+}
+
+fn default_kimi_max_ralph_iterations() -> i32 {
+    1
 }
 
 fn default_theme() -> String {
@@ -129,6 +160,8 @@ impl Default for AppSettings {
             completion_notifications: default_completion_notifications(),
             permission_notifications: false,
             provider_thinking: HashMap::new(),
+            kimi_swarm_enabled: false,
+            kimi_max_ralph_iterations: default_kimi_max_ralph_iterations(),
         }
     }
 }

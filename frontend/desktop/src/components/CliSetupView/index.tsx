@@ -95,6 +95,15 @@ export function CliSetupView({
     onSave({ ...settings, providerThinking: updated });
   }
 
+  function handleSwarmChange(value: string): void {
+    onSave({ ...settings, kimiSwarmEnabled: value === "enabled" });
+  }
+
+  function handleRalphIterationsChange(value: string): void {
+    const parsed = value ? parseInt(value, 10) : 1;
+    onSave({ ...settings, kimiMaxRalphIterations: parsed });
+  }
+
   function handleToggleModel(providerName: string, model: string): void {
     if (actionsDisabled) return;
     const provider = providers.find((p) => p.name === providerName);
@@ -201,10 +210,14 @@ export function CliSetupView({
                   actionsDisabled={actionsDisabled}
                   enabledModels={getEnabledModels(settings, p.name)}
                   thinkingLevels={thinkingLevelsForProvider(settings.providerThinking ?? {}, p.name)}
+                  swarmMode={settings.kimiSwarmEnabled ? "enabled" : ""}
+                  ralphIterations={settings.kimiMaxRalphIterations === 1 ? "" : String(settings.kimiMaxRalphIterations)}
                   onToggleModel={(model) => handleToggleModel(p.name, model)}
                   onToggleAll={(selectAll) => handleToggleAll(p.name, selectAll)}
                   onUpdate={() => void handleUpdateCli(p.name)}
                   onThinkingChange={(model, value) => handleThinkingChange(p.name, model, value)}
+                  onSwarmChange={handleSwarmChange}
+                  onRalphIterationsChange={handleRalphIterationsChange}
                 />
               ))}
             </div>

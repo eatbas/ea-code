@@ -106,6 +106,14 @@ export function ConversationView({
             onPipelineModeChange={onPipelineModeChange}
             onAgentChange={viewModel.setSelectedAgent}
             onThinkingChange={viewModel.handleThinkingChange}
+            isKimi={viewModel.isKimi}
+            kimiSwarmEnabled={viewModel.kimiSwarmEnabled}
+            kimiRalphIterations={viewModel.kimiRalphIterations}
+            isResume={viewModel.isResume}
+            redoSwarm={viewModel.redoSwarm}
+            onRedoSwarmChange={viewModel.setRedoSwarm}
+            onSwarmChange={viewModel.handleSwarmChange}
+            onRalphIterationsChange={viewModel.handleRalphIterationsChange}
             onPromptChange={onPromptDraftChange}
             onSend={viewModel.handleSend}
             onStop={viewModel.handleStop}

@@ -3,7 +3,14 @@ import { useMemo, useState } from "react";
 import { ArrowRight, Plus, RotateCcw, Square } from "lucide-react";
 import type { AgentSelection, ProviderInfo } from "../../../types";
 import { PopoverSelect } from "../../shared/PopoverSelect";
-import { modelOptionsFromProvider, providerDisplayName, THINKING_TRIGGER_LABELS } from "../../shared/constants";
+import {
+  modelOptionsFromProvider,
+  providerDisplayName,
+  THINKING_TRIGGER_LABELS,
+  SWARM_OPTIONS,
+  RALPH_ITERATIONS_OPTIONS,
+  RALPH_TRIGGER_LABELS,
+} from "../../shared/constants";
 import type { PipelineMode } from "./index";
 
 const PIPELINE_OPTIONS: { value: PipelineMode; label: string }[] = [
@@ -28,6 +35,14 @@ interface ComposerToolbarProps {
   onPipelineModeChange: (mode: PipelineMode) => void;
   onAgentChange: (agent: AgentSelection) => void;
   onThinkingChange: (value: string) => void;
+  isKimi: boolean;
+  isResume: boolean;
+  kimiSwarmEnabled: boolean;
+  kimiRalphIterations: number;
+  redoSwarm: boolean;
+  onRedoSwarmChange: (value: boolean) => void;
+  onSwarmChange: (value: string) => void;
+  onRalphIterationsChange: (value: string) => void;
   onSubmit: () => Promise<void>;
   onStop: () => Promise<void>;
   onResumePipeline?: () => void;
@@ -51,13 +66,21 @@ export function ComposerToolbar({
   onPipelineModeChange,
   onAgentChange,
   onThinkingChange,
+  isKimi,
+  isResume,
+  kimiSwarmEnabled,
+  kimiRalphIterations,
+  redoSwarm,
+  onRedoSwarmChange,
+  onSwarmChange,
+  onRalphIterationsChange,
   onSubmit,
   onStop,
   onResumePipeline,
   onNewPipeline,
   submitDisabled,
 }: ComposerToolbarProps): ReactNode {
-  const [openSelect, setOpenSelect] = useState<"pipeline" | "provider" | "model" | "thinking" | null>(null);
+  const [openSelect, setOpenSelect] = useState<"pipeline" | "provider" | "model" | "thinking" | "swarm" | "ralph" | null>(null);
   const hasThinking = thinkingOptions !== undefined && thinkingOptions.length > 0;
   const triggerLabels = agent ? THINKING_TRIGGER_LABELS[agent.provider] : undefined;
   const availableProviders = useMemo(
@@ -161,9 +184,61 @@ export function ComposerToolbar({
                 triggerClassName="flex h-7 w-[5rem] items-center gap-1 rounded-lg border border-edge-strong bg-input-bg px-2 text-[11px] font-semibold text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-input-border-focus hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55"
                 menuClassName="w-max min-w-full rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
                 triggerLabels={triggerLabels}
+                menuTitle="Thinking Level"
                 onChange={onThinkingChange}
               />
             </>
+          )}
+          {isKimi && pipelineMode === "simple" && (
+            <>
+              <span className="px-0.5 text-separator">·</span>
+              <PopoverSelect
+                value={kimiSwarmEnabled ? "enabled" : ""}
+                options={SWARM_OPTIONS}
+                placeholder="Swarm"
+                disabled={locked}
+                direction="up"
+                align="right"
+                open={openSelect === "swarm"}
+                onOpenChange={(open) => setOpenSelect(open ? "swarm" : null)}
+                triggerClassName="flex h-7 items-center gap-1 rounded-lg border border-edge-strong bg-input-bg px-2 text-[11px] font-semibold text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-input-border-focus hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55"
+                menuClassName="w-max min-w-full rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
+                menuTitle="Swarm Mode"
+                onChange={onSwarmChange}
+              />
+              {kimiSwarmEnabled && (
+                <>
+                  <span className="px-0.5 text-separator">·</span>
+                  <PopoverSelect
+                    value={kimiRalphIterations === 1 ? "" : String(kimiRalphIterations)}
+                    options={RALPH_ITERATIONS_OPTIONS}
+                    placeholder="Ralph"
+                    disabled={locked}
+                    direction="up"
+                    align="right"
+                    open={openSelect === "ralph"}
+                    onOpenChange={(open) => setOpenSelect(open ? "ralph" : null)}
+                    triggerClassName="flex h-7 items-center gap-1 rounded-lg border border-edge-strong bg-input-bg px-2 text-[11px] font-semibold text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-input-border-focus hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55"
+                    menuClassName="w-max min-w-full rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
+                    triggerLabels={RALPH_TRIGGER_LABELS}
+                    menuTitle="Ralph Iterations"
+                    onChange={onRalphIterationsChange}
+                  />
+                </>
+              )}
+            </>
+          )}
+          {isKimi && kimiSwarmEnabled && isResume && pipelineMode === "simple" && (
+            <label className="flex items-center gap-1.5 pl-1 text-[11px] font-medium text-fg-muted cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={redoSwarm}
+                onChange={(e) => onRedoSwarmChange(e.target.checked)}
+                disabled={locked}
+                className="h-3.5 w-3.5 rounded border border-edge-strong bg-input-bg accent-running-dot"
+              />
+              Re-do Swarm
+            </label>
           )}
         </div>
 

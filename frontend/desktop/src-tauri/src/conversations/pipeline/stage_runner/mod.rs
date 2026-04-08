@@ -27,6 +27,17 @@ use self::watchers::spawn_stage_watchers;
 const FILE_COMPLETION_STOP_GRACE: Duration = Duration::from_secs(15);
 const POLL_FAILURE_GRACE: Duration = Duration::from_secs(45);
 
+/// Prompt prefix prepended to pipeline stage prompts when Kimi swarm mode
+/// is active. Instructs the agent to create specialised subagents and
+/// dispatch tasks in parallel.
+const PIPELINE_SWARM_PREFIX: &str = "\
+    [SWARM MODE] You have CreateSubagent and Task tools available. \
+    Before starting work, analyse the project and create specialised \
+    subagents (e.g. coder, reviewer, researcher, tester). Then use \
+    Task to dispatch independent subtasks in parallel \u{2014} call Task \
+    multiple times in a single response for maximum concurrency. \
+    Aim for maximum parallelism. Spawn as many subagents as needed.";
+
 /// Configuration for a single pipeline stage execution.
 pub struct StageConfig {
     pub stage_index: usize,
@@ -115,9 +126,51 @@ pub async fn run_stage(
         ));
     }
 
-    let thinking_level = crate::storage::settings::read_settings()
-        .ok()
+    let settings = crate::storage::settings::read_settings().ok();
+    let thinking_level = settings.as_ref()
         .and_then(|s| s.thinking_level(&provider, &model).map(str::to_string));
+    // Only apply Kimi swarm for new sessions (planners and coder).
+    // Resume stages (reviewers, code fixer, merges) inherit the existing
+    // session context. The orchestrator is excluded as prompt enhancement
+    // does not benefit from subagent parallelism.
+    let kimi_swarm = settings.as_ref()
+        .filter(|_| mode == "new" && stage_name != "Prompt Enhancer")
+        .filter(|s| provider.eq_ignore_ascii_case("kimi") && s.kimi_swarm_enabled)
+        .map(|s| {
+            let swarm_dir = format!(
+                "{workspace_path}/.maestro/conversations/{conversation_id}/swarm"
+            );
+            let yaml_path = format!("{swarm_dir}/kimi-swarm.yaml");
+            if !std::path::Path::new(&yaml_path).exists() {
+                let _ = std::fs::create_dir_all(&swarm_dir);
+                let _ = std::fs::write(&yaml_path, crate::models::KIMI_SWARM_YAML);
+            }
+            crate::conversations::symphony_request::KimiSwarmOptions {
+                agent_file: yaml_path,
+                swarm_dir,
+                max_ralph_iterations: s.kimi_max_ralph_iterations,
+            }
+        });
+    // Prepend swarm instructions when swarm mode is active.
+    let prompt = if kimi_swarm.is_some() {
+        format!("{PIPELINE_SWARM_PREFIX}\n\n{prompt}")
+    } else {
+        prompt
+    };
+    let provider_options = crate::conversations::symphony_request::default_provider_options(
+        &provider,
+        thinking_level.as_deref(),
+        kimi_swarm,
+    );
+    emit_pipeline_debug(
+        &app,
+        &workspace_path,
+        &conversation_id,
+        format!(
+            "{stage_name}: options: {}",
+            serde_json::to_string(&provider_options).unwrap_or_else(|_| "{}".to_string()),
+        ),
+    );
     let request = SymphonyChatRequest {
         provider: &provider,
         model: &model,
@@ -125,10 +178,7 @@ pub async fn run_stage(
         mode,
         prompt: &prompt,
         provider_session_ref: provider_session_ref.as_deref(),
-        provider_options: crate::conversations::symphony_request::default_provider_options(
-            &provider,
-            thinking_level.as_deref(),
-        ),
+        provider_options,
     };
 
     let emit_failed = |error_message: &str| -> (PipelineStageRecord, String) {
@@ -306,10 +356,11 @@ pub async fn run_stage(
                         &workspace_path,
                         &conversation_id,
                         format!(
-                            "{stage_name}: polled status -> {status_label} (chars={}, final={}, error={})",
+                            "{stage_name}: polled status -> {status_label} (chars={}, final={}, error={}, exit_code={})",
                             snapshot.accumulated_text.len(),
                             snapshot.final_text.as_ref().map(|text| !text.is_empty()).unwrap_or(false),
                             snapshot.error.as_deref().unwrap_or("none"),
+                            snapshot.exit_code.map(|c| c.to_string()).unwrap_or_else(|| "none".to_string()),
                         ),
                     );
                     last_status = Some(status_label);
@@ -459,12 +510,14 @@ pub async fn run_stage(
 
     if let Some(ref diagnostic) = failure_text {
         eprintln!("[pipeline] {stage_name}: {diagnostic}");
-        emit_pipeline_debug(
-            &app,
-            &workspace_path,
-            &conversation_id,
-            format!("{stage_name}: failure diagnostic recorded"),
-        );
+        for line in diagnostic.lines() {
+            emit_pipeline_debug(
+                &app,
+                &workspace_path,
+                &conversation_id,
+                format!("{stage_name}: {line}"),
+            );
+        }
     }
 
     emit_pipeline_debug(

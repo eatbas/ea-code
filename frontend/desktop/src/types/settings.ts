@@ -63,6 +63,10 @@ export interface AppSettings {
   permissionNotifications: boolean;
   /** Per-provider thinking / reasoning effort level (e.g. { claude: "high", codex: "medium" }). */
   providerThinking: Record<string, string>;
+  /** Whether Kimi swarm (multi-agent) mode is enabled. */
+  kimiSwarmEnabled: boolean;
+  /** Max Ralph Loop iterations for Kimi swarm (-1 = unlimited). */
+  kimiMaxRalphIterations: number;
 }
 
 /** Default settings values. */
@@ -89,4 +93,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   completionNotifications: "never",
   permissionNotifications: false,
   providerThinking: {},
+  kimiSwarmEnabled: false,
+  kimiMaxRalphIterations: 1,
 };

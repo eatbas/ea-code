@@ -9,11 +9,12 @@ use crate::models::{
 
 use super::events::{EVENT_CONVERSATION_OUTPUT_DELTA, EVENT_CONVERSATION_STATUS};
 use super::persistence;
+use super::pipeline_debug::emit_pipeline_debug;
 use super::score_client::{
     consume_score_websocket, poll_until_terminal, submit_score, SymphonyLiveEvent,
     SymphonyScoreSnapshot,
 };
-use super::symphony_request::{default_provider_options, SymphonyChatRequest};
+use super::symphony_request::{default_provider_options, KimiSwarmOptions, SymphonyChatRequest};
 
 fn emit_status(app: &AppHandle, event: ConversationStatusEvent) -> Result<(), String> {
     app.emit(EVENT_CONVERSATION_STATUS, event)
@@ -129,9 +130,59 @@ pub async fn run_conversation_turn(
     } else {
         "new"
     };
-    let thinking_level = crate::storage::settings::read_settings()
-        .ok()
+    let settings = crate::storage::settings::read_settings().ok();
+    let thinking_level = settings.as_ref()
         .and_then(|s| s.thinking_level(&summary.agent.provider, &summary.agent.model).map(str::to_string));
+    let kimi_swarm = settings.as_ref()
+        .filter(|s| summary.agent.provider.eq_ignore_ascii_case("kimi") && s.kimi_swarm_enabled)
+        .and_then(|s| {
+            // Per-conversation swarm folder.
+            let swarm_dir = format!(
+                "{workspace_path}/.maestro/conversations/{conversation_id}/swarm"
+            );
+            let yaml_path = format!("{swarm_dir}/kimi-swarm.yaml");
+            if !std::path::Path::new(&yaml_path).exists() {
+                let _ = std::fs::create_dir_all(&swarm_dir);
+                let _ = std::fs::write(&yaml_path, crate::models::KIMI_SWARM_YAML);
+            }
+            Some(KimiSwarmOptions {
+                agent_file: yaml_path,
+                swarm_dir,
+                max_ralph_iterations: s.kimi_max_ralph_iterations,
+            })
+        });
+    let provider_options = default_provider_options(
+        &summary.agent.provider,
+        thinking_level.as_deref(),
+        kimi_swarm,
+    );
+    // Log full request details for all providers.
+    emit_pipeline_debug(
+        &app,
+        &workspace_path,
+        &conversation_id,
+        format!(
+            "submit: provider={} model={} mode={mode} session_ref={}",
+            summary.agent.provider,
+            summary.agent.model,
+            summary.last_provider_session_ref.as_deref().unwrap_or("none"),
+        ),
+    );
+    emit_pipeline_debug(
+        &app,
+        &workspace_path,
+        &conversation_id,
+        format!(
+            "options: {}",
+            serde_json::to_string(&provider_options).unwrap_or_else(|_| "{}".to_string()),
+        ),
+    );
+    emit_pipeline_debug(
+        &app,
+        &workspace_path,
+        &conversation_id,
+        format!("prompt (first 200 chars): {}", &prompt[..prompt.len().min(200)]),
+    );
     let request = SymphonyChatRequest {
         provider: &summary.agent.provider,
         model: &summary.agent.model,
@@ -139,18 +190,27 @@ pub async fn run_conversation_turn(
         mode,
         prompt: &prompt,
         provider_session_ref: summary.last_provider_session_ref.as_deref(),
-        provider_options: default_provider_options(
-            &summary.agent.provider,
-            thinking_level.as_deref(),
-        ),
+        provider_options,
     };
 
     let accepted = match submit_score(&request).await {
         Ok(response) => response,
         Err(error) => {
+            emit_pipeline_debug(
+                &app,
+                &workspace_path,
+                &conversation_id,
+                format!("simple task: failed to submit: {error}"),
+            );
             return finish_with_failure(&app, &workspace_path, &conversation_id, None, error).await;
         }
     };
+    emit_pipeline_debug(
+        &app,
+        &workspace_path,
+        &conversation_id,
+        format!("simple task: accepted score {}", accepted.score_id),
+    );
 
     let updated_summary = persistence::set_active_score_id(
         &workspace_path,
@@ -242,6 +302,12 @@ pub async fn run_conversation_turn(
     let snapshot = match terminal_snapshot {
         Ok(snapshot) => snapshot,
         Err(error) => {
+            emit_pipeline_debug(
+                &app,
+                &workspace_path,
+                &conversation_id,
+                format!("simple task: polling failed: {error}"),
+            );
             let partial = live_output(&live_buffer);
             return finish_with_failure(
                 &app,
@@ -253,6 +319,16 @@ pub async fn run_conversation_turn(
             .await;
         }
     };
+    emit_pipeline_debug(
+        &app,
+        &workspace_path,
+        &conversation_id,
+        format!(
+            "simple task: completed with status {:?}, output_len={}",
+            snapshot.status,
+            snapshot.accumulated_text.len(),
+        ),
+    );
 
     finish_conversation_from_snapshot(
         &app,

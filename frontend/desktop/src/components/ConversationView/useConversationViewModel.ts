@@ -7,7 +7,7 @@ import { useFooterErrorHandler } from "../../hooks/useFooterErrorHandler";
 import { usePipelineSession } from "../../hooks/usePipelineSession";
 import { usePlanReview } from "../../hooks/usePlanReview";
 import { useSettings } from "../../hooks/useSettings";
-import { THINKING_OPTIONS } from "../shared/constants";
+import { getThinkingOptions, KIMI_SWARM_PROMPT_PREFIX } from "../shared/constants";
 import {
   acceptPlan,
   getPipelineDebugLog,
@@ -191,6 +191,12 @@ export function useConversationViewModel({
     [activeConversation],
   );
 
+  const kimiSwarmEnabled = settings?.kimiSwarmEnabled ?? false;
+  const kimiRalphIterations = settings?.kimiMaxRalphIterations ?? 1;
+  const isKimi = currentAgent?.provider === "kimi";
+  const isResume = Boolean(activeConversation?.summary.lastProviderSessionRef);
+  const [redoSwarm, setRedoSwarm] = useState(false);
+
   const handleSend = useCallback(async (prompt: string, pendingImages?: PendingImage[]) => {
     if (pipelineMode === "code") {
       pipeline.reset();
@@ -209,8 +215,12 @@ export function useConversationViewModel({
       return;
     }
 
-    await onSendPrompt(prompt, agent, pendingImages);
-  }, [activeConversation, onSendPrompt, onSetActiveConversation, pipeline, pipelineMode, planReview, selectedAgent, workspace.path]);
+    const effectivePrompt = (redoSwarm && isKimi && kimiSwarmEnabled && isResume)
+      ? KIMI_SWARM_PROMPT_PREFIX + prompt
+      : prompt;
+    if (redoSwarm) setRedoSwarm(false);
+    await onSendPrompt(effectivePrompt, agent, pendingImages);
+  }, [activeConversation, isKimi, isResume, kimiSwarmEnabled, onSendPrompt, onSetActiveConversation, pipeline, pipelineMode, planReview, redoSwarm, selectedAgent, workspace.path]);
 
   const handleStop = useCallback(async () => {
     if (pipelineConversationId) {
@@ -260,7 +270,7 @@ export function useConversationViewModel({
 
   const thinkingOptions = useMemo(() => {
     if (!currentAgent) return undefined;
-    return THINKING_OPTIONS[currentAgent.provider];
+    return getThinkingOptions(currentAgent.provider, currentAgent.model);
   }, [currentAgent]);
 
   const handleThinkingChange = useCallback((value: string) => {
@@ -274,6 +284,17 @@ export function useConversationViewModel({
     }
     void saveSettings({ ...settings, providerThinking: updated });
   }, [settings, currentAgent, saveSettings]);
+
+  const handleSwarmChange = useCallback((value: string) => {
+    if (!settings) return;
+    void saveSettings({ ...settings, kimiSwarmEnabled: value === "enabled" });
+  }, [settings, saveSettings]);
+
+  const handleRalphIterationsChange = useCallback((value: string) => {
+    if (!settings) return;
+    const parsed = value ? parseInt(value, 10) : 1;
+    void saveSettings({ ...settings, kimiMaxRalphIterations: parsed });
+  }, [settings, saveSettings]);
 
   return {
     availableProviders,
@@ -293,6 +314,14 @@ export function useConversationViewModel({
     handleRedoReview,
     handleNewPipeline,
     handleThinkingChange,
+    isKimi,
+    isResume,
+    kimiSwarmEnabled,
+    kimiRalphIterations,
+    redoSwarm,
+    setRedoSwarm,
+    handleSwarmChange,
+    handleRalphIterationsChange,
     handleFooterError,
   };
 }

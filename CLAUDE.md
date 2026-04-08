@@ -1,22 +1,75 @@
-# CLAUDE.md - Maestro Agent Instructions
+# AGENTS.md - Maestro Agent Instructions
 
 This guidance applies to any AI agent editing this repository.
 
 ## Project Snapshot
 
 - The primary product is the desktop app in `frontend/desktop/`.
-- Desktop stack: Tauri v2, React 19, TypeScript 5.8, Tailwind CSS v4, Rust backend.
-- The repo also contains the marketing site in `frontend/web/` and release scripts in `scripts/`.
+- Desktop stack: Tauri v2, React 19, TypeScript ~6.x, Tailwind CSS v4, Rust backend.
+- The repo also contains the marketing site in `frontend/web/`, the backend API in `symphony-api/`, and release scripts in `scripts/`.
+- `symphony-api/` is a Python/FastAPI service that orchestrates AI CLI agents (Claude, Gemini, Codex, Copilot, Kimi, OpenCode) over HTTP and WebSocket. See `symphony-api/AGENTS.md` for its own conventions.
 - Current persistence is file-based under `~/.maestro/`. Older SQLite and `~/.config/maestro/` references are legacy migration context, not the live architecture.
 
 ## Working Scope
 
-- Default to `frontend/desktop/` unless the user explicitly asks for website work.
+- Default to `frontend/desktop/` unless the user explicitly asks for website or API work.
 - Inspect `frontend/web/` only when the request says `website`, `web`, or points to that path.
+- Inspect `symphony-api/` only when the request explicitly targets the backend API.
 - Ignore generated and dependency output unless the task requires it:
   - `frontend/desktop/node_modules/`
   - `frontend/desktop/src-tauri/target/`
   - `frontend/desktop/src-tauri/gen/`
+
+## Build and Test
+
+### Desktop
+
+Install dependencies:
+
+```sh
+cd frontend/desktop && npm install
+```
+
+Dev mode (Vite only):
+
+```sh
+cd frontend/desktop && npm run dev
+```
+
+Full Tauri dev app:
+
+```sh
+cd frontend/desktop && npm run tauri dev
+```
+
+TypeScript tests:
+
+```sh
+cd frontend/desktop && npm test
+```
+
+### Symphony API
+
+Requires Python 3.12+. Uses `start.sh` to auto-detect the interpreter and manage the venv:
+
+```sh
+cd symphony-api && bash start.sh
+```
+
+Or manually:
+
+```sh
+cd symphony-api && python3 -m venv .venv && . .venv/bin/activate && pip install -e ".[dev]"
+uvicorn symphony.main:app --reload
+```
+
+Run tests:
+
+```sh
+cd symphony-api && pytest
+```
+
+UI at `http://127.0.0.1:8000/`, Swagger docs at `/docs`.
 
 ## Verify Before Delivering
 
@@ -112,9 +165,11 @@ Marketing site: React 19, TypeScript 5.8, Vite 7, Tailwind CSS v4, Lucide React 
 - Desktop frontend: `frontend/desktop/src/`
 - Desktop backend: `frontend/desktop/src-tauri/src/`
 - Website: `frontend/web/src/`
+- Symphony API: `symphony-api/src/symphony/` (see `symphony-api/AGENTS.md`)
 - Release scripts: `scripts/release.ps1`, `scripts/release.sh`
 - CI workflow: `.github/workflows/release.yml`
 - Root docs: `README.md`, `AGENTS.md`, `CLAUDE.md`
+- Test coverage plan: `docs/test-coverage-imp-plan.md`
 
 ## What Not To Do
 
