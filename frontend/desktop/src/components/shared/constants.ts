@@ -36,20 +36,47 @@ export function modelOptionsFromProvider(
 /** Formats a raw model identifier for display. */
 export function formatModelLabel(model: string): string {
   const known: Record<string, string> = {
+    // Claude aliases
     sonnet: "Sonnet",
     opus: "Opus",
     haiku: "Haiku",
+    // Codex models
     "gpt-5.3-codex": "GPT-5.3 Codex",
     "gpt-5.4": "GPT-5.4",
     "gpt-5.4-mini": "GPT-5.4 Mini",
+    "gpt-5.2": "GPT-5.2",
+    "gpt-5-mini": "GPT-5 Mini",
+    "gpt-4.1": "GPT-4.1",
+    // Gemini models
     "gemini-3-flash-preview": "Gemini 3 Flash",
     "gemini-3.1-pro-preview": "Gemini 3.1 Pro",
+    "gemini-2.5-pro": "Gemini 2.5 Pro",
+    "gemini-3-pro": "Gemini 3 Pro",
+    "gemini-3-flash": "Gemini 3 Flash",
+    // Kimi models
     "kimi-code/kimi-for-coding": "Kimi Code",
+    // Copilot backend models
+    "claude-sonnet-4.6": "Claude Sonnet 4.6",
+    "claude-haiku-4.5": "Claude Haiku 4.5",
+    "claude-opus-4.6": "Claude Opus 4.6",
+    "grok-code-fast-1": "Grok Code Fast",
+    // OpenCode GLM models (unprefixed — from /v1/providers API)
+    "glm-4.5": "GLM 4.5",
+    "glm-4.5-air": "GLM 4.5 Air",
+    "glm-4.5-flash": "GLM 4.5 Flash",
+    "glm-4.5v": "GLM 4.5V",
+    "glm-4.6": "GLM 4.6",
+    "glm-4.6v": "GLM 4.6V",
+    "glm-4.7": "GLM 4.7",
+    "glm-4.7-flash": "GLM 4.7 Flash",
+    "glm-4.7-flashx": "GLM 4.7 FlashX",
+    "glm-5": "GLM 5",
+    "glm-5-turbo": "GLM 5 Turbo",
+    "glm-5.1": "GLM 5.1",
+    // OpenCode GLM models (prefixed — from legacy settings)
     "opencode/glm-5": "GLM 5",
     "opencode/glm-5-turbo": "GLM 5 Turbo",
     "opencode/glm-4.7": "GLM 4.7",
-    "claude-sonnet-4.6": "Claude Sonnet 4.6",
-    "claude-haiku-4.5": "Claude Haiku 4.5",
   };
   return known[model] ?? model;
 }
