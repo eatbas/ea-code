@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { saveConversationImage } from "../lib/desktopApi";
 import { blobToBase64, buildPromptWithImages as formatPromptWithImages } from "../utils/imageUtils";
 
@@ -33,35 +34,31 @@ export function useImageAttachments(
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
 
-  // Track URLs for cleanup on unmount
-  const allUrlsRef = useRef<Set<string>>(new Set());
+  // Track blob URLs for cleanup on unmount (asset URLs do not need revoking).
+  const blobUrlsRef = useRef<Set<string>>(new Set());
 
-  // Clear images when conversationId changes
+  // Clear attachments when the active conversation changes — images from prior
+  // turns are already embedded in the conversation history and should not be
+  // re-sent.
   const prevConversationIdRef = useRef<string | null>(conversationId);
   useEffect(() => {
-    if (prevConversationIdRef.current !== conversationId) {
-      prevConversationIdRef.current = conversationId;
-      setAttachedImages((prev) => {
-        prev.forEach((img) => {
-          URL.revokeObjectURL(img.previewUrl);
-          allUrlsRef.current.delete(img.previewUrl);
-        });
-        return [];
-      });
-      setPendingImages((prev) => {
-        prev.forEach((img) => {
-          URL.revokeObjectURL(img.previewUrl);
-          allUrlsRef.current.delete(img.previewUrl);
-        });
-        return [];
-      });
+    if (prevConversationIdRef.current === conversationId) {
+      return;
     }
+
+    // Clean up blob URLs from the previous conversation.
+    blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    blobUrlsRef.current.clear();
+
+    prevConversationIdRef.current = conversationId;
+    setAttachedImages([]);
+    setPendingImages([]);
   }, [conversationId]);
 
-  // Revoke all remaining URLs on unmount
+  // Revoke all remaining blob URLs on unmount.
   useEffect(() => {
     return () => {
-      allUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
 
@@ -76,20 +73,24 @@ export function useImageAttachments(
       }
 
       const previewUrl = URL.createObjectURL(file);
-      allUrlsRef.current.add(previewUrl);
+      blobUrlsRef.current.add(previewUrl);
 
       if (workspacePath && conversationId) {
         try {
           const base64 = await blobToBase64(file);
           const result = await saveConversationImage(workspacePath, conversationId, base64, extension);
+          // Replace the blob URL with a stable asset URL for the saved file.
+          URL.revokeObjectURL(previewUrl);
+          blobUrlsRef.current.delete(previewUrl);
+          const assetUrl = convertFileSrc(result.filePath);
           setAttachedImages((prev) => [
             ...prev,
-            { fileName: result.fileName, filePath: result.filePath, previewUrl },
+            { fileName: result.fileName, filePath: result.filePath, previewUrl: assetUrl },
           ]);
         } catch (error) {
           console.warn("[useImageAttachments] Failed to save image:", error);
           URL.revokeObjectURL(previewUrl);
-          allUrlsRef.current.delete(previewUrl);
+          blobUrlsRef.current.delete(previewUrl);
         }
       } else {
         setPendingImages((prev) => [
@@ -100,9 +101,11 @@ export function useImageAttachments(
     }
   }, [workspacePath, conversationId]);
 
-  const revokeUrl = useCallback((url: string) => {
-    URL.revokeObjectURL(url);
-    allUrlsRef.current.delete(url);
+  const revokeBlobUrl = useCallback((url: string) => {
+    if (blobUrlsRef.current.has(url)) {
+      URL.revokeObjectURL(url);
+      blobUrlsRef.current.delete(url);
+    }
   }, []);
 
   const removeImage = useCallback((index: number) => {
@@ -111,7 +114,7 @@ export function useImageAttachments(
       setAttachedImages((prev) => {
         const updated = [...prev];
         const removed = updated.splice(index, 1);
-        removed.forEach((img) => revokeUrl(img.previewUrl));
+        removed.forEach((img) => revokeBlobUrl(img.previewUrl));
         return updated;
       });
     } else {
@@ -119,22 +122,22 @@ export function useImageAttachments(
       setPendingImages((prev) => {
         const updated = [...prev];
         const removed = updated.splice(pendingIndex, 1);
-        removed.forEach((img) => revokeUrl(img.previewUrl));
+        removed.forEach((img) => revokeBlobUrl(img.previewUrl));
         return updated;
       });
     }
-  }, [attachedImages.length, revokeUrl]);
+  }, [attachedImages.length, revokeBlobUrl]);
 
   const clearImages = useCallback(() => {
     setAttachedImages((prev) => {
-      prev.forEach((img) => revokeUrl(img.previewUrl));
+      prev.forEach((img) => revokeBlobUrl(img.previewUrl));
       return [];
     });
     setPendingImages((prev) => {
-      prev.forEach((img) => revokeUrl(img.previewUrl));
+      prev.forEach((img) => revokeBlobUrl(img.previewUrl));
       return [];
     });
-  }, [revokeUrl]);
+  }, [revokeBlobUrl]);
 
   const buildPromptWithImages = useCallback((prompt: string, extraPaths?: string[]): string => {
     const paths = [

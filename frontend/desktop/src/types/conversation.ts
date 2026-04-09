@@ -94,3 +94,8 @@ export interface ImageSaveResult {
   fileName: string;
   filePath: string;
 }
+
+export interface ImageEntry {
+  fileName: string;
+  filePath: string;
+}

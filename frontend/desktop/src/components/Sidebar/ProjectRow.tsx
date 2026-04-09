@@ -12,7 +12,6 @@ import {
   X,
 } from "lucide-react";
 import { useSidebarRowMenu } from "../../hooks/useSidebarRowMenu";
-import { ConfirmActionPopover } from "../shared/ConfirmActionPopover";
 import { InlineRenameInput } from "../shared/InlineRenameInput";
 import { RowDropdownMenu, type RowDropdownMenuItem } from "../shared/RowDropdownMenu";
 
@@ -115,7 +114,9 @@ export function ProjectRow({
       <button
         type="button"
         onClick={onProjectClick}
-        className={`relative mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-lg py-1.5 pr-16 text-left text-sm transition-colors ${
+        className={`relative mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-lg py-1.5 text-left text-sm transition-colors ${
+          confirmAction ? "pr-[10rem]" : "pr-16"
+        } ${
           hasRunningConversation ? "pl-9" : "pl-3"
         } ${
           isActive
@@ -151,13 +152,23 @@ export function ProjectRow({
         </span>
       </button>
 
-      <div ref={menuRef} className="absolute right-2 top-2 z-10 flex items-start gap-1">
+      <div ref={menuRef} className="absolute right-2 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1">
         {confirmAction ? (
-          <div className="absolute right-0 top-1/2 z-20 -translate-y-1/2">
-            <ConfirmActionPopover
-              label={confirmAction === "archive" ? "Archive?" : "Delete?"}
-              confirmLabel={confirmAction === "archive" ? "Archive" : "Delete"}
-              onConfirm={() => {
+          <>
+            <span className="text-[11px] text-fg-muted">
+              {confirmAction === "archive" ? "Archive?" : "Delete?"}
+            </span>
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); setConfirmAction(null); }}
+              className="rounded px-1.5 py-0.5 text-[11px] font-medium text-fg-muted transition-colors hover:bg-active hover:text-fg"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
                 if (confirmAction === "archive") {
                   onArchiveProject?.();
                 } else {
@@ -165,31 +176,37 @@ export function ProjectRow({
                 }
                 setConfirmAction(null);
               }}
-              onCancel={() => setConfirmAction(null)}
+              className="rounded bg-danger-bg px-1.5 py-0.5 text-[11px] font-medium text-danger-text transition-colors hover:bg-danger-bg-hover hover:text-danger-text-hover"
               disabled={busy}
-            />
-          </div>
-        ) : hasActions && (
+            >
+              {confirmAction === "archive" ? "Archive" : "Delete"}
+            </button>
+          </>
+        ) : (
           <>
+            {hasActions && (
+              <>
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); setMenuOpen((current) => !current); }}
+                  className={`rounded p-1 text-fg-faint transition-opacity hover:bg-active hover:text-fg ${menuOpen ? "opacity-100" : "opacity-0 group-hover/project:opacity-100"}`}
+                  title="Project actions"
+                >
+                  <Ellipsis size={12} />
+                </button>
+                {menuOpen && <RowDropdownMenu items={menuItems} />}
+              </>
+            )}
             <button
               type="button"
-              onClick={(event) => { event.stopPropagation(); setMenuOpen((current) => !current); }}
-              className={`rounded p-1 text-fg-faint transition-opacity hover:bg-active hover:text-fg ${menuOpen ? "opacity-100" : "opacity-0 group-hover/project:opacity-100"}`}
-              title="Project actions"
+              onClick={(event) => { event.stopPropagation(); onCreateConversation(); }}
+              className="rounded p-1 text-fg-faint opacity-0 transition-colors transition-opacity hover:bg-new-btn-bg-hover hover:text-new-btn-text group-hover/project:opacity-100"
+              title="New conversation"
             >
-              <Ellipsis size={12} />
+              <SquarePen size={13} strokeWidth={2} />
             </button>
-            {menuOpen && <RowDropdownMenu items={menuItems} />}
           </>
         )}
-        <button
-          type="button"
-          onClick={(event) => { event.stopPropagation(); onCreateConversation(); }}
-          className="rounded p-1 text-fg-faint opacity-0 transition-colors transition-opacity hover:bg-new-btn-bg-hover hover:text-new-btn-text group-hover/project:opacity-100"
-          title="New conversation"
-        >
-          <SquarePen size={13} strokeWidth={2} />
-        </button>
       </div>
     </div>
   );

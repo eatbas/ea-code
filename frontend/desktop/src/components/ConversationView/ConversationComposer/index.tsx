@@ -6,6 +6,7 @@ import type { AgentSelection, ProviderInfo } from "../../../types";
 import { useAutoResizeTextarea } from "../../../hooks/useAutoResizeTextarea";
 import { type PendingImage, useImageAttachments } from "../../../hooks/useImageAttachments";
 import type { SymphonyStartupStatus } from "../../../utils/symphonyStartup";
+import { ImagePreviewModal } from "../../shared/ImagePreviewModal";
 import { ComposerToolbar } from "./ComposerToolbar";
 import { ImageThumbnails } from "./ImageThumbnails";
 import { PromptInput } from "./PromptInput";
@@ -149,6 +150,7 @@ export function ConversationComposer({
   const [queuedPrompt, setQueuedPrompt] = useState<string | null>(null);
   const [runStartedAt, setRunStartedAt] = useState<number>(0);
   const [now, setNow] = useState(Date.now());
+  const [previewImageSrc, setPreviewImageSrc] = useState<string | null>(null);
   const prevActiveRunningRef = useRef(activeRunning);
 
   const {
@@ -241,6 +243,12 @@ export function ConversationComposer({
 
   return (
     <div className="bg-surface px-5 pb-2 pt-1">
+      {previewImageSrc !== null && (
+        <ImagePreviewModal
+          src={previewImageSrc}
+          onClose={() => setPreviewImageSrc(null)}
+        />
+      )}
       <div className="rounded-[20px] border border-edge bg-panel shadow-[0_0_0_1px_rgba(49,49,52,0.24)]">
         {queuedPrompt !== null && (
           <QueuedPromptBanner
@@ -268,6 +276,7 @@ export function ConversationComposer({
           <ImageThumbnails
             previews={allPreviews}
             onRemove={removeImage}
+            onPreview={setPreviewImageSrc}
           />
         )}
 

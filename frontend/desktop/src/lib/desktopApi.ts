@@ -5,6 +5,7 @@ import type {
   AppSettings,
   ConversationDetail,
   ConversationSummary,
+  ImageEntry,
   ImageSaveResult,
   PipelineState,
   PrerequisiteStatus,
@@ -306,5 +307,15 @@ export function saveConversationImage(
     conversationId,
     imageBase64,
     extension,
+  });
+}
+
+export function listConversationImages(
+  workspacePath: string,
+  conversationId: string,
+): Promise<ImageEntry[]> {
+  return invokeCommand<ImageEntry[]>("list_conversation_images", {
+    workspacePath,
+    conversationId,
   });
 }

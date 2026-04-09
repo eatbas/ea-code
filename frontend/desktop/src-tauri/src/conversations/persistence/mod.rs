@@ -22,7 +22,7 @@ pub use crud::{
 
 pub use debug_log::{append_pipeline_debug_log, read_pipeline_debug_log};
 
-pub use images::save_image;
+pub use images::{list_images, save_image};
 
 pub use pipeline_state::{
     load_pipeline_state, mark_running_pipeline_stages_stopped, save_pipeline_state,

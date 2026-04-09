@@ -176,3 +176,10 @@ pub struct ImageSaveResult {
     pub file_name: String,
     pub file_path: String,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageEntry {
+    pub file_name: String,
+    pub file_path: String,
+}

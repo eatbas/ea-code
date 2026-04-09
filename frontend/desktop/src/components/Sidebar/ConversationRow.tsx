@@ -3,7 +3,6 @@ import { Archive, Ellipsis, Pencil, Pin, Upload, X } from "lucide-react";
 import type { ConversationSummary } from "../../types";
 import { useSidebarRowMenu } from "../../hooks/useSidebarRowMenu";
 import { formatRelativeTime } from "../../utils/formatters";
-import { ConfirmActionPopover } from "../shared/ConfirmActionPopover";
 import { InlineRenameInput } from "../shared/InlineRenameInput";
 import { RowDropdownMenu, type RowDropdownMenuItem } from "../shared/RowDropdownMenu";
 
@@ -147,7 +146,7 @@ export function ConversationRow({
         className={`relative mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-lg py-1.5 text-left transition-[padding,color,background-color] ${
           isRunning ? "pl-11" : "pl-9"
         } ${
-          menuOpen ? "pr-[3.75rem]" : "pr-3 group-hover/conversation:pr-[3.75rem]"
+          confirmAction ? "pr-[10rem]" : menuOpen ? "pr-[3.75rem]" : "pr-3 group-hover/conversation:pr-[3.75rem]"
         } ${
           isActive
             ? "bg-row-active text-fg"
@@ -166,11 +165,21 @@ export function ConversationRow({
       </button>
 
       {confirmAction ? (
-        <div className="absolute right-2 top-1/2 z-20 -translate-y-1/2">
-          <ConfirmActionPopover
-            label={confirmAction === "archive" ? "Archive?" : "Delete?"}
-            confirmLabel={confirmAction === "archive" ? "Archive" : "Delete"}
-            onConfirm={() => {
+        <div className="absolute right-2 top-1/2 z-20 flex -translate-y-1/2 items-center gap-1">
+          <span className="text-[11px] text-fg-muted">
+            {confirmAction === "archive" ? "Archive?" : "Delete?"}
+          </span>
+          <button
+            type="button"
+            onClick={(event) => { event.stopPropagation(); setConfirmAction(null); }}
+            className="rounded px-1.5 py-0.5 text-[11px] font-medium text-fg-muted transition-colors hover:bg-active hover:text-fg"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
               if (confirmAction === "archive") {
                 void withBusy("archive", async () => {
                   await onArchiveConversation(projectPath, conversation.id);
@@ -179,16 +188,17 @@ export function ConversationRow({
                 });
                 return;
               }
-
               void withBusy("remove", async () => {
                 await onRemoveConversation(projectPath, conversation.id);
                 setConfirmAction(null);
                 setMenuOpen(false);
               });
             }}
-            onCancel={() => setConfirmAction(null)}
+            className="rounded bg-danger-bg px-1.5 py-0.5 text-[11px] font-medium text-danger-text transition-colors hover:bg-danger-bg-hover hover:text-danger-text-hover"
             disabled={busy}
-          />
+          >
+            {confirmAction === "archive" ? "Archive" : "Delete"}
+          </button>
         </div>
       ) : (
         <div ref={menuRef} className="absolute right-2 top-2 z-10 flex items-start gap-1">
