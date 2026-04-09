@@ -9,7 +9,7 @@ const NOTIFIABLE_FINAL: ReadonlySet<string> = new Set(["completed", "failed", "s
 
 /**
  * Global hook that reacts to conversation status transitions to:
- * 1. Auto-manage keep-awake during active tasks (regardless of the manual toggle).
+ * 1. Auto-manage keep-awake during active tasks or when manually enabled.
  * 2. Send OS-level notifications when tasks finish (respecting user settings).
  *
  * Mount this once at the App root.
@@ -20,7 +20,7 @@ export function useTaskLifecycle(settings: AppSettings | null): void {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
-  /** Enable keep-awake if any task is running, or the manual toggle is on. */
+  /** Enable keep-awake whilst tasks are running, or for the full session when manually enabled. */
   function syncKeepAwake(): void {
     const shouldBeAwake = runningIds.current.size > 0 || (settingsRef.current?.keepAwake ?? false);
 
@@ -74,7 +74,7 @@ export function useTaskLifecycle(settings: AppSettings | null): void {
     ],
   });
 
-  // Sync keep-awake when the manual toggle changes.
+  // Sync keep-awake when the manual toggle changes or settings finish loading.
   useEffect(() => {
     syncKeepAwake();
   }, [settings?.keepAwake]);

@@ -96,7 +96,7 @@ pub fn run() {
 
     spawn_sidecar_startup(app.handle().clone(), sidecar.clone());
 
-    // Auto-enable keep-awake if the user had it turned on.
+    // Auto-enable keep-awake if the user turned on the manual session-wide toggle.
     if let Ok(settings) = storage::settings::read_settings() {
         if settings.keep_awake {
             let _ = commands::power::enable_keep_awake();

@@ -1,4 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
+import {
+  createElement,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import type { ReactNode } from "react";
 import type { AppSettings } from "../types";
 import { useToast } from "../components/shared/Toast";
 import { getSettings, saveSettings as persistSettings } from "../lib/desktopApi";
@@ -14,8 +23,14 @@ interface UseSettingsReturn {
   saveSettings: (updated: AppSettings, options?: SaveSettingsOptions) => Promise<void>;
 }
 
-/** Hook to load and persist application settings via Tauri commands. */
-export function useSettings(): UseSettingsReturn {
+const SettingsContext = createContext<UseSettingsReturn | null>(null);
+
+interface SettingsProviderProps {
+  children: ReactNode;
+}
+
+/** Shared settings provider backed by the Tauri settings commands. */
+export function SettingsProvider({ children }: SettingsProviderProps): ReactNode {
   const toast = useToast();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -65,5 +80,23 @@ export function useSettings(): UseSettingsReturn {
     }
   }, [toast]);
 
-  return { settings, loading, error, saveSettings };
+  const value = useMemo<UseSettingsReturn>(() => ({
+    settings,
+    loading,
+    error,
+    saveSettings,
+  }), [error, loading, saveSettings, settings]);
+
+  return createElement(SettingsContext.Provider, { value }, children);
+}
+
+/** Hook to access shared application settings loaded by `SettingsProvider`. */
+export function useSettings(): UseSettingsReturn {
+  const context = useContext(SettingsContext);
+
+  if (!context) {
+    throw new Error("useSettings must be used within SettingsProvider.");
+  }
+
+  return context;
 }

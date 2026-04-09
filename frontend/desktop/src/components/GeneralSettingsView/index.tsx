@@ -50,11 +50,14 @@ export function GeneralSettingsView({ settings, onSave }: GeneralSettingsViewPro
 
           {/* Keep awake */}
           <div className="rounded-lg border border-edge bg-panel p-5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-6">
               <div>
                 <p className="text-sm font-medium text-fg">Keep awake</p>
                 <p className="mt-0.5 text-xs text-fg-muted">
                   Prevent the computer from sleeping whilst Maestro is running.
+                </p>
+                <p className="mt-2 text-xs text-fg-muted">
+                  When this is off, Maestro still keeps the computer awake whilst a task is running.
                 </p>
               </div>
               <ToggleSwitch

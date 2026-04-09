@@ -32,19 +32,27 @@ mod platform {
 
 #[cfg(target_os = "windows")]
 mod platform {
+    use windows_sys::Win32::System::Power::{
+        SetThreadExecutionState, ES_CONTINUOUS, ES_SYSTEM_REQUIRED,
+    };
+
     pub fn enable() -> Result<(), String> {
-        // ES_CONTINUOUS | ES_SYSTEM_REQUIRED
-        unsafe {
-            windows_sys::Win32::System::Power::SetThreadExecutionState(0x80000001 | 0x00000001);
+        let previous_state = unsafe { SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) };
+
+        if previous_state == 0 {
+            return Err("Failed to enable Windows keep-awake state.".to_string());
         }
+
         Ok(())
     }
 
     pub fn disable() -> Result<(), String> {
-        // ES_CONTINUOUS only — clears the previous flags
-        unsafe {
-            windows_sys::Win32::System::Power::SetThreadExecutionState(0x80000000);
+        let previous_state = unsafe { SetThreadExecutionState(ES_CONTINUOUS) };
+
+        if previous_state == 0 {
+            return Err("Failed to clear Windows keep-awake state.".to_string());
         }
+
         Ok(())
     }
 }
