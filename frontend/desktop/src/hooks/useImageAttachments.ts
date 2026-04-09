@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { saveConversationImage } from "../lib/desktopApi";
 import { blobToBase64, buildPromptWithImages as formatPromptWithImages } from "../utils/imageUtils";
 
@@ -79,13 +78,12 @@ export function useImageAttachments(
         try {
           const base64 = await blobToBase64(file);
           const result = await saveConversationImage(workspacePath, conversationId, base64, extension);
-          // Replace the blob URL with a stable asset URL for the saved file.
-          URL.revokeObjectURL(previewUrl);
-          blobUrlsRef.current.delete(previewUrl);
-          const assetUrl = convertFileSrc(result.filePath);
+          // Keep the blob URL for the thumbnail preview — it works reliably
+          // in the webview without depending on the asset protocol.  The
+          // filePath is what gets embedded in the prompt for the agent.
           setAttachedImages((prev) => [
             ...prev,
-            { fileName: result.fileName, filePath: result.filePath, previewUrl: assetUrl },
+            { fileName: result.fileName, filePath: result.filePath, previewUrl },
           ]);
         } catch (error) {
           console.warn("[useImageAttachments] Failed to save image:", error);
