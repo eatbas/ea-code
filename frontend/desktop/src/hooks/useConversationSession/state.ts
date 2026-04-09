@@ -149,15 +149,21 @@ export function useConversationSessionState(
     const workspaceChanged = previousWorkspacePathRef.current !== workspacePath;
     previousWorkspacePathRef.current = workspacePath;
 
+    const selection = selectionIntent?.workspacePath === workspacePath ? selectionIntent : null;
+
     if (workspaceChanged) {
       setConversations([]);
       setDrafts({});
+      setActiveConversation(null);
       // Note: pipelineModes is NOT reset on workspace change — keys are scoped
       // as `${workspacePath}::${conversationId}` so no cross-workspace collision.
+    } else if (selection?.mode === "new") {
+      // Explicitly starting a new conversation — clear to the empty state.
+      setActiveConversation(null);
     }
-    setActiveConversation(null);
-
-    const selection = selectionIntent?.workspacePath === workspacePath ? selectionIntent : null;
+    // When switching between conversations in the same workspace, keep the
+    // current conversation visible until the new one loads to avoid flashing
+    // the empty state.
     let cancelled = false;
 
     async function loadWorkspaceConversations(): Promise<void> {
