@@ -61,6 +61,7 @@ export function useConversationViewModel({
   const { settings, saveSettings } = useSettings();
   const handleFooterError = useFooterErrorHandler();
   const [selectedAgent, setSelectedAgent] = useState<AgentSelection | null>(null);
+  const [modelOverride, setModelOverride] = useState<string | null>(null);
   const [pipelinePrompt, setPipelinePrompt] = useState<string>("");
   const [pipelineConversationId, setPipelineConversationId] = useState<string | null>(null);
   const prevConversationIdRef = useRef<string | null>(null);
@@ -127,6 +128,7 @@ export function useConversationViewModel({
 
     if ((prevId !== null && currentId !== prevId) || tokenChanged) {
       setSelectedAgent(null);
+      setModelOverride(null);
       pipeline.reset();
       planReview.reset();
       setPipelinePrompt("");
@@ -223,8 +225,24 @@ export function useConversationViewModel({
     }
   }, [activeConversation, availableProviders, selectedAgent, settings]);
 
-  const currentAgent = activeConversation?.summary.agent ?? selectedAgent;
   const activeRunning = activeConversation?.summary.status === "running";
+  const prevRunningRef = useRef(false);
+
+  // Clear the model override when a turn finishes.  On success the backend
+  // already committed the new model to the summary; on failure the summary
+  // keeps the original — either way the override is no longer needed.
+  useEffect(() => {
+    const wasRunning = prevRunningRef.current;
+    prevRunningRef.current = activeRunning;
+    if (wasRunning && !activeRunning) {
+      setModelOverride(null);
+    }
+  }, [activeRunning]);
+
+  const baseAgent = activeConversation?.summary.agent ?? selectedAgent;
+  const currentAgent = (baseAgent && modelOverride)
+    ? { provider: baseAgent.provider, model: modelOverride }
+    : baseAgent;
   const pipelineDone = pipeline.stages.length > 0
     && !pipeline.running
     && !pipeline.awaitingReview
@@ -244,6 +262,16 @@ export function useConversationViewModel({
   const isResume = Boolean(activeConversation?.summary.lastProviderSessionRef);
   const [redoSwarm, setRedoSwarm] = useState(false);
 
+  const handleAgentChange = useCallback((agent: AgentSelection) => {
+    if (activeConversation) {
+      // Only model changes are allowed on existing conversations;
+      // provider (CLI brand) stays locked.
+      setModelOverride(agent.model);
+    } else {
+      setSelectedAgent(agent);
+    }
+  }, [activeConversation]);
+
   const handleSend = useCallback(async (prompt: string, pendingImages?: PendingImage[]) => {
     if (pipelineMode === "code") {
       pipeline.reset();
@@ -257,8 +285,7 @@ export function useConversationViewModel({
       return;
     }
 
-    const agent = activeConversation?.summary.agent ?? selectedAgent;
-    if (!agent) {
+    if (!currentAgent) {
       return;
     }
 
@@ -266,8 +293,8 @@ export function useConversationViewModel({
       ? KIMI_SWARM_PROMPT_PREFIX + prompt
       : prompt;
     if (redoSwarm) setRedoSwarm(false);
-    await onSendPrompt(effectivePrompt, agent, pendingImages);
-  }, [activeConversation, isKimi, isResume, kimiSwarmEnabled, onSendPrompt, onSetActiveConversation, pipeline, pipelineMode, planReview, redoSwarm, selectedAgent, workspace.path]);
+    await onSendPrompt(effectivePrompt, currentAgent, pendingImages);
+  }, [currentAgent, isKimi, isResume, kimiSwarmEnabled, onSendPrompt, onSetActiveConversation, pipeline, pipelineMode, planReview, redoSwarm, workspace.path]);
 
   const handleStop = useCallback(async () => {
     if (pipelineConversationId) {
@@ -347,7 +374,7 @@ export function useConversationViewModel({
     availableProviders,
     startupStatus,
     currentAgent,
-    setSelectedAgent,
+    handleAgentChange,
     pipelinePrompt,
     pipeline,
     planReview,

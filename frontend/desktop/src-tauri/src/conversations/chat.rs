@@ -98,6 +98,7 @@ async fn finish_with_failure(
     conversation_id: &str,
     assistant_text: Option<String>,
     error: String,
+    model_override: Option<&str>,
 ) -> Result<(), String> {
     let (summary, message) = persistence::finish_turn(
         workspace_path,
@@ -106,6 +107,7 @@ async fn finish_with_failure(
         assistant_text,
         None,
         Some(error),
+        model_override,
     )?;
     emit_status(
         app,
@@ -121,18 +123,25 @@ pub async fn run_conversation_turn(
     detail: ConversationDetail,
     prompt: String,
     abort: Arc<AtomicBool>,
+    model_override: Option<String>,
 ) -> Result<(), String> {
     let summary = detail.summary;
     let workspace_path = summary.workspace_path.clone();
     let conversation_id = summary.id.clone();
-    let mode = if summary.last_provider_session_ref.is_some() {
-        "resume"
+    let effective_model = model_override.as_deref().unwrap_or(&summary.agent.model);
+    // When the user switches model, start a fresh CLI session rather than
+    // trying to resume — most CLIs reject resuming with a different model.
+    let model_changed = model_override.as_deref().is_some_and(|m| m != summary.agent.model);
+    let (mode, effective_session_ref) = if model_changed {
+        ("new", None)
+    } else if summary.last_provider_session_ref.is_some() {
+        ("resume", summary.last_provider_session_ref.as_deref())
     } else {
-        "new"
+        ("new", None)
     };
     let settings = crate::storage::settings::read_settings().ok();
     let thinking_level = settings.as_ref()
-        .and_then(|s| s.thinking_level(&summary.agent.provider, &summary.agent.model).map(str::to_string));
+        .and_then(|s| s.thinking_level(&summary.agent.provider, effective_model).map(str::to_string));
     let kimi_swarm = settings.as_ref()
         .filter(|s| summary.agent.provider.eq_ignore_ascii_case("kimi") && s.kimi_swarm_enabled)
         .and_then(|s| {
@@ -162,10 +171,9 @@ pub async fn run_conversation_turn(
         &workspace_path,
         &conversation_id,
         format!(
-            "submit: provider={} model={} mode={mode} session_ref={}",
+            "submit: provider={} model={effective_model} mode={mode} session_ref={}",
             summary.agent.provider,
-            summary.agent.model,
-            summary.last_provider_session_ref.as_deref().unwrap_or("none"),
+            effective_session_ref.unwrap_or("none"),
         ),
     );
     emit_pipeline_debug(
@@ -185,11 +193,11 @@ pub async fn run_conversation_turn(
     );
     let request = SymphonyChatRequest {
         provider: &summary.agent.provider,
-        model: &summary.agent.model,
+        model: effective_model,
         workspace_path: &summary.workspace_path,
         mode,
         prompt: &prompt,
-        provider_session_ref: summary.last_provider_session_ref.as_deref(),
+        provider_session_ref: effective_session_ref,
         provider_options,
     };
 
@@ -202,7 +210,7 @@ pub async fn run_conversation_turn(
                 &conversation_id,
                 format!("simple task: failed to submit: {error}"),
             );
-            return finish_with_failure(&app, &workspace_path, &conversation_id, None, error).await;
+            return finish_with_failure(&app, &workspace_path, &conversation_id, None, error, model_override.as_deref()).await;
         }
     };
     emit_pipeline_debug(
@@ -315,6 +323,7 @@ pub async fn run_conversation_turn(
                 &conversation_id,
                 (!partial.trim().is_empty()).then_some(partial),
                 error,
+                model_override.as_deref(),
             )
             .await;
         }
@@ -336,6 +345,7 @@ pub async fn run_conversation_turn(
         &conversation_id,
         &live_buffer,
         snapshot,
+        model_override.as_deref(),
     )
 }
 
@@ -345,6 +355,7 @@ fn finish_conversation_from_snapshot(
     conversation_id: &str,
     live_buffer: &Arc<Mutex<String>>,
     snapshot: SymphonyScoreSnapshot,
+    model_override: Option<&str>,
 ) -> Result<(), String> {
     let assistant_text = snapshot
         .final_text
@@ -365,6 +376,7 @@ fn finish_conversation_from_snapshot(
         assistant_text,
         snapshot.provider_session_ref.clone(),
         snapshot.error.clone(),
+        model_override,
     )?;
 
     emit_status(

@@ -24,6 +24,7 @@ interface ComposerToolbarProps {
   providers: ProviderInfo[];
   agent: AgentSelection | null;
   locked: boolean;
+  modelChangeable: boolean;
   sending: boolean;
   stopping: boolean;
   activeRunning: boolean;
@@ -55,6 +56,7 @@ export function ComposerToolbar({
   providers,
   agent,
   locked,
+  modelChangeable,
   sending,
   stopping,
   activeRunning,
@@ -82,6 +84,8 @@ export function ComposerToolbar({
   submitDisabled,
 }: ComposerToolbarProps): ReactNode {
   const [openSelect, setOpenSelect] = useState<"pipeline" | "provider" | "model" | "thinking" | "swarm" | "ralph" | null>(null);
+  // Model, thinking, and swarm options are unlockable on resume.
+  const optionsLocked = locked && !modelChangeable;
   const hasThinking = thinkingOptions !== undefined && thinkingOptions.length > 0;
   const triggerLabels = agent ? THINKING_TRIGGER_LABELS[agent.provider] : undefined;
   const availableProviders = useMemo(
@@ -119,7 +123,7 @@ export function ComposerToolbar({
         />
         {locked && (
           <span className="inline-flex h-8 items-center rounded-lg border border-edge bg-badge-bg px-2.5 py-1 text-[11px] text-fg-muted">
-            Resuming this conversation
+            {modelChangeable ? "You can change the model" : "Resuming this conversation"}
           </span>
         )}
       </div>
@@ -153,7 +157,7 @@ export function ComposerToolbar({
             value={selectedModelValue}
             options={modelOptions}
             placeholder="Model"
-            disabled={locked || modelOptions.length === 0}
+            disabled={optionsLocked || modelOptions.length === 0}
             direction="up"
             align="right"
             open={openSelect === "model"}
@@ -177,7 +181,7 @@ export function ComposerToolbar({
                 value={thinkingLevel}
                 options={thinkingOptions}
                 placeholder="Default"
-                disabled={locked}
+                disabled={optionsLocked}
                 direction="up"
                 align="right"
                 open={openSelect === "thinking"}
@@ -197,7 +201,7 @@ export function ComposerToolbar({
                 value={kimiSwarmEnabled ? "enabled" : ""}
                 options={SWARM_OPTIONS}
                 placeholder="Swarm"
-                disabled={locked}
+                disabled={optionsLocked}
                 direction="up"
                 align="right"
                 open={openSelect === "swarm"}
@@ -214,7 +218,7 @@ export function ComposerToolbar({
                     value={kimiRalphIterations === 1 ? "" : String(kimiRalphIterations)}
                     options={RALPH_ITERATIONS_OPTIONS}
                     placeholder="Ralph"
-                    disabled={locked}
+                    disabled={optionsLocked}
                     direction="up"
                     align="right"
                     open={openSelect === "ralph"}
@@ -235,7 +239,7 @@ export function ComposerToolbar({
                 type="checkbox"
                 checked={redoSwarm}
                 onChange={(e) => onRedoSwarmChange(e.target.checked)}
-                disabled={locked}
+                disabled={optionsLocked}
                 className="h-3.5 w-3.5 rounded border border-edge-strong bg-input-bg accent-running-dot"
               />
               Re-do Swarm

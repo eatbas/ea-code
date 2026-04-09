@@ -13,10 +13,17 @@ export function ConversationTranscript({
   activeConversation,
   activeDraft,
 }: ConversationTranscriptProps): ReactNode {
-  const assistantLabel = formatAssistantLabel(
-    activeConversation.summary.agent.provider,
-    activeConversation.summary.agent.model,
-  );
+  const { agent: conversationAgent } = activeConversation.summary;
+
+  /** Build the label for an assistant message, using per-message agent if available. */
+  function assistantLabelFor(agent?: { provider: string; model: string }, thinkingLevel?: string): string {
+    const effectiveAgent = agent ?? conversationAgent;
+    const base = formatAssistantLabel(effectiveAgent.provider, effectiveAgent.model);
+    return thinkingLevel ? `${base} · ${thinkingLevel}` : base;
+  }
+
+  // Fallback label for the live draft (uses current conversation agent).
+  const draftLabel = assistantLabelFor();
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
@@ -39,7 +46,7 @@ export function ConversationTranscript({
         ) : (
           <div key={message.id} className="mr-auto flex w-full flex-col">
             <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
-              {`Assistant - ${assistantLabel}`}
+              {`Assistant - ${assistantLabelFor(message.agent, message.thinkingLevel)}`}
             </p>
             <div className="assistant-prose text-sm leading-7 text-fg">
               <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
@@ -54,7 +61,7 @@ export function ConversationTranscript({
       {activeDraft && (
         <div className="mr-auto flex w-full flex-col">
           <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
-            {`Assistant - ${assistantLabel}`}
+            {`Assistant - ${draftLabel}`}
           </p>
           <div className="assistant-prose text-sm leading-7 text-fg">
             <Markdown remarkPlugins={[remarkGfm]}>{activeDraft}</Markdown>

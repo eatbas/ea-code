@@ -12,6 +12,10 @@ export interface ConversationMessage {
   role: ConversationMessageRole;
   content: string;
   createdAt: string;
+  /** The agent that produced this message (assistant messages only). */
+  agent?: AgentSelection;
+  /** Thinking level active when this message was produced (assistant only). */
+  thinkingLevel?: string;
 }
 
 export interface ConversationSummary {

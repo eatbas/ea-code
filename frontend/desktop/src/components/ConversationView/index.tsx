@@ -99,6 +99,7 @@ export function ConversationView({
             prompt={activePromptDraft}
             promptHistory={viewModel.promptHistory}
             locked={Boolean(activeConversation)}
+            modelChangeable={viewModel.isResume && !viewModel.activeRunning}
             sending={sending}
             stopping={stopping}
             activeRunning={Boolean(viewModel.activeRunning)}
@@ -110,7 +111,7 @@ export function ConversationView({
             workspacePath={workspace.path}
             conversationId={activeConversation?.summary.id ?? null}
             onPipelineModeChange={onPipelineModeChange}
-            onAgentChange={viewModel.setSelectedAgent}
+            onAgentChange={viewModel.handleAgentChange}
             onThinkingChange={viewModel.handleThinkingChange}
             isKimi={viewModel.isKimi}
             kimiSwarmEnabled={viewModel.kimiSwarmEnabled}

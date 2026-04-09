@@ -138,11 +138,13 @@ export function sendConversationTurn(
   workspacePath: string,
   conversationId: string,
   prompt: string,
+  modelOverride?: string,
 ): Promise<ConversationDetail> {
   return invokeCommand<ConversationDetail>("send_conversation_turn", {
     workspacePath,
     conversationId,
     prompt,
+    modelOverride: modelOverride ?? null,
   });
 }
 

@@ -1,8 +1,8 @@
 //! Turn and status mutation operations.
 
 use crate::models::{
-    ConversationDetail, ConversationMessage, ConversationMessageRole, ConversationStatus,
-    ConversationSummary,
+    AgentSelection, ConversationDetail, ConversationMessage, ConversationMessageRole,
+    ConversationStatus, ConversationSummary,
 };
 use crate::storage::{now_rfc3339, with_conversations_lock};
 
@@ -29,6 +29,8 @@ pub fn mark_turn_running(
             role: ConversationMessageRole::User,
             content: prompt.to_string(),
             created_at: now_rfc3339(),
+            agent: None,
+            thinking_level: None,
         };
         messages.push(user_message);
         summary.message_count = messages.len();
@@ -99,10 +101,38 @@ pub fn finish_turn(
     assistant_text: Option<String>,
     provider_session_ref: Option<String>,
     error: Option<String>,
+    model_override: Option<&str>,
 ) -> Result<(ConversationSummary, Option<ConversationMessage>), String> {
     with_conversations_lock(|| {
         let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
         let mut messages = read_messages_unlocked(workspace_path, conversation_id)?;
+
+        // Commit the model override only on success — if the CLI rejects
+        // the model switch the conversation keeps its original model.
+        let effective_agent = if status == ConversationStatus::Completed {
+            if let Some(new_model) = model_override {
+                summary.agent.model = new_model.to_string();
+            }
+            summary.agent.clone()
+        } else {
+            // For the per-message label, show which model was *attempted*
+            // even if the turn failed.
+            match model_override {
+                Some(m) => AgentSelection {
+                    provider: summary.agent.provider.clone(),
+                    model: m.to_string(),
+                },
+                None => summary.agent.clone(),
+            }
+        };
+
+        // Read the thinking level from settings so it can be stored per-message.
+        let thinking_level = crate::storage::settings::read_settings()
+            .ok()
+            .and_then(|s| {
+                s.thinking_level(&effective_agent.provider, &effective_agent.model)
+                    .map(str::to_string)
+            });
 
         let assistant_message =
             assistant_text
@@ -112,6 +142,8 @@ pub fn finish_turn(
                     role: ConversationMessageRole::Assistant,
                     content,
                     created_at: now_rfc3339(),
+                    agent: Some(effective_agent),
+                    thinking_level,
                 });
 
         if let Some(message) = &assistant_message {

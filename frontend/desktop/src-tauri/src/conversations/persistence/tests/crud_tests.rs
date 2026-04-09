@@ -75,6 +75,7 @@ fn turn_start_and_finish_persist_messages() {
         Some("The app has a Tauri backend and React frontend.".to_string()),
         Some("session-123".to_string()),
         None,
+        None,
     )
     .expect("turn should finish");
 

@@ -32,6 +32,12 @@ pub struct ConversationMessage {
     pub role: ConversationMessageRole,
     pub content: String,
     pub created_at: String,
+    /// The agent (provider + model) that produced this message (assistant only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentSelection>,
+    /// Thinking level active when this message was produced (assistant only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thinking_level: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

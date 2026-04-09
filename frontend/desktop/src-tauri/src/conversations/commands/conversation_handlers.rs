@@ -66,6 +66,7 @@ pub async fn send_conversation_turn(
     workspace_path: String,
     conversation_id: String,
     prompt: String,
+    model_override: Option<String>,
 ) -> Result<ConversationDetail, String> {
     let trimmed = prompt.trim();
     if trimmed.is_empty() {
@@ -93,7 +94,7 @@ pub async fn send_conversation_turn(
         };
 
         if let Err(error) =
-            chat::run_conversation_turn(app_handle, detail_for_task, prompt_for_task, abort).await
+            chat::run_conversation_turn(app_handle, detail_for_task, prompt_for_task, abort, model_override).await
         {
             eprintln!("[conversation] Failed to run conversation turn: {error}");
         }

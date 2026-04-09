@@ -77,6 +77,7 @@ interface ConversationComposerProps {
   prompt: string;
   promptHistory: string[];
   locked: boolean;
+  modelChangeable: boolean;
   sending: boolean;
   stopping: boolean;
   activeRunning: boolean;
@@ -114,6 +115,7 @@ export function ConversationComposer({
   prompt,
   promptHistory,
   locked,
+  modelChangeable,
   sending,
   stopping,
   activeRunning,
@@ -301,6 +303,7 @@ export function ConversationComposer({
             providers={providers}
             agent={agent}
             locked={locked}
+            modelChangeable={modelChangeable}
             sending={sending}
             stopping={stopping}
             activeRunning={activeRunning}

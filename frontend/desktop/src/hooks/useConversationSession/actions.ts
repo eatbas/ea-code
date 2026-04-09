@@ -112,7 +112,14 @@ export function useConversationSessionActions({
           const paths = await flushAndSaveImages(workspacePath, activeConversation.summary.id, pendingImages);
           finalPrompt = buildPromptWithImages(prompt, paths);
         }
-        const updated = await sendConversationTurn(workspacePath, activeConversation.summary.id, finalPrompt);
+        // Forward model override when the user switched model on a resumed conversation.
+        const modelChanged = agent.model !== activeConversation.summary.agent.model;
+        const updated = await sendConversationTurn(
+          workspacePath,
+          activeConversation.summary.id,
+          finalPrompt,
+          modelChanged ? agent.model : undefined,
+        );
         setPromptDrafts((previous) => ({
           ...previous,
           [promptDraftKey(workspacePath, activeConversation.summary.id)]: "",
