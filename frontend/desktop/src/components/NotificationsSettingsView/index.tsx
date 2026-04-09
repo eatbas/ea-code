@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { AppSettings } from "../../types";
 import { PopoverSelect } from "../shared/PopoverSelect";
 import { ToggleSwitch } from "../shared/ToggleSwitch";
 import { useToast } from "../shared/Toast";
-import { requestNotificationPermission } from "../../lib/desktopApi";
+import { requestNotificationPermission, sendNotification } from "../../lib/desktopApi";
 
 const COMPLETION_OPTIONS = [
   { value: "always", label: "Always" },
@@ -20,6 +20,7 @@ interface NotificationsSettingsViewProps {
 export function NotificationsSettingsView({ settings, onSave }: NotificationsSettingsViewProps): ReactNode {
   const toast = useToast();
   const permissionRequested = useRef<boolean>(false);
+  const [sendingTest, setSendingTest] = useState<boolean>(false);
 
   /** Request OS permission the first time notifications are enabled. */
   async function ensurePermission(): Promise<void> {
@@ -47,6 +48,24 @@ export function NotificationsSettingsView({ settings, onSave }: NotificationsSet
     onSave({ ...settings, permissionNotifications: checked });
     if (checked) {
       void ensurePermission();
+    }
+  }
+
+  async function handleSendTestNotification(): Promise<void> {
+    setSendingTest(true);
+    try {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        toast.info("Notification permission was not granted. You can enable it in System Settings.");
+        return;
+      }
+
+      await sendNotification("Maestro test notification", "Notifications are working on this device.");
+      toast.success("Test notification sent.");
+    } catch {
+      toast.error("Failed to send test notification.");
+    } finally {
+      setSendingTest(false);
     }
   }
 
@@ -92,6 +111,25 @@ export function NotificationsSettingsView({ settings, onSave }: NotificationsSet
                 checked={settings.permissionNotifications}
                 onChange={handlePermissionToggle}
               />
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-edge bg-panel p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-fg">Test notification</p>
+                <p className="mt-0.5 text-xs text-fg-muted">
+                  Send a sample operating-system notification to verify delivery on this device.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleSendTestNotification()}
+                disabled={sendingTest}
+                className="rounded-md border border-edge bg-elevated px-4 py-2 text-sm font-medium text-fg-muted transition-colors hover:bg-active hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sendingTest ? "Sending..." : "Send test"}
+              </button>
             </div>
           </div>
         </div>

@@ -4,8 +4,8 @@ import { CONVERSATION_EVENTS } from "../constants/events";
 import { useTauriEventListeners } from "./useTauriEventListeners";
 import { enableKeepAwake, disableKeepAwake, sendNotification } from "../lib/desktopApi";
 
-/** Terminal statuses that mean "the task is done". */
-const TERMINAL: ReadonlySet<string> = new Set(["completed", "failed", "stopped"]);
+/** Statuses that mean the current run is done and can notify the user. */
+const NOTIFIABLE_FINAL: ReadonlySet<string> = new Set(["completed", "failed", "stopped", "awaiting_review"]);
 
 /**
  * Global hook that reacts to conversation status transitions to:
@@ -41,11 +41,15 @@ export function useTaskLifecycle(settings: AppSettings | null): void {
 
     const body = status === "completed"
       ? "Task completed successfully."
+      : status === "awaiting_review"
+        ? "Task is ready for review."
       : status === "failed"
         ? "Task failed."
         : "Task stopped.";
 
-    sendNotification(title, body).catch(() => { /* best-effort */ });
+    sendNotification(title, body).catch((error: unknown) => {
+      console.error("Failed to send notification.", error);
+    });
   }
 
   function handleStatus(event: ConversationStatusEvent): void {
@@ -54,7 +58,7 @@ export function useTaskLifecycle(settings: AppSettings | null): void {
     if (status === "running") {
       runningIds.current.add(id);
       syncKeepAwake();
-    } else if (TERMINAL.has(status)) {
+    } else if (NOTIFIABLE_FINAL.has(status)) {
       const wasRunning = runningIds.current.delete(id);
       syncKeepAwake();
 
