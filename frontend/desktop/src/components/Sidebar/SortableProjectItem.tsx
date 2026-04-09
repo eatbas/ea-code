@@ -74,7 +74,6 @@ export function SortableProjectItem({
       style={style}
       className={isDragging ? "z-20 opacity-70" : undefined}
       {...attributes}
-      {...listeners}
     >
       <div className="mb-2">
         <ProjectRow
@@ -86,6 +85,7 @@ export function SortableProjectItem({
           hasConversations={conversations.length > 0}
           hasRunningConversation={hasRunningConversation}
           showingArchivedConversations={showingArchivedConversations}
+          dragHandleProps={listeners}
           onProjectClick={onProjectClick}
           onCreateConversation={onCreateConversation}
           onToggleShowArchivedConversations={onToggleShowArchivedConversations}

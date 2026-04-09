@@ -168,7 +168,6 @@ export function ProjectList({
   function handleDragStart(event: DragStartEvent): void {
     expandedProjectsBeforeDragRef.current = new Set(expandedProjects);
     setDraggingProjectPath(String(event.active.id));
-    setExpandedProjects(new Set());
   }
 
   function handleDragEnd(event: DragEndEvent): void {

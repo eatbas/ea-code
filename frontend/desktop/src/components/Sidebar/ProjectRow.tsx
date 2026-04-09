@@ -24,6 +24,8 @@ interface ProjectRowProps {
   hasConversations: boolean;
   hasRunningConversation: boolean;
   showingArchivedConversations: boolean;
+  /** Spread onto the row button to make it the drag handle for reordering. */
+  dragHandleProps?: Record<string, unknown>;
   onProjectClick: () => void;
   onCreateConversation: () => void;
   onToggleShowArchivedConversations?: () => void;
@@ -42,6 +44,7 @@ export function ProjectRow({
   hasConversations,
   hasRunningConversation,
   showingArchivedConversations,
+  dragHandleProps,
   onProjectClick,
   onCreateConversation,
   onToggleShowArchivedConversations,
@@ -126,6 +129,7 @@ export function ProjectRow({
               : "text-fg-muted hover:bg-elevated hover:text-fg"
         }`}
         title={projectPath}
+        {...dragHandleProps}
       >
         {hasRunningConversation && (
           <span
