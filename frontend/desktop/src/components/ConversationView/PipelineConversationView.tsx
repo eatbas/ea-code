@@ -124,6 +124,15 @@ export function PipelineConversationView({
   const hasFailed = stages.some((s) => s.status === "failed");
   const hasStopped = stages.some((s) => s.status === "stopped");
   const allDone = stages.length > 0 && stages.every((s) => isTerminal(s.status));
+
+  // Derive the pipeline finish timestamp from the latest stage finishedAt so
+  // the total timer stops counting once the pipeline is no longer running.
+  const pipelineFinishedAt = !running && allDone
+    ? stages.reduce<number | undefined>((latest, s) => {
+      if (s.finishedAt === undefined) return latest;
+      return latest === undefined ? s.finishedAt : Math.max(latest, s.finishedAt);
+    }, undefined)
+    : undefined;
   const canResume = allDone && !running
     && planReviewPhase !== "reviewing"
     && planReviewPhase !== "editing"
@@ -498,6 +507,7 @@ export function PipelineConversationView({
           stageName={statusBarLabel}
           running={running}
           startedAt={pipelineStartedAt}
+          finishedAt={pipelineFinishedAt}
           canResume={canResume}
           hasFailed={hasFailed}
           onResume={onResume}
