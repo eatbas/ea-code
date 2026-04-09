@@ -189,9 +189,33 @@ export function useConversationSessionState(
           return;
         }
 
-        const detail = await getConversation(workspacePath, conversationId);
-        if (!cancelled) {
-          setActiveConversation(detail);
+        try {
+          const detail = await getConversation(workspacePath, conversationId);
+          if (!cancelled) {
+            setActiveConversation(detail);
+          }
+        } catch {
+          if (cancelled) {
+            return;
+          }
+
+          const fallbackConversationId = listed.find((item) => item.id !== conversationId)?.id ?? null;
+          if (!fallbackConversationId) {
+            toast.error("Failed to load conversation.");
+            return;
+          }
+
+          try {
+            const fallbackDetail = await getConversation(workspacePath, fallbackConversationId);
+            if (!cancelled) {
+              setActiveConversation(fallbackDetail);
+              toast.error("The selected conversation could not be restored. Loaded the latest available conversation instead.");
+            }
+          } catch {
+            if (!cancelled) {
+              toast.error("Failed to load conversation.");
+            }
+          }
         }
       } catch {
         if (!cancelled) {

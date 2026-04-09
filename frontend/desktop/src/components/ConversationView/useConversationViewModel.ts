@@ -166,12 +166,20 @@ export function useConversationViewModel({
       console.warn("[pipeline] Failed to load pipeline state:", error);
     });
 
-    void getPipelineDebugLog(workspace.path, activeConversation.summary.id).then((log) => {
-      if (cancelled) {
-        return;
-      }
-      pipeline.loadDebugLog(log);
-    });
+    void getPipelineDebugLog(workspace.path, activeConversation.summary.id)
+      .then((log) => {
+        if (cancelled) {
+          return;
+        }
+        pipeline.loadDebugLog(log);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        console.warn("[pipeline] Failed to load pipeline debug log:", error);
+        pipeline.loadDebugLog("");
+      });
 
     return () => {
       cancelled = true;
