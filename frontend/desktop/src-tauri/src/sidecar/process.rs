@@ -11,7 +11,7 @@ use super::log_buffer::{emit_sidecar_log, SidecarLogBuffer};
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub(crate) const DEFAULT_PORT: u16 = 8719;
-const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RestartState {

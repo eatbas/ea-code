@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(500);
+const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(150);
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub(crate) async fn wait_for_health(base_url: &str) -> Result<(), String> {

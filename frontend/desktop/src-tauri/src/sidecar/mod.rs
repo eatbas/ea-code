@@ -77,10 +77,14 @@ impl SidecarManager {
             return Ok(());
         }
 
-        kill_orphaned_symphony(inner.port).await;
-
-        let prepared =
-            prepare_symphony_environment(&inner.symphony_dir, inner.setup_complete).await?;
+        // Run orphan cleanup and environment preparation concurrently —
+        // they are independent (cleanup works with ports/PIDs, env prep
+        // works with the filesystem and Python discovery).
+        let (_, prepared) = tokio::join!(
+            kill_orphaned_symphony(inner.port),
+            prepare_symphony_environment(&inner.symphony_dir, inner.setup_complete),
+        );
+        let prepared = prepared?;
         let child = spawn_symphony_process(
             &prepared.venv_python,
             &inner.symphony_dir,

@@ -1,8 +1,57 @@
 use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+// ── Python path cache ──────────────────────────────────────────────
+
+const CACHE_FILE: &str = ".python_cache.json";
+const CACHE_MAX_AGE_SECS: u64 = 86_400; // 24 hours
+
+#[derive(Serialize, Deserialize)]
+struct PythonCache {
+    executable: String,
+    launcher_version: Option<String>,
+    /// Unix epoch seconds when the cache was written.
+    cached_at: u64,
+}
+
+fn cache_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".maestro").join(CACHE_FILE))
+}
+
+fn read_python_cache() -> Option<PythonCache> {
+    let path = cache_path()?;
+    let contents = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&contents).ok()
+}
+
+/// Persist the discovered Python interpreter for faster subsequent launches.
+pub fn write_python_cache(interp: &PythonInterpreter) {
+    let Some(path) = cache_path() else { return };
+    let cache = PythonCache {
+        executable: interp.executable.clone(),
+        launcher_version: interp.launcher_version.clone(),
+        cached_at: epoch_secs(),
+    };
+    if let Ok(json) = serde_json::to_string(&cache) {
+        let _ = std::fs::write(&path, json);
+    }
+}
+
+fn epoch_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+// ── Venv validation marker ─────────────────────────────────────────
+
+const VENV_MARKER: &str = ".symphony_validated";
 
 /// Result of Python detection: the command and optional version flag for `py` launcher.
 #[derive(Debug, Clone)]
@@ -49,6 +98,19 @@ impl PythonInterpreter {
 /// 4. Unix-style versioned binaries on PATH: python3.14, python3.13, python3.12.
 /// 5. Generic python3 / python on PATH — only accepted if >= 3.12.
 pub async fn find_python() -> Result<PythonInterpreter, String> {
+    // Fast path: try the cached interpreter from a previous launch.
+    // This turns 9 sequential subprocess spawns into 1 validation call.
+    if let Some(cache) = read_python_cache() {
+        if epoch_secs().saturating_sub(cache.cached_at) < CACHE_MAX_AGE_SECS
+            && check_python_version(&cache.executable).await
+        {
+            return Ok(PythonInterpreter {
+                executable: cache.executable,
+                launcher_version: cache.launcher_version,
+            });
+        }
+    }
+
     // 1. Windows py launcher
     #[cfg(target_os = "windows")]
     {
@@ -171,12 +233,55 @@ pub fn venv_python(venv_dir: &Path) -> PathBuf {
 }
 
 /// Check whether a venv exists and has a working Python >= 3.12.
+///
+/// Uses a lightweight marker file inside the venv to avoid spawning a
+/// Python subprocess on every launch.  The marker stores the venv
+/// binary's mtime — if the mtime matches, the version is still valid.
 pub async fn venv_is_valid(venv_dir: &Path) -> bool {
     let py = venv_python(venv_dir);
     if !py.exists() {
         return false;
     }
-    check_python_version(py.to_string_lossy().as_ref()).await
+
+    // Fast path: marker mtime matches the Python binary's mtime.
+    let marker_path = venv_dir.join(VENV_MARKER);
+    if let (Ok(py_meta), Ok(marker_contents)) = (
+        std::fs::metadata(&py),
+        std::fs::read_to_string(&marker_path),
+    ) {
+        if let Ok(py_mtime) = py_meta.modified() {
+            let mtime_secs = py_mtime
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            if marker_contents.trim() == mtime_secs.to_string() {
+                return true;
+            }
+        }
+    }
+
+    // Slow path: run a Python version-check subprocess.
+    let valid = check_python_version(py.to_string_lossy().as_ref()).await;
+
+    // Write marker so the next launch can skip the subprocess.
+    if valid {
+        write_venv_marker(venv_dir, &py);
+    }
+
+    valid
+}
+
+/// Write the venv validation marker with the Python binary's mtime.
+fn write_venv_marker(venv_dir: &Path, py: &Path) {
+    if let Ok(meta) = std::fs::metadata(py) {
+        if let Ok(mtime) = meta.modified() {
+            let mtime_secs = mtime
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let _ = std::fs::write(venv_dir.join(VENV_MARKER), mtime_secs.to_string());
+        }
+    }
 }
 
 // ── helpers ──────────────────────────────────────────────────────────

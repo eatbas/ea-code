@@ -275,8 +275,13 @@ pub(crate) fn spawn_sidecar_startup(app: AppHandle, sidecar: SidecarManager) {
 }
 
 pub(crate) fn stop_sidecar(sidecar: &SidecarManager) {
+    // Spawn the shutdown as a fire-and-forget task instead of blocking
+    // the Tauri event loop.  The child process was spawned with
+    // `kill_on_drop(true)` (process.rs), so even if the async task does
+    // not complete before the runtime shuts down, the OS will clean up
+    // the child process.
     let cloned = sidecar.clone();
-    tauri::async_runtime::block_on(async move {
+    tauri::async_runtime::spawn(async move {
         if let Err(error) = cloned.stop().await {
             eprintln!("Warning: failed to stop symphony sidecar: {error}");
         }

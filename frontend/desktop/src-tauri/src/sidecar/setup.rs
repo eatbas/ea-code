@@ -17,6 +17,7 @@ pub(crate) async fn prepare_symphony_environment(
     setup_complete: bool,
 ) -> Result<PreparedEnvironment, String> {
     let python = find_python().await?;
+    super::python::write_python_cache(&python);
     let venv_dir = symphony_dir.join(".venv");
 
     if !venv_is_valid(&venv_dir).await {
