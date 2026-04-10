@@ -83,6 +83,10 @@ function App(): ReactNode {
     setViewResetToken((n) => n + 1);
     // Reset pipeline mode to "auto" for the new conversation.
     store.resetPipelineModeForNewConversation(projectPath);
+    // Directly clear the active conversation so repeated "new" clicks within
+    // the same project always show the empty composer — the selection-intent
+    // effect won't re-run when the derived primitives haven't changed.
+    store.setActiveConversation(null);
     store.setConversationSelection({
       workspacePath: projectPath,
       mode: "new",
