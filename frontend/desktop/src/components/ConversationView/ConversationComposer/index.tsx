@@ -84,6 +84,8 @@ interface ConversationComposerProps {
   pipelineRunning: boolean;
   pipelineMode: PipelineMode;
   pipelineDone: boolean;
+  pipelineResumable: boolean;
+  pipelineRedoReviewable: boolean;
   thinkingLevel: string;
   thinkingOptions: { value: string; label: string }[] | undefined;
   workspacePath: string;
@@ -103,6 +105,7 @@ interface ConversationComposerProps {
   onSend: (prompt: string, pendingImages?: PendingImage[]) => Promise<void>;
   onStop: () => Promise<void>;
   onResumePipeline?: () => void;
+  onRedoReviewPipeline?: () => void;
   onNewPipeline?: () => void;
   planReviewPhase?: PlanReviewPhase;
   onOpenCliSetup: () => void;
@@ -122,6 +125,8 @@ export function ConversationComposer({
   pipelineRunning,
   pipelineMode,
   pipelineDone,
+  pipelineResumable,
+  pipelineRedoReviewable,
   thinkingLevel,
   thinkingOptions,
   workspacePath,
@@ -141,6 +146,7 @@ export function ConversationComposer({
   onSend,
   onStop,
   onResumePipeline,
+  onRedoReviewPipeline,
   onNewPipeline,
   planReviewPhase,
   onOpenCliSetup,
@@ -310,6 +316,8 @@ export function ConversationComposer({
             pipelineRunning={pipelineRunning}
             pipelineMode={pipelineMode}
             pipelineDone={pipelineDone}
+            pipelineResumable={pipelineResumable}
+            pipelineRedoReviewable={pipelineRedoReviewable}
             startupPhase={startupStatus.phase}
             thinkingLevel={thinkingLevel}
             thinkingOptions={thinkingOptions}
@@ -327,6 +335,7 @@ export function ConversationComposer({
             onSubmit={handleSubmit}
             onStop={onStop}
             onResumePipeline={onResumePipeline}
+            onRedoReviewPipeline={onRedoReviewPipeline}
             onNewPipeline={onNewPipeline}
             submitDisabled={submitDisabled}
           />

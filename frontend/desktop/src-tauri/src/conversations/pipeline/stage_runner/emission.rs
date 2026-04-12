@@ -2,7 +2,9 @@ use tauri::{AppHandle, Emitter};
 
 use crate::commands::api_health::symphony_base_url;
 use crate::http::symphony_client;
-use crate::models::{ConversationStatus, PipelineStageOutputDelta, PipelineStageStatusEvent};
+use crate::models::{
+    ConversationStatus, PipelineStageOutputDelta, PipelineStageRecord, PipelineStageStatusEvent,
+};
 
 use super::super::super::events::{EVENT_PIPELINE_STAGE_OUTPUT_DELTA, EVENT_PIPELINE_STAGE_STATUS};
 
@@ -45,6 +47,28 @@ pub(super) fn emit_stage_status(
             text,
             started_at: None,
             finished_at: None,
+        },
+    )
+    .map_err(|error| format!("Failed to emit pipeline stage status: {error}"))
+}
+
+pub(super) fn emit_stage_record_status(
+    app: &AppHandle,
+    conversation_id: &str,
+    record: &PipelineStageRecord,
+    text: Option<String>,
+) -> Result<(), String> {
+    app.emit(
+        EVENT_PIPELINE_STAGE_STATUS,
+        PipelineStageStatusEvent {
+            conversation_id: conversation_id.to_string(),
+            stage_index: record.stage_index,
+            stage_name: record.stage_name.clone(),
+            status: record.status.clone(),
+            agent_label: record.agent_label.clone(),
+            text,
+            started_at: record.started_at.clone(),
+            finished_at: record.finished_at.clone(),
         },
     )
     .map_err(|error| format!("Failed to emit pipeline stage status: {error}"))

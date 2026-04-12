@@ -10,6 +10,16 @@ interface ErrorBoundaryState {
   source: "render" | "runtime" | null;
 }
 
+function safeConsoleError(...args: unknown[]): void {
+  try {
+    console.error(...args);
+  } catch {
+    // Vite's dev console bridge can throw before its websocket connects.
+    // Swallow secondary logging failures so the original renderer error
+    // remains visible instead of triggering another crash.
+  }
+}
+
 /**
  * Prevents renderer failures from collapsing the whole window into a blank view.
  *
@@ -42,7 +52,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   public componentDidCatch(error: Error, info: ErrorInfo): void {
     this.setState({ componentStack: info.componentStack ?? null });
-    console.error("[renderer] React error boundary caught an error:", error, info);
+    safeConsoleError("[renderer] React error boundary caught an error:", error, info);
   }
 
   private readonly handleWindowError = (event: ErrorEvent): void => {
@@ -54,10 +64,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       componentStack: null,
       source: "runtime",
     });
-    console.error("[renderer] Unhandled window error:", error);
+    safeConsoleError("[renderer] Unhandled window error:", error);
   };
 
   private readonly handleUnhandledRejection = (event: PromiseRejectionEvent): void => {
+    event.preventDefault();
     const error = event.reason instanceof Error
       ? event.reason
       : new Error(String(event.reason ?? "Unknown unhandled rejection"));
@@ -66,7 +77,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       componentStack: null,
       source: "runtime",
     });
-    console.error("[renderer] Unhandled promise rejection:", error);
+    safeConsoleError("[renderer] Unhandled promise rejection:", error);
   };
 
   public render(): ReactNode {

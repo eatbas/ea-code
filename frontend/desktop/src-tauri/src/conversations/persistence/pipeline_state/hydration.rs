@@ -1,7 +1,7 @@
 use crate::models::{ConversationStatus, PipelineStageRecord, PipelineState};
 
-use super::artifacts::artifact_path_for_stage;
 use super::super::paths::conversation_dir;
+use super::artifacts::artifact_path_for_stage;
 
 fn hydrate_from_file(stage: &mut PipelineStageRecord, path: &std::path::Path) {
     if let Ok(contents) = std::fs::read_to_string(path) {

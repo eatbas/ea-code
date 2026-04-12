@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { ArrowRight, Plus, RotateCcw, Square } from "lucide-react";
+import { ArrowRight, Plus, RefreshCw, RotateCcw, Square } from "lucide-react";
 import type { AgentSelection, ProviderInfo } from "../../../types";
 import type { SymphonyStartupPhase } from "../../../utils/symphonyStartup";
 import { PopoverSelect } from "../../shared/PopoverSelect";
@@ -31,6 +31,8 @@ interface ComposerToolbarProps {
   pipelineRunning: boolean;
   pipelineMode: PipelineMode;
   pipelineDone: boolean;
+  pipelineResumable: boolean;
+  pipelineRedoReviewable: boolean;
   startupPhase: SymphonyStartupPhase;
   thinkingLevel: string;
   thinkingOptions: { value: string; label: string }[] | undefined;
@@ -48,6 +50,7 @@ interface ComposerToolbarProps {
   onSubmit: () => Promise<void>;
   onStop: () => Promise<void>;
   onResumePipeline?: () => void;
+  onRedoReviewPipeline?: () => void;
   onNewPipeline?: () => void;
   submitDisabled: boolean;
 }
@@ -63,6 +66,8 @@ export function ComposerToolbar({
   pipelineRunning,
   pipelineMode,
   pipelineDone,
+  pipelineResumable,
+  pipelineRedoReviewable,
   startupPhase,
   thinkingLevel,
   thinkingOptions,
@@ -80,6 +85,7 @@ export function ComposerToolbar({
   onSubmit,
   onStop,
   onResumePipeline,
+  onRedoReviewPipeline,
   onNewPipeline,
   submitDisabled,
 }: ComposerToolbarProps): ReactNode {
@@ -247,7 +253,19 @@ export function ComposerToolbar({
           )}
         </div>
 
-        {pipelineDone && !pipelineRunning && onResumePipeline && (
+        {pipelineDone && !pipelineRunning && pipelineRedoReviewable && onRedoReviewPipeline && (
+          <button
+            type="button"
+            onClick={onRedoReviewPipeline}
+            className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-edge bg-elevated px-2.5 text-[11px] font-semibold text-fg transition-colors hover:bg-active"
+            title="Run another review cycle"
+          >
+            <RefreshCw size={10} />
+            Re-do Review
+          </button>
+        )}
+
+        {pipelineDone && !pipelineRunning && pipelineResumable && onResumePipeline && (
           <button
             type="button"
             onClick={onResumePipeline}

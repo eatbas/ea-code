@@ -12,6 +12,24 @@ use super::super::super::pipeline;
 use super::lifecycle::{ensure_merge_stage_record, ensure_stage_record};
 use super::setup::{PipelineSetup, StageIndices};
 
+fn planner_stage_range(indices: &StageIndices) -> std::ops::Range<usize> {
+    let start = indices.orchestrator.map(|_| 1).unwrap_or(0);
+    start..start + indices.planner_count
+}
+
+fn collect_planner_stages(
+    stages: Vec<PipelineStageRecord>,
+    indices: &StageIndices,
+) -> Vec<PipelineStageRecord> {
+    let planner_range = planner_stage_range(indices);
+    let mut planner_stages: Vec<_> = stages
+        .into_iter()
+        .filter(|stage| planner_range.contains(&stage.stage_index))
+        .collect();
+    planner_stages.sort_by_key(|stage| stage.stage_index);
+    planner_stages
+}
+
 /// Run the merge chain: load session ref, ensure record, call run_plan_merge.
 /// Returns None if the merge was skipped (no session ref available).
 pub(in crate::conversations::commands) async fn run_merge_chain(
@@ -64,6 +82,7 @@ pub(in crate::conversations::commands) async fn run_merge_chain(
             abort,
             merge_slot,
             merge_buf,
+            plan_merge_index,
             planner_count,
             ref_val,
             merge_agent,
@@ -217,7 +236,7 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
     let planner_stages: Vec<PipelineStageRecord> = persistence::load_pipeline_state(&ws, &conv_id)
         .ok()
         .flatten()
-        .map(|s| s.stages.into_iter().take(indices.planner_count).collect())
+        .map(|state| collect_planner_stages(state.stages, indices))
         .unwrap_or_default();
 
     // --- Reviewers ---
@@ -367,5 +386,64 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
     match fixer_result {
         Ok(_) => (ConversationStatus::Completed, None),
         Err((_, e)) => (ConversationStatus::Failed, Some(e)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{collect_planner_stages, planner_stage_range};
+    use crate::models::{ConversationStatus, PipelineStageRecord};
+    use crate::storage::now_rfc3339;
+
+    use super::super::setup::StageIndices;
+
+    fn stage(
+        stage_index: usize,
+        stage_name: &str,
+        provider_session_ref: Option<&str>,
+    ) -> PipelineStageRecord {
+        PipelineStageRecord {
+            stage_index,
+            stage_name: stage_name.to_string(),
+            agent_label: "test / model".to_string(),
+            status: ConversationStatus::Completed,
+            text: String::new(),
+            started_at: Some(now_rfc3339()),
+            finished_at: Some(now_rfc3339()),
+            score_id: Some(format!("score-{stage_index}")),
+            provider_session_ref: provider_session_ref.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn planner_stage_range_skips_orchestrator() {
+        let indices = StageIndices::new(2, 2, true);
+        assert_eq!(planner_stage_range(&indices), 1..3);
+    }
+
+    #[test]
+    fn collect_planner_stages_uses_stage_indices() {
+        let indices = StageIndices::new(2, 2, true);
+        let planner_stages = collect_planner_stages(
+            vec![
+                stage(0, "Prompt Enhancer", None),
+                stage(1, "Planner 1", Some("planner-1")),
+                stage(2, "Planner 2", Some("planner-2")),
+                stage(3, "Plan Merge", Some("merge")),
+            ],
+            &indices,
+        );
+
+        assert_eq!(planner_stages.len(), 2);
+        assert_eq!(planner_stages[0].stage_name, "Planner 1");
+        assert_eq!(
+            planner_stages[0].provider_session_ref.as_deref(),
+            Some("planner-1")
+        );
+        assert_eq!(planner_stages[1].stage_name, "Planner 2");
+        assert_eq!(
+            planner_stages[1].provider_session_ref.as_deref(),
+            Some("planner-2")
+        );
     }
 }

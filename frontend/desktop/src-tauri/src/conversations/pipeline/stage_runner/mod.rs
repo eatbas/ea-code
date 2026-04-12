@@ -17,7 +17,7 @@ use crate::conversations::symphony_request::SymphonyChatRequest;
 use crate::models::{ConversationStatus, PipelineStageRecord};
 use crate::storage::now_rfc3339;
 
-use self::emission::{emit_stage_delta, request_symphony_stop};
+use self::emission::{emit_stage_delta, emit_stage_record_status, request_symphony_stop};
 use self::finalise::{
     append_live_output, describe_stage_failure, determine_final_status, live_output,
     maybe_update_session_ref, resolve_stage_text, sync_snapshot_output,
@@ -76,6 +76,47 @@ pub(super) fn emit_stage_status(
     )
 }
 
+pub(super) fn emit_stage_record(
+    app: &AppHandle,
+    conversation_id: &str,
+    record: &PipelineStageRecord,
+    text: Option<String>,
+) -> Result<(), String> {
+    emission::emit_stage_record_status(app, conversation_id, record, text)
+}
+
+fn persist_stage_progress(
+    workspace_path: &str,
+    conversation_id: &str,
+    stage_index: usize,
+    stage_name: &str,
+    agent_label: &str,
+    started_at: &str,
+    output_buffer: &Arc<std::sync::Mutex<String>>,
+    score_id: Option<String>,
+    provider_session_ref: Option<String>,
+) {
+    let record = PipelineStageRecord {
+        stage_index,
+        stage_name: stage_name.to_string(),
+        agent_label: agent_label.to_string(),
+        status: ConversationStatus::Running,
+        text: live_output(output_buffer),
+        started_at: Some(started_at.to_string()),
+        finished_at: None,
+        score_id,
+        provider_session_ref,
+    };
+
+    if let Err(error) = crate::conversations::persistence::update_pipeline_stage(
+        workspace_path,
+        conversation_id,
+        &record,
+    ) {
+        eprintln!("[pipeline] Failed to persist stage progress for {stage_name}: {error}");
+    }
+}
+
 /// Execute a single pipeline stage: submit a score to Symphony, observe it via
 /// polling and optional WebSocket deltas, watch for the expected plan file, and
 /// persist the result.
@@ -127,19 +168,20 @@ pub async fn run_stage(
     }
 
     let settings = crate::storage::settings::read_settings().ok();
-    let thinking_level = settings.as_ref()
+    let thinking_level = settings
+        .as_ref()
         .and_then(|s| s.thinking_level(&provider, &model).map(str::to_string));
     // Only apply Kimi swarm for new sessions (planners and coder).
     // Resume stages (reviewers, code fixer, merges) inherit the existing
     // session context. The orchestrator is excluded as prompt enhancement
     // does not benefit from subagent parallelism.
-    let kimi_swarm = settings.as_ref()
+    let kimi_swarm = settings
+        .as_ref()
         .filter(|_| mode == "new" && stage_name != "Prompt Enhancer")
         .filter(|s| provider.eq_ignore_ascii_case("kimi") && s.kimi_swarm_enabled)
         .map(|s| {
-            let swarm_dir = format!(
-                "{workspace_path}/.maestro/conversations/{conversation_id}/swarm"
-            );
+            let swarm_dir =
+                format!("{workspace_path}/.maestro/conversations/{conversation_id}/swarm");
             let yaml_path = format!("{swarm_dir}/kimi-swarm.yaml");
             if !std::path::Path::new(&yaml_path).exists() {
                 let _ = std::fs::create_dir_all(&swarm_dir);
@@ -183,15 +225,6 @@ pub async fn run_stage(
 
     let emit_failed = |error_message: &str| -> (PipelineStageRecord, String) {
         let diagnostic = format!("# {stage_name} failed\n\n{error_message}");
-        let _ = emit_stage_status(
-            &app,
-            &conversation_id,
-            stage_index,
-            &stage_name,
-            ConversationStatus::Failed,
-            &agent_label,
-            Some(diagnostic.clone()),
-        );
         let mut record = PipelineStageRecord::failed(
             stage_index,
             stage_name.clone(),
@@ -199,6 +232,7 @@ pub async fn run_stage(
             Some(started_at.clone()),
         );
         record.text = diagnostic;
+        let _ = emit_stage_record_status(&app, &conversation_id, &record, Some(record.text.clone()));
         (record, error_message.to_string())
     };
 
@@ -227,6 +261,18 @@ pub async fn run_stage(
         *guard = Some(accepted.score_id.clone());
     }
 
+    persist_stage_progress(
+        &workspace_path,
+        &conversation_id,
+        stage_index,
+        &stage_name,
+        &agent_label,
+        &started_at,
+        &output_buffer,
+        Some(accepted.score_id.clone()),
+        None,
+    );
+
     let watchers = spawn_stage_watchers(file_to_watch.clone(), abort.clone());
     let app_ref = app.clone();
     let conversation_id_ref = conversation_id.clone();
@@ -239,6 +285,8 @@ pub async fn run_stage(
         let websocket_stop_ref = websocket_stop.clone();
         let score_id = accepted.score_id.clone();
         let stage_name_for_ws = stage_name.clone();
+        let agent_label_for_ws = agent_label.clone();
+        let started_at_for_ws = started_at.clone();
         let app_for_ws = app.clone();
         let workspace_for_ws = workspace_path.clone();
         let conversation_for_ws = conversation_id.clone();
@@ -260,10 +308,22 @@ pub async fn run_stage(
                                     &delta,
                                 )?;
                             }
-                            maybe_update_session_ref(
+                            if let Some(provider_session_ref) = maybe_update_session_ref(
                                 &session_ref_writer,
                                 snapshot.provider_session_ref.as_deref(),
-                            );
+                            ) {
+                                persist_stage_progress(
+                                    &workspace_for_ws,
+                                    &conversation_for_ws,
+                                    stage_index,
+                                    &stage_name_for_ws,
+                                    &agent_label_for_ws,
+                                    &started_at_for_ws,
+                                    &output_buffer_writer,
+                                    Some(score_id.clone()),
+                                    Some(provider_session_ref),
+                                );
+                            }
                             Ok(())
                         }
                         SymphonyLiveEvent::OutputDelta { text } => {
@@ -273,10 +333,23 @@ pub async fn run_stage(
                         SymphonyLiveEvent::ProviderSession {
                             provider_session_ref,
                         } => {
-                            maybe_update_session_ref(
+                            let updated_session = maybe_update_session_ref(
                                 &session_ref_writer,
                                 Some(provider_session_ref.as_str()),
                             );
+                            if let Some(provider_session_ref) = updated_session {
+                                persist_stage_progress(
+                                    &workspace_for_ws,
+                                    &conversation_for_ws,
+                                    stage_index,
+                                    &stage_name_for_ws,
+                                    &agent_label_for_ws,
+                                    &started_at_for_ws,
+                                    &output_buffer_writer,
+                                    Some(score_id.clone()),
+                                    Some(provider_session_ref),
+                                );
+                            }
                             emit_pipeline_debug(
                                 &app_for_ws,
                                 &workspace_for_ws,
@@ -371,7 +444,21 @@ pub async fn run_stage(
                     emit_stage_delta(&app, &conversation_id, stage_index, &delta)
                         .map_err(|error| emit_failed(&error))?;
                 }
-                maybe_update_session_ref(&session_ref, snapshot.provider_session_ref.as_deref());
+                if let Some(provider_session_ref) =
+                    maybe_update_session_ref(&session_ref, snapshot.provider_session_ref.as_deref())
+                {
+                    persist_stage_progress(
+                        &workspace_path,
+                        &conversation_id,
+                        stage_index,
+                        &stage_name,
+                        &agent_label,
+                        &started_at,
+                        &output_buffer,
+                        Some(accepted.score_id.clone()),
+                        Some(provider_session_ref),
+                    );
+                }
                 if snapshot.status.is_terminal() {
                     emit_pipeline_debug(
                         &app,
@@ -531,16 +618,6 @@ pub async fn run_stage(
         ),
     );
 
-    let _ = emit_stage_status(
-        &app,
-        &conversation_id,
-        stage_index,
-        &stage_name,
-        final_status.clone(),
-        &agent_label,
-        display_text.clone(),
-    );
-
     let record = PipelineStageRecord {
         stage_index,
         stage_name: stage_name.clone(),
@@ -552,6 +629,8 @@ pub async fn run_stage(
         score_id: captured_job,
         provider_session_ref: captured_session_ref,
     };
+
+    let _ = emit_stage_record_status(&app, &conversation_id, &record, Some(record.text.clone()));
 
     if let Err(error) = crate::conversations::persistence::update_pipeline_stage(
         &workspace_path,

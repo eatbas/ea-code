@@ -12,12 +12,17 @@ import { useTauriEventListeners } from "./useTauriEventListeners";
 import type { StageStatus } from "../components/ConversationView/PipelineStageSection";
 
 export interface PipelineStageState {
+  stageIndex: number;
   stageName: string;
   agentLabel: string;
   status: StageStatus;
   text: string;
   startedAt: number | undefined;
   finishedAt: number | undefined;
+}
+
+function sortStagesByIndex(stages: PipelineStageState[]): PipelineStageState[] {
+  return [...stages].sort((left, right) => left.stageIndex - right.stageIndex);
 }
 
 function mapStatus(s: string): StageStatus {
@@ -28,6 +33,10 @@ function mapStatus(s: string): StageStatus {
     case "stopped": return "stopped";
     default: return "pending";
   }
+}
+
+function isTerminalStatus(status: StageStatus): boolean {
+  return status === "completed" || status === "failed" || status === "stopped";
 }
 
 export interface UsePipelineSessionReturn {
@@ -93,17 +102,18 @@ export function usePipelineSession(
 
     setStages((prev) => {
       const copy = [...prev];
-      while (copy.length <= event.stageIndex) {
-        copy.push({
+      const existingIndex = copy.findIndex((stage) => stage.stageIndex === event.stageIndex);
+      const existing = existingIndex === -1
+        ? {
+          stageIndex: event.stageIndex,
           stageName: "",
           agentLabel: "",
-          status: "pending",
+          status: "pending" as const,
           text: "",
           startedAt: undefined,
           finishedAt: undefined,
-        });
-      }
-      const existing = copy[event.stageIndex];
+        }
+        : copy[existingIndex];
       // When re-emitting saved stages the event carries persisted timestamps.
       const persistedStart = event.startedAt
         ? new Date(event.startedAt).getTime()
@@ -111,11 +121,14 @@ export function usePipelineSession(
       const persistedFinish = event.finishedAt
         ? new Date(event.finishedAt).getTime()
         : undefined;
+      const terminalWithoutFinish = isTerminalStatus(mappedStatus) && persistedFinish === undefined;
+      const keepRunning = terminalWithoutFinish && existing.status === "running";
 
-      copy[event.stageIndex] = {
+      const nextStage: PipelineStageState = {
+        stageIndex: event.stageIndex,
         stageName: event.stageName,
         agentLabel: event.agentLabel,
-        status: mappedStatus,
+        status: keepRunning ? existing.status : mappedStatus,
         // When the backend sends plan file content with a completed status,
         // replace the accumulated SSE output so the user sees the actual plan.
         text: event.text ?? existing.text,
@@ -123,12 +136,19 @@ export function usePipelineSession(
           ?? (mappedStatus === "running"
             ? (existing.status === "running" ? existing.startedAt ?? now : now)
             : existing.startedAt),
-        finishedAt: persistedFinish
-          ?? ((mappedStatus === "completed" || mappedStatus === "failed")
+        finishedAt: keepRunning
+          ? existing.finishedAt
+          : persistedFinish
+          ?? ((mappedStatus === "completed" || mappedStatus === "failed" || mappedStatus === "stopped")
             ? (existing.finishedAt ?? now)
             : undefined),
       };
-      return copy;
+      if (existingIndex === -1) {
+        copy.push(nextStage);
+      } else {
+        copy[existingIndex] = nextStage;
+      }
+      return sortStagesByIndex(copy);
     });
   }, []);
 
@@ -137,23 +157,28 @@ export function usePipelineSession(
 
     setStages((prev) => {
       const copy = [...prev];
-      // Pad the array if the delta arrives before the status event.
-      while (copy.length <= event.stageIndex) {
-        copy.push({
+      const existingIndex = copy.findIndex((stage) => stage.stageIndex === event.stageIndex);
+      const existing = existingIndex === -1
+        ? {
+          stageIndex: event.stageIndex,
           stageName: "",
           agentLabel: "",
-          status: "pending",
+          status: "pending" as const,
           text: "",
           startedAt: undefined,
           finishedAt: undefined,
-        });
-      }
-      const existing = copy[event.stageIndex];
-      copy[event.stageIndex] = {
+        }
+        : copy[existingIndex];
+      const nextStage: PipelineStageState = {
         ...existing,
         text: existing.text ? `${existing.text}\n${event.text}` : event.text,
       };
-      return copy;
+      if (existingIndex === -1) {
+        copy.push(nextStage);
+      } else {
+        copy[existingIndex] = nextStage;
+      }
+      return sortStagesByIndex(copy);
     });
   }, []);
 
@@ -223,6 +248,7 @@ export function usePipelineSession(
   ) => {
     setUserPrompt(state.userPrompt);
     const loaded: PipelineStageState[] = state.stages.map((s) => ({
+      stageIndex: s.stageIndex,
       stageName: s.stageName,
       agentLabel: s.agentLabel,
       status: mapStatus(s.status),
@@ -230,7 +256,7 @@ export function usePipelineSession(
       startedAt: s.startedAt ? new Date(s.startedAt).getTime() : undefined,
       finishedAt: s.finishedAt ? new Date(s.finishedAt).getTime() : undefined,
     }));
-    setStages(loaded);
+    setStages(sortStagesByIndex(loaded));
     setRunning(stillRunning);
     setAwaitingReview(conversationStatus === "awaiting_review");
 

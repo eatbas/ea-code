@@ -134,6 +134,7 @@ export function PipelineConversationView({
     }, undefined)
     : undefined;
   const canResume = allDone && !running
+    && (hasFailed || hasStopped)
     && planReviewPhase !== "reviewing"
     && planReviewPhase !== "editing"
     && planReviewPhase !== "submitting_edit";
@@ -142,12 +143,12 @@ export function PipelineConversationView({
   const allReviewersDone = reviewerStages.length > 0 && reviewerStages.every((s) => isTerminal(s.status));
   const reviewMergeDone = reviewMergeStage != null && isTerminal(reviewMergeStage.status);
 
-  // The latest code fixer is the one from the last redo cycle, or the original.
-  const latestCodeFixer = redoCycles.length > 0
-    ? redoCycles[redoCycles.length - 1].codeFixer
-    : codeFixerStage;
-  const canRedoReview = allDone && !running && latestCodeFixer != null
-    && isTerminal(latestCodeFixer.status)
+  // Re-do Review only needs a finished coding pass to resume from.
+  // The backend reuses the original coder session ref, so requiring the
+  // latest code-fixer stage here incorrectly hides the action after some
+  // completed review cycles.
+  const canRedoReview = allDone && !running && coderStage != null
+    && coderStage.status === "completed"
     && planReviewPhase !== "reviewing"
     && planReviewPhase !== "editing"
     && planReviewPhase !== "submitting_edit";
@@ -247,7 +248,7 @@ export function PipelineConversationView({
               <div className={stageGridClass(plannerStages.length)}>
                 {plannerStages.map((stage, i) => (
                   <PipelineStageSection
-                    key={`planner-${String(i)}`}
+                    key={`planner-${String(stage.stageIndex)}`}
                     label={stage.stageName || `Planner ${String(i + 1)}`}
                     agentLabel={stage.agentLabel}
                     status={stage.status}
@@ -317,7 +318,7 @@ export function PipelineConversationView({
               <div className={stageGridClass(reviewerStages.length)}>
                 {reviewerStages.map((stage, i) => (
                   <PipelineStageSection
-                    key={`reviewer-${String(i)}`}
+                    key={`reviewer-${String(stage.stageIndex)}`}
                     label={stage.stageName || `Reviewer ${String(i + 1)}`}
                     agentLabel={stage.agentLabel}
                     status={stage.status}
@@ -396,9 +397,9 @@ export function PipelineConversationView({
               {cycle.reviewers.length > 0 && (
                 <PipelineStageGroup groupLabel={`Reviewers (Cycle ${String(cycle.cycle)})`} stages={cycle.reviewers}>
                   <div className={stageGridClass(cycle.reviewers.length)}>
-                    {cycle.reviewers.map((stage, i) => (
+                    {cycle.reviewers.map((stage) => (
                       <PipelineStageSection
-                        key={`redo-reviewer-${String(cycle.cycle)}-${String(i)}`}
+                        key={`redo-reviewer-${String(cycle.cycle)}-${String(stage.stageIndex)}`}
                         label={stage.stageName}
                         agentLabel={stage.agentLabel}
                         status={stage.status}

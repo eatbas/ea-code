@@ -32,7 +32,7 @@ export const STATUS_STYLES: Record<StageStatus, { dot: string; label: string; te
 };
 
 export function formatElapsed(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
+  const totalSeconds = Math.floor(Math.max(0, ms) / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   if (minutes > 0) {

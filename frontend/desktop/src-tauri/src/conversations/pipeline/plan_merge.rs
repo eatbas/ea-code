@@ -17,6 +17,7 @@ pub async fn run_plan_merge_with_feedback(
     abort: Arc<AtomicBool>,
     score_id_slot: Arc<std::sync::Mutex<Option<String>>>,
     output_buffer: Arc<std::sync::Mutex<String>>,
+    stage_index: usize,
     planner_count: usize,
     provider_session_ref: String,
     agent: PipelineAgent,
@@ -29,6 +30,7 @@ pub async fn run_plan_merge_with_feedback(
         abort,
         score_id_slot,
         output_buffer,
+        stage_index,
         planner_count,
         provider_session_ref,
         agent,
@@ -46,6 +48,7 @@ pub async fn run_plan_merge(
     abort: Arc<AtomicBool>,
     score_id_slot: Arc<std::sync::Mutex<Option<String>>>,
     output_buffer: Arc<std::sync::Mutex<String>>,
+    stage_index: usize,
     planner_count: usize,
     provider_session_ref: String,
     agent: PipelineAgent,
@@ -57,6 +60,7 @@ pub async fn run_plan_merge(
         abort,
         score_id_slot,
         output_buffer,
+        stage_index,
         planner_count,
         provider_session_ref,
         agent,
@@ -72,12 +76,12 @@ async fn run_plan_merge_inner(
     abort: Arc<AtomicBool>,
     score_id_slot: Arc<std::sync::Mutex<Option<String>>>,
     output_buffer: Arc<std::sync::Mutex<String>>,
+    stage_index: usize,
     planner_count: usize,
     provider_session_ref: String,
     agent: PipelineAgent,
     feedback: Option<String>,
 ) -> Result<PipelineStageRecord, (PipelineStageRecord, String)> {
-    let stage_index = planner_count;
     let label = agent_label(&agent);
 
     let conv_dir = format!("{workspace_path}/.maestro/conversations/{conversation_id}");

@@ -106,6 +106,8 @@ export function ConversationView({
             pipelineRunning={viewModel.pipeline.running}
             pipelineMode={pipelineMode}
             pipelineDone={viewModel.pipelineDone}
+            pipelineResumable={viewModel.pipelineResumable}
+            pipelineRedoReviewable={viewModel.pipelineRedoReviewable}
             thinkingLevel={viewModel.thinkingLevel}
             thinkingOptions={viewModel.thinkingOptions}
             workspacePath={workspace.path}
@@ -125,6 +127,7 @@ export function ConversationView({
             onSend={viewModel.handleSend}
             onStop={viewModel.handleStop}
             onResumePipeline={viewModel.handleResume}
+            onRedoReviewPipeline={viewModel.handleRedoReview}
             onNewPipeline={viewModel.handleNewPipeline}
             planReviewPhase={viewModel.planReview.phase}
             onOpenCliSetup={onOpenCliSetup}

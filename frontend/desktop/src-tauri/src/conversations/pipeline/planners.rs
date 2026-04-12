@@ -7,7 +7,7 @@ use crate::models::{ConversationStatus, PipelineAgent, PipelineStageRecord, Pipe
 use crate::storage::now_rfc3339;
 
 use super::prompts::{agent_label, build_planner_prompt};
-use super::stage_runner::{emit_stage_status, run_stage, StageConfig};
+use super::stage_runner::{emit_stage_record, run_stage, StageConfig};
 use crate::conversations::pipeline_debug::emit_pipeline_debug;
 
 /// Run all planners in parallel. Returns when all planners have completed.
@@ -118,13 +118,10 @@ pub async fn run_pipeline_planners(
 
         if already_completed {
             if let Some(record) = previous_stage {
-                let _ = emit_stage_status(
+                let _ = emit_stage_record(
                     &app,
                     &conversation_id,
-                    stage_index,
-                    &record.stage_name,
-                    record.status.clone(),
-                    &record.agent_label,
+                    record,
                     if record.text.is_empty() {
                         None
                     } else {

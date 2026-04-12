@@ -198,15 +198,17 @@ pub(super) fn sync_snapshot_output(
 pub(super) fn maybe_update_session_ref(
     session_ref: &Arc<Mutex<Option<String>>>,
     next_session: Option<&str>,
-) {
+) -> Option<String> {
     let Some(next_session) = next_session.map(str::to_string) else {
-        return;
+        return None;
     };
     if let Ok(mut guard) = session_ref.lock() {
         if guard.as_deref() != Some(next_session.as_str()) {
             *guard = Some(next_session);
+            return guard.clone();
         }
     }
+    None
 }
 
 pub(super) fn live_output(output_buffer: &Arc<Mutex<String>>) -> String {

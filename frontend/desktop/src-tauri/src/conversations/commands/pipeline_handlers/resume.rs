@@ -2,11 +2,12 @@
 //! restarts from that point.
 
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter};
 
 use crate::conversations::events::EVENT_CONVERSATION_STATUS;
-use crate::models::{ConversationDetail, ConversationStatus};
+use crate::models::{ConversationDetail, ConversationStatus, PipelineStageRecord};
 
 use super::super::super::persistence;
 use super::super::super::pipeline;
@@ -27,6 +28,7 @@ pub async fn resume_pipeline(
 
     let detail = persistence::get_conversation(&workspace_path, &conversation_id)?;
     let setup = prepare_pipeline(&workspace_path, &conversation_id)?;
+    let current_review_cycle = state.review_cycle;
 
     // Use enhanced_prompt if available, otherwise fall back to user_prompt.
     let user_prompt = state
@@ -71,6 +73,300 @@ pub async fn resume_pipeline(
     let review_merge_done = stage_done("Review Merge");
     let code_fixer_done = stage_done("Code Fixer");
 
+    let cycle_suffix = format!(" (Cycle {current_review_cycle})");
+    let cycle_review_merge_name = format!("Review Merge{cycle_suffix}");
+    let cycle_code_fixer_name = format!("Code Fixer{cycle_suffix}");
+    let cycle_reviewer_stages: Vec<_> = previous_stages
+        .iter()
+        .filter(|s| s.stage_name.starts_with("Reviewer") && s.stage_name.contains(&cycle_suffix))
+        .collect();
+    let cycle_review_merge_stage = previous_stages
+        .iter()
+        .find(|s| s.stage_name == cycle_review_merge_name);
+    let cycle_code_fixer_stage = previous_stages
+        .iter()
+        .find(|s| s.stage_name == cycle_code_fixer_name);
+    let has_current_review_cycle = current_review_cycle > 1
+        && (!cycle_reviewer_stages.is_empty()
+            || cycle_review_merge_stage.is_some()
+            || cycle_code_fixer_stage.is_some());
+
+    if has_current_review_cycle {
+        let cycle_reviewers_done = cycle_reviewer_stages.len() == setup.reviewer_count
+            && cycle_reviewer_stages
+                .iter()
+                .all(|s| s.status == ConversationStatus::Completed);
+        let cycle_review_merge_done = cycle_review_merge_stage
+            .map(|s| s.status == ConversationStatus::Completed)
+            .unwrap_or(false);
+        let cycle_code_fixer_done = cycle_code_fixer_stage
+            .map(|s| s.status == ConversationStatus::Completed)
+            .unwrap_or(false);
+
+        if cycle_code_fixer_done {
+            return Err(
+                "Pipeline is already complete. Use re-do review to run another review cycle."
+                    .to_string(),
+            );
+        }
+
+        let reviewer_start = cycle_reviewer_stages
+            .iter()
+            .map(|s| s.stage_index)
+            .min()
+            .or_else(|| {
+                cycle_review_merge_stage.and_then(|s| s.stage_index.checked_sub(setup.reviewer_count))
+            })
+            .or_else(|| {
+                cycle_code_fixer_stage
+                    .and_then(|s| s.stage_index.checked_sub(setup.reviewer_count + 1))
+            })
+            .ok_or("Unable to determine current re-do review cycle indices")?;
+        let review_merge_index = cycle_review_merge_stage
+            .map(|s| s.stage_index)
+            .unwrap_or(reviewer_start + setup.reviewer_count);
+        let code_fixer_index = cycle_code_fixer_stage
+            .map(|s| s.stage_index)
+            .unwrap_or(review_merge_index + 1);
+
+        let planner_stage_records: Vec<PipelineStageRecord> = previous_stages
+            .iter()
+            .filter(|s| s.stage_name.starts_with("Planner"))
+            .cloned()
+            .collect();
+        let coder_ref = previous_stages
+            .iter()
+            .find(|s| s.stage_name == "Coder")
+            .and_then(|s| s.provider_session_ref.clone())
+            .unwrap_or_default();
+
+        let app_handle = app.clone();
+        let ws = workspace_path.clone();
+        let conv_id = conversation_id.clone();
+        let prev = previous_stages.clone();
+        let review_dir = format!(
+            "{ws}/.maestro/conversations/{conv_id}/review_{current_review_cycle}"
+        );
+        let review_merged_dir = format!(
+            "{ws}/.maestro/conversations/{conv_id}/review_merged_{current_review_cycle}"
+        );
+        let code_fixer_dir = format!(
+            "{ws}/.maestro/conversations/{conv_id}/code_fixer_{current_review_cycle}"
+        );
+        let review_merged_path = format!("{review_merged_dir}/review_merged.md");
+        let cycle_suffix_for_run = cycle_suffix.clone();
+        let cycle_review_merge_name_for_run = cycle_review_merge_name.clone();
+        let cycle_code_fixer_name_for_run = cycle_code_fixer_name.clone();
+
+        tokio::spawn(async move {
+            let Some(_guard) = begin_pipeline_task(&app_handle, &ws, &conv_id) else {
+                return;
+            };
+
+            re_emit_completed_stages(&app_handle, &conv_id, &ws, reviewer_start);
+
+            if !cycle_reviewers_done {
+                let reviewer_slots: Vec<_> = (0..setup.reviewer_count)
+                    .map(|_| Arc::new(std::sync::Mutex::new(None::<String>)))
+                    .collect();
+                let reviewer_bufs: Vec<_> = (0..setup.reviewer_count)
+                    .map(|_| Arc::new(std::sync::Mutex::new(String::new())))
+                    .collect();
+
+                for (i, reviewer) in setup.reviewers.iter().enumerate() {
+                    let label = format!("{} / {}", reviewer.provider, reviewer.model);
+                    ensure_stage_record(
+                        &ws,
+                        &conv_id,
+                        reviewer_start + i,
+                        &format!("Reviewer {}{}", i + 1, cycle_suffix_for_run),
+                        &label,
+                    );
+                }
+
+                let reviewer_result = pipeline::run_pipeline_reviewers(
+                    app_handle.clone(),
+                    conv_id.clone(),
+                    ws.clone(),
+                    setup.reviewers.clone(),
+                    setup.abort.clone(),
+                    reviewer_slots,
+                    Some(prev.clone()),
+                    reviewer_bufs,
+                    &planner_stage_records,
+                    reviewer_start,
+                    Some(review_dir.clone()),
+                    Some(cycle_suffix_for_run.clone()),
+                )
+                .await;
+
+                if setup.abort.load(Ordering::Acquire) {
+                    emit_final_status(&app_handle, &ws, &conv_id, ConversationStatus::Stopped, None);
+                    pipeline_cleanup(&ws, &conv_id);
+                    return;
+                }
+
+                if let Err(error) = reviewer_result {
+                    emit_final_status(
+                        &app_handle,
+                        &ws,
+                        &conv_id,
+                        ConversationStatus::Failed,
+                        Some(error),
+                    );
+                    pipeline_cleanup(&ws, &conv_id);
+                    return;
+                }
+            }
+
+            if !cycle_review_merge_done {
+                let Some(review_merge_agent) = setup.reviewers.first().cloned() else {
+                    emit_final_status(
+                        &app_handle,
+                        &ws,
+                        &conv_id,
+                        ConversationStatus::Failed,
+                        Some("No reviewer available for Review Merge".to_string()),
+                    );
+                    pipeline_cleanup(&ws, &conv_id);
+                    return;
+                };
+
+                let reviewer_session_ref = persistence::load_pipeline_state(&ws, &conv_id)
+                    .ok()
+                    .flatten()
+                    .and_then(|saved| {
+                        saved.stages
+                            .iter()
+                            .find(|stage| stage.stage_index == reviewer_start)
+                            .and_then(|stage| stage.provider_session_ref.clone())
+                    })
+                    .unwrap_or_default();
+
+                if reviewer_session_ref.is_empty() {
+                    emit_final_status(
+                        &app_handle,
+                        &ws,
+                        &conv_id,
+                        ConversationStatus::Failed,
+                        Some("No reviewer session ref for Review Merge".to_string()),
+                    );
+                    pipeline_cleanup(&ws, &conv_id);
+                    return;
+                }
+
+                let rm_label = format!(
+                    "{} / {}",
+                    review_merge_agent.provider, review_merge_agent.model
+                );
+                ensure_stage_record(
+                    &ws,
+                    &conv_id,
+                    review_merge_index,
+                    &cycle_review_merge_name_for_run,
+                    &rm_label,
+                );
+
+                let rm_result = pipeline::run_review_merge(
+                    app_handle.clone(),
+                    conv_id.clone(),
+                    ws.clone(),
+                    setup.abort.clone(),
+                    Arc::new(std::sync::Mutex::new(None::<String>)),
+                    Arc::new(std::sync::Mutex::new(String::new())),
+                    review_merge_index,
+                    setup.reviewer_count,
+                    reviewer_session_ref,
+                    review_merge_agent,
+                    Some(review_dir.clone()),
+                    Some(review_merged_dir.clone()),
+                    Some(cycle_review_merge_name_for_run.clone()),
+                )
+                .await;
+
+                if setup.abort.load(Ordering::Acquire) {
+                    emit_final_status(&app_handle, &ws, &conv_id, ConversationStatus::Stopped, None);
+                    pipeline_cleanup(&ws, &conv_id);
+                    return;
+                }
+
+                if let Err((_, error)) = rm_result {
+                    emit_final_status(
+                        &app_handle,
+                        &ws,
+                        &conv_id,
+                        ConversationStatus::Failed,
+                        Some(error),
+                    );
+                    pipeline_cleanup(&ws, &conv_id);
+                    return;
+                }
+            }
+
+            if coder_ref.is_empty() {
+                emit_final_status(
+                    &app_handle,
+                    &ws,
+                    &conv_id,
+                    ConversationStatus::Failed,
+                    Some("No coder session ref for Code Fixer".to_string()),
+                );
+                pipeline_cleanup(&ws, &conv_id);
+                return;
+            }
+
+            let fixer_label = format!("{} / {}", setup.coder.provider, setup.coder.model);
+            ensure_stage_record(
+                &ws,
+                &conv_id,
+                code_fixer_index,
+                &cycle_code_fixer_name_for_run,
+                &fixer_label,
+            );
+
+            let fixer_result = pipeline::run_code_fixer(
+                app_handle.clone(),
+                conv_id.clone(),
+                ws.clone(),
+                setup.abort.clone(),
+                Arc::new(std::sync::Mutex::new(None::<String>)),
+                Arc::new(std::sync::Mutex::new(String::new())),
+                code_fixer_index,
+                coder_ref,
+                setup.coder.clone(),
+                Some(code_fixer_dir),
+                Some(review_merged_path),
+                Some(cycle_code_fixer_name_for_run),
+            )
+            .await;
+
+            if setup.abort.load(Ordering::Acquire) {
+                emit_final_status(&app_handle, &ws, &conv_id, ConversationStatus::Stopped, None);
+            } else {
+                match fixer_result {
+                    Ok(_) => emit_final_status(
+                        &app_handle,
+                        &ws,
+                        &conv_id,
+                        ConversationStatus::Completed,
+                        None,
+                    ),
+                    Err((_, error)) => emit_final_status(
+                        &app_handle,
+                        &ws,
+                        &conv_id,
+                        ConversationStatus::Failed,
+                        Some(error),
+                    ),
+                }
+            }
+
+            pipeline_cleanup(&ws, &conv_id);
+        });
+
+        return Ok(detail);
+    }
+
     // Determine resume point.
     #[derive(Debug)]
     enum ResumePoint {
@@ -102,6 +398,13 @@ pub async fn resume_pipeline(
         ResumePoint::Orchestrator
     };
 
+    if let ResumePoint::AlreadyComplete = resume_point {
+        return Err(
+            "Pipeline is already complete. Use re-do review to run another review cycle."
+                .to_string(),
+        );
+    }
+
     let app_handle = app.clone();
     let ws = workspace_path.clone();
     let conv_id = conversation_id.clone();
@@ -116,15 +419,7 @@ pub async fn resume_pipeline(
         };
 
         match resume_point {
-            ResumePoint::AlreadyComplete => {
-                emit_final_status(
-                    &app_handle,
-                    &ws,
-                    &conv_id,
-                    ConversationStatus::Completed,
-                    None,
-                );
-            }
+            ResumePoint::AlreadyComplete => unreachable!("handled before spawning"),
             ResumePoint::Orchestrator => {
                 // Re-run orchestrator, then continue to planners.
                 let mut effective_prompt = user_prompt.clone();

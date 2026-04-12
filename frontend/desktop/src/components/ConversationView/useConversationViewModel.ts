@@ -7,6 +7,7 @@ import { useFooterErrorHandler } from "../../hooks/useFooterErrorHandler";
 import { usePipelineSession } from "../../hooks/usePipelineSession";
 import { usePlanReview } from "../../hooks/usePlanReview";
 import { useSettings } from "../../hooks/useSettings";
+import { useToast } from "../shared/Toast";
 import { getThinkingOptions, KIMI_SWARM_PROMPT_PREFIX } from "../shared/constants";
 import {
   acceptPlan,
@@ -40,6 +41,16 @@ interface UseConversationViewModelParams {
   onStopConversation: () => Promise<void>;
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+  return fallback;
+}
+
 export function useConversationViewModel({
   workspace,
   sidecarReady,
@@ -60,11 +71,13 @@ export function useConversationViewModel({
   } = useApiHealth();
   const { settings, saveSettings } = useSettings();
   const handleFooterError = useFooterErrorHandler();
+  const toast = useToast();
   const [selectedAgent, setSelectedAgent] = useState<AgentSelection | null>(null);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
   const [pipelinePrompt, setPipelinePrompt] = useState<string>("");
   const [pipelineConversationId, setPipelineConversationId] = useState<string | null>(null);
   const prevConversationIdRef = useRef<string | null>(null);
+  const hydratedConversationIdRef = useRef<string | null>(null);
   const prevResetTokenRef = useRef(viewResetToken);
   const refreshContextRef = useRef<{
     workspacePath: string;
@@ -133,14 +146,24 @@ export function useConversationViewModel({
       planReview.reset();
       setPipelinePrompt("");
       setPipelineConversationId(null);
+      hydratedConversationIdRef.current = null;
       // Note: pipelineMode is now managed by the store, not reset here.
     }
   }, [activeConversation, pipeline, planReview, viewResetToken]);
 
   useEffect(() => {
     if (!activeConversation) {
+      hydratedConversationIdRef.current = null;
       return;
     }
+
+    const alreadyHydrated = hydratedConversationIdRef.current === activeConversation.summary.id;
+    const hasLoadedPipelineState = pipelineConversationId === activeConversation.summary.id
+      && (pipeline.stages.length > 0 || pipeline.userPrompt.length > 0);
+    if (alreadyHydrated && hasLoadedPipelineState) {
+      return;
+    }
+    hydratedConversationIdRef.current = activeConversation.summary.id;
 
     let cancelled = false;
     void getPipelineState(workspace.path, activeConversation.summary.id).then((state) => {
@@ -149,6 +172,7 @@ export function useConversationViewModel({
       }
 
       if (!state) {
+        hydratedConversationIdRef.current = null;
         // No pipeline state — this is a simple task conversation.
         // Always set the mode so the agent selector stays visible.
         onPipelineModeChange("simple");
@@ -165,6 +189,7 @@ export function useConversationViewModel({
       // auto-detection or effect re-runs.
       onPipelineModeChange("code");
     }).catch((error) => {
+      hydratedConversationIdRef.current = null;
       console.warn("[pipeline] Failed to load pipeline state:", error);
     });
 
@@ -186,7 +211,14 @@ export function useConversationViewModel({
     return () => {
       cancelled = true;
     };
-  }, [activeConversation, pipeline, workspace.path, onPipelineModeChange]);
+  }, [
+    activeConversation,
+    onPipelineModeChange,
+    pipeline.stages.length,
+    pipeline.userPrompt,
+    pipelineConversationId,
+    workspace.path,
+  ]);
 
   useEffect(() => {
     if (activeConversation) {
@@ -249,6 +281,11 @@ export function useConversationViewModel({
     && pipeline.stages.every((stage) => (
       stage.status === "completed" || stage.status === "failed" || stage.status === "stopped"
     ));
+  const pipelineResumable = pipelineDone && pipeline.stages.some((stage) => (
+    stage.status === "failed" || stage.status === "stopped"
+  ));
+  const pipelineRedoReviewable = pipelineDone
+    && pipeline.stages.some((stage) => stage.stageName === "Coder" && stage.status === "completed");
   const promptHistory = useMemo(
     () => activeConversation?.messages
       .filter((message) => message.role === "user")
@@ -310,23 +347,27 @@ export function useConversationViewModel({
       return;
     }
 
-    pipeline.softReset();
-    planReview.reset();
-    await resumePipeline(workspace.path, pipelineConversationId);
-  }, [pipeline, pipelineConversationId, planReview, workspace.path]);
+    try {
+      await resumePipeline(workspace.path, pipelineConversationId);
+      pipeline.softReset();
+      planReview.reset();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to resume pipeline."));
+    }
+  }, [pipeline, pipelineConversationId, planReview, toast, workspace.path]);
 
   const handleRedoReview = useCallback(async () => {
     if (!pipelineConversationId) {
       return;
     }
 
-    pipeline.softReset();
     try {
       await redoReviewPipeline(workspace.path, pipelineConversationId);
+      pipeline.softReset();
     } catch (error) {
-      console.error("[redo-review] Failed to start redo review:", error);
+      toast.error(getErrorMessage(error, "Failed to start re-do review."));
     }
-  }, [pipeline, pipelineConversationId, workspace.path]);
+  }, [pipeline, pipelineConversationId, toast, workspace.path]);
 
   const handleNewPipeline = useCallback(() => {
     pipeline.reset();
@@ -380,6 +421,8 @@ export function useConversationViewModel({
     planReview,
     activeRunning,
     pipelineDone,
+    pipelineResumable,
+    pipelineRedoReviewable,
     promptHistory,
     thinkingLevel,
     thinkingOptions,

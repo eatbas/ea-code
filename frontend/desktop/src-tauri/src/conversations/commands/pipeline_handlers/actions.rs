@@ -10,8 +10,8 @@ use crate::conversations::events::EVENT_CONVERSATION_STATUS;
 use crate::conversations::pipeline_debug::emit_pipeline_debug;
 use crate::http::symphony_client;
 use crate::models::{
-    AgentSelection, ConversationDetail, ConversationStatus, ConversationSummary,
-    PipelineStageRecord, PipelineState, ConversationStatusEvent,
+    AgentSelection, ConversationDetail, ConversationStatus, ConversationStatusEvent,
+    ConversationSummary, PipelineStageRecord, PipelineState,
 };
 use crate::storage::now_rfc3339;
 
@@ -79,6 +79,85 @@ pub async fn start_pipeline(
 
     let setup = prepare_pipeline_with_config(&workspace_path, &conversation_id, config)?;
 
+    let conv_dir = format!("{workspace_path}/.maestro/conversations/{conversation_id}");
+    let prompt_dir = format!("{conv_dir}/prompt");
+    if let Err(e) = std::fs::create_dir_all(&prompt_dir) {
+        emit_pipeline_debug(
+            &app,
+            &workspace_path,
+            &conversation_id,
+            format!("Failed to create prompt directory: {e}"),
+        );
+    }
+    if let Err(e) = std::fs::write(format!("{prompt_dir}/prompt.md"), trimmed) {
+        emit_pipeline_debug(
+            &app,
+            &workspace_path,
+            &conversation_id,
+            format!("Failed to save prompt: {e}"),
+        );
+    }
+
+    let mut seed_stages = Vec::new();
+    if let Some(orchestrator_index) = setup.indices.orchestrator {
+        let orchestrator_label = setup
+            .orchestrator_agent
+            .as_ref()
+            .map(|agent| format!("{} / {}", agent.provider, agent.model))
+            .unwrap_or_default();
+        seed_stages.push(PipelineStageRecord {
+            stage_index: orchestrator_index,
+            stage_name: "Prompt Enhancer".to_string(),
+            agent_label: orchestrator_label,
+            status: ConversationStatus::Running,
+            text: String::new(),
+            started_at: Some(now_rfc3339()),
+            finished_at: None,
+            score_id: None,
+            provider_session_ref: None,
+        });
+    }
+    let planner_start = setup.indices.orchestrator.map(|_| 1).unwrap_or(0);
+    for planner_number in 0..setup.planner_count {
+        let planner = &setup.planners[planner_number];
+        seed_stages.push(PipelineStageRecord {
+            stage_index: planner_start + planner_number,
+            stage_name: format!("Planner {}", planner_number + 1),
+            agent_label: format!("{} / {}", planner.provider, planner.model),
+            status: if setup.orchestrator_agent.is_some() {
+                ConversationStatus::Idle
+            } else {
+                ConversationStatus::Running
+            },
+            text: String::new(),
+            started_at: if setup.orchestrator_agent.is_some() {
+                None
+            } else {
+                Some(now_rfc3339())
+            },
+            finished_at: None,
+            score_id: None,
+            provider_session_ref: None,
+        });
+    }
+    seed_stages.sort_by_key(|stage| stage.stage_index);
+    let seed_state = PipelineState {
+        user_prompt: trimmed.to_string(),
+        pipeline_mode: "code".to_string(),
+        stages: seed_stages,
+        review_cycle: 1,
+        enhanced_prompt: None,
+    };
+    if let Err(e) = persistence::save_pipeline_state(&workspace_path, &conversation_id, &seed_state)
+    {
+        emit_pipeline_debug(
+            &app,
+            &workspace_path,
+            &conversation_id,
+            format!("Failed to seed pipeline state: {e}"),
+        );
+    }
+
     let app_handle = app.clone();
     let ws = workspace_path.clone();
     let conv_id = conversation_id.clone();
@@ -95,73 +174,15 @@ pub async fn start_pipeline(
             "Pipeline background task started",
         );
 
-        // Step 1: Save the raw prompt to prompt/prompt.md.
         let conv_dir = format!("{ws}/.maestro/conversations/{conv_id}");
         let prompt_dir = format!("{conv_dir}/prompt");
-        if let Err(e) = std::fs::create_dir_all(&prompt_dir) {
-            emit_pipeline_debug(
-                &app_handle,
-                &ws,
-                &conv_id,
-                format!("Failed to create prompt directory: {e}"),
-            );
-        }
-        if let Err(e) = std::fs::write(format!("{prompt_dir}/prompt.md"), &user_prompt) {
-            emit_pipeline_debug(
-                &app_handle,
-                &ws,
-                &conv_id,
-                format!("Failed to save prompt: {e}"),
-            );
-        }
 
-        // Step 2: If orchestrator is configured, create pipeline.json with an
-        // initial Orchestrator stage record so that `update_pipeline_stage`
-        // (called by `run_stage`) can persist its progress.  Without this file
-        // existing beforehand, stage updates are silently skipped.
-        if setup.orchestrator_agent.is_some() {
-            let orchestrator_index = setup.indices.orchestrator.unwrap_or(0);
-            let orch_label = setup.orchestrator_agent.as_ref().map(|a| {
-                format!("{} / {}", a.provider, a.model)
-            }).unwrap_or_default();
-            let seed_state = PipelineState {
-                user_prompt: user_prompt.clone(),
-                pipeline_mode: "code".to_string(),
-                stages: vec![PipelineStageRecord {
-                    stage_index: orchestrator_index,
-                    stage_name: "Prompt Enhancer".to_string(),
-                    agent_label: orch_label,
-                    status: ConversationStatus::Running,
-                    text: String::new(),
-                    started_at: Some(now_rfc3339()),
-                    finished_at: None,
-                    score_id: None,
-                    provider_session_ref: None,
-                }],
-                review_cycle: 1,
-                enhanced_prompt: None,
-            };
-            if let Err(e) = persistence::save_pipeline_state(&ws, &conv_id, &seed_state) {
-                emit_pipeline_debug(
-                    &app_handle,
-                    &ws,
-                    &conv_id,
-                    format!("Failed to seed pipeline state: {e}"),
-                );
-            }
-        }
-
-        // Step 3: Run orchestrator if configured.
+        // Step 1: Run orchestrator if configured.
         let mut effective_prompt = user_prompt.clone();
         let mut enhanced_prompt_saved: Option<String> = None;
 
         if let Some(orchestrator_agent) = &setup.orchestrator_agent {
-            emit_pipeline_debug(
-                &app_handle,
-                &ws,
-                &conv_id,
-                "Running orchestrator stage...",
-            );
+            emit_pipeline_debug(&app_handle, &ws, &conv_id, "Running orchestrator stage...");
 
             let orchestrator_index = setup.indices.orchestrator.unwrap_or(0);
             let orchestrator_slot = setup
@@ -248,7 +269,9 @@ pub async fn start_pipeline(
                         .collect::<Vec<_>>()
                         .join(" ");
                     if !fallback_title.is_empty() {
-                        if let Ok(updated_summary) = persistence::rename_conversation(&ws, &conv_id, &fallback_title) {
+                        if let Ok(updated_summary) =
+                            persistence::rename_conversation(&ws, &conv_id, &fallback_title)
+                        {
                             let _ = app_handle.emit(
                                 EVENT_CONVERSATION_STATUS,
                                 ConversationStatusEvent {
@@ -262,7 +285,7 @@ pub async fn start_pipeline(
             }
         }
 
-        // Step 4: Save enhanced_prompt to pipeline state BEFORE running planners.
+        // Step 2: Save enhanced_prompt to pipeline state BEFORE running planners.
         if let Some(enhanced) = enhanced_prompt_saved.clone() {
             if let Ok(Some(mut state)) = persistence::load_pipeline_state(&ws, &conv_id) {
                 state.enhanced_prompt = Some(enhanced);
@@ -270,7 +293,7 @@ pub async fn start_pipeline(
             }
         }
 
-        // Step 5: Run planners with the effective prompt.
+        // Step 3: Run planners with the effective prompt.
         let planner_start = setup.indices.orchestrator.map(|_| 1).unwrap_or(0);
         let planner_result = pipeline::run_pipeline_planners(
             app_handle.clone(),
@@ -280,9 +303,21 @@ pub async fn start_pipeline(
             planner_start,
             effective_prompt.clone(),
             setup.abort.clone(),
-            setup.score_id_slots.iter().skip(planner_start).take(setup.planner_count).cloned().collect(),
+            setup
+                .score_id_slots
+                .iter()
+                .skip(planner_start)
+                .take(setup.planner_count)
+                .cloned()
+                .collect(),
             None,
-            setup.stage_buffers.iter().skip(planner_start).take(setup.planner_count).cloned().collect(),
+            setup
+                .stage_buffers
+                .iter()
+                .skip(planner_start)
+                .take(setup.planner_count)
+                .cloned()
+                .collect(),
         )
         .await;
 
@@ -395,7 +430,7 @@ pub async fn get_pipeline_state(
     if let Some(ref mut s) = state {
         let live_texts = persistence::get_pipeline_stage_texts(&workspace_path, &conversation_id)?;
         for (i, text) in live_texts.into_iter().enumerate() {
-            if let Some(stage) = s.stages.get_mut(i) {
+            if let Some(stage) = s.stages.iter_mut().find(|stage| stage.stage_index == i) {
                 if stage.text.is_empty() && !text.is_empty() {
                     stage.text = text;
                 }
@@ -508,7 +543,7 @@ pub async fn send_plan_edit_feedback(
             "{} / {}",
             setup.merge_agent.provider, setup.merge_agent.model
         );
-        ensure_merge_stage_record(&ws, &conv_id, setup.planner_count, &merge_label);
+        ensure_merge_stage_record(&ws, &conv_id, setup.indices.plan_merge, &merge_label);
 
         let merge_slot = setup
             .score_id_slots
@@ -521,7 +556,7 @@ pub async fn send_plan_edit_feedback(
             .cloned()
             .unwrap_or_default();
 
-        re_emit_completed_stages(&app_handle, &conv_id, &ws, setup.planner_count);
+        re_emit_completed_stages(&app_handle, &conv_id, &ws, setup.indices.plan_merge);
 
         let merge_result = pipeline::run_plan_merge_with_feedback(
             app_handle.clone(),
@@ -530,6 +565,7 @@ pub async fn send_plan_edit_feedback(
             setup.abort.clone(),
             merge_slot,
             merge_buf,
+            setup.indices.plan_merge,
             setup.planner_count,
             session_ref,
             setup.merge_agent,

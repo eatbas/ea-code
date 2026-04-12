@@ -7,7 +7,7 @@ use crate::models::{ConversationStatus, PipelineAgent, PipelineStageRecord};
 use crate::storage::now_rfc3339;
 
 use super::prompts::{agent_label, build_reviewer_prompt};
-use super::stage_runner::{emit_stage_status, run_stage, StageConfig};
+use super::stage_runner::{emit_stage_record, run_stage, StageConfig};
 
 /// Run all reviewers in parallel. Each reviewer resumes the corresponding
 /// planner's session to retain plan context, then uses git tools to review
@@ -53,13 +53,10 @@ pub async fn run_pipeline_reviewers(
                 .as_ref()
                 .and_then(|s| s.iter().find(|st| st.stage_index == stage_idx))
             {
-                let _ = emit_stage_status(
+                let _ = emit_stage_record(
                     &app,
                     &conversation_id,
-                    stage_idx,
-                    &record.stage_name,
-                    record.status.clone(),
-                    &record.agent_label,
+                    record,
                     if record.text.is_empty() {
                         None
                     } else {
@@ -89,15 +86,7 @@ pub async fn run_pipeline_reviewers(
                         &conversation_id,
                         &failed_record,
                     );
-                    let _ = emit_stage_status(
-                        &app,
-                        &conversation_id,
-                        stage_idx,
-                        &failed_record.stage_name,
-                        ConversationStatus::Failed,
-                        &label,
-                        None,
-                    );
+                    let _ = emit_stage_record(&app, &conversation_id, &failed_record, None);
                     return Err(format!(
                         "Reviewer {reviewer_number}: Planner {reviewer_number} is missing a provider session ref",
                     ));
@@ -115,15 +104,7 @@ pub async fn run_pipeline_reviewers(
                     &conversation_id,
                     &failed_record,
                 );
-                let _ = emit_stage_status(
-                    &app,
-                    &conversation_id,
-                    stage_idx,
-                    &failed_record.stage_name,
-                    ConversationStatus::Failed,
-                    &label,
-                    None,
-                );
+                let _ = emit_stage_record(&app, &conversation_id, &failed_record, None);
                 return Err(format!(
                     "Reviewer {reviewer_number}: missing matching Planner {reviewer_number} stage",
                 ));
