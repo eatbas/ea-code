@@ -133,6 +133,11 @@ pub struct PipelineStageRecord {
     /// Provider session ref for resuming this stage.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_session_ref: Option<String>,
+    /// User-supplied prompt for chat-style stages that originate from a
+    /// post-pipeline follow-up turn (e.g. "Follow-up N"). Regular pipeline
+    /// stages leave this unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_prompt: Option<String>,
 }
 
 impl PipelineStageRecord {
@@ -153,6 +158,7 @@ impl PipelineStageRecord {
             finished_at: Some(crate::storage::now_rfc3339()),
             score_id: None,
             provider_session_ref: None,
+            user_prompt: None,
         }
     }
 }

@@ -193,6 +193,7 @@ pub(in crate::conversations::commands) async fn run_coding_phase(
                 finished_at: None,
                 score_id: None,
                 provider_session_ref: None,
+                user_prompt: None,
             })
     } else {
         // --- Coder ---
@@ -412,6 +413,7 @@ mod tests {
             finished_at: Some(now_rfc3339()),
             score_id: Some(format!("score-{stage_index}")),
             provider_session_ref: provider_session_ref.map(str::to_string),
+            user_prompt: None,
         }
     }
 

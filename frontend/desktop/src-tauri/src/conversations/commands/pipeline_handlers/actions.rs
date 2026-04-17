@@ -115,6 +115,7 @@ pub async fn start_pipeline(
             finished_at: None,
             score_id: None,
             provider_session_ref: None,
+            user_prompt: None,
         });
     }
     let planner_start = setup.indices.orchestrator.map(|_| 1).unwrap_or(0);
@@ -138,6 +139,7 @@ pub async fn start_pipeline(
             finished_at: None,
             score_id: None,
             provider_session_ref: None,
+            user_prompt: None,
         });
     }
     seed_stages.sort_by_key(|stage| stage.stage_index);

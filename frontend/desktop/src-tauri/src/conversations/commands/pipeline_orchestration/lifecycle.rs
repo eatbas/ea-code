@@ -170,6 +170,7 @@ pub(in crate::conversations::commands) fn ensure_merge_stage_record(
                 finished_at: None,
                 score_id: None,
                 provider_session_ref: None,
+                user_prompt: None,
             });
         } else if let Some(merge) = state
             .stages
@@ -213,6 +214,7 @@ pub(in crate::conversations::commands) fn ensure_stage_record(
                 finished_at: None,
                 score_id: None,
                 provider_session_ref: None,
+                user_prompt: None,
             });
             state.stages.sort_by_key(|s| s.stage_index);
         }

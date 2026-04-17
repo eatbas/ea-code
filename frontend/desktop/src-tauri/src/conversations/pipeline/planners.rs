@@ -65,6 +65,7 @@ pub async fn run_pipeline_planners(
                     finished_at: None,
                     score_id: None,
                     provider_session_ref: None,
+                    user_prompt: None,
                 }
             }
         })

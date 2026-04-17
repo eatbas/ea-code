@@ -86,6 +86,7 @@ pub fn run() {
             conversations::commands::pipeline_handlers::actions::accept_plan,
             conversations::commands::pipeline_handlers::actions::send_plan_edit_feedback,
             conversations::commands::pipeline_handlers::redo_review::redo_review_pipeline,
+            conversations::commands::pipeline_handlers::continue_coder::continue_coder,
             commands::power::enable_keep_awake,
             commands::power::disable_keep_awake,
             commands::notifications::request_notification_permission,

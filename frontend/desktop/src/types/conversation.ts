@@ -85,6 +85,8 @@ export interface PipelineStageRecord {
   finishedAt: string | null;
   scoreId?: string | null;
   providerSessionRef?: string | null;
+  /** User prompt for chat-style follow-up stages (e.g. "Follow-up N"). */
+  userPrompt?: string | null;
 }
 
 export interface PipelineState {

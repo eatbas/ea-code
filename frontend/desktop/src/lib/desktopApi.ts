@@ -188,6 +188,18 @@ export function redoReviewPipeline(
   });
 }
 
+export function continueCoder(
+  workspacePath: string,
+  conversationId: string,
+  prompt: string,
+): Promise<ConversationDetail> {
+  return invokeCommand<ConversationDetail>("continue_coder", {
+    workspacePath,
+    conversationId,
+    prompt,
+  });
+}
+
 export function getPipelineState(
   workspacePath: string,
   conversationId: string,

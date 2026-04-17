@@ -91,6 +91,15 @@ export function PipelineConversationView({
     (s) => s.stageName === "Code Fixer",
   ) ?? null;
 
+  // Post-pipeline chat turns. Rendered as chat bubbles below the pipeline
+  // stage cards, ordered by the numeric suffix ("Follow-up 1", "Follow-up 2").
+  const followUpStages = stages
+    .filter((s) => s.stageName.startsWith("Follow-up"))
+    .sort((a, b) => {
+      const parse = (name: string) => Number(name.replace("Follow-up", "").trim()) || 0;
+      return parse(a.stageName) - parse(b.stageName);
+    });
+
   // Collect re-do review cycles. Each cycle has stages with "(Cycle N)" suffix.
   const redoCycles: Array<{
     cycle: number;
@@ -448,6 +457,40 @@ export function PipelineConversationView({
                   </p>
                 </PipelineStageSection>
               )}
+            </div>
+          ))}
+
+          {/* Post-pipeline chat — follow-up turns to the Coder session. */}
+          {followUpStages.map((stage) => (
+            <div key={stage.stageName} className="flex flex-col gap-2">
+              {stage.userPrompt && (
+                <div className="ml-auto max-w-3xl rounded-2xl border border-edge-strong bg-elevated px-4 py-3 text-sm leading-6 text-fg">
+                  <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
+                    user
+                  </p>
+                  <p className="whitespace-pre-wrap break-words">{stage.userPrompt}</p>
+                </div>
+              )}
+              <div className="mr-auto max-w-3xl rounded-2xl border border-edge bg-panel px-4 py-3 text-sm leading-6 text-fg">
+                <p className="mb-1 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-fg-subtle">
+                  <span>coder</span>
+                  {stage.agentLabel && (
+                    <span className="text-fg-faint normal-case tracking-normal">
+                      · {stage.agentLabel}
+                    </span>
+                  )}
+                </p>
+                <p className="whitespace-pre-wrap break-words text-fg-muted">
+                  {stage.text
+                    || (stage.status === "running"
+                      ? "Thinking..."
+                      : stage.status === "failed"
+                        ? "Follow-up did not produce a response."
+                        : stage.status === "stopped"
+                          ? "Follow-up was stopped."
+                          : "Waiting for response...")}
+                </p>
+              </div>
             </div>
           ))}
 

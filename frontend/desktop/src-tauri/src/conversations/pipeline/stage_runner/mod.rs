@@ -106,6 +106,7 @@ fn persist_stage_progress(
         finished_at: None,
         score_id,
         provider_session_ref,
+        user_prompt: None,
     };
 
     if let Err(error) = crate::conversations::persistence::update_pipeline_stage(
@@ -628,6 +629,7 @@ pub async fn run_stage(
         finished_at: Some(now_rfc3339()),
         score_id: captured_job,
         provider_session_ref: captured_session_ref,
+        user_prompt: None,
     };
 
     let _ = emit_stage_record_status(&app, &conversation_id, &record, Some(record.text.clone()));

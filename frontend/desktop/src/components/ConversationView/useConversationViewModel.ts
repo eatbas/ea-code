@@ -11,6 +11,7 @@ import { useToast } from "../shared/Toast";
 import { getThinkingOptions, KIMI_SWARM_PROMPT_PREFIX } from "../shared/constants";
 import {
   acceptPlan,
+  continueCoder,
   getPipelineDebugLog,
   getPipelineState,
   redoReviewPipeline,
@@ -311,6 +312,20 @@ export function useConversationViewModel({
 
   const handleSend = useCallback(async (prompt: string, pendingImages?: PendingImage[]) => {
     if (pipelineMode === "code") {
+      // Once a pipeline has finished, the next prompt continues the Coder's
+      // session as a chat-style follow-up instead of starting a new pipeline.
+      if (pipelineConversationId && pipelineDone) {
+        const coderStage = pipeline.stages.find((s) => s.stageName === "Coder");
+        const agentLabel = coderStage?.agentLabel ?? "";
+        pipeline.addFollowUp(prompt, agentLabel);
+        try {
+          await continueCoder(workspace.path, pipelineConversationId, prompt);
+        } catch (error) {
+          toast.error(getErrorMessage(error, "Failed to continue coder."));
+        }
+        return;
+      }
+
       pipeline.reset();
       planReview.reset();
       setPipelinePrompt(prompt);
@@ -331,7 +346,7 @@ export function useConversationViewModel({
       : prompt;
     if (redoSwarm) setRedoSwarm(false);
     await onSendPrompt(effectivePrompt, currentAgent, pendingImages);
-  }, [currentAgent, isKimi, isResume, kimiSwarmEnabled, onSendPrompt, onSetActiveConversation, pipeline, pipelineMode, planReview, redoSwarm, workspace.path]);
+  }, [currentAgent, isKimi, isResume, kimiSwarmEnabled, onSendPrompt, onSetActiveConversation, pipeline, pipelineConversationId, pipelineDone, pipelineMode, planReview, redoSwarm, toast, workspace.path]);
 
   const handleStop = useCallback(async () => {
     if (pipelineConversationId) {
