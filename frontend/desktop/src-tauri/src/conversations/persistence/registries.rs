@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+
+use crate::storage::{atomic_write, with_conversations_lock};
 
 fn running_conversations() -> &'static Mutex<HashSet<String>> {
     static ACTIVE_RUNNING_CONVERSATIONS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
@@ -23,6 +26,8 @@ pub(super) fn is_running_conversation_tracked(
 
 pub struct RunningConversationGuard {
     key: String,
+    workspace_path: String,
+    conversation_id: String,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -35,6 +40,12 @@ impl Drop for RunningConversationGuard {
     fn drop(&mut self) {
         if let Ok(mut tracked) = running_conversations().lock() {
             tracked.remove(&self.key);
+        }
+        if let Err(error) = persist_running_remove(&self.workspace_path, &self.conversation_id) {
+            eprintln!(
+                "[registries] Failed to clear persisted running flag for {}: {error}",
+                self.conversation_id
+            );
         }
     }
 }
@@ -51,7 +62,115 @@ pub fn track_running_conversation(
     if !inserted {
         return Err("Conversation is already running".to_string());
     }
-    Ok(RunningConversationGuard { key })
+    // Persist alongside the in-memory set so a crash or restart leaves a durable
+    // record that the reattach pass can consult to reconnect to Symphony.
+    if let Err(error) = persist_running_add(workspace_path, conversation_id) {
+        // Roll back the in-memory insert if the file write failed so the two
+        // views stay consistent.
+        if let Ok(mut tracked) = running_conversations().lock() {
+            tracked.remove(&key);
+        }
+        return Err(format!(
+            "Failed to persist running conversation flag: {error}"
+        ));
+    }
+    Ok(RunningConversationGuard {
+        key,
+        workspace_path: workspace_path.to_string(),
+        conversation_id: conversation_id.to_string(),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Persistent running-conversation registry — survives crashes and restarts so
+// the startup reattach pass can reconnect to Symphony scores that were still
+// running when the app went down.
+// ---------------------------------------------------------------------------
+
+fn running_file_path(workspace_path: &str) -> PathBuf {
+    Path::new(workspace_path).join(".maestro").join("running.json")
+}
+
+fn read_running_file_unlocked(workspace_path: &str) -> HashSet<String> {
+    let path = running_file_path(workspace_path);
+    let Ok(data) = std::fs::read_to_string(&path) else {
+        return HashSet::new();
+    };
+    serde_json::from_str::<HashSet<String>>(&data).unwrap_or_default()
+}
+
+fn write_running_file_unlocked(
+    workspace_path: &str,
+    ids: &HashSet<String>,
+) -> Result<(), String> {
+    let path = running_file_path(workspace_path);
+    if ids.is_empty() {
+        if path.exists() {
+            std::fs::remove_file(&path)
+                .map_err(|error| format!("Failed to remove running file: {error}"))?;
+        }
+        return Ok(());
+    }
+    let mut sorted: Vec<&String> = ids.iter().collect();
+    sorted.sort();
+    let json = serde_json::to_string_pretty(&sorted)
+        .map_err(|error| format!("Failed to serialise running set: {error}"))?;
+    atomic_write(&path, &json)
+}
+
+fn persist_running_add(workspace_path: &str, conversation_id: &str) -> Result<(), String> {
+    with_conversations_lock(|| {
+        let mut set = read_running_file_unlocked(workspace_path);
+        set.insert(conversation_id.to_string());
+        write_running_file_unlocked(workspace_path, &set)
+    })
+}
+
+fn persist_running_remove(workspace_path: &str, conversation_id: &str) -> Result<(), String> {
+    with_conversations_lock(|| {
+        let mut set = read_running_file_unlocked(workspace_path);
+        if set.remove(conversation_id) {
+            write_running_file_unlocked(workspace_path, &set)
+        } else {
+            Ok(())
+        }
+    })
+}
+
+/// Read the persisted set of conversations that were marked running at the
+/// time of the last `track_running_conversation` / guard-drop. The reattach
+/// pass consults this at startup to decide which Symphony scores to poll.
+pub fn read_persisted_running_conversations(
+    workspace_path: &str,
+) -> Result<Vec<String>, String> {
+    with_conversations_lock(|| {
+        let mut ids: Vec<String> = read_running_file_unlocked(workspace_path)
+            .into_iter()
+            .collect();
+        ids.sort();
+        Ok(ids)
+    })
+}
+
+/// Remove a conversation from the persisted running set without touching the
+/// in-memory set. Called by the reattach pass once it has applied a terminal
+/// state (or otherwise finished reconciling the conversation).
+pub fn forget_persisted_running_conversation(
+    workspace_path: &str,
+    conversation_id: &str,
+) -> Result<(), String> {
+    persist_running_remove(workspace_path, conversation_id)
+}
+
+/// Return true if the conversation is in the persistent running set — i.e. it
+/// was tracked as running when the last write happened. Used by the in-process
+/// reconcile path to defer stale-marking until the reattach pass has had a
+/// chance to query Symphony.
+pub(super) fn is_running_conversation_persisted(
+    workspace_path: &str,
+    conversation_id: &str,
+) -> bool {
+    read_running_file_unlocked(workspace_path).contains(conversation_id)
 }
 
 // ---------------------------------------------------------------------------

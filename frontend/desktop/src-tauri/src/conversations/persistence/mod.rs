@@ -30,10 +30,10 @@ pub use pipeline_state::{
 };
 
 pub use registries::{
-    get_pipeline_score_ids, get_pipeline_stage_texts, register_abort_flag,
-    register_pipeline_score_slots, register_pipeline_stage_buffers, remove_abort_flag,
-    remove_pipeline_score_slots, remove_pipeline_stage_buffers, track_running_conversation,
-    trigger_abort,
+    forget_persisted_running_conversation, get_pipeline_score_ids, get_pipeline_stage_texts,
+    read_persisted_running_conversations, register_abort_flag, register_pipeline_score_slots,
+    register_pipeline_stage_buffers, remove_abort_flag, remove_pipeline_score_slots,
+    remove_pipeline_stage_buffers, track_running_conversation, trigger_abort,
 };
 
 pub type ConversationCleanupStats = registries::ConversationCleanupStats;

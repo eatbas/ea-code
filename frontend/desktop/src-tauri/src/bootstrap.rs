@@ -271,6 +271,11 @@ pub(crate) fn spawn_sidecar_startup(app: AppHandle, sidecar: SidecarManager) {
                 error: None,
             },
         );
+
+        // Symphony is now reachable — reconcile any conversations that were
+        // flagged running when the app last went down. This replaces the old
+        // process-local HashSet check with Symphony's own truth.
+        crate::conversations::reattach::run_startup_reattach_pass(app.clone()).await;
     });
 }
 

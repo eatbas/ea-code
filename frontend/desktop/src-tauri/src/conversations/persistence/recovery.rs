@@ -11,7 +11,7 @@ use super::paths::{
 };
 use super::pipeline_state::artifacts::artifact_path_for_stage;
 use super::pipeline_state::load_pipeline_state;
-use super::registries::is_running_conversation_tracked;
+use super::registries::{is_running_conversation_persisted, is_running_conversation_tracked};
 
 pub(super) fn normalise_title(prompt: &str) -> String {
     let trimmed = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -242,8 +242,16 @@ pub(super) fn reconcile_stale_running_unlocked(
     if is_running_conversation_tracked(&summary.workspace_path, &summary.id)? {
         return Ok(());
     }
+    // If the conversation is in the persisted running set, defer reconciliation
+    // to the async reattach pass so we can consult Symphony rather than
+    // synthesising state from `artifact_exists`. The reattach pass removes the
+    // conversation from the persisted set once it has applied a final state.
+    if is_running_conversation_persisted(&summary.workspace_path, &summary.id) {
+        return Ok(());
+    }
 
-    summary.active_score_id = None;
+    // Preserve `active_score_id` so a later manual reattach (or a future
+    // reattach-pass pickup) can still find the Symphony score.
     summary.error = Some(STALE_RUNNING_ERROR.to_string());
     summary.updated_at = now_rfc3339();
 
