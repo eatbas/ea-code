@@ -9,7 +9,10 @@ use self::hydration::hydrate_stage_text;
 use self::reconstruction::reconstruct_pipeline_from_artifacts;
 use super::paths::pipeline_file_path;
 
-fn save_pipeline_state_unlocked(path: &std::path::Path, state: &PipelineState) -> Result<(), String> {
+fn save_pipeline_state_unlocked(
+    path: &std::path::Path,
+    state: &PipelineState,
+) -> Result<(), String> {
     let json = serde_json::to_string_pretty(state)
         .map_err(|error| format!("Failed to serialise pipeline state: {error}"))?;
     atomic_write(path, &json)
@@ -104,10 +107,12 @@ pub fn mark_running_pipeline_stages_stopped(
             return Ok(());
         }
 
-        let data = std::fs::read_to_string(&path)
-            .map_err(|error| format!("Failed to read pipeline state {}: {error}", path.display()))?;
-        let mut state: PipelineState = serde_json::from_str(&data)
-            .map_err(|error| format!("Failed to parse pipeline state {}: {error}", path.display()))?;
+        let data = std::fs::read_to_string(&path).map_err(|error| {
+            format!("Failed to read pipeline state {}: {error}", path.display())
+        })?;
+        let mut state: PipelineState = serde_json::from_str(&data).map_err(|error| {
+            format!("Failed to parse pipeline state {}: {error}", path.display())
+        })?;
 
         let mut changed = false;
         for stage in &mut state.stages {

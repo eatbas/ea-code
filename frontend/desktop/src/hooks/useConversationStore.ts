@@ -23,6 +23,14 @@ import { useProjectConversationIndex } from "./useProjectConversationIndex";
 import { useToast } from "../components/shared/Toast";
 import type { PipelineMode } from "../components/ConversationView/ConversationComposer";
 
+/**
+ * Backend CRUD commands emit `CONVERSATION_EVENTS.STATUS` (and
+ * `CONVERSATION_EVENTS.DELETED` for removals) after they complete. Both
+ * stores — the active-workspace session and the cross-project index —
+ * subscribe to those events directly, so callers only need to invoke the
+ * backend; no manual fan-out is required here.
+ */
+
 interface UseConversationStoreReturn {
   /** Active conversation detail for the current workspace. */
   activeConversation: ConversationDetail | null;
@@ -114,14 +122,12 @@ export function useConversationStore(
     loadedProjectPaths,
     loadingProjectPaths,
     ensureLoaded: ensureProjectConversationsLoaded,
-    upsertConversation: upsertInIndex,
-    removeConversation: removeFromIndex,
   } = useProjectConversationIndex(projects);
 
   const isActiveWorkspace = (projectPath: string): boolean =>
     workspace?.path === projectPath;
 
-  /** Run a CRUD action that returns a summary, syncing both stores. */
+  /** Run a CRUD action; the index/session update themselves via STATUS events. */
   function upsertAction(
     projectPath: string,
     sessionFn: () => Promise<ConversationSummary | null>,
@@ -130,11 +136,10 @@ export function useConversationStore(
   ): void {
     void (async () => {
       try {
-        const summary = isActiveWorkspace(projectPath)
-          ? await sessionFn()
-          : await directFn();
-        if (summary) {
-          upsertInIndex(summary);
+        if (isActiveWorkspace(projectPath)) {
+          await sessionFn();
+        } else {
+          await directFn();
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : errorLabel);
@@ -154,10 +159,7 @@ export function useConversationStore(
     stopping,
     updateActivePromptDraft,
     sendPrompt: async (prompt: string, agent: AgentSelection, pendingImages?: PendingImage[]): Promise<void> => {
-      const summary = await sendPrompt(prompt, agent, pendingImages);
-      if (summary) {
-        upsertInIndex(summary);
-      }
+      await sendPrompt(prompt, agent, pendingImages);
     },
     stopActiveConversation,
 
@@ -170,11 +172,9 @@ export function useConversationStore(
       void (async () => {
         try {
           if (isActiveWorkspace(projectPath)) {
-            const deleted = await deleteConversationById(conversationId);
-            if (deleted) removeFromIndex(projectPath, conversationId);
+            await deleteConversationById(conversationId);
           } else {
             await deleteConversationApi(projectPath, conversationId);
-            removeFromIndex(projectPath, conversationId);
           }
         } catch (error) {
           toast.error(error instanceof Error ? error.message : "Failed to delete conversation.");

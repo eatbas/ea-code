@@ -34,7 +34,6 @@ pub(super) fn reconstruct_pipeline_from_artifacts(
             finished_at: None,
             score_id: None,
             provider_session_ref: None,
-            user_prompt: None,
         });
     }
 
@@ -60,7 +59,6 @@ pub(super) fn reconstruct_pipeline_from_artifacts(
                                 finished_at: None,
                                 score_id: None,
                                 provider_session_ref: None,
-                                user_prompt: None,
                             });
                         }
                     }
@@ -80,7 +78,6 @@ pub(super) fn reconstruct_pipeline_from_artifacts(
             finished_at: None,
             score_id: None,
             provider_session_ref: None,
-            user_prompt: None,
         });
     }
     stages.sort_by_key(|stage| stage.stage_index);
@@ -117,7 +114,6 @@ pub(super) fn reconstruct_pipeline_from_artifacts(
                                 finished_at: None,
                                 score_id: None,
                                 provider_session_ref: None,
-                                user_prompt: None,
                             });
                         }
                     }
@@ -182,6 +178,5 @@ fn append_stage_from_file(
         finished_at: None,
         score_id: None,
         provider_session_ref: None,
-        user_prompt: None,
     });
 }

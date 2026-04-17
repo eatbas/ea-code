@@ -1,7 +1,7 @@
-use std::fs;
+use super::paths::images_dir_path;
 use crate::models::{ImageEntry, ImageSaveResult};
 use crate::storage::with_conversations_lock;
-use super::paths::images_dir_path;
+use std::fs;
 
 const ALLOWED_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp"];
 
@@ -37,17 +37,14 @@ pub fn save_image(
 
 /// Lists all image files stored for a conversation, returning their names and
 /// absolute paths so the frontend can load them via the asset protocol.
-pub fn list_images(
-    workspace_path: &str,
-    conversation_id: &str,
-) -> Result<Vec<ImageEntry>, String> {
+pub fn list_images(workspace_path: &str, conversation_id: &str) -> Result<Vec<ImageEntry>, String> {
     let images_dir = images_dir_path(workspace_path, conversation_id);
     if !images_dir.exists() {
         return Ok(Vec::new());
     }
 
-    let entries = fs::read_dir(&images_dir)
-        .map_err(|e| format!("Failed to read images directory: {e}"))?;
+    let entries =
+        fs::read_dir(&images_dir).map_err(|e| format!("Failed to read images directory: {e}"))?;
 
     let mut images: Vec<ImageEntry> = entries
         .filter_map(|entry| entry.ok())
@@ -79,8 +76,7 @@ pub fn list_images(
 /// or 0 if the directory is empty or contains no matching files.
 /// Using max index + 1 prevents collisions when files are manually deleted.
 fn max_image_index(dir: &std::path::Path) -> Result<usize, String> {
-    let entries = fs::read_dir(dir)
-        .map_err(|e| format!("Failed to read images directory: {e}"))?;
+    let entries = fs::read_dir(dir).map_err(|e| format!("Failed to read images directory: {e}"))?;
 
     let max = entries
         .filter_map(|entry| entry.ok())

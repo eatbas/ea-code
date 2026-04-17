@@ -115,7 +115,6 @@ pub async fn start_pipeline(
             finished_at: None,
             score_id: None,
             provider_session_ref: None,
-            user_prompt: None,
         });
     }
     let planner_start = setup.indices.orchestrator.map(|_| 1).unwrap_or(0);
@@ -139,7 +138,6 @@ pub async fn start_pipeline(
             finished_at: None,
             score_id: None,
             provider_session_ref: None,
-            user_prompt: None,
         });
     }
     seed_stages.sort_by_key(|stage| stage.stage_index);
@@ -367,7 +365,17 @@ pub async fn stop_pipeline(
     let mut stopped_score_ids = std::collections::HashSet::new();
 
     loop {
-        let score_ids = persistence::get_pipeline_score_ids(&workspace_path, &conversation_id)?;
+        let mut score_ids = persistence::get_pipeline_score_ids(&workspace_path, &conversation_id)?;
+        // Follow-up turns run outside the pipeline score-slot registry; their
+        // live score id lives on the summary. Include it so a single Stop
+        // click still asks Symphony to cancel the follow-up.
+        if let Ok(detail) = persistence::get_conversation(&workspace_path, &conversation_id) {
+            if let Some(active) = detail.summary.active_score_id {
+                if !score_ids.iter().any(|id| id == &active) {
+                    score_ids.push(active);
+                }
+            }
+        }
         if !score_ids.is_empty() {
             emit_pipeline_debug(
                 &app,
@@ -431,8 +439,12 @@ pub async fn get_pipeline_state(
 
     if let Some(ref mut s) = state {
         let live_texts = persistence::get_pipeline_stage_texts(&workspace_path, &conversation_id)?;
-        for (i, text) in live_texts.into_iter().enumerate() {
-            if let Some(stage) = s.stages.iter_mut().find(|stage| stage.stage_index == i) {
+        for (stage_index, text) in live_texts {
+            if let Some(stage) = s
+                .stages
+                .iter_mut()
+                .find(|stage| stage.stage_index == stage_index)
+            {
                 if stage.text.is_empty() && !text.is_empty() {
                     stage.text = text;
                 }

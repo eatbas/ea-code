@@ -20,6 +20,27 @@ pub async fn redo_review_pipeline(
     workspace_path: String,
     conversation_id: String,
 ) -> Result<ConversationDetail, String> {
+    fn ensure_runtime_stage(
+        workspace_path: &str,
+        conversation_id: &str,
+        stage_index: usize,
+    ) -> Result<
+        (
+            Arc<std::sync::Mutex<Option<String>>>,
+            Arc<std::sync::Mutex<String>>,
+        ),
+        String,
+    > {
+        Ok((
+            persistence::ensure_pipeline_score_slot(workspace_path, conversation_id, stage_index)?,
+            persistence::ensure_pipeline_stage_buffer(
+                workspace_path,
+                conversation_id,
+                stage_index,
+            )?,
+        ))
+    }
+
     let detail = persistence::get_conversation(&workspace_path, &conversation_id)?;
 
     let mut state = persistence::load_pipeline_state(&workspace_path, &conversation_id)?
@@ -91,12 +112,25 @@ pub async fn redo_review_pipeline(
         let abort = setup.abort.clone();
 
         // --- Reviewers ---
-        let reviewer_slots: Vec<_> = (0..reviewer_count)
-            .map(|_| Arc::new(std::sync::Mutex::new(None::<String>)))
-            .collect();
-        let reviewer_bufs: Vec<_> = (0..reviewer_count)
-            .map(|_| Arc::new(std::sync::Mutex::new(String::new())))
-            .collect();
+        let reviewer_runtime = match (0..reviewer_count)
+            .map(|i| ensure_runtime_stage(&ws, &conv_id, reviewer_start + i))
+            .collect::<Result<Vec<_>, _>>()
+        {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                emit_final_status(
+                    &app_handle,
+                    &ws,
+                    &conv_id,
+                    ConversationStatus::Failed,
+                    Some(error),
+                );
+                pipeline_cleanup(&ws, &conv_id);
+                return;
+            }
+        };
+        let (reviewer_slots, reviewer_bufs): (Vec<_>, Vec<_>) =
+            reviewer_runtime.into_iter().unzip();
 
         for (i, reviewer) in setup.reviewers.iter().enumerate() {
             let label = format!("{} / {}", reviewer.provider, reviewer.model);
@@ -195,8 +229,20 @@ pub async fn redo_review_pipeline(
         let rm_stage_name = format!("Review Merge{cycle_suffix}");
         ensure_stage_record(&ws, &conv_id, review_merge_index, &rm_stage_name, &rm_label);
 
-        let rm_slot = Arc::new(std::sync::Mutex::new(None::<String>));
-        let rm_buf = Arc::new(std::sync::Mutex::new(String::new()));
+        let (rm_slot, rm_buf) = match ensure_runtime_stage(&ws, &conv_id, review_merge_index) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                emit_final_status(
+                    &app_handle,
+                    &ws,
+                    &conv_id,
+                    ConversationStatus::Failed,
+                    Some(error),
+                );
+                pipeline_cleanup(&ws, &conv_id);
+                return;
+            }
+        };
 
         let rm_result = pipeline::run_review_merge(
             app_handle.clone(),
@@ -250,8 +296,20 @@ pub async fn redo_review_pipeline(
             &fixer_label,
         );
 
-        let fixer_slot = Arc::new(std::sync::Mutex::new(None::<String>));
-        let fixer_buf = Arc::new(std::sync::Mutex::new(String::new()));
+        let (fixer_slot, fixer_buf) = match ensure_runtime_stage(&ws, &conv_id, code_fixer_index) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                emit_final_status(
+                    &app_handle,
+                    &ws,
+                    &conv_id,
+                    ConversationStatus::Failed,
+                    Some(error),
+                );
+                pipeline_cleanup(&ws, &conv_id);
+                return;
+            }
+        };
 
         let fixer_result = pipeline::run_code_fixer(
             app_handle.clone(),

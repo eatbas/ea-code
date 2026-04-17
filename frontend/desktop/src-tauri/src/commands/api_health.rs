@@ -247,9 +247,7 @@ pub async fn update_api_cli(
 
 /// Return all buffered sidecar log entries for retroactive retrieval.
 #[tauri::command]
-pub async fn get_sidecar_logs(
-    state: State<'_, AppState>,
-) -> Result<Vec<SidecarLogEvent>, String> {
+pub async fn get_sidecar_logs(state: State<'_, AppState>) -> Result<Vec<SidecarLogEvent>, String> {
     let entries: Vec<SidecarLogEntry> = state.sidecar.log_buffer().await.snapshot().await;
     Ok(entries
         .into_iter()

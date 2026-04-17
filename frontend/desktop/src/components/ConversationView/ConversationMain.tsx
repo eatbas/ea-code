@@ -60,6 +60,8 @@ export function ConversationMain({
         onRedoReview={onRedoReview}
         onStop={onStop}
         planReviewPhase={planReviewPhase}
+        activeConversation={activeConversation}
+        activeDraft={activeDraft}
       />
     );
   }

@@ -49,6 +49,11 @@ export interface ConversationStatusEvent {
   message?: ConversationMessage;
 }
 
+export interface ConversationDeletedEvent {
+  workspacePath: string;
+  conversationId: string;
+}
+
 export interface PipelineStageStatusEvent {
   conversationId: string;
   stageIndex: number;
@@ -85,8 +90,6 @@ export interface PipelineStageRecord {
   finishedAt: string | null;
   scoreId?: string | null;
   providerSessionRef?: string | null;
-  /** User prompt for chat-style follow-up stages (e.g. "Follow-up N"). */
-  userPrompt?: string | null;
 }
 
 export interface PipelineState {

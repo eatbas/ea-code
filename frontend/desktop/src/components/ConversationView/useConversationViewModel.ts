@@ -314,10 +314,10 @@ export function useConversationViewModel({
     if (pipelineMode === "code") {
       // Once a pipeline has finished, the next prompt continues the Coder's
       // session as a chat-style follow-up instead of starting a new pipeline.
+      // The backend persists the turn as regular user/assistant messages —
+      // the transcript picks them up from the normal conversation status +
+      // output-delta event stream.
       if (pipelineConversationId && pipelineDone) {
-        const coderStage = pipeline.stages.find((s) => s.stageName === "Coder");
-        const agentLabel = coderStage?.agentLabel ?? "";
-        pipeline.addFollowUp(prompt, agentLabel);
         try {
           await continueCoder(workspace.path, pipelineConversationId, prompt);
         } catch (error) {

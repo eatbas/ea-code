@@ -88,7 +88,9 @@ pub fn track_running_conversation(
 // ---------------------------------------------------------------------------
 
 fn running_file_path(workspace_path: &str) -> PathBuf {
-    Path::new(workspace_path).join(".maestro").join("running.json")
+    Path::new(workspace_path)
+        .join(".maestro")
+        .join("running.json")
 }
 
 fn read_running_file_unlocked(workspace_path: &str) -> HashSet<String> {
@@ -99,10 +101,7 @@ fn read_running_file_unlocked(workspace_path: &str) -> HashSet<String> {
     serde_json::from_str::<HashSet<String>>(&data).unwrap_or_default()
 }
 
-fn write_running_file_unlocked(
-    workspace_path: &str,
-    ids: &HashSet<String>,
-) -> Result<(), String> {
+fn write_running_file_unlocked(workspace_path: &str, ids: &HashSet<String>) -> Result<(), String> {
     let path = running_file_path(workspace_path);
     if ids.is_empty() {
         if path.exists() {
@@ -140,9 +139,7 @@ fn persist_running_remove(workspace_path: &str, conversation_id: &str) -> Result
 /// Read the persisted set of conversations that were marked running at the
 /// time of the last `track_running_conversation` / guard-drop. The reattach
 /// pass consults this at startup to decide which Symphony scores to poll.
-pub fn read_persisted_running_conversations(
-    workspace_path: &str,
-) -> Result<Vec<String>, String> {
+pub fn read_persisted_running_conversations(workspace_path: &str) -> Result<Vec<String>, String> {
     with_conversations_lock(|| {
         let mut ids: Vec<String> = read_running_file_unlocked(workspace_path)
             .into_iter()
@@ -254,6 +251,25 @@ pub fn register_pipeline_score_slots(
     Ok(slots)
 }
 
+/// Ensure a score-ID slot exists for an arbitrary stage index. Dynamic review
+/// cycles append stages beyond the fixed pipeline layout, so they must join the
+/// same shared registry as the original stages.
+pub fn ensure_pipeline_score_slot(
+    workspace_path: &str,
+    conversation_id: &str,
+    stage_index: usize,
+) -> Result<Arc<std::sync::Mutex<Option<String>>>, String> {
+    let key = running_conversation_key(workspace_path, conversation_id);
+    let mut guard = pipeline_jobs()
+        .lock()
+        .map_err(|error| format!("Failed to ensure pipeline score slot: {error}"))?;
+    let slots = guard.entry(key).or_default();
+    while slots.len() <= stage_index {
+        slots.push(Arc::new(std::sync::Mutex::new(None)));
+    }
+    Ok(slots[stage_index].clone())
+}
+
 /// Return every non-empty score ID currently registered for this pipeline.
 pub fn get_pipeline_score_ids(
     workspace_path: &str,
@@ -319,11 +335,30 @@ pub fn register_pipeline_stage_buffers(
     Ok(buffers)
 }
 
-/// Read accumulated output text from every registered stage buffer.
+/// Ensure a stage buffer exists for an arbitrary stage index so dynamic stages
+/// participate in the same reload/hydration path as the fixed layout.
+pub fn ensure_pipeline_stage_buffer(
+    workspace_path: &str,
+    conversation_id: &str,
+    stage_index: usize,
+) -> Result<Arc<std::sync::Mutex<String>>, String> {
+    let key = running_conversation_key(workspace_path, conversation_id);
+    let mut guard = stage_buffers()
+        .lock()
+        .map_err(|error| format!("Failed to ensure stage buffer: {error}"))?;
+    let buffers = guard.entry(key).or_default();
+    while buffers.len() <= stage_index {
+        buffers.push(Arc::new(std::sync::Mutex::new(String::new())));
+    }
+    Ok(buffers[stage_index].clone())
+}
+
+/// Read accumulated output text from every registered stage buffer keyed by its
+/// actual stage index so sparse dynamic stages hydrate correctly.
 pub fn get_pipeline_stage_texts(
     workspace_path: &str,
     conversation_id: &str,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<(usize, String)>, String> {
     let key = running_conversation_key(workspace_path, conversation_id);
     let guard = stage_buffers()
         .lock()
@@ -333,7 +368,8 @@ pub fn get_pipeline_stage_texts(
     };
     Ok(buffers
         .iter()
-        .map(|buf| buf.lock().map(|g| g.clone()).unwrap_or_default())
+        .enumerate()
+        .map(|(index, buf)| (index, buf.lock().map(|g| g.clone()).unwrap_or_default()))
         .collect())
 }
 

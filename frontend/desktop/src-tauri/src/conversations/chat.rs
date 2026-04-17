@@ -16,12 +16,16 @@ use super::score_client::{
 };
 use super::symphony_request::{default_provider_options, KimiSwarmOptions, SymphonyChatRequest};
 
-fn emit_status(app: &AppHandle, event: ConversationStatusEvent) -> Result<(), String> {
+pub(super) fn emit_status(app: &AppHandle, event: ConversationStatusEvent) -> Result<(), String> {
     app.emit(EVENT_CONVERSATION_STATUS, event)
         .map_err(|error| format!("Failed to emit conversation status: {error}"))
 }
 
-fn emit_output_delta(app: &AppHandle, conversation_id: &str, text: &str) -> Result<(), String> {
+pub(super) fn emit_output_delta(
+    app: &AppHandle,
+    conversation_id: &str,
+    text: &str,
+) -> Result<(), String> {
     app.emit(
         EVENT_CONVERSATION_OUTPUT_DELTA,
         ConversationOutputDelta {
@@ -32,7 +36,7 @@ fn emit_output_delta(app: &AppHandle, conversation_id: &str, text: &str) -> Resu
     .map_err(|error| format!("Failed to emit conversation output delta: {error}"))
 }
 
-fn append_live_output(buffer: &Arc<Mutex<String>>, text: &str) {
+pub(super) fn append_live_output(buffer: &Arc<Mutex<String>>, text: &str) {
     if let Ok(mut guard) = buffer.lock() {
         if !guard.is_empty() {
             guard.push('\n');
@@ -41,7 +45,10 @@ fn append_live_output(buffer: &Arc<Mutex<String>>, text: &str) {
     }
 }
 
-fn sync_snapshot_output(buffer: &Arc<Mutex<String>>, accumulated_text: &str) -> Option<String> {
+pub(super) fn sync_snapshot_output(
+    buffer: &Arc<Mutex<String>>,
+    accumulated_text: &str,
+) -> Option<String> {
     let Ok(mut guard) = buffer.lock() else {
         return None;
     };
@@ -58,11 +65,11 @@ fn sync_snapshot_output(buffer: &Arc<Mutex<String>>, accumulated_text: &str) -> 
     None
 }
 
-fn live_output(buffer: &Arc<Mutex<String>>) -> String {
+pub(super) fn live_output(buffer: &Arc<Mutex<String>>) -> String {
     buffer.lock().map(|guard| guard.clone()).unwrap_or_default()
 }
 
-fn maybe_update_provider_session(
+pub(super) fn maybe_update_provider_session(
     app: &AppHandle,
     workspace_path: &str,
     conversation_id: &str,
@@ -131,7 +138,9 @@ pub async fn run_conversation_turn(
     let effective_model = model_override.as_deref().unwrap_or(&summary.agent.model);
     // When the user switches model, start a fresh CLI session rather than
     // trying to resume — most CLIs reject resuming with a different model.
-    let model_changed = model_override.as_deref().is_some_and(|m| m != summary.agent.model);
+    let model_changed = model_override
+        .as_deref()
+        .is_some_and(|m| m != summary.agent.model);
     let (mode, effective_session_ref) = if model_changed {
         ("new", None)
     } else if summary.last_provider_session_ref.is_some() {
@@ -140,15 +149,17 @@ pub async fn run_conversation_turn(
         ("new", None)
     };
     let settings = crate::storage::settings::read_settings().ok();
-    let thinking_level = settings.as_ref()
-        .and_then(|s| s.thinking_level(&summary.agent.provider, effective_model).map(str::to_string));
-    let kimi_swarm = settings.as_ref()
+    let thinking_level = settings.as_ref().and_then(|s| {
+        s.thinking_level(&summary.agent.provider, effective_model)
+            .map(str::to_string)
+    });
+    let kimi_swarm = settings
+        .as_ref()
         .filter(|s| summary.agent.provider.eq_ignore_ascii_case("kimi") && s.kimi_swarm_enabled)
         .and_then(|s| {
             // Per-conversation swarm folder.
-            let swarm_dir = format!(
-                "{workspace_path}/.maestro/conversations/{conversation_id}/swarm"
-            );
+            let swarm_dir =
+                format!("{workspace_path}/.maestro/conversations/{conversation_id}/swarm");
             let yaml_path = format!("{swarm_dir}/kimi-swarm.yaml");
             if !std::path::Path::new(&yaml_path).exists() {
                 let _ = std::fs::create_dir_all(&swarm_dir);
@@ -189,7 +200,10 @@ pub async fn run_conversation_turn(
         &app,
         &workspace_path,
         &conversation_id,
-        format!("prompt (first 200 chars): {}", &prompt[..prompt.len().min(200)]),
+        format!(
+            "prompt (first 200 chars): {}",
+            &prompt[..prompt.len().min(200)]
+        ),
     );
     let request = SymphonyChatRequest {
         provider: &summary.agent.provider,
@@ -210,7 +224,15 @@ pub async fn run_conversation_turn(
                 &conversation_id,
                 format!("simple task: failed to submit: {error}"),
             );
-            return finish_with_failure(&app, &workspace_path, &conversation_id, None, error, model_override.as_deref()).await;
+            return finish_with_failure(
+                &app,
+                &workspace_path,
+                &conversation_id,
+                None,
+                error,
+                model_override.as_deref(),
+            )
+            .await;
         }
     };
     emit_pipeline_debug(

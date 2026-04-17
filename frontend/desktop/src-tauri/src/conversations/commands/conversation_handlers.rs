@@ -1,11 +1,35 @@
 use serde::Deserialize;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tokio::time::{sleep, Duration, Instant};
 
 use crate::http::symphony_client;
-use crate::models::{AgentSelection, ConversationDetail, ConversationStatus, ConversationSummary};
+use crate::models::{
+    AgentSelection, ConversationDeletedEvent, ConversationDetail, ConversationStatus,
+    ConversationStatusEvent, ConversationSummary,
+};
 
+use super::super::events::{EVENT_CONVERSATION_DELETED, EVENT_CONVERSATION_STATUS};
 use super::super::{chat, persistence};
+
+fn emit_conversation_status(app: &AppHandle, summary: &ConversationSummary) {
+    let _ = app.emit(
+        EVENT_CONVERSATION_STATUS,
+        ConversationStatusEvent {
+            conversation: summary.clone(),
+            message: None,
+        },
+    );
+}
+
+fn emit_conversation_deleted(app: &AppHandle, workspace_path: &str, conversation_id: &str) {
+    let _ = app.emit(
+        EVENT_CONVERSATION_DELETED,
+        ConversationDeletedEvent {
+            workspace_path: workspace_path.to_string(),
+            conversation_id: conversation_id.to_string(),
+        },
+    );
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -93,8 +117,14 @@ pub async fn send_conversation_turn(
             }
         };
 
-        if let Err(error) =
-            chat::run_conversation_turn(app_handle, detail_for_task, prompt_for_task, abort, model_override).await
+        if let Err(error) = chat::run_conversation_turn(
+            app_handle,
+            detail_for_task,
+            prompt_for_task,
+            abort,
+            model_override,
+        )
+        .await
         {
             eprintln!("[conversation] Failed to run conversation turn: {error}");
         }
@@ -159,42 +189,57 @@ pub async fn stop_conversation(
 
 #[tauri::command]
 pub async fn delete_conversation(
+    app: AppHandle,
     workspace_path: String,
     conversation_id: String,
 ) -> Result<(), String> {
-    persistence::delete_conversation(&workspace_path, &conversation_id)
+    persistence::delete_conversation(&workspace_path, &conversation_id)?;
+    emit_conversation_deleted(&app, &workspace_path, &conversation_id);
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn rename_conversation(
+    app: AppHandle,
     workspace_path: String,
     conversation_id: String,
     title: String,
 ) -> Result<ConversationSummary, String> {
-    persistence::rename_conversation(&workspace_path, &conversation_id, &title)
+    let summary = persistence::rename_conversation(&workspace_path, &conversation_id, &title)?;
+    emit_conversation_status(&app, &summary);
+    Ok(summary)
 }
 
 #[tauri::command]
 pub async fn archive_conversation(
+    app: AppHandle,
     workspace_path: String,
     conversation_id: String,
 ) -> Result<ConversationSummary, String> {
-    persistence::archive_conversation(&workspace_path, &conversation_id)
+    let summary = persistence::archive_conversation(&workspace_path, &conversation_id)?;
+    emit_conversation_status(&app, &summary);
+    Ok(summary)
 }
 
 #[tauri::command]
 pub async fn unarchive_conversation(
+    app: AppHandle,
     workspace_path: String,
     conversation_id: String,
 ) -> Result<ConversationSummary, String> {
-    persistence::unarchive_conversation(&workspace_path, &conversation_id)
+    let summary = persistence::unarchive_conversation(&workspace_path, &conversation_id)?;
+    emit_conversation_status(&app, &summary);
+    Ok(summary)
 }
 
 #[tauri::command]
 pub async fn set_conversation_pinned(
+    app: AppHandle,
     workspace_path: String,
     conversation_id: String,
     pinned: bool,
 ) -> Result<ConversationSummary, String> {
-    persistence::set_conversation_pinned(&workspace_path, &conversation_id, pinned)
+    let summary = persistence::set_conversation_pinned(&workspace_path, &conversation_id, pinned)?;
+    emit_conversation_status(&app, &summary);
+    Ok(summary)
 }

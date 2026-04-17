@@ -1,7 +1,9 @@
 use super::super::{
-    create_conversation, delete_conversation, finish_turn, get_conversation, list_conversations,
-    mark_turn_running, register_abort_flag, register_pipeline_score_slots,
-    register_pipeline_stage_buffers, rename_conversation, track_running_conversation,
+    create_conversation, delete_conversation, ensure_pipeline_score_slot,
+    ensure_pipeline_stage_buffer, finish_turn, get_conversation, get_pipeline_score_ids,
+    get_pipeline_stage_texts, list_conversations, mark_turn_running, register_abort_flag,
+    register_pipeline_score_slots, register_pipeline_stage_buffers, rename_conversation,
+    track_running_conversation,
 };
 use crate::models::{AgentSelection, ConversationStatus};
 
@@ -270,6 +272,65 @@ fn runtime_registries_are_reused_for_same_conversation() {
         &first_buffers[0],
         &second_buffers[0]
     ));
+}
+
+#[test]
+fn dynamic_pipeline_runtime_registry_extends_existing_slots_and_buffers() {
+    let workspace = TestWorkspace::new();
+    let conversation = create_conversation(
+        workspace
+            .path()
+            .to_str()
+            .expect("workspace path should be utf-8"),
+        AgentSelection {
+            provider: "codex".to_string(),
+            model: "gpt-5.4".to_string(),
+        },
+        None,
+    )
+    .expect("conversation should be created");
+
+    let workspace_path = workspace
+        .path()
+        .to_str()
+        .expect("workspace path should be utf-8");
+
+    register_pipeline_score_slots(workspace_path, &conversation.summary.id, 4)
+        .expect("base score slots should register");
+    register_pipeline_stage_buffers(workspace_path, &conversation.summary.id, 4)
+        .expect("base stage buffers should register");
+
+    let extra_slot = ensure_pipeline_score_slot(workspace_path, &conversation.summary.id, 6)
+        .expect("dynamic score slot should register");
+    let same_extra_slot = ensure_pipeline_score_slot(workspace_path, &conversation.summary.id, 6)
+        .expect("dynamic score slot should be reused");
+    assert!(std::sync::Arc::ptr_eq(&extra_slot, &same_extra_slot));
+    *extra_slot.lock().expect("dynamic score slot should lock") = Some("score-6".to_string());
+
+    let extra_buffer = ensure_pipeline_stage_buffer(workspace_path, &conversation.summary.id, 6)
+        .expect("dynamic stage buffer should register");
+    let same_extra_buffer =
+        ensure_pipeline_stage_buffer(workspace_path, &conversation.summary.id, 6)
+            .expect("dynamic stage buffer should be reused");
+    assert!(std::sync::Arc::ptr_eq(&extra_buffer, &same_extra_buffer));
+    extra_buffer
+        .lock()
+        .expect("dynamic stage buffer should lock")
+        .push_str("redo review output");
+
+    let score_ids = get_pipeline_score_ids(workspace_path, &conversation.summary.id)
+        .expect("score ids should read");
+    assert_eq!(score_ids, vec!["score-6".to_string()]);
+
+    let stage_texts = get_pipeline_stage_texts(workspace_path, &conversation.summary.id)
+        .expect("stage texts should read");
+    assert_eq!(
+        stage_texts
+            .iter()
+            .find(|(stage_index, _)| *stage_index == 6)
+            .map(|(_, text)| text.as_str()),
+        Some("redo review output")
+    );
 }
 
 #[test]

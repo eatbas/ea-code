@@ -23,6 +23,27 @@ pub async fn resume_pipeline(
     workspace_path: String,
     conversation_id: String,
 ) -> Result<ConversationDetail, String> {
+    fn ensure_runtime_stage(
+        workspace_path: &str,
+        conversation_id: &str,
+        stage_index: usize,
+    ) -> Result<
+        (
+            Arc<std::sync::Mutex<Option<String>>>,
+            Arc<std::sync::Mutex<String>>,
+        ),
+        String,
+    > {
+        Ok((
+            persistence::ensure_pipeline_score_slot(workspace_path, conversation_id, stage_index)?,
+            persistence::ensure_pipeline_stage_buffer(
+                workspace_path,
+                conversation_id,
+                stage_index,
+            )?,
+        ))
+    }
+
     let state = persistence::load_pipeline_state(&workspace_path, &conversation_id)?
         .ok_or("No pipeline state found for this conversation")?;
 
@@ -61,7 +82,9 @@ pub async fn resume_pipeline(
         .filter(|s| s.stage_name.starts_with("Planner"))
         .collect();
     let all_planners_done = !planner_stages.is_empty()
-        && planner_stages.iter().all(|s| s.status == ConversationStatus::Completed);
+        && planner_stages
+            .iter()
+            .all(|s| s.status == ConversationStatus::Completed);
     let merge_done = stage_done("Plan Merge");
     let coder_done = stage_done("Coder");
     let reviewer_stages: Vec<_> = previous_stages
@@ -69,7 +92,9 @@ pub async fn resume_pipeline(
         .filter(|s| s.stage_name.starts_with("Reviewer") && !s.stage_name.contains("(Cycle"))
         .collect();
     let all_reviewers_done = !reviewer_stages.is_empty()
-        && reviewer_stages.iter().all(|s| s.status == ConversationStatus::Completed);
+        && reviewer_stages
+            .iter()
+            .all(|s| s.status == ConversationStatus::Completed);
     let review_merge_done = stage_done("Review Merge");
     let code_fixer_done = stage_done("Code Fixer");
 
@@ -115,7 +140,8 @@ pub async fn resume_pipeline(
             .map(|s| s.stage_index)
             .min()
             .or_else(|| {
-                cycle_review_merge_stage.and_then(|s| s.stage_index.checked_sub(setup.reviewer_count))
+                cycle_review_merge_stage
+                    .and_then(|s| s.stage_index.checked_sub(setup.reviewer_count))
             })
             .or_else(|| {
                 cycle_code_fixer_stage
@@ -144,15 +170,12 @@ pub async fn resume_pipeline(
         let ws = workspace_path.clone();
         let conv_id = conversation_id.clone();
         let prev = previous_stages.clone();
-        let review_dir = format!(
-            "{ws}/.maestro/conversations/{conv_id}/review_{current_review_cycle}"
-        );
-        let review_merged_dir = format!(
-            "{ws}/.maestro/conversations/{conv_id}/review_merged_{current_review_cycle}"
-        );
-        let code_fixer_dir = format!(
-            "{ws}/.maestro/conversations/{conv_id}/code_fixer_{current_review_cycle}"
-        );
+        let review_dir =
+            format!("{ws}/.maestro/conversations/{conv_id}/review_{current_review_cycle}");
+        let review_merged_dir =
+            format!("{ws}/.maestro/conversations/{conv_id}/review_merged_{current_review_cycle}");
+        let code_fixer_dir =
+            format!("{ws}/.maestro/conversations/{conv_id}/code_fixer_{current_review_cycle}");
         let review_merged_path = format!("{review_merged_dir}/review_merged.md");
         let cycle_suffix_for_run = cycle_suffix.clone();
         let cycle_review_merge_name_for_run = cycle_review_merge_name.clone();
@@ -166,12 +189,25 @@ pub async fn resume_pipeline(
             re_emit_completed_stages(&app_handle, &conv_id, &ws, reviewer_start);
 
             if !cycle_reviewers_done {
-                let reviewer_slots: Vec<_> = (0..setup.reviewer_count)
-                    .map(|_| Arc::new(std::sync::Mutex::new(None::<String>)))
-                    .collect();
-                let reviewer_bufs: Vec<_> = (0..setup.reviewer_count)
-                    .map(|_| Arc::new(std::sync::Mutex::new(String::new())))
-                    .collect();
+                let reviewer_runtime = match (0..setup.reviewer_count)
+                    .map(|i| ensure_runtime_stage(&ws, &conv_id, reviewer_start + i))
+                    .collect::<Result<Vec<_>, _>>()
+                {
+                    Ok(runtime) => runtime,
+                    Err(error) => {
+                        emit_final_status(
+                            &app_handle,
+                            &ws,
+                            &conv_id,
+                            ConversationStatus::Failed,
+                            Some(error),
+                        );
+                        pipeline_cleanup(&ws, &conv_id);
+                        return;
+                    }
+                };
+                let (reviewer_slots, reviewer_bufs): (Vec<_>, Vec<_>) =
+                    reviewer_runtime.into_iter().unzip();
 
                 for (i, reviewer) in setup.reviewers.iter().enumerate() {
                     let label = format!("{} / {}", reviewer.provider, reviewer.model);
@@ -201,7 +237,13 @@ pub async fn resume_pipeline(
                 .await;
 
                 if setup.abort.load(Ordering::Acquire) {
-                    emit_final_status(&app_handle, &ws, &conv_id, ConversationStatus::Stopped, None);
+                    emit_final_status(
+                        &app_handle,
+                        &ws,
+                        &conv_id,
+                        ConversationStatus::Stopped,
+                        None,
+                    );
                     pipeline_cleanup(&ws, &conv_id);
                     return;
                 }
@@ -236,7 +278,8 @@ pub async fn resume_pipeline(
                     .ok()
                     .flatten()
                     .and_then(|saved| {
-                        saved.stages
+                        saved
+                            .stages
                             .iter()
                             .find(|stage| stage.stage_index == reviewer_start)
                             .and_then(|stage| stage.provider_session_ref.clone())
@@ -267,13 +310,29 @@ pub async fn resume_pipeline(
                     &rm_label,
                 );
 
+                let (rm_slot, rm_buf) =
+                    match ensure_runtime_stage(&ws, &conv_id, review_merge_index) {
+                        Ok(runtime) => runtime,
+                        Err(error) => {
+                            emit_final_status(
+                                &app_handle,
+                                &ws,
+                                &conv_id,
+                                ConversationStatus::Failed,
+                                Some(error),
+                            );
+                            pipeline_cleanup(&ws, &conv_id);
+                            return;
+                        }
+                    };
+
                 let rm_result = pipeline::run_review_merge(
                     app_handle.clone(),
                     conv_id.clone(),
                     ws.clone(),
                     setup.abort.clone(),
-                    Arc::new(std::sync::Mutex::new(None::<String>)),
-                    Arc::new(std::sync::Mutex::new(String::new())),
+                    rm_slot,
+                    rm_buf,
                     review_merge_index,
                     setup.reviewer_count,
                     reviewer_session_ref,
@@ -285,7 +344,13 @@ pub async fn resume_pipeline(
                 .await;
 
                 if setup.abort.load(Ordering::Acquire) {
-                    emit_final_status(&app_handle, &ws, &conv_id, ConversationStatus::Stopped, None);
+                    emit_final_status(
+                        &app_handle,
+                        &ws,
+                        &conv_id,
+                        ConversationStatus::Stopped,
+                        None,
+                    );
                     pipeline_cleanup(&ws, &conv_id);
                     return;
                 }
@@ -324,13 +389,29 @@ pub async fn resume_pipeline(
                 &fixer_label,
             );
 
+            let (fixer_slot, fixer_buf) =
+                match ensure_runtime_stage(&ws, &conv_id, code_fixer_index) {
+                    Ok(runtime) => runtime,
+                    Err(error) => {
+                        emit_final_status(
+                            &app_handle,
+                            &ws,
+                            &conv_id,
+                            ConversationStatus::Failed,
+                            Some(error),
+                        );
+                        pipeline_cleanup(&ws, &conv_id);
+                        return;
+                    }
+                };
+
             let fixer_result = pipeline::run_code_fixer(
                 app_handle.clone(),
                 conv_id.clone(),
                 ws.clone(),
                 setup.abort.clone(),
-                Arc::new(std::sync::Mutex::new(None::<String>)),
-                Arc::new(std::sync::Mutex::new(String::new())),
+                fixer_slot,
+                fixer_buf,
                 code_fixer_index,
                 coder_ref,
                 setup.coder.clone(),
@@ -341,7 +422,13 @@ pub async fn resume_pipeline(
             .await;
 
             if setup.abort.load(Ordering::Acquire) {
-                emit_final_status(&app_handle, &ws, &conv_id, ConversationStatus::Stopped, None);
+                emit_final_status(
+                    &app_handle,
+                    &ws,
+                    &conv_id,
+                    ConversationStatus::Stopped,
+                    None,
+                );
             } else {
                 match fixer_result {
                     Ok(_) => emit_final_status(
@@ -468,7 +555,9 @@ pub async fn resume_pipeline(
                             let _ = std::fs::write(&enhanced_path, &result.enhanced_prompt);
 
                             // Rename conversation with the summary title.
-                            if let Ok(updated_summary) = persistence::rename_conversation(&ws, &conv_id, &result.summary) {
+                            if let Ok(updated_summary) =
+                                persistence::rename_conversation(&ws, &conv_id, &result.summary)
+                            {
                                 // Emit conversation_status event to update sidebar and header.
                                 let _ = app_handle.emit(
                                     EVENT_CONVERSATION_STATUS,
@@ -490,7 +579,9 @@ pub async fn resume_pipeline(
                                 .collect::<Vec<_>>()
                                 .join(" ");
                             if !fallback_title.is_empty() {
-                                if let Ok(updated_summary) = persistence::rename_conversation(&ws, &conv_id, &fallback_title) {
+                                if let Ok(updated_summary) =
+                                    persistence::rename_conversation(&ws, &conv_id, &fallback_title)
+                                {
                                     let _ = app_handle.emit(
                                         EVENT_CONVERSATION_STATUS,
                                         crate::models::ConversationStatusEvent {
@@ -522,9 +613,21 @@ pub async fn resume_pipeline(
                     planner_start,
                     effective_prompt,
                     setup.abort.clone(),
-                    setup.score_id_slots.iter().skip(planner_start).take(planner_count).cloned().collect(),
+                    setup
+                        .score_id_slots
+                        .iter()
+                        .skip(planner_start)
+                        .take(planner_count)
+                        .cloned()
+                        .collect(),
                     Some(prev),
-                    setup.stage_buffers.iter().skip(planner_start).take(planner_count).cloned().collect(),
+                    setup
+                        .stage_buffers
+                        .iter()
+                        .skip(planner_start)
+                        .take(planner_count)
+                        .cloned()
+                        .collect(),
                 )
                 .await;
 
@@ -560,9 +663,21 @@ pub async fn resume_pipeline(
                     planner_start,
                     user_prompt,
                     setup.abort.clone(),
-                    setup.score_id_slots.iter().skip(planner_start).take(planner_count).cloned().collect(),
+                    setup
+                        .score_id_slots
+                        .iter()
+                        .skip(planner_start)
+                        .take(planner_count)
+                        .cloned()
+                        .collect(),
                     Some(prev),
-                    setup.stage_buffers.iter().skip(planner_start).take(planner_count).cloned().collect(),
+                    setup
+                        .stage_buffers
+                        .iter()
+                        .skip(planner_start)
+                        .take(planner_count)
+                        .cloned()
+                        .collect(),
                 )
                 .await;
 

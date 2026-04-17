@@ -52,7 +52,6 @@ pub(super) fn hydrate_stage_text(
                 finished_at: None,
                 score_id: None,
                 provider_session_ref: None,
-                user_prompt: None,
             });
         }
     }

@@ -10,7 +10,6 @@ import {
 export type { ConversationSelectionIntent } from "./state";
 
 interface UseConversationSessionReturn {
-  conversations: ConversationSummary[];
   activeConversation: ConversationDetail | null;
   setActiveConversation: import("react").Dispatch<import("react").SetStateAction<ConversationDetail | null>>;
   activeDraft: string;
@@ -44,7 +43,6 @@ export function useConversationSession(
     toast,
     activeConversation: state.activeConversation,
     setActiveConversation: state.setActiveConversation,
-    setConversations: state.setConversations,
     setDrafts: state.setDrafts,
     setPromptDrafts: state.setPromptDrafts,
     setLoading: state.setLoading,
@@ -55,7 +53,6 @@ export function useConversationSession(
   });
 
   return {
-    conversations: state.conversations,
     activeConversation: state.activeConversation,
     setActiveConversation: state.setActiveConversation,
     activeDraft: state.activeDraft,

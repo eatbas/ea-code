@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ConversationStatusEvent, ConversationSummary, ProjectEntry } from "../types";
+import type {
+  ConversationDeletedEvent,
+  ConversationStatusEvent,
+  ConversationSummary,
+  ProjectEntry,
+} from "../types";
 import { listWorkspaceConversations } from "../lib/desktopApi";
 import { CONVERSATION_EVENTS } from "../constants/events";
 import { useTauriEventListeners } from "./useTauriEventListeners";
@@ -12,8 +17,6 @@ interface UseProjectConversationIndexReturn {
   loadedProjectPaths: Set<string>;
   loadingProjectPaths: Set<string>;
   ensureLoaded: (workspacePath: string) => Promise<void>;
-  removeConversation: (workspacePath: string, conversationId: string) => void;
-  upsertConversation: (conversation: ConversationSummary) => void;
 }
 
 function sortConversations(items: ConversationSummary[]): ConversationSummary[] {
@@ -60,6 +63,23 @@ export function useProjectConversationIndex(projects: ProjectEntry[]): UseProjec
               ),
             ),
           }));
+        },
+      },
+      {
+        event: CONVERSATION_EVENTS.DELETED,
+        handler: (payload: ConversationDeletedEvent) => {
+          setIndex((previous) => {
+            const existing = previous[payload.workspacePath];
+            if (!existing) {
+              return previous;
+            }
+            return {
+              ...previous,
+              [payload.workspacePath]: existing.filter(
+                (conversation) => conversation.id !== payload.conversationId,
+              ),
+            };
+          });
         },
       },
     ],
@@ -133,24 +153,5 @@ export function useProjectConversationIndex(projects: ProjectEntry[]): UseProjec
     loadedProjectPaths,
     loadingProjectPaths,
     ensureLoaded,
-    upsertConversation: (conversation: ConversationSummary) => {
-      markProjectLoaded(conversation.workspacePath);
-      setIndex((previous) => ({
-        ...previous,
-        [conversation.workspacePath]: sortConversations(
-          upsertByKey(
-            previous[conversation.workspacePath] ?? [],
-            conversation,
-            (item) => item.id,
-          ),
-        ),
-      }));
-    },
-    removeConversation: (workspacePath: string, conversationId: string) => {
-      setIndex((previous) => ({
-        ...previous,
-        [workspacePath]: (previous[workspacePath] ?? []).filter((conversation) => conversation.id !== conversationId),
-      }));
-    },
   };
 }

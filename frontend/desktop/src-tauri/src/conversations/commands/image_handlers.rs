@@ -1,6 +1,6 @@
-use base64::Engine;
-use crate::models::{ImageEntry, ImageSaveResult};
 use super::super::persistence;
+use crate::models::{ImageEntry, ImageSaveResult};
+use base64::Engine;
 
 #[tauri::command]
 pub async fn save_conversation_image(

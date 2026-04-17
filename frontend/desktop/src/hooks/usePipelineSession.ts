@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   ConversationStatus,
   PipelineDebugLogEvent,
@@ -19,8 +19,6 @@ export interface PipelineStageState {
   text: string;
   startedAt: number | undefined;
   finishedAt: number | undefined;
-  /** User prompt for chat-style follow-up stages. */
-  userPrompt?: string;
 }
 
 function sortStagesByIndex(stages: PipelineStageState[]): PipelineStageState[] {
@@ -55,17 +53,7 @@ export interface UsePipelineSessionReturn {
   softReset: () => void;
   loadDebugLog: (log: string) => void;
   loadFromSaved: (state: PipelineState, stillRunning?: boolean, conversationStatus?: ConversationStatus) => void;
-  /**
-   * Optimistically append a post-pipeline follow-up turn so the user sees
-   * their prompt in the transcript immediately. The stage index matches the
-   * backend's `FOLLOW_UP_STAGE_BASE + n` scheme.
-   */
-  addFollowUp: (prompt: string, agentLabel: string) => void;
 }
-
-/** Starting stage index for chat-style follow-up turns. Must match the
- *  backend constant `FOLLOW_UP_STAGE_BASE` in `continue_coder.rs`. */
-const FOLLOW_UP_STAGE_BASE = 10_000;
 
 /**
  * Manages live pipeline state and listens to Tauri events.
@@ -89,6 +77,15 @@ export function usePipelineSession(
   // without needing to be recreated (which would re-register listeners).
   const conversationIdRef = useRef(activeConversationId);
   conversationIdRef.current = activeConversationId;
+
+  // When the active conversation switches, clear pipeline-wide refs so the
+  // new conversation doesn't inherit the previous conversation's start time
+  // or running-stage name labels (the stage list itself is driven by
+  // loadFromSaved, which owns the reset of visible state).
+  useEffect(() => {
+    pipelineStartRef.current = undefined;
+    runningNamesRef.current = new Set();
+  }, [activeConversationId]);
 
   const handleStageStatus = useCallback((event: PipelineStageStatusEvent) => {
     if (event.conversationId !== conversationIdRef.current) return;
@@ -268,7 +265,6 @@ export function usePipelineSession(
       text: s.text,
       startedAt: s.startedAt ? new Date(s.startedAt).getTime() : undefined,
       finishedAt: s.finishedAt ? new Date(s.finishedAt).getTime() : undefined,
-      userPrompt: s.userPrompt ?? undefined,
     }));
     setStages(sortStagesByIndex(loaded));
     setRunning(stillRunning);
@@ -298,32 +294,6 @@ export function usePipelineSession(
     }
   }, []);
 
-  const addFollowUp = useCallback((prompt: string, agentLabel: string) => {
-    const now = Date.now();
-    setStages((prev) => {
-      const followUpNumber = prev.filter((s) => s.stageName.startsWith("Follow-up")).length + 1;
-      const stageName = `Follow-up ${String(followUpNumber)}`;
-      runningNamesRef.current.add(stageName);
-      const next: PipelineStageState = {
-        stageIndex: FOLLOW_UP_STAGE_BASE + followUpNumber - 1,
-        stageName,
-        agentLabel,
-        status: "running",
-        text: "",
-        startedAt: now,
-        finishedAt: undefined,
-        userPrompt: prompt,
-      };
-      return sortStagesByIndex([...prev, next]);
-    });
-    setRunning(true);
-    setAwaitingReview(false);
-    setCurrentStageName([...runningNamesRef.current].join(", "));
-    if (!pipelineStartRef.current) {
-      pipelineStartRef.current = now;
-    }
-  }, []);
-
   return {
     stages,
     debugLog,
@@ -336,6 +306,5 @@ export function usePipelineSession(
     softReset,
     loadDebugLog,
     loadFromSaved,
-    addFollowUp,
   };
 }

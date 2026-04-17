@@ -148,12 +148,7 @@ fn spawn_pipe_drain<R>(
                 Ok(Some(line)) => {
                     if !line.trim().is_empty() {
                         eprintln!("[sidecar:{stream_name}] {line}");
-                        emit_sidecar_log(
-                            app.as_ref(),
-                            buffer.as_ref(),
-                            stream_name,
-                            line,
-                        );
+                        emit_sidecar_log(app.as_ref(), buffer.as_ref(), stream_name, line);
                     }
                 }
                 Ok(None) => break,

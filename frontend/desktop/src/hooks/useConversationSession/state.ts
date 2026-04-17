@@ -1,10 +1,10 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ConversationDeletedEvent,
   ConversationDetail,
   ConversationOutputDelta,
   ConversationStatusEvent,
-  ConversationSummary,
   WorkspaceInfo,
 } from "../../types";
 import { CONVERSATION_EVENTS } from "../../constants/events";
@@ -17,8 +17,6 @@ import {
   mergeSummary,
   promptDraftKey,
   removeEntry,
-  sortConversations,
-  upsertConversationSummary,
 } from "./helpers";
 import type { PipelineMode } from "../../components/ConversationView/ConversationComposer";
 
@@ -35,8 +33,6 @@ interface ToastApi {
 }
 
 export interface UseConversationSessionState {
-  conversations: ConversationSummary[];
-  setConversations: Dispatch<SetStateAction<ConversationSummary[]>>;
   activeConversation: ConversationDetail | null;
   setActiveConversation: Dispatch<SetStateAction<ConversationDetail | null>>;
   drafts: Record<string, string>;
@@ -66,7 +62,6 @@ export function useConversationSessionState(
   selectionIntent: ConversationSelectionIntent | null,
   toast: ToastApi,
 ): UseConversationSessionState {
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeConversation, setActiveConversation] = useState<ConversationDetail | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
@@ -103,7 +98,6 @@ export function useConversationSessionState(
       {
         event: CONVERSATION_EVENTS.STATUS,
         handler: (payload: ConversationStatusEvent) => {
-          setConversations((previous) => upsertConversationSummary(previous, payload.conversation));
           setActiveConversation((previous) => {
             if (!previous || previous.summary.id !== payload.conversation.id) {
               return previous;
@@ -124,6 +118,19 @@ export function useConversationSessionState(
           }
         },
       },
+      {
+        event: CONVERSATION_EVENTS.DELETED,
+        handler: (payload: ConversationDeletedEvent) => {
+          setActiveConversation((previous) => (
+            previous?.summary.id === payload.conversationId ? null : previous
+          ));
+          setDrafts((previous) => removeEntry(previous, payload.conversationId));
+          if (stoppingConversationIdRef.current === payload.conversationId) {
+            stoppingConversationIdRef.current = null;
+            setStoppingConversationId(null);
+          }
+        },
+      },
     ],
   });
 
@@ -135,7 +142,6 @@ export function useConversationSessionState(
   useEffect(() => {
     if (!workspace) {
       previousWorkspacePathRef.current = null;
-      setConversations([]);
       setActiveConversation(null);
       setDrafts({});
       setPromptDrafts({});
@@ -152,7 +158,6 @@ export function useConversationSessionState(
     const selection = selectionIntent?.workspacePath === workspacePath ? selectionIntent : null;
 
     if (workspaceChanged) {
-      setConversations([]);
       setDrafts({});
       setActiveConversation(null);
       // Note: pipelineModes is NOT reset on workspace change — keys are scoped
@@ -174,7 +179,6 @@ export function useConversationSessionState(
           return;
         }
 
-        setConversations(sortConversations(listed));
         if (selection?.mode === "new") {
           setActiveConversation(null);
           return;
@@ -297,8 +301,6 @@ export function useConversationSessionState(
   }, []);
 
   return {
-    conversations,
-    setConversations,
     activeConversation,
     setActiveConversation,
     drafts,

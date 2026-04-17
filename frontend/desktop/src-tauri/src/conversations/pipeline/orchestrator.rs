@@ -43,7 +43,10 @@ pub async fn run_orchestrator(
         .map_err(|e| format!("Failed to create prompt_enhanced directory: {e}"))?;
 
     let output_path = format!("{prompt_enhanced_dir}/prompt_enhanced_output.json");
-    let agent_label = format!("{} / {}", orchestrator_agent.provider, orchestrator_agent.model);
+    let agent_label = format!(
+        "{} / {}",
+        orchestrator_agent.provider, orchestrator_agent.model
+    );
 
     emit_pipeline_debug(
         &app,
@@ -82,7 +85,13 @@ pub async fn run_orchestrator(
     match stage_result {
         Ok(_record) => {
             // Stage completed successfully, now parse the output file.
-            parse_orchestrator_output(&output_path, &user_prompt, &app, &workspace_path, &conversation_id)
+            parse_orchestrator_output(
+                &output_path,
+                &user_prompt,
+                &app,
+                &workspace_path,
+                &conversation_id,
+            )
         }
         Err((_record, error)) => {
             emit_pipeline_debug(
@@ -190,5 +199,9 @@ fn parse_orchestrator_output(
 
 /// Generate a 4-word fallback title from the user prompt.
 fn four_word_fallback(prompt: &str) -> String {
-    prompt.split_whitespace().take(4).collect::<Vec<_>>().join(" ")
+    prompt
+        .split_whitespace()
+        .take(4)
+        .collect::<Vec<_>>()
+        .join(" ")
 }

@@ -18,7 +18,6 @@ import {
   promptDraftKey,
   removeEntry,
   updateActiveConversationSummary,
-  upsertConversationSummary,
 } from "./helpers";
 import { blobToBase64, buildPromptWithImages } from "../../utils/imageUtils";
 
@@ -49,7 +48,6 @@ interface UseConversationSessionActionParams {
   toast: ToastApi;
   activeConversation: ConversationDetail | null;
   setActiveConversation: Dispatch<SetStateAction<ConversationDetail | null>>;
-  setConversations: Dispatch<SetStateAction<ConversationSummary[]>>;
   setDrafts: Dispatch<SetStateAction<Record<string, string>>>;
   setPromptDrafts: Dispatch<SetStateAction<Record<string, string>>>;
   setLoading: Dispatch<SetStateAction<boolean>>;
@@ -64,7 +62,6 @@ export function useConversationSessionActions({
   toast,
   activeConversation,
   setActiveConversation,
-  setConversations,
   setDrafts,
   setPromptDrafts,
   setLoading,
@@ -137,7 +134,6 @@ export function useConversationSessionActions({
             messages: updated.messages,
           };
         });
-        setConversations((previous) => upsertConversationSummary(previous, updated.summary));
         return updated.summary;
       }
 
@@ -161,7 +157,6 @@ export function useConversationSessionActions({
           ? { ...previous, summary: { ...previous.summary, ...running.summary } }
           : running
       ));
-      setConversations((previous) => upsertConversationSummary(previous, running.summary));
       return running.summary;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to send prompt.");
@@ -169,7 +164,7 @@ export function useConversationSessionActions({
     } finally {
       setSending(false);
     }
-  }, [activeConversation, setActiveConversation, setConversations, setPromptDrafts, setSending, toast, transferPipelineModeToConversation, workspace]);
+  }, [activeConversation, setActiveConversation, setPromptDrafts, setSending, toast, transferPipelineModeToConversation, workspace]);
 
   const stopActiveConversation = useCallback(async (): Promise<void> => {
     if (!workspace || !activeConversation) {
@@ -183,7 +178,6 @@ export function useConversationSessionActions({
 
     try {
       const summary = await stopConversation(workspacePath, conversationId);
-      setConversations((previous) => upsertConversationSummary(previous, summary));
       setActiveConversation((previous) => updateActiveConversationSummary(previous, summary));
       if (summary.status !== "running") {
         stoppingConversationIdRef.current = null;
@@ -197,7 +191,6 @@ export function useConversationSessionActions({
   }, [
     activeConversation,
     setActiveConversation,
-    setConversations,
     setStoppingConversationId,
     stoppingConversationIdRef,
     toast,
@@ -211,18 +204,14 @@ export function useConversationSessionActions({
 
     try {
       await deleteConversation(workspace.path, conversationId);
-      setConversations((previous) => previous.filter((conversation) => conversation.id !== conversationId));
-      setDrafts((previous) => removeEntry(previous, conversationId));
       setPromptDrafts((previous) => removeEntry(previous, promptDraftKey(workspace.path, conversationId)));
-      setActiveConversation((previous) => (
-        previous?.summary.id === conversationId ? null : previous
-      ));
+      // Active detail + drafts are cleared by the DELETED event listener.
       return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete conversation.");
       return false;
     }
-  }, [setActiveConversation, setConversations, setDrafts, setPromptDrafts, toast, workspace]);
+  }, [setPromptDrafts, toast, workspace]);
 
   const renameConversationById = useCallback(async (
     conversationId: string,
@@ -234,14 +223,13 @@ export function useConversationSessionActions({
 
     try {
       const summary = await renameConversation(workspace.path, conversationId, title);
-      setConversations((previous) => upsertConversationSummary(previous, summary));
       setActiveConversation((previous) => updateActiveConversationSummary(previous, summary));
       return summary;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to rename conversation.");
       return null;
     }
-  }, [setActiveConversation, setConversations, toast, workspace]);
+  }, [setActiveConversation, toast, workspace]);
 
   const archiveConversationById = useCallback(async (
     conversationId: string,
@@ -252,7 +240,6 @@ export function useConversationSessionActions({
 
     try {
       const summary = await archiveConversation(workspace.path, conversationId);
-      setConversations((previous) => previous.filter((conversation) => conversation.id !== conversationId));
       setDrafts((previous) => removeEntry(previous, conversationId));
       setPromptDrafts((previous) => removeEntry(previous, promptDraftKey(workspace.path, conversationId)));
       setActiveConversation((previous) => (
@@ -263,7 +250,7 @@ export function useConversationSessionActions({
       toast.error(error instanceof Error ? error.message : "Failed to archive conversation.");
       return null;
     }
-  }, [setActiveConversation, setConversations, setDrafts, setPromptDrafts, toast, workspace]);
+  }, [setActiveConversation, setDrafts, setPromptDrafts, toast, workspace]);
 
   const unarchiveConversationById = useCallback(async (
     conversationId: string,
@@ -274,14 +261,13 @@ export function useConversationSessionActions({
 
     try {
       const summary = await unarchiveConversation(workspace.path, conversationId);
-      setConversations((previous) => upsertConversationSummary(previous, summary));
       setActiveConversation((previous) => updateActiveConversationSummary(previous, summary));
       return summary;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to unarchive conversation.");
       return null;
     }
-  }, [setActiveConversation, setConversations, toast, workspace]);
+  }, [setActiveConversation, toast, workspace]);
 
   const setConversationPinnedById = useCallback(async (
     conversationId: string,
@@ -293,14 +279,13 @@ export function useConversationSessionActions({
 
     try {
       const summary = await setConversationPinned(workspace.path, conversationId, pinned);
-      setConversations((previous) => upsertConversationSummary(previous, summary));
       setActiveConversation((previous) => updateActiveConversationSummary(previous, summary));
       return summary;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update pin.");
       return null;
     }
-  }, [setActiveConversation, setConversations, toast, workspace]);
+  }, [setActiveConversation, toast, workspace]);
 
   return {
     openConversation,

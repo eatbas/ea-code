@@ -1,5 +1,4 @@
 import type { ConversationDetail, ConversationSummary } from "../../types";
-import { upsertByKey } from "../useEventResource";
 
 export function mergeSummary(
   previous: ConversationSummary | undefined,
@@ -15,32 +14,8 @@ export function mergeSummary(
   };
 }
 
-export function sortConversations(items: ConversationSummary[]): ConversationSummary[] {
-  return [...items].sort((left, right) => {
-    const pinOrder = Number(Boolean(right.pinnedAt)) - Number(Boolean(left.pinnedAt));
-    if (pinOrder !== 0) {
-      return pinOrder;
-    }
-
-    return right.updatedAt.localeCompare(left.updatedAt);
-  });
-}
-
 export function promptDraftKey(workspacePath: string, conversationId?: string | null): string {
   return conversationId ? `${workspacePath}::${conversationId}` : `${workspacePath}::__new__`;
-}
-
-export function upsertConversationSummary(
-  items: ConversationSummary[],
-  summary: ConversationSummary,
-): ConversationSummary[] {
-  return sortConversations(
-    upsertByKey(
-      items,
-      mergeSummary(items.find((item) => item.id === summary.id), summary),
-      (item) => item.id,
-    ),
-  );
 }
 
 export function updateActiveConversationSummary(

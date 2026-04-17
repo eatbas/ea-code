@@ -44,7 +44,10 @@ pub fn default_provider_options(
         );
     }
     if let Some(level) = thinking_level {
-        options.insert("thinking_level".to_string(), Value::String(level.to_string()));
+        options.insert(
+            "thinking_level".to_string(),
+            Value::String(level.to_string()),
+        );
     }
     if let Some(swarm) = kimi_swarm {
         options.insert("agent_file".to_string(), Value::String(swarm.agent_file));
@@ -95,9 +98,6 @@ mod tests {
             options.get("agent_file"),
             Some(&Value::String("/tmp/swarm.yaml".to_string())),
         );
-        assert_eq!(
-            options.get("max_ralph_iterations"),
-            Some(&Value::from(-1)),
-        );
+        assert_eq!(options.get("max_ralph_iterations"), Some(&Value::from(-1)),);
     }
 }

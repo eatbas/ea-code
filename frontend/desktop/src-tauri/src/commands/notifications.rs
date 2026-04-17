@@ -3,7 +3,6 @@
 /// We use the Tauri plugin on every desktop platform so permission checks and
 /// delivery go through the same native stack. This avoids the macOS mismatch
 /// where permission requests used Tauri, but delivery used `notify-rust`.
-
 use tauri::AppHandle;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 

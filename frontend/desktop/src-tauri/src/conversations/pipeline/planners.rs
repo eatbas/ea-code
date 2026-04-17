@@ -65,25 +65,34 @@ pub async fn run_pipeline_planners(
                     finished_at: None,
                     score_id: None,
                     provider_session_ref: None,
-                    user_prompt: None,
                 }
             }
         })
         .collect();
     // Load existing state to preserve orchestrator data.
-    let existing = super::super::persistence::load_pipeline_state(&workspace_path, &conversation_id)
-        .ok()
-        .flatten();
+    let existing =
+        super::super::persistence::load_pipeline_state(&workspace_path, &conversation_id)
+            .ok()
+            .flatten();
 
     let mut all_stages = existing
         .as_ref()
-        .map(|s| s.stages.iter().filter(|st| !st.stage_name.starts_with("Planner")).cloned().collect::<Vec<_>>())
+        .map(|s| {
+            s.stages
+                .iter()
+                .filter(|st| !st.stage_name.starts_with("Planner"))
+                .cloned()
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default();
     all_stages.extend(initial_stages);
     all_stages.sort_by_key(|s| s.stage_index);
 
     let initial_state = PipelineState {
-        user_prompt: existing.as_ref().map(|s| s.user_prompt.clone()).unwrap_or(user_prompt.clone()),
+        user_prompt: existing
+            .as_ref()
+            .map(|s| s.user_prompt.clone())
+            .unwrap_or(user_prompt.clone()),
         pipeline_mode: "code".to_string(),
         stages: all_stages,
         review_cycle: existing.as_ref().map(|s| s.review_cycle).unwrap_or(1),
@@ -216,19 +225,29 @@ pub async fn run_pipeline_planners(
     stage_records.sort_by_key(|s| s.stage_index);
 
     // Load existing state to preserve orchestrator data when merging.
-    let existing_final = super::super::persistence::load_pipeline_state(&workspace_path, &conversation_id)
-        .ok()
-        .flatten();
+    let existing_final =
+        super::super::persistence::load_pipeline_state(&workspace_path, &conversation_id)
+            .ok()
+            .flatten();
 
     let mut all_final_stages = existing_final
         .as_ref()
-        .map(|s| s.stages.iter().filter(|st| !st.stage_name.starts_with("Planner")).cloned().collect::<Vec<_>>())
+        .map(|s| {
+            s.stages
+                .iter()
+                .filter(|st| !st.stage_name.starts_with("Planner"))
+                .cloned()
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default();
     all_final_stages.extend(stage_records);
     all_final_stages.sort_by_key(|s| s.stage_index);
 
     let state = PipelineState {
-        user_prompt: existing_final.as_ref().map(|s| s.user_prompt.clone()).unwrap_or(user_prompt),
+        user_prompt: existing_final
+            .as_ref()
+            .map(|s| s.user_prompt.clone())
+            .unwrap_or(user_prompt),
         pipeline_mode: "code".to_string(),
         stages: all_final_stages,
         review_cycle: existing_final.as_ref().map(|s| s.review_cycle).unwrap_or(1),

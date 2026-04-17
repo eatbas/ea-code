@@ -22,6 +22,7 @@ export const API_EVENTS = {
 /** Simple task conversation runtime events. */
 export const CONVERSATION_EVENTS = {
   STATUS: "conversation_status",
+  DELETED: "conversation_deleted",
   OUTPUT_DELTA: "conversation_output_delta",
 } as const;
 

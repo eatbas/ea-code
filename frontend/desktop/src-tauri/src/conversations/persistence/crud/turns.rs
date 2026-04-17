@@ -34,7 +34,10 @@ pub fn mark_turn_running(
         };
         messages.push(user_message);
         summary.message_count = messages.len();
-        if summary.message_count == 1 {
+        // Preserve existing titles (e.g. pipeline-seeded titles). Only rewrite
+        // the default placeholder so the first user prompt becomes the title
+        // for simple chats.
+        if summary.message_count == 1 && summary.title.trim() == "New conversation" {
             summary.title = normalise_title(prompt);
         }
         summary.status = ConversationStatus::Running;
@@ -143,6 +146,61 @@ pub fn finish_turn(
                     content,
                     created_at: now_rfc3339(),
                     agent: Some(effective_agent),
+                    thinking_level,
+                });
+
+        if let Some(message) = &assistant_message {
+            messages.push(message.clone());
+            write_messages_unlocked(workspace_path, conversation_id, &messages)?;
+        }
+
+        summary.message_count = messages.len();
+        summary.status = status;
+        summary.updated_at = now_rfc3339();
+        summary.active_score_id = None;
+        if provider_session_ref.is_some() {
+            summary.last_provider_session_ref = provider_session_ref;
+        }
+        summary.error = error;
+        write_summary_unlocked(&summary)?;
+
+        Ok((summary, assistant_message))
+    })
+}
+
+/// Finalise a turn where the assistant message carries an explicit agent
+/// label (e.g. a pipeline follow-up tagged with the coder agent) without
+/// touching `summary.agent`. The summary agent remains the pipeline's
+/// primary agent selection; each message keeps its own agent annotation.
+pub fn finish_turn_with_message_agent(
+    workspace_path: &str,
+    conversation_id: &str,
+    status: ConversationStatus,
+    assistant_text: Option<String>,
+    provider_session_ref: Option<String>,
+    error: Option<String>,
+    message_agent: &AgentSelection,
+) -> Result<(ConversationSummary, Option<ConversationMessage>), String> {
+    with_conversations_lock(|| {
+        let mut summary = read_summary_unlocked(workspace_path, conversation_id)?;
+        let mut messages = read_messages_unlocked(workspace_path, conversation_id)?;
+
+        let thinking_level = crate::storage::settings::read_settings()
+            .ok()
+            .and_then(|s| {
+                s.thinking_level(&message_agent.provider, &message_agent.model)
+                    .map(str::to_string)
+            });
+
+        let assistant_message =
+            assistant_text
+                .filter(|text| !text.trim().is_empty())
+                .map(|content| ConversationMessage {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    role: ConversationMessageRole::Assistant,
+                    content,
+                    created_at: now_rfc3339(),
+                    agent: Some(message_agent.clone()),
                     thinking_level,
                 });
 
