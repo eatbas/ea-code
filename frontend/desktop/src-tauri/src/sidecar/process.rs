@@ -11,7 +11,11 @@ use super::log_buffer::{emit_sidecar_log, SidecarLogBuffer};
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub(crate) const DEFAULT_PORT: u16 = 8719;
-const SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
+// Give uvicorn's lifespan enough time to run `orchestra.stop()` — each bash
+// shell has its own 2s graceful exit timeout, and shells stop in parallel, so
+// ~3s comfortably covers the worst case while staying under the outer
+// shutdown budget in bootstrap::SIDECAR_SHUTDOWN_TIMEOUT.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(4);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RestartState {
@@ -56,6 +60,11 @@ pub(crate) async fn spawn_symphony_process(
             "--no-access-log",
         ])
         .env("SYMPHONY_CONFIG", &config_path)
+        // Let symphony self-terminate if Maestro dies without a clean
+        // shutdown (crash, SIGKILL, power loss). On Windows this is
+        // redundant with the Job Object, but on macOS/Linux it is the only
+        // mechanism that reaches reparented descendants.
+        .env("MAESTRO_PARENT_PID", std::process::id().to_string())
         .current_dir(symphony_dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -70,6 +79,14 @@ pub(crate) async fn spawn_symphony_process(
     let mut child = command
         .spawn()
         .map_err(|error| format!("Failed to start symphony: {error}"))?;
+
+    // Attach to the process-wide Windows Job Object so that the kernel
+    // tree-kills the Python sidecar (and its bash + CLI descendants) if
+    // Maestro exits, crashes, or is force-killed.
+    #[cfg(target_os = "windows")]
+    if let Some(pid) = child.id() {
+        super::windows_job::attach_pid(pid);
+    }
 
     if let Some(stdout) = child.stdout.take() {
         spawn_pipe_drain(stdout, "stdout", app.clone(), buffer.clone());

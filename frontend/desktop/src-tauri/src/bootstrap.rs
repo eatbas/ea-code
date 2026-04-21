@@ -5,12 +5,15 @@ use std::path::Path;
 use std::path::PathBuf;
 #[cfg(target_os = "macos")]
 use std::process::Command;
+use std::time::Duration;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::sidecar::{self, SidecarManager};
 use crate::storage;
+
+const SIDECAR_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 const EVENT_SIDECAR_READY: &str = "sidecar_ready";
 
@@ -280,15 +283,25 @@ pub(crate) fn spawn_sidecar_startup(app: AppHandle, sidecar: SidecarManager) {
 }
 
 pub(crate) fn stop_sidecar(sidecar: &SidecarManager) {
-    // Spawn the shutdown as a fire-and-forget task instead of blocking
-    // the Tauri event loop.  The child process was spawned with
-    // `kill_on_drop(true)` (process.rs), so even if the async task does
-    // not complete before the runtime shuts down, the OS will clean up
-    // the child process.
+    // Block synchronously so the Python sidecar and its descendants
+    // (bash shells + CLI agents on Windows) are actually killed before
+    // Tauri tears down its async runtime. Fire-and-forget races with
+    // shutdown: the spawned `taskkill /T /F` never runs, and Windows
+    // `kill_on_drop` only terminates the direct child, leaving the
+    // grandchildren orphaned.
     let cloned = sidecar.clone();
-    tauri::async_runtime::spawn(async move {
-        if let Err(error) = cloned.stop().await {
-            eprintln!("Warning: failed to stop symphony sidecar: {error}");
+    tauri::async_runtime::block_on(async move {
+        match tokio::time::timeout(SIDECAR_SHUTDOWN_TIMEOUT, cloned.stop()).await {
+            Ok(Err(error)) => {
+                eprintln!("Warning: failed to stop symphony sidecar: {error}");
+            }
+            Err(_) => {
+                eprintln!(
+                    "Warning: symphony sidecar shutdown exceeded {:?}",
+                    SIDECAR_SHUTDOWN_TIMEOUT
+                );
+            }
+            Ok(Ok(())) => {}
         }
     });
 }

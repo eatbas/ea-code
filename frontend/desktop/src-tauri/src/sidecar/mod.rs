@@ -5,6 +5,8 @@ pub(crate) mod log_buffer;
 mod process;
 pub mod python;
 mod setup;
+#[cfg(target_os = "windows")]
+mod windows_job;
 
 pub use discovery::find_symphony_dir;
 

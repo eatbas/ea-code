@@ -10,6 +10,7 @@ pub mod storage;
 
 use bootstrap::{build_sidecar, run_startup_maintenance, spawn_sidecar_startup, stop_sidecar};
 use commands::AppState;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,8 +20,6 @@ pub fn run() {
 
     #[cfg(desktop)]
     {
-        use tauri::Manager;
-
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
@@ -33,6 +32,12 @@ pub fn run() {
     let sidecar = build_sidecar();
 
     let app = builder
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                window.app_handle().exit(0);
+            }
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
