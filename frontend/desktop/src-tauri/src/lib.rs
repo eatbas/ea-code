@@ -24,7 +24,12 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
+                // `set_focus` can silently fail under Windows' focus-stealing
+                // prevention if Maestro was last active more than a few seconds
+                // ago.  Request user attention as a fallback so the taskbar
+                // icon flashes and the user gets a visible cue.
                 let _ = window.set_focus();
+                let _ = window.request_user_attention(Some(tauri::UserAttentionType::Informational));
             }
         }));
     }
