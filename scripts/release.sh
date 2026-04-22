@@ -89,7 +89,11 @@ replace_in_file() {
 replace_in_file "$TAURI_PATH" "s/\"version\": \"$CURRENT\"/\"version\": \"$VERSION\"/"
 echo "[1/6] Bumped frontend/desktop/src-tauri/tauri.conf.json"
 
-replace_in_file "$CARGO_PATH" "0,/^version = \"$CURRENT\"/s//version = \"$VERSION\"/"
+# Scope the substitution to the [package] section so we never clobber a
+# workspace or dependency version. BSD sed (macOS default) silently accepts
+# the GNU-only `0,/regex/s//...` form without substituting — that was the
+# source of the 1.7.7 partial-bump failure.
+replace_in_file "$CARGO_PATH" "/^\[package\]/,/^\[/ s/^version = \"$CURRENT\"\$/version = \"$VERSION\"/"
 echo "[2/6] Bumped frontend/desktop/src-tauri/Cargo.toml"
 
 replace_in_file "$PACKAGE_PATH" "s/\"version\": \"$CURRENT\"/\"version\": \"$VERSION\"/"
