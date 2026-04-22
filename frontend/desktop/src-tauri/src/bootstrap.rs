@@ -23,6 +23,11 @@ struct SidecarReadyPayload {
     error: Option<String>,
 }
 
+/// Fast, essential startup maintenance that runs on the main thread before the
+/// Tauri builder is constructed. Keep this cheap and deterministic — anything
+/// that does per-conversation I/O (and could therefore deadlock or hang on a
+/// broken conversation) must be queued on the background conversation cleanup
+/// task instead (see [`spawn_startup_conversation_cleanup`]).
 pub(crate) fn run_startup_maintenance() {
     repair_process_environment();
 
@@ -41,38 +46,67 @@ pub(crate) fn run_startup_maintenance() {
     if let Err(error) = storage::projects::cleanup_missing_projects() {
         eprintln!("Warning: stale project cleanup failed: {error}");
     }
+}
 
-    match storage::projects::list_projects(true) {
-        Ok(projects) => {
-            let mut recovered = 0usize;
-            let mut removed = 0usize;
+/// Heal per-workspace conversation state in the background. Kept off the
+/// synchronous startup path so a single broken conversation can never prevent
+/// the main window from appearing — the previous synchronous variant was
+/// observed to deadlock on a malformed conversation directory, ghosting the
+/// whole app.
+///
+/// This runs on Tokio's blocking pool (the persistence layer uses synchronous
+/// `std::sync::Mutex` locks and blocking filesystem I/O). Each project is
+/// isolated with `catch_unwind` so a panic on one workspace does not abort the
+/// entire pass.
+pub(crate) fn spawn_startup_conversation_cleanup() {
+    tauri::async_runtime::spawn(async {
+        let result = tokio::task::spawn_blocking(run_conversation_cleanup_blocking).await;
+        if let Err(error) = result {
+            eprintln!("Warning: conversation cleanup task panicked: {error}");
+        }
+    });
+}
 
-            for project in projects {
-                match crate::conversations::persistence::cleanup_orphaned_conversations(
-                    &project.path,
-                ) {
-                    Ok(stats) => {
-                        recovered += stats.recovered;
-                        removed += stats.removed;
-                    }
-                    Err(error) => {
-                        eprintln!(
-                            "Warning: conversation cleanup failed for {}: {error}",
-                            project.path
-                        );
-                    }
-                }
+fn run_conversation_cleanup_blocking() {
+    let projects = match storage::projects::list_projects(true) {
+        Ok(projects) => projects,
+        Err(error) => {
+            eprintln!("Warning: failed to list projects for conversation cleanup: {error}");
+            return;
+        }
+    };
+
+    let mut recovered = 0usize;
+    let mut removed = 0usize;
+
+    for project in projects {
+        let project_path = project.path.clone();
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::conversations::persistence::cleanup_orphaned_conversations(&project_path)
+        }));
+
+        match outcome {
+            Ok(Ok(stats)) => {
+                recovered += stats.recovered;
+                removed += stats.removed;
             }
-
-            if recovered > 0 || removed > 0 {
+            Ok(Err(error)) => {
                 eprintln!(
-                    "Startup cleanup: recovered {recovered} conversation(s), removed {removed} orphaned conversation(s)"
+                    "Warning: conversation cleanup failed for {project_path}: {error}"
+                );
+            }
+            Err(_) => {
+                eprintln!(
+                    "Warning: conversation cleanup panicked for {project_path} — skipping"
                 );
             }
         }
-        Err(error) => {
-            eprintln!("Warning: failed to list projects for conversation cleanup: {error}");
-        }
+    }
+
+    if recovered > 0 || removed > 0 {
+        eprintln!(
+            "Startup cleanup: recovered {recovered} conversation(s), removed {removed} orphaned conversation(s)"
+        );
     }
 }
 

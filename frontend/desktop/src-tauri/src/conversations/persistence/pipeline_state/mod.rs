@@ -67,34 +67,43 @@ pub fn update_pipeline_stage(
     })
 }
 
-pub fn load_pipeline_state(
+/// Lock-free variant of [`load_pipeline_state`]. MUST only be called from
+/// inside an already-held `with_conversations_lock` scope — calling the public
+/// `load_pipeline_state` from such a scope deadlocks on the non-reentrant
+/// `CONVERSATIONS_LOCK`.
+pub(in crate::conversations::persistence) fn load_pipeline_state_unlocked(
     workspace_path: &str,
     conversation_id: &str,
 ) -> Result<Option<PipelineState>, String> {
-    with_conversations_lock(|| {
-        let path = pipeline_file_path(workspace_path, conversation_id);
-        if !path.exists() {
+    let path = pipeline_file_path(workspace_path, conversation_id);
+    if !path.exists() {
+        return Ok(reconstruct_pipeline_from_artifacts(
+            workspace_path,
+            conversation_id,
+        ));
+    }
+
+    let data = match std::fs::read_to_string(&path) {
+        Ok(data) => data,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(reconstruct_pipeline_from_artifacts(
                 workspace_path,
                 conversation_id,
             ));
         }
+        Err(error) => return Err(format!("Failed to read pipeline state: {error}")),
+    };
+    let mut state: PipelineState = serde_json::from_str(&data)
+        .map_err(|error| format!("Failed to parse pipeline state: {error}"))?;
+    hydrate_stage_text(workspace_path, conversation_id, &mut state);
+    Ok(Some(state))
+}
 
-        let data = match std::fs::read_to_string(&path) {
-            Ok(data) => data,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(reconstruct_pipeline_from_artifacts(
-                    workspace_path,
-                    conversation_id,
-                ));
-            }
-            Err(error) => return Err(format!("Failed to read pipeline state: {error}")),
-        };
-        let mut state: PipelineState = serde_json::from_str(&data)
-            .map_err(|error| format!("Failed to parse pipeline state: {error}"))?;
-        hydrate_stage_text(workspace_path, conversation_id, &mut state);
-        Ok(Some(state))
-    })
+pub fn load_pipeline_state(
+    workspace_path: &str,
+    conversation_id: &str,
+) -> Result<Option<PipelineState>, String> {
+    with_conversations_lock(|| load_pipeline_state_unlocked(workspace_path, conversation_id))
 }
 
 pub fn mark_running_pipeline_stages_stopped(

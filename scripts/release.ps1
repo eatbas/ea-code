@@ -20,6 +20,39 @@ $PackagePath = Join-Path $Root "frontend/desktop/package.json"
 
 $TauriConf = Get-Content $TauriPath -Raw | ConvertFrom-Json
 $CurrentVersion = $TauriConf.version
+
+$PackageConf = Get-Content $PackagePath -Raw | ConvertFrom-Json
+$PackageCurrent = $PackageConf.version
+
+$CargoCurrent = $null
+foreach ($line in Get-Content $CargoPath) {
+    if ($line -match '^version\s*=\s*"([^"]+)"') {
+        $CargoCurrent = $Matches[1]
+        break
+    }
+}
+
+# Fail-fast if the three version files disagree. Silent drift is how a previous
+# release shipped with Cargo.toml pinned to an older version — the regex
+# replacement below only fires when the "from" version matches, so mismatched
+# sources silently produced no change.
+if (-not $CurrentVersion -or -not $CargoCurrent -or -not $PackageCurrent) {
+    Write-Host "Error: Could not read a version from one of the sources:" -ForegroundColor Red
+    Write-Host "  tauri.conf.json : '$CurrentVersion'" -ForegroundColor Red
+    Write-Host "  Cargo.toml      : '$CargoCurrent'" -ForegroundColor Red
+    Write-Host "  package.json    : '$PackageCurrent'" -ForegroundColor Red
+    exit 1
+}
+
+if ($CurrentVersion -ne $CargoCurrent -or $CurrentVersion -ne $PackageCurrent) {
+    Write-Host "Error: Version sources are out of sync — aborting to avoid a partial bump." -ForegroundColor Red
+    Write-Host "  tauri.conf.json : $CurrentVersion" -ForegroundColor Red
+    Write-Host "  Cargo.toml      : $CargoCurrent" -ForegroundColor Red
+    Write-Host "  package.json    : $PackageCurrent" -ForegroundColor Red
+    Write-Host "Sync them manually to the same value, commit, then re-run this script." -ForegroundColor Red
+    exit 1
+}
+
 $Parts = $CurrentVersion.Split(".")
 $Major = [int]$Parts[0]
 $Minor = [int]$Parts[1]
@@ -77,6 +110,26 @@ $PackageContent = Get-Content $PackagePath -Raw
 $PackageContent = $PackageContent -replace [regex]::Escape("`"version`": `"$CurrentVersion`""), "`"version`": `"$Version`""
 Set-Content $PackagePath $PackageContent -NoNewline
 Write-Host "[3/6] Bumped frontend/desktop/package.json" -ForegroundColor Green
+
+# Verify all three files actually landed on $Version before committing.
+$TauriAfter = (Get-Content $TauriPath -Raw | ConvertFrom-Json).version
+$PackageAfter = (Get-Content $PackagePath -Raw | ConvertFrom-Json).version
+$CargoAfter = $null
+foreach ($line in Get-Content $CargoPath) {
+    if ($line -match '^version\s*=\s*"([^"]+)"') {
+        $CargoAfter = $Matches[1]
+        break
+    }
+}
+
+if ($TauriAfter -ne $Version -or $CargoAfter -ne $Version -or $PackageAfter -ne $Version) {
+    Write-Host "Error: Post-bump verification failed — files did not land on ${Version}:" -ForegroundColor Red
+    Write-Host "  tauri.conf.json : $TauriAfter" -ForegroundColor Red
+    Write-Host "  Cargo.toml      : $CargoAfter" -ForegroundColor Red
+    Write-Host "  package.json    : $PackageAfter" -ForegroundColor Red
+    Write-Host "No commit or tag created. Restore and investigate." -ForegroundColor Red
+    exit 1
+}
 
 git add $TauriPath $CargoPath $PackagePath
 git commit -m "chore: bump version to $Version"

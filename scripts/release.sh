@@ -14,6 +14,30 @@ CARGO_PATH="$ROOT/frontend/desktop/src-tauri/Cargo.toml"
 PACKAGE_PATH="$ROOT/frontend/desktop/package.json"
 
 CURRENT=$(grep -o '"version": "[^"]*"' "$TAURI_PATH" | head -1 | cut -d'"' -f4)
+CARGO_CURRENT=$(grep -E '^version = "[^"]*"' "$CARGO_PATH" | head -1 | cut -d'"' -f2)
+PACKAGE_CURRENT=$(grep -o '"version": "[^"]*"' "$PACKAGE_PATH" | head -1 | cut -d'"' -f4)
+
+# Fail-fast if the three version files disagree. Silent drift is how a previous
+# release shipped with Cargo.toml pinned to an older version — the sed
+# replacement below only fires when the "from" version matches, so mismatched
+# sources silently produced no change.
+if [ -z "$CURRENT" ] || [ -z "$CARGO_CURRENT" ] || [ -z "$PACKAGE_CURRENT" ]; then
+  echo "Error: Could not read a version from one of the sources:" >&2
+  echo "  tauri.conf.json : '${CURRENT:-<missing>}'" >&2
+  echo "  Cargo.toml      : '${CARGO_CURRENT:-<missing>}'" >&2
+  echo "  package.json    : '${PACKAGE_CURRENT:-<missing>}'" >&2
+  exit 1
+fi
+
+if [ "$CURRENT" != "$CARGO_CURRENT" ] || [ "$CURRENT" != "$PACKAGE_CURRENT" ]; then
+  echo "Error: Version sources are out of sync — aborting to avoid a partial bump." >&2
+  echo "  tauri.conf.json : $CURRENT" >&2
+  echo "  Cargo.toml      : $CARGO_CURRENT" >&2
+  echo "  package.json    : $PACKAGE_CURRENT" >&2
+  echo "Sync them manually to the same value, commit, then re-run this script." >&2
+  exit 1
+fi
+
 IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
 
 ARG="${1:-patch}"
@@ -70,6 +94,20 @@ echo "[2/6] Bumped frontend/desktop/src-tauri/Cargo.toml"
 
 replace_in_file "$PACKAGE_PATH" "s/\"version\": \"$CURRENT\"/\"version\": \"$VERSION\"/"
 echo "[3/6] Bumped frontend/desktop/package.json"
+
+# Verify all three files actually landed on $VERSION before committing.
+TAURI_AFTER=$(grep -o '"version": "[^"]*"' "$TAURI_PATH" | head -1 | cut -d'"' -f4)
+CARGO_AFTER=$(grep -E '^version = "[^"]*"' "$CARGO_PATH" | head -1 | cut -d'"' -f2)
+PACKAGE_AFTER=$(grep -o '"version": "[^"]*"' "$PACKAGE_PATH" | head -1 | cut -d'"' -f4)
+
+if [ "$TAURI_AFTER" != "$VERSION" ] || [ "$CARGO_AFTER" != "$VERSION" ] || [ "$PACKAGE_AFTER" != "$VERSION" ]; then
+  echo "Error: Post-bump verification failed — files did not land on $VERSION:" >&2
+  echo "  tauri.conf.json : $TAURI_AFTER" >&2
+  echo "  Cargo.toml      : $CARGO_AFTER" >&2
+  echo "  package.json    : $PACKAGE_AFTER" >&2
+  echo "No commit or tag created. Restore and investigate." >&2
+  exit 1
+fi
 
 git add "$TAURI_PATH" "$CARGO_PATH" "$PACKAGE_PATH"
 git commit -m "chore: bump version to $VERSION"

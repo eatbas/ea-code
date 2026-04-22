@@ -10,7 +10,7 @@ use super::paths::{
     RECOVERED_SUMMARY_ERROR, STALE_RUNNING_ERROR,
 };
 use super::pipeline_state::artifacts::artifact_path_for_stage;
-use super::pipeline_state::load_pipeline_state;
+use super::pipeline_state::load_pipeline_state_unlocked;
 use super::registries::{is_running_conversation_persisted, is_running_conversation_tracked};
 
 pub(super) fn normalise_title(prompt: &str) -> String {
@@ -136,7 +136,11 @@ fn recover_summary_unlocked(
     conversation_id: &str,
 ) -> Result<Option<ConversationSummary>, String> {
     let messages = read_messages_unlocked(workspace_path, conversation_id)?;
-    let pipeline_state = load_pipeline_state(workspace_path, conversation_id)
+    // Use the _unlocked variant: we are already inside a `with_conversations_lock`
+    // scope (see `cleanup_orphaned_conversations` and `load_summary_with_recovery_unlocked`),
+    // and the `CONVERSATIONS_LOCK` mutex is non-reentrant — re-acquiring it here
+    // would deadlock the entire app on startup.
+    let pipeline_state = load_pipeline_state_unlocked(workspace_path, conversation_id)
         .ok()
         .flatten();
     let has_artifacts = !messages.is_empty()
@@ -258,7 +262,10 @@ pub(super) fn reconcile_stale_running_unlocked(
     reconcile_stale_pipeline_stages(&summary.workspace_path, &summary.id);
 
     // Re-derive conversation status from the now-reconciled pipeline stages.
-    if let Ok(Some(state)) = load_pipeline_state(&summary.workspace_path, &summary.id) {
+    // Use the _unlocked variant: this function is always invoked inside a
+    // `with_conversations_lock` scope (see `list_conversations` / `get_conversation`),
+    // and the lock is non-reentrant.
+    if let Ok(Some(state)) = load_pipeline_state_unlocked(&summary.workspace_path, &summary.id) {
         summary.status = recover_status_from_pipeline_state(&state);
     } else {
         summary.status = ConversationStatus::Failed;

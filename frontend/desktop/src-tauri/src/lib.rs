@@ -8,7 +8,10 @@ pub mod platform;
 pub mod sidecar;
 pub mod storage;
 
-use bootstrap::{build_sidecar, run_startup_maintenance, spawn_sidecar_startup, stop_sidecar};
+use bootstrap::{
+    build_sidecar, run_startup_maintenance, spawn_sidecar_startup,
+    spawn_startup_conversation_cleanup, stop_sidecar,
+};
 use commands::AppState;
 use tauri::Manager;
 
@@ -24,10 +27,6 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
-                // `set_focus` can silently fail under Windows' focus-stealing
-                // prevention if Maestro was last active more than a few seconds
-                // ago.  Request user attention as a fallback so the taskbar
-                // icon flashes and the user gets a visible cue.
                 let _ = window.set_focus();
                 let _ = window.request_user_attention(Some(tauri::UserAttentionType::Informational));
             }
@@ -105,6 +104,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error whilst building tauri application");
 
+    // Heal any broken conversations in the background. Decoupled from the
+    // synchronous startup path so a single corrupt conversation cannot prevent
+    // the main window from appearing.
+    spawn_startup_conversation_cleanup();
     spawn_sidecar_startup(app.handle().clone(), sidecar.clone());
 
     // Auto-enable keep-awake if the user turned on the manual session-wide toggle.
