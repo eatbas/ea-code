@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ConversationStatus,
   PipelineDebugLogEvent,
@@ -39,6 +39,25 @@ function isTerminalStatus(status: StageStatus): boolean {
   return status === "completed" || status === "failed" || status === "stopped";
 }
 
+/**
+ * Earliest defined `startedAt` across the supplied stages.
+ *
+ * Derived from `stages` state so the value stays in lockstep with the
+ * rendered stage list. Returning this as state (not a ref) prevents the
+ * PipelineStatusBar from flickering out when the ref is reset mid-run
+ * (e.g. during re-hydration via `loadFromSaved`).
+ */
+function earliestStageStart(stages: PipelineStageState[]): number | undefined {
+  let earliest: number | undefined;
+  for (const stage of stages) {
+    if (stage.startedAt === undefined) continue;
+    if (earliest === undefined || stage.startedAt < earliest) {
+      earliest = stage.startedAt;
+    }
+  }
+  return earliest;
+}
+
 export interface UsePipelineSessionReturn {
   stages: PipelineStageState[];
   debugLog: string;
@@ -70,7 +89,6 @@ export function usePipelineSession(
   const [awaitingReview, setAwaitingReview] = useState(false);
   const [currentStageName, setCurrentStageName] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
-  const pipelineStartRef = useRef<number | undefined>(undefined);
   const runningNamesRef = useRef<Set<string>>(new Set());
 
   // Stable ref so event handlers always see the latest conversation ID
@@ -78,12 +96,11 @@ export function usePipelineSession(
   const conversationIdRef = useRef(activeConversationId);
   conversationIdRef.current = activeConversationId;
 
-  // When the active conversation switches, clear pipeline-wide refs so the
-  // new conversation doesn't inherit the previous conversation's start time
-  // or running-stage name labels (the stage list itself is driven by
-  // loadFromSaved, which owns the reset of visible state).
+  // When the active conversation switches, clear the running-stage name
+  // set so the new conversation doesn't inherit the previous
+  // conversation's labels. The stage list itself is driven by
+  // loadFromSaved, which owns the reset of visible state.
   useEffect(() => {
-    pipelineStartRef.current = undefined;
     runningNamesRef.current = new Set();
   }, [activeConversationId]);
 
@@ -94,9 +111,6 @@ export function usePipelineSession(
     const now = Date.now();
 
     if (mappedStatus === "running") {
-      if (!pipelineStartRef.current) {
-        pipelineStartRef.current = now;
-      }
       setRunning(true);
       setAwaitingReview(false);
     }
@@ -235,7 +249,6 @@ export function usePipelineSession(
     setAwaitingReview(false);
     setCurrentStageName("");
     setUserPrompt("");
-    pipelineStartRef.current = undefined;
     runningNamesRef.current.clear();
   }, []);
 
@@ -270,12 +283,6 @@ export function usePipelineSession(
     setRunning(stillRunning);
     setAwaitingReview(conversationStatus === "awaiting_review");
 
-    const firstStarted = loaded
-      .map((s) => s.startedAt)
-      .filter((t): t is number => t !== undefined)
-      .sort()[0];
-    pipelineStartRef.current = firstStarted;
-
     if (stillRunning) {
       const names = loaded.filter((s) => s.status === "running").map((s) => s.stageName);
       runningNamesRef.current = new Set(names);
@@ -294,10 +301,15 @@ export function usePipelineSession(
     }
   }, []);
 
+  // Derived from stages so the PipelineStatusBar guard tracks the rendered
+  // stage list exactly. A ref-backed value could go stale mid-run and hide
+  // the bar until the next stage-status event restored it.
+  const pipelineStartedAt = useMemo(() => earliestStageStart(stages), [stages]);
+
   return {
     stages,
     debugLog,
-    pipelineStartedAt: pipelineStartRef.current,
+    pipelineStartedAt,
     running,
     awaitingReview,
     currentStageName,
