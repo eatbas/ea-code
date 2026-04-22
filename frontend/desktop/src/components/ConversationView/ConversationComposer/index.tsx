@@ -26,18 +26,22 @@ function formatElapsed(ms: number): string {
   return `${String(seconds)}s`;
 }
 
-/** Status bar shown while the agent is running in Simple Task mode.
- *  Layout mirrors PipelineStatusBar: green light, pulsing label, stop, timer. */
-function SimpleTaskStatusBar({
+/** Status bar shown while the agent is running — either in Simple Task mode
+ *  or as a follow-up turn on a completed Code Pipeline (resumed Coder
+ *  session). Layout mirrors PipelineStatusBar: green light, pulsing label,
+ *  stop, timer. */
+function ThinkingStatusBar({
   startedAt,
   now,
   stopping,
   onStop,
+  label,
 }: {
   startedAt: number;
   now: number;
   stopping: boolean;
   onStop: () => void;
+  label: string;
 }): ReactNode {
   const elapsed = formatElapsed(now - startedAt);
   return (
@@ -50,7 +54,7 @@ function SimpleTaskStatusBar({
         <div className="flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-running-dot" />
           <span className="text-xs font-semibold animate-pulse text-running-dot">
-            Thinking
+            {label}
           </span>
         </div>
         <button
@@ -84,6 +88,7 @@ interface ConversationComposerProps {
   pipelineRunning: boolean;
   pipelineMode: PipelineMode;
   pipelineDone: boolean;
+  coderFollowupRunning: boolean;
   pipelineResumable: boolean;
   pipelineRedoReviewable: boolean;
   thinkingLevel: string;
@@ -125,6 +130,7 @@ export function ConversationComposer({
   pipelineRunning,
   pipelineMode,
   pipelineDone,
+  coderFollowupRunning,
   pipelineResumable,
   pipelineRedoReviewable,
   thinkingLevel,
@@ -265,13 +271,15 @@ export function ConversationComposer({
           />
         )}
 
-        {/* Simple task status bar — mirrors PipelineStatusBar exactly */}
-        {isSimpleRunning && (
-          <SimpleTaskStatusBar
+        {/* Thinking status bar — shown for simple-task turns and for
+            follow-up turns on a completed code pipeline (resumed Coder). */}
+        {(isSimpleRunning || coderFollowupRunning) && (
+          <ThinkingStatusBar
             startedAt={runStartedAt}
             now={now}
             stopping={stopping}
             onStop={() => { void onStop(); }}
+            label={coderFollowupRunning ? "Coder thinking" : "Thinking"}
           />
         )}
 
@@ -294,9 +302,11 @@ export function ConversationComposer({
           placeholder={
             queuedPrompt !== null
               ? "Message queued — will send when agent finishes..."
-              : pipelineRunning
-                ? "Pipeline is running..."
-                : "Describe the task you want the agent to handle."
+              : coderFollowupRunning
+                ? "Coder is thinking..."
+                : pipelineRunning
+                  ? "Pipeline is running..."
+                  : "Describe the task you want the agent to handle."
           }
           textareaRef={textareaRef}
           onPromptChange={promptNavigation.handlePromptChange}

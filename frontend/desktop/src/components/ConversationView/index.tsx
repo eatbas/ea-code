@@ -106,6 +106,7 @@ export function ConversationView({
             pipelineRunning={viewModel.pipeline.running}
             pipelineMode={pipelineMode}
             pipelineDone={viewModel.pipelineDone}
+            coderFollowupRunning={viewModel.coderFollowupRunning}
             pipelineResumable={viewModel.pipelineResumable}
             pipelineRedoReviewable={viewModel.pipelineRedoReviewable}
             thinkingLevel={viewModel.thinkingLevel}

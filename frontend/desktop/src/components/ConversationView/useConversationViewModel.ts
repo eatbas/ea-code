@@ -276,12 +276,19 @@ export function useConversationViewModel({
   const currentAgent = (baseAgent && modelOverride)
     ? { provider: baseAgent.provider, model: modelOverride }
     : baseAgent;
-  const pipelineDone = pipeline.stages.length > 0
-    && !pipeline.running
-    && !pipeline.awaitingReview
+  const allStagesTerminal = pipeline.stages.length > 0
     && pipeline.stages.every((stage) => (
       stage.status === "completed" || stage.status === "failed" || stage.status === "stopped"
     ));
+  const pipelineDone = allStagesTerminal
+    && !pipeline.running
+    && !pipeline.awaitingReview;
+  // Follow-up turns after a code pipeline: the pipeline stages are all
+  // terminal but the conversation is running because `continue_coder` is
+  // streaming the Coder's reply. Used to show a dedicated thinking indicator.
+  const coderFollowupRunning = pipelineMode === "code"
+    && activeRunning
+    && allStagesTerminal;
   const pipelineResumable = pipelineDone && pipeline.stages.some((stage) => (
     stage.status === "failed" || stage.status === "stopped"
   ));
@@ -436,6 +443,7 @@ export function useConversationViewModel({
     planReview,
     activeRunning,
     pipelineDone,
+    coderFollowupRunning,
     pipelineResumable,
     pipelineRedoReviewable,
     promptHistory,
