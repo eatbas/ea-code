@@ -2,9 +2,9 @@
 
 # Maestro
 
-### Stop Paying for Five AI Subscriptions and Only Using One
+### Stop Paying for Six AI Subscriptions and Only Using One
 
-You're subscribed to Claude, Gemini, Codex, Kimi, and OpenCode. But right now, you're copy-pasting between them, switching tabs, and hoping one model gets it right on the first try.
+You're subscribed to Claude, Gemini, Codex, Copilot, Kimi, and OpenCode. But right now, you're copy-pasting between them, switching tabs, and hoping one model gets it right on the first try.
 
 **What if they all worked together instead?**
 
@@ -18,7 +18,7 @@ Maestro is a desktop app that wires your AI coding CLIs into a single orchestrat
 
 ## The Problem
 
-You're paying for multiple AI coding subscriptions. You use Claude for planning, Gemini for quick questions, Codex for generation. But you're doing the orchestration manually — switching between tools, re-explaining context, and judging the output yourself.
+You're paying for multiple AI coding subscriptions. You use Claude for planning, Gemini for quick questions, Codex or Copilot for generation. But you're doing the orchestration manually — switching between tools, re-explaining context, and judging the output yourself.
 
 That's expensive, slow, and exhausting.
 
@@ -40,12 +40,13 @@ You assign the roles. Claude plans, Codex codes, Gemini reviews — or any combi
 | Backend | CLI |
 |---------|-----|
 | Claude | Claude Code |
-| Codex | GitHub Copilot CLI |
+| Codex | OpenAI Codex CLI |
+| Copilot | GitHub Copilot CLI |
 | Gemini | Google Gemini CLI |
 | Kimi | Kimi CLI |
 | OpenCode | OpenCode CLI |
 
-Use one, use all five — assign any backend to any stage.
+Use one, use all six — assign any backend to any stage.
 
 ## How The Pipeline Works
 
@@ -86,7 +87,7 @@ No model marks its own homework — reviewers resume planner sessions for contex
 | Blind spots go unnoticed | Parallel reviewers catch what one misses |
 | You manually re-prompt when output is wrong | Redo Review cycles re-review and fix with full context |
 | No review before implementation begins | Plan approval gates let you review before any code is written |
-| You pay for 5 subscriptions and use 1 at a time | Every subscription earns its keep |
+| You pay for 6 subscriptions and use 1 at a time | Every subscription earns its keep |
 
 ## Desktop App Highlights
 

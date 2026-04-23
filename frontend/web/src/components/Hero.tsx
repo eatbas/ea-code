@@ -34,7 +34,7 @@ export function Hero() {
               {" "}to work as one quality pipeline.
             </h1>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-faint mx-auto lg:mx-0">
-              You already have Claude, Codex, Gemini, Kimi, and OpenCode.
+              You already have Claude, Codex, Copilot, Gemini, Kimi, and OpenCode.
               Maestro orchestrates them into one pipeline — planning in
               parallel, merging plans, coding, reviewing with multiple agents,
               and fixing — so you ship higher-quality code than any single

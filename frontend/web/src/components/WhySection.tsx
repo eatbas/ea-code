@@ -42,7 +42,7 @@ const COMPARISONS: ComparisonRowProps[] = [
     ea: "Plan approval gates let you review before any code is written",
   },
   {
-    single: "You pay for 5 subscriptions and use 1 at a time",
+    single: "You pay for 6 subscriptions and use 1 at a time",
     ea: "Every subscription earns its keep",
   },
 ];

@@ -1,6 +1,7 @@
 const AGENTS = [
   { name: "Claude", mono: "claude", colour: "#D97706" },
   { name: "Codex", mono: "codex", colour: "#10B981" },
+  { name: "Copilot", mono: "copilot", colour: "#2563EB" },
   { name: "Gemini", mono: "gemini", colour: "#3B82F6" },
   { name: "Kimi", mono: "kimi", colour: "#A855F7" },
   { name: "OpenCode", mono: "opencode", colour: "#F43F5E" },

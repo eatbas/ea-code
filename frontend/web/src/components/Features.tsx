@@ -36,7 +36,7 @@ const FEATURES: FeatureCardProps[] = [
     icon: <Layers className="h-5 w-5" />,
     title: "Mix & Match Agents",
     description:
-      "Assign Claude for planning, Codex for code generation, Gemini for review — every subscription earns its keep.",
+      "Assign Claude for planning, Codex or Copilot for code generation, Gemini for review — every subscription earns its keep.",
     wide: true,
   },
   {
