@@ -265,9 +265,12 @@ pub async fn get_api_cli_versions(
     let client = api_client();
     let url = format!("{base_url}/v1/cli-versions");
 
+    // First call lazy-triggers a full check on the backend, which runs
+    // version probes for every provider and can take tens of seconds on a
+    // cold start — allow for that before giving up.
     match client
         .get(&url)
-        .timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(90))
         .send()
         .await
     {

@@ -77,7 +77,7 @@ function summaryCopy(status: SymphonyStartupStatus, apiHealth: ApiHealth | null,
 function diagnosticItems(status: SymphonyStartupStatus, apiHealth: ApiHealth | null, providerCount: number): DiagnosticItem[] {
   return [
     {
-      label: "Sidecar",
+      label: "Symphony-API",
       value: status.sidecar === "ready" ? "Ready" : status.sidecar === "failed" ? "Failed" : "Starting",
       state: status.sidecar,
     },
