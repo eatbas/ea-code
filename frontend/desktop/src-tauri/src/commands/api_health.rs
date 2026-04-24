@@ -6,7 +6,7 @@ use tauri::{AppHandle, State};
 use crate::commands::emitter::{emit_done, emit_items};
 use crate::commands::AppState;
 use crate::http::api_client;
-use crate::models::{ApiCliVersionInfo, ApiHealthStatus, ModelDetail, ProviderInfo, SidecarLogEvent};
+use crate::models::{ApiCliVersionInfo, ApiHealthStatus, ModelDetail, ProviderInfo, ProviderOptionDefinition, SidecarLogEvent};
 use crate::sidecar::log_buffer::SidecarLogEntry;
 
 pub const EVENT_API_HEALTH: &str = "api_health_status";
@@ -46,6 +46,17 @@ struct ProviderCapability {
     supports_resume: bool,
     supports_model_override: bool,
     session_reference_format: String,
+}
+
+#[derive(Deserialize)]
+struct ModelDetailResponse {
+    provider: String,
+    model: String,
+    ready: bool,
+    busy: bool,
+    supports_resume: bool,
+    #[serde(default)]
+    provider_options_schema: Vec<ProviderOptionDefinition>,
 }
 
 #[derive(Deserialize)]
@@ -90,6 +101,17 @@ fn map_provider_info(provider: ProviderCapability) -> ProviderInfo {
         supports_resume: provider.supports_resume,
         supports_model_override: provider.supports_model_override,
         session_reference_format: provider.session_reference_format,
+    }
+}
+
+fn map_model_detail(detail: ModelDetailResponse) -> ModelDetail {
+    ModelDetail {
+        provider: detail.provider,
+        model: detail.model,
+        ready: detail.ready,
+        busy: detail.busy,
+        supports_resume: detail.supports_resume,
+        provider_options_schema: detail.provider_options_schema,
     }
 }
 
@@ -239,8 +261,15 @@ pub async fn get_api_models(app: AppHandle, state: State<'_, AppState>) -> Resul
         .await
     {
         Ok(response) if response.status().is_success() => {
-            if let Ok(models) = response.json::<Vec<ModelDetail>>().await {
-                emit_items(&app, EVENT_API_MODEL, models);
+            match response.json::<Vec<ModelDetailResponse>>().await {
+                Ok(models) => emit_items(
+                    &app,
+                    EVENT_API_MODEL,
+                    models.into_iter().map(map_model_detail),
+                ),
+                Err(error) => {
+                    eprintln!("[api_health] failed to decode models response: {error}");
+                }
             }
         }
         Ok(response) => {
@@ -350,7 +379,11 @@ pub async fn get_sidecar_logs(state: State<'_, AppState>) -> Result<Vec<SidecarL
 
 #[cfg(test)]
 mod tests {
-    use super::{map_api_cli_version, map_provider_info, CliVersionResponse, ProviderCapability};
+    use super::{
+        map_api_cli_version, map_model_detail, map_provider_info, CliVersionResponse,
+        ModelDetailResponse, ProviderCapability,
+    };
+    use crate::models::{ProviderOptionChoice, ProviderOptionDefinition};
 
     #[test]
     fn provider_mapping_preserves_models() {
@@ -370,6 +403,100 @@ mod tests {
         assert_eq!(info.models, vec!["gpt-5.4"]);
         assert!(!info.supports_resume);
         assert!(info.supports_model_override);
+    }
+
+    #[test]
+    fn model_detail_deserialises_symphony_snake_case_payload() {
+        let payload = serde_json::json!({
+            "provider": "kimi",
+            "model": "kimi-code/kimi-for-coding",
+            "ready": true,
+            "busy": false,
+            "supports_resume": true,
+            "provider_options_schema": [
+                {
+                    "key": "thinking_mode",
+                    "label": "Thinking",
+                    "type": "select",
+                    "default": "enabled",
+                    "choices": [
+                        {"value": "enabled", "label": "Enabled", "description": "On"},
+                        {"value": "disabled", "label": "Disabled", "description": "Off"}
+                    ]
+                },
+                {
+                    "key": "max_ralph_iterations",
+                    "label": "Ralph Iterations",
+                    "type": "select",
+                    "default": "1",
+                    "choices": [
+                        {"value": "1", "label": "1", "description": "Single pass."}
+                    ]
+                }
+            ]
+        });
+
+        let response: ModelDetailResponse =
+            serde_json::from_value(payload).expect("snake_case payload should deserialise");
+        let detail = map_model_detail(response);
+
+        assert_eq!(detail.provider, "kimi");
+        assert_eq!(detail.model, "kimi-code/kimi-for-coding");
+        assert!(detail.supports_resume);
+        assert_eq!(detail.provider_options_schema.len(), 2);
+        assert_eq!(detail.provider_options_schema[0].key, "thinking_mode");
+        assert_eq!(detail.provider_options_schema[1].key, "max_ralph_iterations");
+        assert_eq!(
+            detail.provider_options_schema[0].choices[0].value,
+            "enabled"
+        );
+    }
+
+    #[test]
+    fn model_detail_defaults_missing_schema_to_empty() {
+        let payload = serde_json::json!({
+            "provider": "claude",
+            "model": "haiku",
+            "ready": true,
+            "busy": false,
+            "supports_resume": true
+        });
+
+        let response: ModelDetailResponse =
+            serde_json::from_value(payload).expect("payload without schema should deserialise");
+        let detail = map_model_detail(response);
+
+        assert_eq!(detail.provider, "claude");
+        assert!(detail.provider_options_schema.is_empty());
+    }
+
+    #[test]
+    fn model_detail_serialises_to_camel_case_for_frontend() {
+        let detail = map_model_detail(ModelDetailResponse {
+            provider: "claude".to_string(),
+            model: "opus".to_string(),
+            ready: true,
+            busy: false,
+            supports_resume: true,
+            provider_options_schema: vec![ProviderOptionDefinition {
+                key: "thinking_level".to_string(),
+                label: "Thinking".to_string(),
+                r#type: "select".to_string(),
+                default: Some("xhigh".to_string()),
+                choices: vec![ProviderOptionChoice {
+                    value: "xhigh".to_string(),
+                    label: "Extra high".to_string(),
+                    description: None,
+                }],
+            }],
+        });
+
+        let value = serde_json::to_value(&detail).expect("detail should serialise");
+        assert_eq!(value["provider"], "claude");
+        assert_eq!(value["supportsResume"], true);
+        assert_eq!(value["providerOptionsSchema"][0]["key"], "thinking_level");
+        assert!(value.get("supports_resume").is_none());
+        assert!(value.get("provider_options_schema").is_none());
     }
 
     #[test]
