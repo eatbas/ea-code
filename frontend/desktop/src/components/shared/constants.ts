@@ -33,46 +33,54 @@ export function modelOptionsFromProvider(
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** Formats a raw model identifier for display. */
+/** Irregular labels that don't follow the default hyphen-segment rules. */
+const SPECIAL_MODEL_LABELS: Record<string, string> = {
+  "opus[1m]": "Opus (1M)",
+  "kimi-code/kimi-for-coding": "Kimi Code",
+};
+
+/** Formats a single hyphen-delimited model-id segment for display.
+ *  Numeric version segments ("5.4", "4.6") pass through untouched;
+ *  digit+letter codes ("5v") are upper-cased; "1m" becomes "(1M)";
+ *  alphabetic tokens are capitalised. */
+function formatModelSegment(segment: string): string {
+  if (segment === "1m") return "(1M)";
+  if (/^\d+[a-z]$/.test(segment)) return segment.toUpperCase();
+  if (/^\d/.test(segment)) return segment;
+  return segment.charAt(0).toUpperCase() + segment.slice(1);
+}
+
+/** Formats a raw model identifier for display.
+ *
+ *  Derives labels programmatically from the slug so new models format
+ *  correctly without code changes. Brand-specific rules:
+ *  - ``gpt-<ver>[-<suffix>...]`` → ``GPT-<ver>[ <Suffix>...]`` (e.g. ``gpt-5.5`` → ``GPT-5.5``).
+ *  - ``glm-<ver>[-<suffix>...]`` → ``GLM <ver>[ <Suffix>...]``.
+ *  - Anything else is split on ``-`` and title-cased segment by segment.
+ *  - ``opencode/<slug>`` is treated as ``<slug>``.
+ *  - Irregular cases (``opus[1m]``, Kimi alias) live in ``SPECIAL_MODEL_LABELS``.
+ */
 export function formatModelLabel(model: string): string {
-  const known: Record<string, string> = {
-    // Claude aliases
-    sonnet: "Sonnet",
-    opus: "Opus",
-    "opus[1m]": "Opus (1M)",
-    haiku: "Haiku",
-    // Codex models (latest generation)
-    "gpt-5.3-codex": "GPT-5.3 Codex",
-    "gpt-5.4": "GPT-5.4",
-    "gpt-5.4-mini": "GPT-5.4 Mini",
-    "gpt-5.4-nano": "GPT-5.4 Nano",
-    // Gemini models
-    "gemini-2.5-flash": "Gemini 2.5 Flash",
-    "gemini-3-flash-preview": "Gemini 3 Flash Preview",
-    "gemini-3-pro-preview": "Gemini 3 Pro Preview",
-    "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
-    "gemini-3.1-pro": "Gemini 3.1 Pro",
-    "gemini-2.5-pro": "Gemini 2.5 Pro",
-    "gemini-3-pro": "Gemini 3 Pro",
-    "gemini-3-flash": "Gemini 3 Flash",
-    // Kimi models
-    "kimi-code/kimi-for-coding": "Kimi Code",
-    // Copilot backend models (latest per tier)
-    "claude-sonnet-4.6": "Claude Sonnet 4.6",
-    "claude-haiku-4.5": "Claude Haiku 4.5",
-    "claude-opus-4.6": "Claude Opus 4.6",
-    "claude-opus-4.6-1m": "Claude Opus 4.6 (1M)",
-    "claude-opus-4.6-fast": "Claude Opus 4.6 Fast",
-    // OpenCode GLM models (latest generation)
-    "glm-5": "GLM 5",
-    "glm-5-turbo": "GLM 5 Turbo",
-    "glm-5.1": "GLM 5.1",
-    "glm-5v-turbo": "GLM 5V Turbo",
-    // OpenCode GLM models (prefixed — from legacy settings)
-    "opencode/glm-5": "GLM 5",
-    "opencode/glm-5-turbo": "GLM 5 Turbo",
-  };
-  return known[model] ?? model;
+  const special = SPECIAL_MODEL_LABELS[model];
+  if (special) return special;
+
+  const slug = model.replace(/^opencode\//, "");
+  const [head, ...rest] = slug.split("-");
+  if (!head) return model;
+
+  const tail = rest.map(formatModelSegment);
+
+  if (head === "gpt") {
+    const [version, ...suffix] = tail;
+    if (!version) return "GPT";
+    return suffix.length > 0 ? `GPT-${version} ${suffix.join(" ")}` : `GPT-${version}`;
+  }
+
+  if (head === "glm") {
+    return tail.length > 0 ? `GLM ${tail.join(" ")}` : "GLM";
+  }
+
+  return [formatModelSegment(head), ...tail].join(" ");
 }
 
 /** Formats the selected assistant as a single provider + model label. */
