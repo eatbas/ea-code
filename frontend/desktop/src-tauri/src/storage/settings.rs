@@ -14,6 +14,17 @@ struct SettingsWrapper {
     settings: AppSettings,
 }
 
+/// Migrate legacy thinking values to match the current API schema.
+fn migrate_provider_thinking(thinking: &mut std::collections::HashMap<String, String>) {
+    for value in thinking.values_mut() {
+        match value.as_str() {
+            "on" => *value = "enabled".to_string(),
+            "off" => *value = "disabled".to_string(),
+            _ => {}
+        }
+    }
+}
+
 /// Reads settings from settings.json.
 /// Returns default settings if the file doesn't exist.
 pub fn read_settings() -> Result<AppSettings, String> {
@@ -28,14 +39,16 @@ pub fn read_settings() -> Result<AppSettings, String> {
             .map_err(|e| format!("Failed to read settings file: {e}"))?;
 
         // Try to parse with wrapper first (new format)
-        if let Ok(wrapper) = serde_json::from_str::<SettingsWrapper>(&contents) {
+        if let Ok(mut wrapper) = serde_json::from_str::<SettingsWrapper>(&contents) {
+            migrate_provider_thinking(&mut wrapper.settings.provider_thinking);
             return Ok(wrapper.settings);
         }
 
         // Fall back to direct AppSettings parsing (for compatibility)
-        let settings: AppSettings = serde_json::from_str(&contents)
+        let mut settings: AppSettings = serde_json::from_str(&contents)
             .map_err(|e| format!("Failed to parse settings file: {e}"))?;
 
+        migrate_provider_thinking(&mut settings.provider_thinking);
         Ok(settings)
     })
 }

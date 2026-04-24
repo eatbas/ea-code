@@ -15,6 +15,8 @@ export const API_EVENTS = {
   HEALTH_STATUS: "api_health_status",
   PROVIDER_INFO: "api_provider_info",
   PROVIDERS_COMPLETE: "api_providers_check_complete",
+  MODEL_INFO: "api_model_info",
+  MODELS_COMPLETE: "api_models_check_complete",
   CLI_VERSION_INFO: "api_cli_version_info",
   CLI_VERSIONS_COMPLETE: "api_versions_check_complete",
 } as const;

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { ApiHealth, AppSettings, ProviderInfo, ApiCliVersionInfo } from "../../types";
+import type { ApiHealth, AppSettings, ProviderInfo, ApiCliVersionInfo, ModelDetail } from "../../types";
 import {
   modelOptionsFromProvider,
   providerDisplayName,
@@ -43,6 +43,7 @@ interface CliSetupViewProps {
   sidecarReady: boolean | null;
   sidecarError: string | null;
   providers: ProviderInfo[];
+  models: ModelDetail[];
   apiVersions: ApiCliVersionInfo[];
   versionsLoading: boolean;
   updating: string | null;
@@ -59,6 +60,7 @@ export function CliSetupView({
   sidecarReady,
   sidecarError,
   providers,
+  models,
   apiVersions,
   versionsLoading,
   updating,
@@ -137,6 +139,10 @@ export function CliSetupView({
     return apiVersions.find((v) => v.provider === providerName);
   }
 
+  function modelsForProvider(providerName: string): ModelDetail[] {
+    return models.filter((m) => m.provider === providerName);
+  }
+
   return (
     <div className="relative flex h-full flex-col bg-surface">
       <div className="flex-1 overflow-y-auto px-8 py-8">
@@ -173,6 +179,7 @@ export function CliSetupView({
                 <CliCard
                   key={p.name}
                   provider={p}
+                  models={modelsForProvider(p.name)}
                   version={versionForProvider(p.name)}
                   loading={versionsLoading || updating === p.name}
                   updating={updating === p.name}

@@ -7,10 +7,7 @@ import { PopoverSelect } from "../../shared/PopoverSelect";
 import {
   modelOptionsFromProvider,
   providerDisplayName,
-  THINKING_TRIGGER_LABELS,
   SWARM_OPTIONS,
-  RALPH_ITERATIONS_OPTIONS,
-  RALPH_TRIGGER_LABELS,
 } from "../../shared/constants";
 import type { PipelineMode } from "./index";
 
@@ -36,6 +33,7 @@ interface ComposerToolbarProps {
   startupPhase: SymphonyStartupPhase;
   thinkingLevel: string;
   thinkingOptions: { value: string; label: string }[] | undefined;
+  ralphOptions: { value: string; label: string }[] | undefined;
   onPipelineModeChange: (mode: PipelineMode) => void;
   onAgentChange: (agent: AgentSelection) => void;
   onThinkingChange: (value: string) => void;
@@ -71,6 +69,7 @@ export function ComposerToolbar({
   startupPhase,
   thinkingLevel,
   thinkingOptions,
+  ralphOptions,
   onPipelineModeChange,
   onAgentChange,
   onThinkingChange,
@@ -93,7 +92,12 @@ export function ComposerToolbar({
   // Model, thinking, and swarm options are unlockable on resume.
   const optionsLocked = locked && !modelChangeable;
   const hasThinking = thinkingOptions !== undefined && thinkingOptions.length > 0;
-  const triggerLabels = agent ? THINKING_TRIGGER_LABELS[agent.provider] : undefined;
+  const triggerLabels = agent
+    ? thinkingOptions?.reduce<Record<string, string>>((acc, opt) => {
+        if (opt.value === "") acc[opt.value] = "Default";
+        return acc;
+      }, {})
+    : undefined;
   const availableProviders = useMemo(
     () => providers.filter((provider) => provider.available),
     [providers],
@@ -217,12 +221,12 @@ export function ComposerToolbar({
                 menuTitle="Swarm Mode"
                 onChange={onSwarmChange}
               />
-              {kimiSwarmEnabled && (
+              {kimiSwarmEnabled && ralphOptions && ralphOptions.length > 0 && (
                 <>
                   <span className="px-0.5 text-separator">·</span>
                   <PopoverSelect
                     value={kimiRalphIterations === 1 ? "" : String(kimiRalphIterations)}
-                    options={RALPH_ITERATIONS_OPTIONS}
+                    options={ralphOptions}
                     placeholder="Ralph"
                     disabled={optionsLocked}
                     direction="up"
@@ -231,7 +235,6 @@ export function ComposerToolbar({
                     onOpenChange={(open) => setOpenSelect(open ? "ralph" : null)}
                     triggerClassName="flex h-7 items-center gap-1 rounded-lg border border-edge-strong bg-input-bg px-2 text-[11px] font-semibold text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-input-border-focus hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55"
                     menuClassName="w-max min-w-full rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_20px_44px_rgba(0,0,0,0.38)]"
-                    triggerLabels={RALPH_TRIGGER_LABELS}
                     menuTitle="Ralph Iterations"
                     onChange={onRalphIterationsChange}
                   />

@@ -1,15 +1,7 @@
 import type { ReactNode } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { ProviderInfo, ApiCliVersionInfo } from "../../types";
-import {
-  providerDisplayName,
-  modelOptionsFromProvider,
-  getThinkingOptions,
-  THINKING_TRIGGER_LABELS,
-  SWARM_OPTIONS,
-  RALPH_ITERATIONS_OPTIONS,
-  RALPH_TRIGGER_LABELS,
-} from "../shared/constants";
+import type { ProviderInfo, ApiCliVersionInfo, ModelDetail, ProviderOptionDefinition } from "../../types";
+import { providerDisplayName, modelOptionsFromProvider } from "../shared/constants";
 import { PopoverSelect } from "../shared/PopoverSelect";
 import { useToast } from "../shared/Toast";
 import { ModelCheckboxList } from "./ModelCheckboxList";
@@ -65,14 +57,30 @@ function StatusBadge({
   );
 }
 
+/** Find the first thinking-related option definition in a model's schema. */
+function findThinkingOption(schema: ProviderOptionDefinition[]): ProviderOptionDefinition | undefined {
+  return schema.find((d) => d.key === "thinking_mode" || d.key === "thinking_level");
+}
+
+/** Find the first Ralph iteration option definition in a model's schema. */
+function findRalphOption(schema: ProviderOptionDefinition[]): ProviderOptionDefinition | undefined {
+  return schema.find((d) => d.key === "max_ralph_iterations");
+}
+
+/** Convert API option choices to PopoverSelect options. */
+function choicesToOptions(choices: ProviderOptionDefinition["choices"]): { value: string; label: string }[] {
+  return choices.map((c) => ({ value: c.value, label: c.label }));
+}
+
 interface CliCardProps {
   provider: ProviderInfo;
+  models: ModelDetail[];
   version: ApiCliVersionInfo | undefined;
   loading: boolean;
   updating: boolean;
   actionsDisabled: boolean;
   enabledModels: Set<string>;
-  /** Per-model thinking levels keyed by "provider:model". */
+  /** Per-model thinking levels keyed by model value. */
   thinkingLevels: Record<string, string>;
   /** Kimi swarm mode value ("enabled" or ""). */
   swarmMode: string;
@@ -92,6 +100,7 @@ interface CliCardProps {
 /** Card displaying a single CLI provider's version, models, and actions. */
 export function CliCard({
   provider,
+  models,
   version,
   loading,
   updating,
@@ -111,20 +120,20 @@ export function CliCard({
   const displayName = providerDisplayName(provider.name) + " CLI";
   const modelOptions = modelOptionsFromProvider(provider);
   const modelControlsDisabled = actionsDisabled || !provider.available;
-  const thinkingOptions: Record<string, { value: string; label: string }[]> | undefined =
-    (() => {
-      const map: Record<string, { value: string; label: string }[]> = {};
-      let hasAny = false;
-      for (const m of provider.models) {
-        const opts = getThinkingOptions(provider.name, m);
-        if (opts) {
-          map[m] = opts;
-          hasAny = true;
-        }
-      }
-      return hasAny ? map : undefined;
-    })();
-  const thinkingTriggerLabels = THINKING_TRIGGER_LABELS[provider.name];
+
+  // Build per-model thinking option schemas from API model details.
+  const thinkingSchemas: Record<string, ProviderOptionDefinition> = {};
+  for (const m of models) {
+    const opt = findThinkingOption(m.providerOptionsSchema);
+    if (opt) {
+      thinkingSchemas[m.model] = opt;
+    }
+  }
+
+  // Derive Ralph options from the first model that exposes them.
+  const ralphDefinition = models.map((m) => findRalphOption(m.providerOptionsSchema)).find(Boolean);
+  const ralphOptions = ralphDefinition ? choicesToOptions(ralphDefinition.choices) : undefined;
+
   const showUpdate =
     !loading && provider.available && version && !version.upToDate;
   const showInstall = !loading && !provider.available;
@@ -142,9 +151,8 @@ export function CliCard({
           modelOptions={modelOptions}
           enabledModels={enabledModels}
           disabled={modelControlsDisabled}
-          thinkingOptions={provider.available ? thinkingOptions : undefined}
+          thinkingSchemas={provider.available ? thinkingSchemas : undefined}
           thinkingLevels={thinkingLevels}
-          thinkingTriggerLabels={provider.available ? thinkingTriggerLabels : undefined}
           onToggleModel={onToggleModel}
           onToggleAll={onToggleAll}
           onThinkingChange={onThinkingChange}
@@ -158,7 +166,10 @@ export function CliCard({
             </p>
             <PopoverSelect
               value={swarmMode}
-              options={SWARM_OPTIONS}
+              options={[
+                { value: "", label: "Disabled" },
+                { value: "enabled", label: "Enabled" },
+              ]}
               onChange={onSwarmChange}
               disabled={modelControlsDisabled}
               direction="down"
@@ -167,19 +178,18 @@ export function CliCard({
               menuClassName="w-full min-w-full rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur"
             />
           </div>
-          {swarmMode === "enabled" && (
+          {swarmMode === "enabled" && ralphOptions && ralphOptions.length > 0 && (
             <div>
               <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-fg-faint">
                 Ralph Iterations
               </p>
               <PopoverSelect
                 value={ralphIterations}
-                options={RALPH_ITERATIONS_OPTIONS}
+                options={ralphOptions}
                 onChange={onRalphIterationsChange}
                 disabled={modelControlsDisabled}
                 direction="down"
-                placeholder="Default"
-                triggerLabels={RALPH_TRIGGER_LABELS}
+                placeholder={ralphDefinition?.default ?? "Default"}
                 triggerClassName="flex w-full h-10 items-center gap-2 rounded-md border border-edge-strong bg-input-bg px-3 text-sm font-medium text-fg shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition-all hover:border-input-border-focus hover:bg-elevated disabled:cursor-not-allowed disabled:opacity-55"
                 menuClassName="w-full min-w-full rounded-2xl border border-edge-strong bg-panel p-1 shadow-[0_18px_40px_rgba(0,0,0,0.35)] backdrop-blur"
               />

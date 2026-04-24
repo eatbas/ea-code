@@ -93,6 +93,7 @@ interface ConversationComposerProps {
   pipelineRedoReviewable: boolean;
   thinkingLevel: string;
   thinkingOptions: { value: string; label: string }[] | undefined;
+  ralphOptions: { value: string; label: string }[] | undefined;
   workspacePath: string;
   conversationId: string | null;
   onPipelineModeChange: (mode: PipelineMode) => void;
@@ -135,6 +136,7 @@ export function ConversationComposer({
   pipelineRedoReviewable,
   thinkingLevel,
   thinkingOptions,
+  ralphOptions,
   workspacePath,
   conversationId,
   onPipelineModeChange,
@@ -331,6 +333,7 @@ export function ConversationComposer({
             startupPhase={startupStatus.phase}
             thinkingLevel={thinkingLevel}
             thinkingOptions={thinkingOptions}
+            ralphOptions={ralphOptions}
             onPipelineModeChange={onPipelineModeChange}
             onAgentChange={onAgentChange}
             onThinkingChange={onThinkingChange}

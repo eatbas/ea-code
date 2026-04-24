@@ -1,13 +1,9 @@
 import { useRef, useState, useEffect, type ReactNode } from "react";
+import type { ProviderOptionDefinition } from "../../types";
 import { Checkmark } from "../shared/Checkmark";
 import { PopoverSelect } from "../shared/PopoverSelect";
 
 interface ModelOption {
-  value: string;
-  label: string;
-}
-
-interface ThinkingOption {
   value: string;
   label: string;
 }
@@ -19,12 +15,10 @@ interface ModelCheckboxListProps {
   enabledModels: Set<string>;
   /** Whether checkbox interactions should be disabled. */
   disabled: boolean;
-  /** Per-model thinking / effort options keyed by model value (undefined = no thinking control). */
-  thinkingOptions: Record<string, ThinkingOption[]> | undefined;
+  /** Per-model thinking option schemas keyed by model value (undefined = no thinking control). */
+  thinkingSchemas: Record<string, ProviderOptionDefinition> | undefined;
   /** Per-model thinking levels keyed by model value. */
   thinkingLevels: Record<string, string>;
-  /** Short labels for the trigger button, keyed by option value. */
-  thinkingTriggerLabels: Record<string, string> | undefined;
   /** Called when a single model is toggled. */
   onToggleModel: (value: string) => void;
   /** Called to select or deselect all models. */
@@ -67,16 +61,15 @@ export function ModelCheckboxList({
   modelOptions,
   enabledModels,
   disabled,
-  thinkingOptions,
+  thinkingSchemas,
   thinkingLevels,
-  thinkingTriggerLabels,
   onToggleModel,
   onToggleAll,
   onThinkingChange,
 }: ModelCheckboxListProps): ReactNode {
   const allSelected = modelOptions.every((opt) => enabledModels.has(opt.value));
-  const hasAnyThinking = thinkingOptions !== undefined
-    && Object.values(thinkingOptions).some((opts) => opts.length > 0);
+  const hasAnyThinking = thinkingSchemas !== undefined
+    && Object.values(thinkingSchemas).length > 0;
 
   return (
     <div className="mt-4">
@@ -114,6 +107,7 @@ export function ModelCheckboxList({
       <div className="flex flex-col gap-1.5">
         {modelOptions.map((opt) => {
           const isChecked = enabledModels.has(opt.value);
+          const schema = thinkingSchemas?.[opt.value];
           return (
             <div key={opt.value} className="flex items-center gap-2">
               <button
@@ -141,26 +135,21 @@ export function ModelCheckboxList({
                 </span>
                 <TruncatedLabel text={opt.label} />
               </button>
-              {(() => {
-                const modelOpts = thinkingOptions?.[opt.value];
-                if (!modelOpts || modelOpts.length === 0) return null;
-                return (
-                  <div className="shrink-0">
-                    <PopoverSelect
-                      value={thinkingLevels[opt.value] ?? ""}
-                      options={modelOpts}
-                      onChange={(v) => onThinkingChange(opt.value, v)}
-                      disabled={disabled}
-                      direction="down"
-                      placeholder="Default"
-                      triggerClassName={THINKING_TRIGGER_CLASS}
-                      menuClassName={THINKING_MENU_CLASS}
-                      triggerLabels={thinkingTriggerLabels}
-                      menuTitle="Thinking Level"
-                    />
-                  </div>
-                );
-              })()}
+              {schema && (
+                <div className="shrink-0">
+                  <PopoverSelect
+                    value={thinkingLevels[opt.value] ?? ""}
+                    options={schema.choices.map((c) => ({ value: c.value, label: c.label }))}
+                    onChange={(v) => onThinkingChange(opt.value, v)}
+                    disabled={disabled}
+                    direction="down"
+                    placeholder={schema.default ?? "Default"}
+                    triggerClassName={THINKING_TRIGGER_CLASS}
+                    menuClassName={THINKING_MENU_CLASS}
+                    menuTitle={schema.label}
+                  />
+                </div>
+              )}
             </div>
           );
         })}

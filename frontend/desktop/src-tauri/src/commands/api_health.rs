@@ -6,12 +6,14 @@ use tauri::{AppHandle, State};
 use crate::commands::emitter::{emit_done, emit_items};
 use crate::commands::AppState;
 use crate::http::api_client;
-use crate::models::{ApiCliVersionInfo, ApiHealthStatus, ProviderInfo, SidecarLogEvent};
+use crate::models::{ApiCliVersionInfo, ApiHealthStatus, ModelDetail, ProviderInfo, SidecarLogEvent};
 use crate::sidecar::log_buffer::SidecarLogEntry;
 
 pub const EVENT_API_HEALTH: &str = "api_health_status";
 pub const EVENT_API_PROVIDER: &str = "api_provider_info";
 pub const EVENT_API_PROVIDERS_DONE: &str = "api_providers_check_complete";
+pub const EVENT_API_MODEL: &str = "api_model_info";
+pub const EVENT_API_MODELS_DONE: &str = "api_models_check_complete";
 pub const EVENT_API_CLI_VERSION: &str = "api_cli_version_info";
 pub const EVENT_API_CLI_VERSIONS_DONE: &str = "api_versions_check_complete";
 
@@ -20,22 +22,49 @@ const DEFAULT_SYMPHONY_PORT: u16 = 8719;
 #[derive(Deserialize)]
 struct HealthResponse {
     status: String,
-    musician_count: Option<u32>,
+    #[serde(default)]
+    config_path: String,
+    #[serde(default)]
+    shell_path: Option<String>,
+    #[serde(default)]
+    bash_version: Option<String>,
+    #[serde(default)]
+    musicians_booted: bool,
+    #[serde(default)]
+    musician_count: u32,
+    #[serde(default)]
+    details: Vec<String>,
 }
 
 #[derive(Deserialize)]
 struct ProviderCapability {
     provider: String,
+    executable: Option<String>,
+    enabled: bool,
     available: bool,
     models: Vec<String>,
+    supports_resume: bool,
+    supports_model_override: bool,
+    session_reference_format: String,
 }
 
 #[derive(Deserialize)]
 struct CliVersionResponse {
     provider: String,
+    executable: Option<String>,
     current_version: Option<String>,
     latest_version: Option<String>,
     needs_update: bool,
+    #[serde(default)]
+    last_checked: Option<String>,
+    #[serde(default)]
+    next_check_at: Option<String>,
+    #[serde(default)]
+    auto_update: bool,
+    #[serde(default)]
+    last_updated: Option<String>,
+    #[serde(default)]
+    update_skipped_reason: Option<String>,
 }
 
 pub fn symphony_base_url() -> String {
@@ -54,18 +83,30 @@ pub fn symphony_base_url() -> String {
 fn map_provider_info(provider: ProviderCapability) -> ProviderInfo {
     ProviderInfo {
         name: provider.provider,
+        executable: provider.executable,
+        enabled: provider.enabled,
         available: provider.available,
         models: provider.models,
+        supports_resume: provider.supports_resume,
+        supports_model_override: provider.supports_model_override,
+        session_reference_format: provider.session_reference_format,
     }
 }
 
 fn map_api_cli_version(version: CliVersionResponse) -> ApiCliVersionInfo {
     ApiCliVersionInfo {
         provider: version.provider,
+        executable: version.executable,
         installed_version: version.current_version,
         latest_version: version.latest_version,
         up_to_date: !version.needs_update,
         available: true,
+        needs_update: Some(version.needs_update),
+        last_checked: version.last_checked,
+        next_check_at: version.next_check_at,
+        auto_update: Some(version.auto_update),
+        last_updated: version.last_updated,
+        update_skipped_reason: version.update_skipped_reason,
     }
 }
 
@@ -74,7 +115,12 @@ fn map_health_success(base_url: String, body: HealthResponse) -> ApiHealthStatus
         connected: true,
         url: base_url,
         status: Some(body.status),
-        musician_count: body.musician_count,
+        config_path: Some(body.config_path),
+        shell_path: body.shell_path,
+        bash_version: body.bash_version,
+        musicians_booted: Some(body.musicians_booted),
+        musician_count: Some(body.musician_count),
+        details: Some(body.details),
         error: None,
     }
 }
@@ -88,7 +134,12 @@ fn map_health_failure(
         connected: false,
         url: base_url,
         status,
+        config_path: None,
+        shell_path: None,
+        bash_version: None,
+        musicians_booted: None,
         musician_count: None,
+        details: None,
         error,
     }
 }
@@ -116,7 +167,12 @@ pub async fn check_api_health(app: AppHandle, state: State<'_, AppState>) -> Res
         Ok(response) if response.status().is_success() => {
             let body = response.json().await.unwrap_or(HealthResponse {
                 status: "ok".to_string(),
-                musician_count: None,
+                config_path: String::new(),
+                shell_path: None,
+                bash_version: None,
+                musicians_booted: false,
+                musician_count: 0,
+                details: vec![],
             });
             map_health_success(base_url, body)
         }
@@ -166,6 +222,36 @@ pub async fn get_api_providers(app: AppHandle, state: State<'_, AppState>) -> Re
     }
 
     emit_done(&app, EVENT_API_PROVIDERS_DONE);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_api_models(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let _ = state.sidecar.ensure_running().await;
+    let base_url = symphony_base_url();
+    let client = api_client();
+    let url = format!("{base_url}/v1/models");
+
+    match client
+        .get(&url)
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+    {
+        Ok(response) if response.status().is_success() => {
+            if let Ok(models) = response.json::<Vec<ModelDetail>>().await {
+                emit_items(&app, EVENT_API_MODEL, models);
+            }
+        }
+        Ok(response) => {
+            eprintln!("[api_health] models endpoint returned {}", response.status());
+        }
+        Err(error) => {
+            eprintln!("[api_health] failed to fetch models: {error}");
+        }
+    }
+
+    emit_done(&app, EVENT_API_MODELS_DONE);
     Ok(())
 }
 
@@ -267,22 +353,35 @@ mod tests {
     fn provider_mapping_preserves_models() {
         let info = map_provider_info(ProviderCapability {
             provider: "copilot".to_string(),
+            executable: Some("copilot".to_string()),
+            enabled: true,
             available: true,
             models: vec!["gpt-5.4".to_string()],
+            supports_resume: false,
+            supports_model_override: true,
+            session_reference_format: "opaque-string".to_string(),
         });
 
         assert_eq!(info.name, "copilot");
         assert!(info.available);
         assert_eq!(info.models, vec!["gpt-5.4"]);
+        assert!(!info.supports_resume);
+        assert!(info.supports_model_override);
     }
 
     #[test]
     fn api_cli_version_mapping_inverts_needs_update() {
         let version = map_api_cli_version(CliVersionResponse {
             provider: "copilot".to_string(),
+            executable: None,
             current_version: Some("1.0.0".to_string()),
             latest_version: Some("1.0.1".to_string()),
             needs_update: true,
+            last_checked: None,
+            next_check_at: None,
+            auto_update: true,
+            last_updated: None,
+            update_skipped_reason: None,
         });
 
         assert_eq!(version.provider, "copilot");
@@ -290,5 +389,6 @@ mod tests {
         assert_eq!(version.latest_version.as_deref(), Some("1.0.1"));
         assert!(!version.up_to_date);
         assert!(version.available);
+        assert_eq!(version.needs_update, Some(true));
     }
 }

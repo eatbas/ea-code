@@ -2082,7 +2082,7 @@ dependencies = [
 
 [[package]]
 name = "maestro"
-version = "1.7.4"
+version = "1.7.7"
 dependencies = [
  "base64 0.22.1",
  "chrono",

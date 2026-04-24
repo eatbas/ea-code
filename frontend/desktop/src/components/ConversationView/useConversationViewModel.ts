@@ -3,12 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentSelection, ConversationDetail, WorkspaceInfo } from "../../types";
 import type { PendingImage } from "../../hooks/useImageAttachments";
 import { useApiHealth } from "../../hooks/useApiHealth";
+import { useApiModels } from "../../hooks/useApiModels";
 import { useFooterErrorHandler } from "../../hooks/useFooterErrorHandler";
 import { usePipelineSession } from "../../hooks/usePipelineSession";
 import { usePlanReview } from "../../hooks/usePlanReview";
 import { useSettings } from "../../hooks/useSettings";
 import { useToast } from "../shared/Toast";
-import { getThinkingOptions, KIMI_SWARM_PROMPT_PREFIX } from "../shared/constants";
+import { KIMI_SWARM_PROMPT_PREFIX } from "../shared/constants";
 import {
   acceptPlan,
   continueCoder,
@@ -70,6 +71,7 @@ export function useConversationViewModel({
     checking: apiChecking,
     checkHealth,
   } = useApiHealth();
+  const { models, fetchModels } = useApiModels();
   const { settings, saveSettings } = useSettings();
   const handleFooterError = useFooterErrorHandler();
   const toast = useToast();
@@ -130,8 +132,9 @@ export function useConversationViewModel({
 
     if (sidecarReady === true && (workspaceChanged || readyBecameAvailable)) {
       checkHealth();
+      fetchModels();
     }
-  }, [checkHealth, sidecarReady, workspace.path]);
+  }, [checkHealth, fetchModels, sidecarReady, workspace.path]);
 
   useEffect(() => {
     const currentId = activeConversation?.summary.id ?? null;
@@ -405,10 +408,26 @@ export function useConversationViewModel({
     return settings.providerThinking[key] ?? "";
   }, [settings, currentAgent]);
 
-  const thinkingOptions = useMemo(() => {
+  const modelDetail = useMemo(() => {
     if (!currentAgent) return undefined;
-    return getThinkingOptions(currentAgent.provider, currentAgent.model);
-  }, [currentAgent]);
+    return models.find((m) => m.provider === currentAgent.provider && m.model === currentAgent.model);
+  }, [models, currentAgent]);
+
+  const thinkingOptions = useMemo(() => {
+    if (!modelDetail) return undefined;
+    const def = modelDetail.providerOptionsSchema.find(
+      (d) => d.key === "thinking_mode" || d.key === "thinking_level"
+    );
+    if (!def) return undefined;
+    return def.choices.map((c) => ({ value: c.value, label: c.label }));
+  }, [modelDetail]);
+
+  const ralphOptions = useMemo(() => {
+    if (!modelDetail) return undefined;
+    const def = modelDetail.providerOptionsSchema.find((d) => d.key === "max_ralph_iterations");
+    if (!def) return undefined;
+    return def.choices.map((c) => ({ value: c.value, label: c.label }));
+  }, [modelDetail]);
 
   const handleThinkingChange = useCallback((value: string) => {
     if (!settings || !currentAgent) return;
@@ -462,6 +481,7 @@ export function useConversationViewModel({
     redoSwarm,
     setRedoSwarm,
     handleSwarmChange,
+    ralphOptions,
     handleRalphIterationsChange,
     handleFooterError,
   };

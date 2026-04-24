@@ -111,6 +111,7 @@ export function ConversationView({
             pipelineRedoReviewable={viewModel.pipelineRedoReviewable}
             thinkingLevel={viewModel.thinkingLevel}
             thinkingOptions={viewModel.thinkingOptions}
+            ralphOptions={viewModel.ralphOptions}
             workspacePath={workspace.path}
             conversationId={activeConversation?.summary.id ?? null}
             onPipelineModeChange={onPipelineModeChange}

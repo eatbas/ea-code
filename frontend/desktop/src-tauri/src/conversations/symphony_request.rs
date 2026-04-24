@@ -27,10 +27,31 @@ pub struct SymphonyChatRequest<'a> {
     pub provider_options: SymphonyProviderOptions,
 }
 
+fn thinking_key_for_provider(provider: &str) -> &'static str {
+    if provider.eq_ignore_ascii_case("kimi") || provider.eq_ignore_ascii_case("opencode") {
+        "thinking_mode"
+    } else {
+        "thinking_level"
+    }
+}
+
+fn normalise_thinking_value(provider: &str, value: &str) -> String {
+    if provider.eq_ignore_ascii_case("kimi") || provider.eq_ignore_ascii_case("opencode") {
+        match value {
+            "on" => "enabled".to_string(),
+            "off" => "disabled".to_string(),
+            _ => value.to_string(),
+        }
+    } else {
+        value.to_string()
+    }
+}
+
 /// Apply provider-specific defaults for Maestro-managed runs.
 ///
 /// When `thinking_level` is `Some`, the value is forwarded to the
-/// Symphony provider adapter as `"thinking_level"` in the options map.
+/// Symphony provider adapter under the correct key (`thinking_level` or
+/// `thinking_mode`) depending on the provider.
 pub fn default_provider_options(
     provider: &str,
     thinking_level: Option<&str>,
@@ -44,10 +65,9 @@ pub fn default_provider_options(
         );
     }
     if let Some(level) = thinking_level {
-        options.insert(
-            "thinking_level".to_string(),
-            Value::String(level.to_string()),
-        );
+        let key = thinking_key_for_provider(provider);
+        let value = normalise_thinking_value(provider, level);
+        options.insert(key.to_string(), Value::String(value));
     }
     if let Some(swarm) = kimi_swarm {
         options.insert("agent_file".to_string(), Value::String(swarm.agent_file));
@@ -83,6 +103,40 @@ mod tests {
         assert_eq!(
             options.get("thinking_level"),
             Some(&Value::String("medium".to_string())),
+        );
+    }
+
+    #[test]
+    fn kimi_thinking_uses_mode_key() {
+        let options = default_provider_options("kimi", Some("enabled"), None);
+        assert_eq!(
+            options.get("thinking_mode"),
+            Some(&Value::String("enabled".to_string())),
+        );
+        assert!(options.get("thinking_level").is_none());
+    }
+
+    #[test]
+    fn kimi_thinking_normalises_legacy_values() {
+        let on_opts = default_provider_options("kimi", Some("on"), None);
+        assert_eq!(
+            on_opts.get("thinking_mode"),
+            Some(&Value::String("enabled".to_string())),
+        );
+
+        let off_opts = default_provider_options("kimi", Some("off"), None);
+        assert_eq!(
+            off_opts.get("thinking_mode"),
+            Some(&Value::String("disabled".to_string())),
+        );
+    }
+
+    #[test]
+    fn opencode_thinking_uses_mode_key() {
+        let options = default_provider_options("opencode", Some("disabled"), None);
+        assert_eq!(
+            options.get("thinking_mode"),
+            Some(&Value::String("disabled".to_string())),
         );
     }
 

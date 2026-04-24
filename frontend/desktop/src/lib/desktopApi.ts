@@ -96,8 +96,16 @@ export function getApiProviders(): Promise<void> {
   return invokeCommand<void>("get_api_providers");
 }
 
+export function getApiModels(): Promise<void> {
+  return invokeCommand<void>("get_api_models");
+}
+
 export function refreshApiProviders(): Promise<void> {
   return Promise.all([checkApiHealth(), getApiProviders()]).then(() => undefined);
+}
+
+export function refreshApiProvidersAndModels(): Promise<void> {
+  return Promise.all([checkApiHealth(), getApiProviders(), getApiModels()]).then(() => undefined);
 }
 
 export function getApiCliVersions(): Promise<void> {

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import { useApiCliVersions } from "../../hooks/useApiCliVersions";
 import { useApiHealth } from "../../hooks/useApiHealth";
+import { useApiModels } from "../../hooks/useApiModels";
 import { useCliHealth } from "../../hooks/useCliHealth";
 import { useSidecarLogs } from "../../hooks/useSidecarLogs";
 import { useSidecarReady } from "../../hooks/useSidecarReady";
@@ -20,6 +21,7 @@ export function CliSetupRoute(): ReactNode {
     checking: apiChecking,
     checkHealth: checkApiHealth,
   } = useApiHealth();
+  const { models, loading: modelsLoading, fetchModels } = useApiModels();
   const { sidecarReady, sidecarError } = useSidecarReady();
   const { logs: sidecarLogs } = useSidecarLogs();
   const {
@@ -34,10 +36,11 @@ export function CliSetupRoute(): ReactNode {
   const refreshAll = useCallback((showSuccessToast: boolean): void => {
     checkApiHealth();
     fetchApiVersions();
+    fetchModels();
     if (showSuccessToast) {
       toast.success("Symphony checks started.");
     }
-  }, [checkApiHealth, fetchApiVersions, toast]);
+  }, [checkApiHealth, fetchApiVersions, fetchModels, toast]);
 
   useEffect(() => {
     if (!settings) {
@@ -72,8 +75,9 @@ export function CliSetupRoute(): ReactNode {
       sidecarReady={sidecarReady}
       sidecarError={sidecarError}
       providers={providers}
+      models={models}
       apiVersions={apiVersions}
-      versionsLoading={apiVersionsLoading}
+      versionsLoading={apiVersionsLoading || modelsLoading}
       updating={apiVersionsUpdating}
       sidecarLogs={sidecarLogs}
       onRefresh={() => refreshAll(true)}
