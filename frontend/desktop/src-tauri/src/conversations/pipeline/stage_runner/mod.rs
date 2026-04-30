@@ -201,6 +201,7 @@ pub async fn run_stage(
     };
     let provider_options = crate::conversations::symphony_request::default_provider_options(
         &provider,
+        &model,
         thinking_level.as_deref(),
         kimi_swarm,
     );

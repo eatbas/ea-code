@@ -128,8 +128,12 @@ async fn run_follow_up_turn(
             s.thinking_level(&coder_agent.provider, &coder_agent.model)
                 .map(str::to_string)
         });
-    let provider_options =
-        default_provider_options(&coder_agent.provider, thinking_level.as_deref(), None);
+    let provider_options = default_provider_options(
+        &coder_agent.provider,
+        &coder_agent.model,
+        thinking_level.as_deref(),
+        None,
+    );
 
     emit_pipeline_debug(
         app,

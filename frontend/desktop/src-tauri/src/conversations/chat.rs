@@ -173,6 +173,7 @@ pub async fn run_conversation_turn(
         });
     let provider_options = default_provider_options(
         &summary.agent.provider,
+        &summary.agent.model,
         thinking_level.as_deref(),
         kimi_swarm,
     );
