@@ -204,20 +204,27 @@ pub async fn run_pipeline_planners(
 
     for (result_idx, result) in results.into_iter().enumerate() {
         let stage_idx = spawned_indices[result_idx];
+        // The user-visible planner number is its position within the
+        // planner phase (1, 2, 3, ...), NOT its global pipeline stage
+        // index. Without this offset, when the orchestrator runs
+        // first (stage 0) the planners are reported as "Planner 2,
+        // 3, 4" instead of "Planner 1, 2, 3", which is confusing in
+        // the UI and in logs.
+        let planner_number = stage_idx - planner_start_index + 1;
         match result {
             Ok(Ok(record)) => stage_records.push(record),
             Ok(Err((record, e))) => {
                 stage_records.push(record);
-                errors.push(format!("Planner {}: {e}", stage_idx + 1));
+                errors.push(format!("Planner {planner_number}: {e}"));
             }
             Err(e) => {
                 stage_records.push(PipelineStageRecord::failed(
                     stage_idx,
-                    format!("Planner {}", stage_idx + 1),
+                    format!("Planner {planner_number}"),
                     String::new(),
                     None,
                 ));
-                errors.push(format!("Planner {} panicked: {e}", stage_idx + 1));
+                errors.push(format!("Planner {planner_number} panicked: {e}"));
             }
         }
     }
@@ -265,6 +272,10 @@ pub async fn run_pipeline_planners(
         );
     }
 
+    // Strict gating: every planner must succeed before we move on to
+    // the merge step. We need the full diversity of plans to pick the
+    // strongest path forward; running with a partial set would give
+    // the merge agent less to work with than the user asked for.
     if errors.is_empty() {
         emit_pipeline_debug(
             &app,

@@ -11,7 +11,8 @@ use tokio::time::{sleep, Duration, Instant};
 
 use crate::conversations::pipeline_debug::emit_pipeline_debug;
 use crate::conversations::score_client::{
-    consume_score_websocket, fetch_score_snapshot, SymphonyLiveEvent, SCORE_POLL_INTERVAL,
+    consume_score_websocket, fetch_score_snapshot, SymphonyLiveEvent, SymphonyScoreSnapshot,
+    SCORE_POLL_INTERVAL,
 };
 use crate::conversations::symphony_request::SymphonyChatRequest;
 use crate::models::{ConversationStatus, PipelineStageRecord};
@@ -19,13 +20,27 @@ use crate::storage::now_rfc3339;
 
 use self::emission::{emit_stage_delta, emit_stage_record_status, request_symphony_stop};
 use self::finalise::{
-    append_live_output, describe_stage_failure, determine_final_status, live_output,
-    maybe_update_session_ref, resolve_stage_text, sync_snapshot_output,
+    append_live_output, describe_stage_failure, determine_final_status, is_network_error,
+    live_output, maybe_update_session_ref, resolve_stage_text, stage_error_text,
+    sync_snapshot_output,
 };
 use self::watchers::spawn_stage_watchers;
 
 const FILE_COMPLETION_STOP_GRACE: Duration = Duration::from_secs(15);
 const POLL_FAILURE_GRACE: Duration = Duration::from_secs(45);
+
+/// Maximum number of attempts (1 initial + 2 retries) for a single
+/// pipeline stage when a transient network error is detected. After
+/// this is exhausted the stage is reported as Failed.
+const MAX_STAGE_ATTEMPTS: u32 = 3;
+/// Backoff between auto-retry attempts. Long enough to let a brief
+/// provider-side outage clear; short enough that a multi-stage pipeline
+/// does not stall for minutes when the API is genuinely down.
+const RETRY_BACKOFF: Duration = Duration::from_secs(10);
+/// Prompt used when resuming a captured provider session for a retry.
+/// Plain `continue` lets the agent pick up exactly where the stream was
+/// interrupted without reframing the original task.
+const RETRY_CONTINUE_PROMPT: &str = "continue";
 
 /// Prompt prefix prepended to pipeline stage prompts when Kimi swarm mode
 /// is active. Instructs the agent to create specialised subagents and
@@ -54,6 +69,17 @@ pub struct StageConfig {
     /// Suitable for coding agents that modify the codebase but may not
     /// write a dedicated marker file.
     pub file_required: bool,
+}
+
+/// Outcome of a single attempt at running a stage. Used by the retry
+/// loop to decide whether to re-attempt with `continue`.
+struct AttemptOutcome {
+    terminal_snapshot: Result<SymphonyScoreSnapshot, String>,
+    final_status: ConversationStatus,
+    captured_session_ref: Option<String>,
+    captured_job: Option<String>,
+    display_text: Option<String>,
+    accumulated_text: String,
 }
 
 pub(super) fn emit_stage_status(
@@ -117,9 +143,15 @@ fn persist_stage_progress(
     }
 }
 
-/// Execute a single pipeline stage: submit a score to Symphony, observe it via
-/// polling and optional WebSocket deltas, watch for the expected plan file, and
-/// persist the result.
+/// Execute a single pipeline stage with auto-retry on transient
+/// connection failures.
+///
+/// The first attempt uses the caller-supplied prompt and mode. If the
+/// score completes with a network-class error and the run captured a
+/// provider session ref, the stage is re-submitted in `resume` mode
+/// with a `continue` prompt so the agent picks up where the interrupted
+/// stream left off. Up to [`MAX_STAGE_ATTEMPTS`] attempts are made before
+/// the stage is reported as Failed.
 pub async fn run_stage(
     app: AppHandle,
     conversation_id: String,
@@ -129,28 +161,19 @@ pub async fn run_stage(
     score_id_slot: Arc<std::sync::Mutex<Option<String>>>,
     output_buffer: Arc<std::sync::Mutex<String>>,
 ) -> Result<PipelineStageRecord, (PipelineStageRecord, String)> {
-    let StageConfig {
-        stage_index,
-        stage_name,
-        provider,
-        model,
-        prompt,
-        file_to_watch,
-        mode,
-        provider_session_ref,
-        failure_message,
-        agent_label,
-        file_required,
-    } = config;
+    let stage_index = config.stage_index;
+    let stage_name = config.stage_name.clone();
+    let provider = config.provider.clone();
+    let model = config.model.clone();
+    let initial_prompt = config.prompt.clone();
+    let file_to_watch = config.file_to_watch.clone();
+    let initial_mode = config.mode;
+    let initial_session_ref = config.provider_session_ref.clone();
+    let failure_message = config.failure_message.clone();
+    let agent_label = config.agent_label.clone();
+    let file_required = config.file_required;
+
     let started_at = now_rfc3339();
-    emit_pipeline_debug(
-        &app,
-        &workspace_path,
-        &conversation_id,
-        format!(
-            "{stage_name}: starting stage with {provider}/{model}, mode={mode}, file_required={file_required}, file_to_watch={file_to_watch}",
-        ),
-    );
 
     if let Err(error) = emit_stage_status(
         &app,
@@ -162,22 +185,329 @@ pub async fn run_stage(
         None,
     ) {
         return Err((
-            PipelineStageRecord::failed(stage_index, stage_name, agent_label, Some(started_at)),
+            PipelineStageRecord::failed(
+                stage_index,
+                stage_name.clone(),
+                agent_label.clone(),
+                Some(started_at.clone()),
+            ),
             error,
         ));
     }
 
+    let mut current_mode: &'static str = initial_mode;
+    let mut current_prompt = initial_prompt;
+    let mut current_session_ref = initial_session_ref;
+    let mut last_outcome: Option<AttemptOutcome> = None;
+
+    for attempt in 0..MAX_STAGE_ATTEMPTS {
+        let attempt_index = attempt + 1;
+        if attempt_index > 1 {
+            emit_pipeline_debug(
+                &app,
+                &workspace_path,
+                &conversation_id,
+                format!(
+                    "{stage_name}: attempt {attempt_index}/{MAX_STAGE_ATTEMPTS} resuming session {} with `continue`",
+                    current_session_ref.as_deref().unwrap_or("<none>"),
+                ),
+            );
+        } else {
+            emit_pipeline_debug(
+                &app,
+                &workspace_path,
+                &conversation_id,
+                format!(
+                    "{stage_name}: starting stage with {provider}/{model}, mode={current_mode}, file_required={file_required}, file_to_watch={file_to_watch}",
+                ),
+            );
+        }
+
+        let attempt_outcome = attempt_stage(
+            &app,
+            &conversation_id,
+            &workspace_path,
+            stage_index,
+            &stage_name,
+            &provider,
+            &model,
+            &current_prompt,
+            current_mode,
+            current_session_ref.as_deref(),
+            &file_to_watch,
+            file_required,
+            &agent_label,
+            &started_at,
+            abort.clone(),
+            score_id_slot.clone(),
+            output_buffer.clone(),
+        )
+        .await;
+
+        // On a clean stop or non-failed terminal status we are done.
+        if attempt_outcome.final_status != ConversationStatus::Failed {
+            last_outcome = Some(attempt_outcome);
+            break;
+        }
+
+        // The user may have aborted between attempts — respect that even
+        // if the score itself reported Failed.
+        if abort.load(Ordering::Acquire) {
+            last_outcome = Some(attempt_outcome);
+            break;
+        }
+
+        let error_text = stage_error_text(&attempt_outcome.terminal_snapshot).unwrap_or_default();
+        let recoverable =
+            !error_text.is_empty() && is_network_error(&error_text);
+        let session_for_retry = attempt_outcome
+            .captured_session_ref
+            .clone()
+            .or_else(|| current_session_ref.clone());
+
+        let can_retry =
+            recoverable && session_for_retry.is_some() && attempt_index < MAX_STAGE_ATTEMPTS;
+
+        if !can_retry {
+            if recoverable && session_for_retry.is_none() {
+                emit_pipeline_debug(
+                    &app,
+                    &workspace_path,
+                    &conversation_id,
+                    format!(
+                        "{stage_name}: detected network error but no provider session captured \u{2014} cannot retry",
+                    ),
+                );
+            } else if recoverable {
+                emit_pipeline_debug(
+                    &app,
+                    &workspace_path,
+                    &conversation_id,
+                    format!(
+                        "{stage_name}: exhausted {MAX_STAGE_ATTEMPTS} attempts after network errors",
+                    ),
+                );
+            }
+            last_outcome = Some(attempt_outcome);
+            break;
+        }
+
+        emit_pipeline_debug(
+            &app,
+            &workspace_path,
+            &conversation_id,
+            format!(
+                "{stage_name}: attempt {attempt_index} hit network error ({}); retrying after {}s",
+                truncate_for_log(&error_text, 200),
+                RETRY_BACKOFF.as_secs(),
+            ),
+        );
+
+        // Append a visible separator into the live output buffer so the
+        // user can see in the stage transcript that a retry was issued
+        // and what triggered it.
+        append_live_output(
+            &output_buffer,
+            &format!(
+                "\n--- retry: attempt {attempt_index} hit network error; resuming with `continue` ---\n",
+            ),
+        );
+        if let Err(error) =
+            emit_stage_delta(
+                &app,
+                &conversation_id,
+                stage_index,
+                &format!(
+                    "\n--- retry: attempt {attempt_index} hit network error; resuming with `continue` ---\n",
+                ),
+            )
+        {
+            eprintln!("[pipeline] {stage_name}: failed to emit retry separator: {error}");
+        }
+
+        // Sleep with abort awareness so a stop click during backoff
+        // exits promptly.
+        let mut aborted_during_backoff = false;
+        let backoff_deadline = Instant::now() + RETRY_BACKOFF;
+        while Instant::now() < backoff_deadline {
+            if abort.load(Ordering::Acquire) {
+                aborted_during_backoff = true;
+                break;
+            }
+            sleep(Duration::from_millis(200)).await;
+        }
+
+        if aborted_during_backoff {
+            last_outcome = Some(attempt_outcome);
+            break;
+        }
+
+        current_mode = "resume";
+        current_prompt = RETRY_CONTINUE_PROMPT.to_string();
+        current_session_ref = session_for_retry;
+        last_outcome = Some(attempt_outcome);
+    }
+
+    let outcome = last_outcome.expect("at least one attempt always runs");
+    finalise_stage_record(
+        &app,
+        &conversation_id,
+        &workspace_path,
+        stage_index,
+        &stage_name,
+        &agent_label,
+        &started_at,
+        &file_to_watch,
+        file_required,
+        &failure_message,
+        outcome,
+    )
+}
+
+/// Emit + persist the final stage record using the most recent attempt's
+/// outcome. Returns `Ok` on a successful stage and `Err` with the
+/// caller-supplied failure message otherwise.
+#[allow(clippy::too_many_arguments)]
+fn finalise_stage_record(
+    app: &AppHandle,
+    conversation_id: &str,
+    workspace_path: &str,
+    stage_index: usize,
+    stage_name: &str,
+    agent_label: &str,
+    started_at: &str,
+    file_to_watch: &str,
+    file_required: bool,
+    failure_message: &str,
+    outcome: AttemptOutcome,
+) -> Result<PipelineStageRecord, (PipelineStageRecord, String)> {
+    let AttemptOutcome {
+        terminal_snapshot,
+        final_status,
+        captured_session_ref,
+        captured_job,
+        display_text,
+        accumulated_text,
+    } = outcome;
+
+    let failure_text = if final_status == ConversationStatus::Failed {
+        Some(describe_stage_failure(
+            stage_name,
+            file_to_watch,
+            file_required,
+            &terminal_snapshot,
+            captured_job.as_deref(),
+            captured_session_ref.as_deref(),
+            &accumulated_text,
+        ))
+    } else {
+        None
+    };
+
+    let display_text = display_text.or_else(|| failure_text.clone());
+
+    if let Some(ref diagnostic) = failure_text {
+        eprintln!("[pipeline] {stage_name}: {diagnostic}");
+        for line in diagnostic.lines() {
+            emit_pipeline_debug(
+                app,
+                workspace_path,
+                conversation_id,
+                format!("{stage_name}: {line}"),
+            );
+        }
+    }
+
+    emit_pipeline_debug(
+        app,
+        workspace_path,
+        conversation_id,
+        format!(
+            "{stage_name}: final status resolved to {:?}; watched_file_exists={}",
+            final_status,
+            std::path::Path::new(file_to_watch).exists(),
+        ),
+    );
+
+    let record = PipelineStageRecord {
+        stage_index,
+        stage_name: stage_name.to_string(),
+        agent_label: agent_label.to_string(),
+        status: final_status.clone(),
+        text: display_text.unwrap_or(accumulated_text),
+        started_at: Some(started_at.to_string()),
+        finished_at: Some(now_rfc3339()),
+        score_id: captured_job,
+        provider_session_ref: captured_session_ref,
+    };
+
+    let _ = emit_stage_record_status(app, conversation_id, &record, Some(record.text.clone()));
+
+    if let Err(error) = crate::conversations::persistence::update_pipeline_stage(
+        workspace_path,
+        conversation_id,
+        &record,
+    ) {
+        eprintln!("[pipeline] Failed to save stage state for {stage_name}: {error}");
+    }
+
+    if final_status == ConversationStatus::Failed {
+        Err((record, failure_message.to_string()))
+    } else {
+        Ok(record)
+    }
+}
+
+fn truncate_for_log(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        text.to_string()
+    } else {
+        let mut truncated: String = text.chars().take(max_chars).collect();
+        truncated.push_str("...");
+        truncated
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn attempt_stage(
+    app: &AppHandle,
+    conversation_id: &str,
+    workspace_path: &str,
+    stage_index: usize,
+    stage_name: &str,
+    provider: &str,
+    model: &str,
+    prompt: &str,
+    mode: &str,
+    provider_session_ref: Option<&str>,
+    file_to_watch: &str,
+    file_required: bool,
+    agent_label: &str,
+    started_at: &str,
+    abort: Arc<AtomicBool>,
+    score_id_slot: Arc<std::sync::Mutex<Option<String>>>,
+    output_buffer: Arc<std::sync::Mutex<String>>,
+) -> AttemptOutcome {
     let settings = crate::storage::settings::read_settings().ok();
     let thinking_level = settings
         .as_ref()
-        .and_then(|s| s.thinking_level(&provider, &model).map(str::to_string));
-    // Only apply Kimi swarm for new sessions (planners and coder).
-    // Resume stages (reviewers, code fixer, merges) inherit the existing
-    // session context. The orchestrator is excluded as prompt enhancement
-    // does not benefit from subagent parallelism.
+        .and_then(|s| s.thinking_level(provider, model).map(str::to_string));
+    // Kimi swarm spins up coding subagents that aggressively modify
+    // files in parallel. That behaviour is exactly what the **Coder**
+    // and **Code Fixer** stages need, but it is destructive everywhere
+    // else: planners, reviewers, and merge stages are supposed to
+    // analyse / plan / synthesise without touching the codebase. With
+    // swarm enabled in those stages the planner subagents skip writing
+    // their `Plan-N.md` artefact and start editing source files
+    // directly -- exactly the symptom the user reported (planning
+    // phase produced 1500+ lines of code diffs instead of a plan).
+    //
+    // Use an explicit allowlist of stage names rather than a blocklist
+    // so any future read-only stage we add stays safe by default.
+    let stage_allows_swarm = matches!(stage_name, "Coder" | "Code Fixer");
     let kimi_swarm = settings
         .as_ref()
-        .filter(|_| mode == "new" && stage_name != "Prompt Enhancer")
+        .filter(|_| mode == "new" && stage_allows_swarm)
         .filter(|s| provider.eq_ignore_ascii_case("kimi") && s.kimi_swarm_enabled)
         .map(|s| {
             let swarm_dir =
@@ -194,68 +524,64 @@ pub async fn run_stage(
             }
         });
     // Prepend swarm instructions when swarm mode is active.
-    let prompt = if kimi_swarm.is_some() {
+    let augmented_prompt = if kimi_swarm.is_some() {
         format!("{PIPELINE_SWARM_PREFIX}\n\n{prompt}")
     } else {
-        prompt
+        prompt.to_string()
     };
     let provider_options = crate::conversations::symphony_request::default_provider_options(
-        &provider,
-        &model,
+        provider,
+        model,
         thinking_level.as_deref(),
         kimi_swarm,
     );
     emit_pipeline_debug(
-        &app,
-        &workspace_path,
-        &conversation_id,
+        app,
+        workspace_path,
+        conversation_id,
         format!(
             "{stage_name}: options: {}",
             serde_json::to_string(&provider_options).unwrap_or_else(|_| "{}".to_string()),
         ),
     );
     let request = SymphonyChatRequest {
-        provider: &provider,
-        model: &model,
-        workspace_path: &workspace_path,
+        provider,
+        model,
+        workspace_path,
         mode,
-        prompt: &prompt,
-        provider_session_ref: provider_session_ref.as_deref(),
+        prompt: &augmented_prompt,
+        provider_session_ref,
         provider_options,
-    };
-
-    let emit_failed = |error_message: &str| -> (PipelineStageRecord, String) {
-        let diagnostic = format!("# {stage_name} failed\n\n{error_message}");
-        let mut record = PipelineStageRecord::failed(
-            stage_index,
-            stage_name.clone(),
-            agent_label.clone(),
-            Some(started_at.clone()),
-        );
-        record.text = diagnostic;
-        let _ =
-            emit_stage_record_status(&app, &conversation_id, &record, Some(record.text.clone()));
-        (record, error_message.to_string())
     };
 
     let accepted = match crate::conversations::score_client::submit_score(&request).await {
         Ok(response) => response,
         Err(error) => {
             emit_pipeline_debug(
-                &app,
-                &workspace_path,
-                &conversation_id,
+                app,
+                workspace_path,
+                conversation_id,
                 format!("{stage_name}: failed to submit score: {error}"),
             );
-            return Err(emit_failed(&format!(
-                "{stage_name} failed to submit to symphony: {error}"
-            )));
+            // Report a Failed outcome with no captured session so the
+            // retry loop classifies as network-class failure (the marker
+            // text contains "Failed to submit Symphony score") and can
+            // re-issue against the existing session_ref the caller
+            // already has.
+            return AttemptOutcome {
+                terminal_snapshot: Err(error.clone()),
+                final_status: ConversationStatus::Failed,
+                captured_session_ref: provider_session_ref.map(str::to_string),
+                captured_job: None,
+                display_text: None,
+                accumulated_text: live_output(&output_buffer),
+            };
         }
     };
     emit_pipeline_debug(
-        &app,
-        &workspace_path,
-        &conversation_id,
+        app,
+        workspace_path,
+        conversation_id,
         format!("{stage_name}: accepted score {}", accepted.score_id),
     );
 
@@ -264,34 +590,36 @@ pub async fn run_stage(
     }
 
     persist_stage_progress(
-        &workspace_path,
-        &conversation_id,
+        workspace_path,
+        conversation_id,
         stage_index,
-        &stage_name,
-        &agent_label,
-        &started_at,
+        stage_name,
+        agent_label,
+        started_at,
         &output_buffer,
         Some(accepted.score_id.clone()),
-        None,
+        provider_session_ref.map(str::to_string),
     );
 
-    let watchers = spawn_stage_watchers(file_to_watch.clone(), abort.clone());
+    let watchers = spawn_stage_watchers(file_to_watch.to_string(), abort.clone());
     let app_ref = app.clone();
-    let conversation_id_ref = conversation_id.clone();
+    let conversation_id_ref = conversation_id.to_string();
     let output_buffer_writer = output_buffer.clone();
-    let session_ref: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(None));
+    let session_ref: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(
+        provider_session_ref.map(str::to_string),
+    ));
     let session_ref_writer = session_ref.clone();
     let websocket_stop = Arc::new(AtomicBool::new(false));
 
     {
         let websocket_stop_ref = websocket_stop.clone();
         let score_id = accepted.score_id.clone();
-        let stage_name_for_ws = stage_name.clone();
-        let agent_label_for_ws = agent_label.clone();
-        let started_at_for_ws = started_at.clone();
+        let stage_name_for_ws = stage_name.to_string();
+        let agent_label_for_ws = agent_label.to_string();
+        let started_at_for_ws = started_at.to_string();
         let app_for_ws = app.clone();
-        let workspace_for_ws = workspace_path.clone();
-        let conversation_for_ws = conversation_id.clone();
+        let workspace_for_ws = workspace_path.to_string();
+        let conversation_for_ws = conversation_id.to_string();
         tokio::spawn(async move {
             let result =
                 consume_score_websocket(
@@ -383,8 +711,8 @@ pub async fn run_stage(
     let mut stop_requested_at: Option<Instant> = None;
     let mut poll_failure_started_at: Option<Instant> = None;
     let mut last_status: Option<String> = None;
-    let terminal_snapshot = loop {
-        let watched_file_exists = Path::new(&file_to_watch).exists();
+    let terminal_snapshot: Result<SymphonyScoreSnapshot, String> = loop {
+        let watched_file_exists = Path::new(file_to_watch).exists();
         if (watchers.local_stop.load(Ordering::Acquire)
             || abort.load(Ordering::Acquire)
             || watched_file_exists)
@@ -398,9 +726,9 @@ pub async fn run_stage(
                 "watched file became ready"
             };
             emit_pipeline_debug(
-                &app,
-                &workspace_path,
-                &conversation_id,
+                app,
+                workspace_path,
+                conversation_id,
                 format!(
                     "{stage_name}: issuing stop request for score {} because {stop_reason}",
                     accepted.score_id
@@ -415,9 +743,9 @@ pub async fn run_stage(
             Ok(snapshot) => {
                 if let Some(failure_started_at) = poll_failure_started_at.take() {
                     emit_pipeline_debug(
-                        &app,
-                        &workspace_path,
-                        &conversation_id,
+                        app,
+                        workspace_path,
+                        conversation_id,
                         format!(
                             "{stage_name}: polling recovered after {:.1}s",
                             failure_started_at.elapsed().as_secs_f32(),
@@ -427,9 +755,9 @@ pub async fn run_stage(
                 let status_label = format!("{:?}", snapshot.status).to_lowercase();
                 if last_status.as_deref() != Some(status_label.as_str()) {
                     emit_pipeline_debug(
-                        &app,
-                        &workspace_path,
-                        &conversation_id,
+                        app,
+                        workspace_path,
+                        conversation_id,
                         format!(
                             "{stage_name}: polled status -> {status_label} (chars={}, final={}, error={}, exit_code={})",
                             snapshot.accumulated_text.len(),
@@ -443,19 +771,22 @@ pub async fn run_stage(
                 if let Some(delta) =
                     sync_snapshot_output(&output_buffer, &snapshot.accumulated_text)
                 {
-                    emit_stage_delta(&app, &conversation_id, stage_index, &delta)
-                        .map_err(|error| emit_failed(&error))?;
+                    if let Err(error) =
+                        emit_stage_delta(app, conversation_id, stage_index, &delta)
+                    {
+                        eprintln!("[pipeline] {stage_name}: failed to emit stage delta: {error}");
+                    }
                 }
                 if let Some(provider_session_ref) =
                     maybe_update_session_ref(&session_ref, snapshot.provider_session_ref.as_deref())
                 {
                     persist_stage_progress(
-                        &workspace_path,
-                        &conversation_id,
+                        workspace_path,
+                        conversation_id,
                         stage_index,
-                        &stage_name,
-                        &agent_label,
-                        &started_at,
+                        stage_name,
+                        agent_label,
+                        started_at,
                         &output_buffer,
                         Some(accepted.score_id.clone()),
                         Some(provider_session_ref),
@@ -463,23 +794,23 @@ pub async fn run_stage(
                 }
                 if snapshot.status.is_terminal() {
                     emit_pipeline_debug(
-                        &app,
-                        &workspace_path,
-                        &conversation_id,
+                        app,
+                        workspace_path,
+                        conversation_id,
                         format!("{stage_name}: reached terminal snapshot state"),
                     );
                     break Ok(snapshot);
                 }
                 if stop_requested
-                    && Path::new(&file_to_watch).exists()
+                    && Path::new(file_to_watch).exists()
                     && stop_requested_at
                         .map(|instant| instant.elapsed() >= FILE_COMPLETION_STOP_GRACE)
                         .unwrap_or(false)
                 {
                     emit_pipeline_debug(
-                        &app,
-                        &workspace_path,
-                        &conversation_id,
+                        app,
+                        workspace_path,
+                        conversation_id,
                         format!(
                             "{stage_name}: watched file exists but score {} stayed non-terminal after stop grace; finalising from file",
                             accepted.score_id,
@@ -494,12 +825,12 @@ pub async fn run_stage(
             Err(error) => {
                 let first_failure = poll_failure_started_at.is_none();
                 let failure_started_at = poll_failure_started_at.get_or_insert_with(Instant::now);
-                if Path::new(&file_to_watch).exists() {
+                if Path::new(file_to_watch).exists() {
                     if !stop_requested {
                         emit_pipeline_debug(
-                            &app,
-                            &workspace_path,
-                            &conversation_id,
+                            app,
+                            workspace_path,
+                            conversation_id,
                             format!(
                                 "{stage_name}: polling failed after watched file appeared; issuing best-effort stop for score {}",
                                 accepted.score_id,
@@ -508,9 +839,9 @@ pub async fn run_stage(
                         request_symphony_stop(accepted.score_id.clone());
                     }
                     emit_pipeline_debug(
-                        &app,
-                        &workspace_path,
-                        &conversation_id,
+                        app,
+                        workspace_path,
+                        conversation_id,
                         format!(
                             "{stage_name}: polling failed after watched file existed; finalising from file: {error}",
                         ),
@@ -520,9 +851,9 @@ pub async fn run_stage(
                 if failure_started_at.elapsed() < POLL_FAILURE_GRACE {
                     if first_failure {
                         emit_pipeline_debug(
-                            &app,
-                            &workspace_path,
-                            &conversation_id,
+                            app,
+                            workspace_path,
+                            conversation_id,
                             format!(
                                 "{stage_name}: polling failed but retrying for up to {}s: {error}",
                                 POLL_FAILURE_GRACE.as_secs(),
@@ -533,9 +864,9 @@ pub async fn run_stage(
                     continue;
                 }
                 emit_pipeline_debug(
-                    &app,
-                    &workspace_path,
-                    &conversation_id,
+                    app,
+                    workspace_path,
+                    conversation_id,
                     format!(
                         "{stage_name}: polling failed after {}s grace: {error}",
                         POLL_FAILURE_GRACE.as_secs(),
@@ -552,18 +883,18 @@ pub async fn run_stage(
 
     let final_status = determine_final_status(
         abort.as_ref(),
-        &file_to_watch,
+        file_to_watch,
         watchers.file_ready.as_ref(),
         file_required,
-        &stage_name,
+        stage_name,
         &terminal_snapshot,
     );
     let file_text = resolve_stage_text(
-        &file_to_watch,
+        file_to_watch,
         &output_buffer,
         file_required,
         &final_status,
-        &stage_name,
+        stage_name,
     );
     let captured_session_ref = session_ref.lock().ok().and_then(|guard| guard.clone());
     let captured_job = score_id_slot.lock().ok().and_then(|guard| guard.clone());
@@ -573,78 +904,20 @@ pub async fn run_stage(
         .ok()
         .and_then(|snapshot| snapshot.final_text.clone())
         .filter(|text| !text.trim().is_empty());
-    let failure_text = if final_status == ConversationStatus::Failed {
-        Some(describe_stage_failure(
-            &stage_name,
-            &file_to_watch,
-            file_required,
-            &terminal_snapshot,
-            captured_job.as_deref(),
-            captured_session_ref.as_deref(),
-            &accumulated_text,
-        ))
-    } else {
-        None
-    };
-    let display_text = file_text
-        .or(terminal_text)
-        .or_else(|| {
-            if accumulated_text.is_empty() {
-                None
-            } else {
-                Some(accumulated_text.clone())
-            }
-        })
-        .or(failure_text.clone());
-
-    if let Some(ref diagnostic) = failure_text {
-        eprintln!("[pipeline] {stage_name}: {diagnostic}");
-        for line in diagnostic.lines() {
-            emit_pipeline_debug(
-                &app,
-                &workspace_path,
-                &conversation_id,
-                format!("{stage_name}: {line}"),
-            );
+    let display_text = file_text.or(terminal_text).or_else(|| {
+        if accumulated_text.is_empty() {
+            None
+        } else {
+            Some(accumulated_text.clone())
         }
-    }
+    });
 
-    emit_pipeline_debug(
-        &app,
-        &workspace_path,
-        &conversation_id,
-        format!(
-            "{stage_name}: final status resolved to {:?}; watched_file_exists={}",
-            final_status,
-            std::path::Path::new(&file_to_watch).exists(),
-        ),
-    );
-
-    let record = PipelineStageRecord {
-        stage_index,
-        stage_name: stage_name.clone(),
-        agent_label: agent_label.clone(),
-        status: final_status.clone(),
-        text: display_text.unwrap_or(accumulated_text),
-        started_at: Some(started_at),
-        finished_at: Some(now_rfc3339()),
-        score_id: captured_job,
-        provider_session_ref: captured_session_ref,
-    };
-
-    let _ = emit_stage_record_status(&app, &conversation_id, &record, Some(record.text.clone()));
-
-    if let Err(error) = crate::conversations::persistence::update_pipeline_stage(
-        &workspace_path,
-        &conversation_id,
-        &record,
-    ) {
-        eprintln!("[pipeline] Failed to save stage state for {stage_name}: {error}");
-    }
-
-    if final_status == ConversationStatus::Failed {
-        Err((record, failure_message))
-    } else {
-        Ok(record)
+    AttemptOutcome {
+        terminal_snapshot,
+        final_status,
+        captured_session_ref,
+        captured_job,
+        display_text,
+        accumulated_text,
     }
 }

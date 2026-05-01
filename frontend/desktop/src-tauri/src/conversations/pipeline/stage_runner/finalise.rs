@@ -217,3 +217,86 @@ pub(super) fn live_output(output_buffer: &Arc<Mutex<String>>) -> String {
         .map(|guard| guard.clone())
         .unwrap_or_default()
 }
+
+/// Substrings indicating a transient provider-side connectivity failure
+/// rather than a real semantic error from the agent. When any of these
+/// appears in the score's error payload we treat the failure as
+/// recoverable and let the stage runner retry by resuming the captured
+/// provider session with a `continue` turn.
+const NETWORK_ERROR_MARKERS: &[&str] = &[
+    "Connection error",
+    "APIConnectionError",
+    "ConnectionError",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "ETIMEDOUT",
+    "Read timed out",
+    "Connection reset",
+    "Connection aborted",
+    "RemoteDisconnected",
+    "ProtocolError",
+    "Network is unreachable",
+    "Temporary failure in name resolution",
+    "Failed to fetch Symphony score",
+    "Failed to submit Symphony score",
+    "Symphony WebSocket",
+];
+
+/// Returns true when `error_text` matches one of the recognised
+/// transient connectivity failure markers. Case-insensitive.
+pub(super) fn is_network_error(error_text: &str) -> bool {
+    let lowered = error_text.to_lowercase();
+    NETWORK_ERROR_MARKERS
+        .iter()
+        .any(|marker| lowered.contains(&marker.to_lowercase()))
+}
+
+/// Pull the most descriptive error string out of a terminal stage outcome.
+/// Returns `None` if the stage neither errored at the score level nor
+/// failed at the polling level — auto-retry should not engage in that
+/// case.
+pub(super) fn stage_error_text(
+    snapshot: &Result<crate::conversations::score_client::SymphonyScoreSnapshot, String>,
+) -> Option<String> {
+    match snapshot {
+        Ok(run_result) => run_result.error.clone(),
+        Err(error) => Some(error.clone()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_network_error;
+
+    #[test]
+    fn detects_kimi_api_connection_error() {
+        // Verbatim error string that surfaced from kimi-cli during the
+        // 2026-04-30 outage; this is the case the auto-retry exists for.
+        let kimi_error = r#"{"role":"tool","content":"<system>ERROR: LLM provider error when running agent: Connection error.</system>","tool_call_id":"tool_x"}"#;
+        assert!(is_network_error(kimi_error));
+    }
+
+    #[test]
+    fn detects_lowercase_connection_error() {
+        assert!(is_network_error("connection error"));
+    }
+
+    #[test]
+    fn detects_symphony_poll_failure() {
+        assert!(is_network_error(
+            "Failed to fetch Symphony score abc-123: timeout",
+        ));
+    }
+
+    #[test]
+    fn ignores_semantic_failure() {
+        assert!(!is_network_error(
+            "Agent step 5 failed: tool returned validation error: missing field 'foo'",
+        ));
+    }
+
+    #[test]
+    fn ignores_empty_string() {
+        assert!(!is_network_error(""));
+    }
+}

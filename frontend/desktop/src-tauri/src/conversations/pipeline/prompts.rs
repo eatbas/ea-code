@@ -7,6 +7,12 @@ pub fn agent_label(agent: &PipelineAgent) -> String {
 pub fn build_planner_prompt(planner_number: usize, plan_dir: &str, user_prompt: &str) -> String {
     format!(
         "You are Planner {n} in a multi-agent code pipeline. Your task is to create a detailed implementation plan.\n\n\
+         ⚠️ CRITICAL — READ-ONLY MODE:\n\
+         - You MUST NOT modify, create, or delete any source file in the workspace.\n\
+         - The ONLY file you are allowed to write is your plan markdown at: {dir}/Plan-{n}.md\n\
+         - Do NOT spawn coding subagents. Do NOT use Task / CreateSubagent to delegate file edits.\n\
+         - If you find yourself about to call Edit, Write, StrReplaceFile, or any tool that mutates \
+         project source files: STOP. That work belongs to the Coder stage, not to you.\n\n\
          IMPORTANT RULES:\n\
          - Create ONLY a plan. Do NOT write any code.\n\
          - Save your plan as a markdown file to: {dir}/Plan-{n}.md\n\
@@ -200,4 +206,25 @@ pub fn build_orchestrator_prompt(user_prompt: &str, output_path: &str) -> String
         output_path = output_path,
         prompt = user_prompt,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression: previously the planner prompt only said "Do NOT
+    /// write any code", which kimi-for-coding (especially in swarm
+    /// mode) routinely ignored -- it would spawn coding subagents that
+    /// modified hundreds of source files instead of writing the plan.
+    /// The prompt must now contain explicit, hard-to-miss read-only
+    /// guards and a direct instruction not to spawn subagents.
+    #[test]
+    fn planner_prompt_forbids_modifying_source_files_and_spawning_subagents() {
+        let prompt = build_planner_prompt(2, "/tmp/plan", "Implement i18n");
+        assert!(prompt.contains("READ-ONLY MODE"));
+        assert!(prompt.contains("MUST NOT modify"));
+        assert!(prompt.contains("Do NOT spawn coding subagents"));
+        assert!(prompt.contains("CreateSubagent"));
+        assert!(prompt.contains("/tmp/plan/Plan-2.md"));
+    }
 }

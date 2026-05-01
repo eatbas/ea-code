@@ -80,6 +80,8 @@ export function ConversationView({
           onResume={viewModel.handleResume}
           onRedoReview={viewModel.handleRedoReview}
           onStop={viewModel.handleStop}
+          onRetryStage={viewModel.handleRetryStage}
+          retryingStageIndex={viewModel.retryingStageIndex}
         />
 
         {reviewingPlan ? (

@@ -17,6 +17,7 @@ import {
   getPipelineState,
   redoReviewPipeline,
   resumePipeline,
+  retryFailedStage,
   sendPlanEditFeedback,
   startPipeline,
   stopPipeline,
@@ -394,6 +395,35 @@ export function useConversationViewModel({
     }
   }, [pipeline, pipelineConversationId, toast, workspace.path]);
 
+  const [retryingStageIndex, setRetryingStageIndex] = useState<number | null>(null);
+
+  const handleRetryStage = useCallback(
+    async (stageIndex: number) => {
+      if (!pipelineConversationId) return;
+      if (retryingStageIndex !== null) return;
+      setRetryingStageIndex(stageIndex);
+      try {
+        await retryFailedStage(workspace.path, pipelineConversationId, stageIndex);
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Failed to retry stage."));
+        setRetryingStageIndex(null);
+      }
+    },
+    [pipelineConversationId, retryingStageIndex, toast, workspace.path],
+  );
+
+  // Clear the in-flight indicator once the stage settles (success or
+  // failure). The backend transitions the stage out of `running` either
+  // way, so any non-running status means the retry attempt finished.
+  useEffect(() => {
+    if (retryingStageIndex === null) return;
+    const stage = pipeline.stages.find((s) => s.stageIndex === retryingStageIndex);
+    if (!stage) return;
+    if (stage.status !== "running") {
+      setRetryingStageIndex(null);
+    }
+  }, [pipeline.stages, retryingStageIndex]);
+
   const handleNewPipeline = useCallback(() => {
     pipeline.reset();
     planReview.reset();
@@ -472,6 +502,8 @@ export function useConversationViewModel({
     handleStop,
     handleResume,
     handleRedoReview,
+    handleRetryStage,
+    retryingStageIndex,
     handleNewPipeline,
     handleThinkingChange,
     isKimi,

@@ -46,18 +46,36 @@ pub(in crate::conversations::commands) async fn run_merge_chain(
     let loaded = persistence::load_pipeline_state(&ws, &conv_id)
         .ok()
         .flatten();
-    // Find the first planner stage for session ref (not orchestrator).
+    // Resume from the first SUCCESSFUL planner's session. We can't use
+    // a failed planner's session because its CLI might be in a bad
+    // state (e.g. claude after a socket disconnect), and any planner
+    // that completed cleanly is a safe base for the merge step.
+    // Fall back to the first planner with a captured session ref if
+    // none succeeded -- that path is rare and the merge agent will
+    // surface the issue clearly if the session truly cannot resume.
     let session_ref = loaded.as_ref().and_then(|s| {
         s.stages
             .iter()
-            .find(|st| st.stage_name.starts_with("Planner"))
+            .find(|st| {
+                st.stage_name.starts_with("Planner")
+                    && st.status == crate::models::ConversationStatus::Completed
+                    && st.provider_session_ref.is_some()
+            })
+            .or_else(|| {
+                s.stages
+                    .iter()
+                    .find(|st| {
+                        st.stage_name.starts_with("Planner")
+                            && st.provider_session_ref.is_some()
+                    })
+            })
             .and_then(|st| st.provider_session_ref.clone())
     });
 
     let ref_val = match session_ref {
         Some(v) => v,
         None => {
-            eprintln!("[pipeline] No provider_session_ref from first planner; skipping merge");
+            eprintln!("[pipeline] No provider_session_ref from any planner; skipping merge");
             return None;
         }
     };

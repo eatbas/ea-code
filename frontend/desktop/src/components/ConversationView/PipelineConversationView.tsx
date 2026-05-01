@@ -28,6 +28,16 @@ interface PipelineConversationViewProps {
   onRedoReview?: () => void;
   /** Called when the user clicks Stop. */
   onStop?: () => void;
+  /**
+   * Called when the user clicks the per-stage Retry button on a failed
+   * stage. Receives the stageIndex of the stage to resume.
+   */
+  onRetryStage?: (stageIndex: number) => void;
+  /**
+   * Stage index currently mid-retry (one at a time) so the button can
+   * show the spinner state. `null` when no retry is in flight.
+   */
+  retryingStageIndex?: number | null;
   /** Plan review phase. */
   planReviewPhase?: PlanReviewPhase;
   /** Full conversation detail — carries follow-up messages (if any). */
@@ -68,10 +78,18 @@ export function PipelineConversationView({
   onResume,
   onRedoReview,
   onStop,
+  onRetryStage,
+  retryingStageIndex,
   planReviewPhase,
   activeConversation,
   activeDraft,
 }: PipelineConversationViewProps): ReactNode {
+  const retryHandlerFor = (stageIndex: number): (() => void) | undefined => {
+    if (!onRetryStage) return undefined;
+    return () => onRetryStage(stageIndex);
+  };
+  const isRetryPending = (stageIndex: number): boolean =>
+    retryingStageIndex === stageIndex;
   const [orchestratorOpen, setOrchestratorOpen] = useState(true);
   const [plannersOpen, setPlannersOpen] = useState(true);
   const [mergeOpen, setMergeOpen] = useState(true);
@@ -237,6 +255,8 @@ export function PipelineConversationView({
               onOpenChange={setOrchestratorOpen}
               startedAt={orchestratorStage.startedAt}
               finishedAt={orchestratorStage.finishedAt}
+              onRetry={retryHandlerFor(orchestratorStage.stageIndex)}
+              retryPending={isRetryPending(orchestratorStage.stageIndex)}
             >
               <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
                 {stageBodyText(orchestratorStage, "Enhanced prompt was not found.")}
@@ -264,6 +284,8 @@ export function PipelineConversationView({
                     onOpenChange={setPlannersOpen}
                     startedAt={stage.startedAt}
                     finishedAt={stage.finishedAt}
+                    onRetry={retryHandlerFor(stage.stageIndex)}
+                    retryPending={isRetryPending(stage.stageIndex)}
                   >
                     <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
                       {stageBodyText(stage, "Plan file was not found.")}
@@ -284,6 +306,8 @@ export function PipelineConversationView({
               onOpenChange={setMergeOpen}
               startedAt={mergeStage.startedAt}
               finishedAt={mergeStage.finishedAt}
+              onRetry={retryHandlerFor(mergeStage.stageIndex)}
+              retryPending={isRetryPending(mergeStage.stageIndex)}
             >
               <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
                 {stageBodyText(mergeStage, "Merged plan file was not found.")}
@@ -307,6 +331,8 @@ export function PipelineConversationView({
               onOpenChange={setCoderOpen}
               startedAt={coderStage.startedAt}
               finishedAt={coderStage.finishedAt}
+              onRetry={retryHandlerFor(coderStage.stageIndex)}
+              retryPending={isRetryPending(coderStage.stageIndex)}
             >
               <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
                 {stageBodyText(coderStage, "Coder completion summary was not found.")}
@@ -334,6 +360,8 @@ export function PipelineConversationView({
                     onOpenChange={setReviewersOpen}
                     startedAt={stage.startedAt}
                     finishedAt={stage.finishedAt}
+                    onRetry={retryHandlerFor(stage.stageIndex)}
+                    retryPending={isRetryPending(stage.stageIndex)}
                   >
                     <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
                       {stageBodyText(stage, "Review file was not found.")}
@@ -359,6 +387,8 @@ export function PipelineConversationView({
               onOpenChange={setReviewMergeOpen}
               startedAt={reviewMergeStage.startedAt}
               finishedAt={reviewMergeStage.finishedAt}
+              onRetry={retryHandlerFor(reviewMergeStage.stageIndex)}
+              retryPending={isRetryPending(reviewMergeStage.stageIndex)}
             >
               <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
                 {stageBodyText(reviewMergeStage, "Merged review file was not found.")}
@@ -382,6 +412,8 @@ export function PipelineConversationView({
               onOpenChange={setCodeFixerOpen}
               startedAt={codeFixerStage.startedAt}
               finishedAt={codeFixerStage.finishedAt}
+              onRetry={retryHandlerFor(codeFixerStage.stageIndex)}
+              retryPending={isRetryPending(codeFixerStage.stageIndex)}
             >
               <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
                 {stageBodyText(codeFixerStage, "Code Fixer summary was not found.")}
@@ -415,6 +447,8 @@ export function PipelineConversationView({
                         onOpenChange={setReviewersOpen}
                         startedAt={stage.startedAt}
                         finishedAt={stage.finishedAt}
+                        onRetry={retryHandlerFor(stage.stageIndex)}
+                        retryPending={isRetryPending(stage.stageIndex)}
                       >
                         <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
                           {stageBodyText(stage, "Review file was not found.")}
@@ -434,6 +468,8 @@ export function PipelineConversationView({
                   onOpenChange={setReviewMergeOpen}
                   startedAt={cycle.reviewMerge.startedAt}
                   finishedAt={cycle.reviewMerge.finishedAt}
+                  onRetry={retryHandlerFor(cycle.reviewMerge.stageIndex)}
+                  retryPending={isRetryPending(cycle.reviewMerge.stageIndex)}
                 >
                   <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
                     {stageBodyText(cycle.reviewMerge, "Merged review file was not found.")}
@@ -450,6 +486,8 @@ export function PipelineConversationView({
                   onOpenChange={setCodeFixerOpen}
                   startedAt={cycle.codeFixer.startedAt}
                   finishedAt={cycle.codeFixer.finishedAt}
+                  onRetry={retryHandlerFor(cycle.codeFixer.stageIndex)}
+                  retryPending={isRetryPending(cycle.codeFixer.stageIndex)}
                 >
                   <p className="text-xs leading-5 text-fg-muted whitespace-pre-wrap break-words">
                     {stageBodyText(cycle.codeFixer, "Code Fixer summary was not found.")}

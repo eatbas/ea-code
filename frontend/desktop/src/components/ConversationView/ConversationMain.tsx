@@ -18,6 +18,8 @@ interface ConversationMainProps {
   onResume: () => Promise<void>;
   onRedoReview: () => Promise<void>;
   onStop: () => Promise<void>;
+  onRetryStage: (stageIndex: number) => Promise<void>;
+  retryingStageIndex: number | null;
 }
 
 export function ConversationMain({
@@ -29,6 +31,8 @@ export function ConversationMain({
   onResume,
   onRedoReview,
   onStop,
+  onRetryStage,
+  retryingStageIndex,
 }: ConversationMainProps): ReactNode {
   const messages = activeConversation?.messages ?? [];
   const lastMessageLength = messages[messages.length - 1]?.content.length ?? 0;
@@ -59,6 +63,8 @@ export function ConversationMain({
         onResume={onResume}
         onRedoReview={onRedoReview}
         onStop={onStop}
+        onRetryStage={onRetryStage}
+        retryingStageIndex={retryingStageIndex}
         planReviewPhase={planReviewPhase}
         activeConversation={activeConversation}
         activeDraft={activeDraft}

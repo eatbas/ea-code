@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, RotateCcw } from "lucide-react";
 
 export type StageStatus = "pending" | "running" | "completed" | "failed" | "stopped";
 
@@ -20,6 +20,15 @@ interface PipelineStageSectionProps {
   startedAt?: number;
   /** Epoch ms when the stage finished (stops timer). */
   finishedAt?: number;
+  /**
+   * If provided and the stage is `failed`, a Retry button is shown
+   * in the header. Clicking sends a `continue` turn to the captured
+   * provider session — distinct from the pipeline-wide retry that
+   * re-issues the original prompt.
+   */
+  onRetry?: () => void;
+  /** Whether a retry is currently in flight (disables the button). */
+  retryPending?: boolean;
   children: ReactNode;
 }
 
@@ -63,6 +72,8 @@ export function PipelineStageSection({
   onOpenChange,
   startedAt,
   finishedAt,
+  onRetry,
+  retryPending,
   children,
 }: PipelineStageSectionProps): ReactNode {
   const [internalOpen, setInternalOpen] = useState(defaultOpen ?? status === "running");
@@ -90,12 +101,23 @@ export function PipelineStageSection({
     ? formatElapsed((finishedAt ?? now) - startedAt)
     : null;
 
+  // The header is a div + role="button" rather than a real <button> so
+  // we can nest a real Retry <button> inside without producing invalid
+  // HTML (button-in-button) when a stage fails.
   return (
     <div className="flex flex-col rounded-xl border border-edge bg-panel min-w-0">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
         onClick={toggle}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left min-w-0 whitespace-nowrap"
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggle();
+          }
+        }}
+        className="flex w-full cursor-pointer items-center gap-2 px-4 py-3 text-left min-w-0 whitespace-nowrap"
       >
         <span className={`h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
         <span className="shrink-0 text-xs font-semibold text-fg">{shortLabel(label)}</span>
@@ -106,6 +128,22 @@ export function PipelineStageSection({
           {elapsed && (
             <span className="text-[10px] font-mono text-fg-faint">{elapsed}</span>
           )}
+          {status === "failed" && onRetry && (
+            <button
+              type="button"
+              aria-label="Retry stage with continue"
+              title="Resume this stage by sending `continue` to its session"
+              disabled={retryPending}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRetry();
+              }}
+              className="inline-flex items-center gap-1 rounded-md border border-edge bg-elevated px-2 py-0.5 text-[10px] font-semibold text-fg transition-colors hover:bg-active disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RotateCcw size={10} className={retryPending ? "animate-spin" : ""} />
+              {retryPending ? "Retrying..." : "Retry"}
+            </button>
+          )}
           <span className={`text-[10px] font-medium uppercase tracking-wider ${style.text}`}>
             {style.label}
           </span>
@@ -114,7 +152,7 @@ export function PipelineStageSection({
           size={14}
           className={`shrink-0 text-fg-muted transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
-      </button>
+      </div>
       {isOpen && (
         <div className="min-h-0 flex-1 max-h-48 overflow-y-auto overflow-x-hidden border-t border-edge px-4 py-3 pipeline-scroll">
           {children}

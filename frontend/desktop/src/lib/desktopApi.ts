@@ -208,6 +208,25 @@ export function continueCoder(
   });
 }
 
+/**
+ * Re-run a single failed pipeline stage by sending `continue` to its
+ * captured provider session. Unlike resumePipeline, this does not
+ * re-issue the original prompt — it relies on the agent's existing
+ * context. Use for transient connection failures where the agent had
+ * already started the work.
+ */
+export function retryFailedStage(
+  workspacePath: string,
+  conversationId: string,
+  stageIndex: number,
+): Promise<ConversationDetail> {
+  return invokeCommand<ConversationDetail>("retry_failed_stage", {
+    workspacePath,
+    conversationId,
+    stageIndex,
+  });
+}
+
 export function getPipelineState(
   workspacePath: string,
   conversationId: string,
